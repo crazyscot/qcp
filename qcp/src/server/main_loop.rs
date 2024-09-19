@@ -1,13 +1,16 @@
 // qcp server event loop
 // (c) 2024 Ross Younger
 
+use std::fs::Metadata;
+use std::io::ErrorKind;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::cert::Credentials;
 use crate::protocol::control::{control_capnp, ClientMessage};
 use crate::protocol::session::session_capnp::{self};
-use crate::protocol::session::Response;
+use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 
 use capnp::message::ReaderOptions;
@@ -229,12 +232,67 @@ async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
     }
 }
 
-async fn handle_get(_sp: &mut StreamPair, filename: String) -> anyhow::Result<()> {
+async fn handle_get(sp: &mut StreamPair, filename: String) -> anyhow::Result<()> {
     debug!("GET {filename}");
 
-    // TODO
-    send_response(&mut _sp.send, Status::NotYetImplemented, Some("soon")).await?;
+    let result = open_file_read(&filename).await;
+    let (mut file, meta) = match result {
+        Ok(res) => res,
+        Err((status, message)) => {
+            send_response(&mut sp.send, status, message.as_deref()).await?;
+            return Ok(());
+        }
+    };
+    // We believe we can fulfil this request.
+    send_response(&mut sp.send, Status::Ok, None).await?;
+
+    let header = FileHeader::serialize_direct(meta.len(), &filename);
+    sp.send.write_all(&header).await?;
+
+    let result = tokio::io::copy(&mut file, sp.send.get_mut()).await;
+    match result {
+        Ok(sent) if sent == meta.len() => (),
+        Ok(sent) => {
+            error!(
+                "File sent size {sent} doesn't match its metadata {}",
+                meta.len()
+            );
+            return Ok(());
+        }
+        Err(e) => {
+            error!("Error during io::copy: {e}");
+            return Ok(());
+        }
+    }
+
+    let trailer = FileTrailer::serialize_direct();
+    sp.send.write_all(&trailer).await?;
     Ok(())
+}
+
+async fn open_file_read(
+    filename: &str,
+) -> anyhow::Result<(tokio::fs::File, Metadata), (Status, Option<String>)> {
+    let path = Path::new(&filename);
+
+    let fh = std::fs::File::open(path).map_err(|e| match e.kind() {
+        ErrorKind::NotFound => (Status::FileNotFound, Some(e.to_string())),
+        ErrorKind::PermissionDenied => (Status::IncorrectPermissions, Some(e.to_string())),
+        ErrorKind::Other => (Status::IoError, Some(e.to_string())),
+        _ => (
+            Status::IoError,
+            Some(format!("unhandled error from File::open: {e}")),
+        ),
+    })?;
+
+    let meta = fh.metadata().map_err(|e| {
+        (
+            Status::IoError,
+            Some(format!("unable to determine file size: {e}")),
+        )
+    })?;
+
+    Ok((fh.into(), meta))
 }
 
 async fn handle_put(_sp: &mut StreamPair, filename: String) -> anyhow::Result<()> {

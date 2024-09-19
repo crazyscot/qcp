@@ -66,3 +66,51 @@ impl Response {
         Ok(Self { status, message })
     }
 }
+
+#[derive(Debug)]
+pub struct FileHeader {
+    pub size: u64,
+    pub filename: String,
+}
+
+impl FileHeader {
+    pub fn serialize(&self) -> Vec<u8> {
+        Self::serialize_direct(self.size, &self.filename)
+    }
+    pub fn serialize_direct(size: u64, filename: &str) -> Vec<u8> {
+        let mut msg = ::capnp::message::Builder::new_default();
+
+        let mut response_msg = msg.init_root::<session_capnp::file_header::Builder>();
+        response_msg.set_size(size);
+        response_msg.set_filename(filename);
+        capnp::serialize::write_message_to_words(&msg)
+    }
+    pub async fn read(read: &mut tokCompat<RecvStream>) -> anyhow::Result<Self> {
+        let reader = capnp_futures::serialize::read_message(read, ReaderOptions::new()).await?;
+        let msg_reader: session_capnp::file_header::Reader = reader.get_root()?;
+        Ok(Self {
+            size: msg_reader.get_size(),
+            filename: msg_reader.get_filename()?.to_string()?,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct FileTrailer {}
+
+impl FileTrailer {
+    pub fn serialize(&self) -> Vec<u8> {
+        Self::serialize_direct()
+    }
+    pub fn serialize_direct() -> Vec<u8> {
+        let mut msg = ::capnp::message::Builder::new_default();
+
+        let mut _response_msg = msg.init_root::<session_capnp::file_trailer::Builder>();
+        capnp::serialize::write_message_to_words(&msg)
+    }
+    pub async fn read(read: &mut tokCompat<RecvStream>) -> anyhow::Result<Self> {
+        let reader = capnp_futures::serialize::read_message(read, ReaderOptions::new()).await?;
+        let _msg_reader: session_capnp::file_trailer::Reader = reader.get_root()?;
+        Ok(Self {})
+    }
+}

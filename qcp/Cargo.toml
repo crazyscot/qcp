@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 version.workspace = true
 license.workspace = true
-rust-version = "1.76.0"
+rust-version = "1.81.0"
 
 [dependencies]
 anstyle = "1.0.8"
@@ -19,7 +19,7 @@ gethostname = "0.5.0"
 quinn = "0.11.5"
 rcgen = { version = "0.13.1", features = ["crypto", "pem", "ring"] }
 rustls-pki-types = "1.8.0"
-tokio = { version = "1.40.0", default-features = true, features = ["full", "io-std"] }
+tokio = { version = "1.40.0", default-features = true, features = ["full", "io-std", "io-util"] }
 tokio-util = { version = "0.7.12", features = ["compat"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

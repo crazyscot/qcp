@@ -3,7 +3,7 @@
 
 use crate::protocol::control::{control_capnp, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
-use crate::protocol::session::{session_capnp, Response};
+use crate::protocol::session::{session_capnp, FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
 use crate::{cert::Credentials, protocol};
 
@@ -15,7 +15,9 @@ use quinn::{rustls, Connection};
 use rustls::RootCertStore;
 use rustls_pki_types::CertificateDer;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::path::PathBuf;
 use std::process::Stdio;
+use std::str::FromStr as _;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
@@ -71,9 +73,8 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
 
     let server_address = async_dns::lookup(server_hostname)
         .await
-        .map_err(|e| {
-            error!("host name lookup failed1");
-            e
+        .inspect_err(|e| {
+            error!("host name lookup failed: {e}");
         })?
         .next()
         .ok_or_else(|| {
@@ -138,7 +139,7 @@ async fn process_request(connection: &mut Connection, _args: &ClientArgs) -> boo
     connection
         .open_bi()
         .map_err(|e| anyhow::anyhow!(e))
-        .and_then(|sp| do_get(sp, "testfile"))
+        .and_then(|sp| do_get(sp, "testfile", "/tmp/"))
         .inspect_err(|e| error!("{e}"))
         .map_ok_or_else(|_| false, |_| true)
         .await
@@ -215,7 +216,7 @@ pub fn create_endpoint(
     Ok(endpoint)
 }
 
-async fn do_get(sp: RawStreamPair, filename: &str) -> Result<()> {
+async fn do_get(sp: RawStreamPair, filename: &str, dest_dir: &str) -> Result<()> {
     let mut stream: StreamPair = sp.into();
 
     let span = span!(Level::TRACE, "do_get");
@@ -245,5 +246,19 @@ async fn do_get(sp: RawStreamPair, filename: &str) -> Result<()> {
             status = response.status
         ));
     }
-    todo!();
+
+    let header = FileHeader::read(&mut stream.recv).await?;
+    trace!("GET: HEADER {header:?}");
+
+    let mut path = PathBuf::from_str(dest_dir).unwrap();
+    path.push(filename);
+    let mut file = tokio::fs::File::create(path).await?;
+
+    let mut read_n = stream.recv.get_mut().take(header.size);
+    tokio::io::copy(&mut read_n, &mut file).await?;
+
+    let _trailer = FileTrailer::read(&mut stream.recv).await?;
+    // Trailer is empty for now, but its existence means the server believes the file was sent correctly
+
+    Ok(())
 }
