@@ -1,6 +1,7 @@
 // qcp client event loop
 // (c) 2024 Ross Younger
 
+use crate::client::args::ProcessedArgs;
 use crate::protocol::control::{control_capnp, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{session_capnp, FileHeader, FileTrailer, Response};
@@ -32,14 +33,15 @@ const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 /// Main CLI entrypoint
 #[tokio::main]
 pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
-    let server_hostname = "localhost"; // TEMP; this will come from parsed args
+    let unpacked_args = ProcessedArgs::try_from(args)?;
+    println!("{unpacked_args:?}"); // TEMP
 
     let span = trace_span!("CLIENT");
     let _guard = span.enter();
     let credentials = crate::cert::Credentials::generate()?;
 
     info!("connecting to remote");
-    let mut server = launch_server(args.server_debug)?;
+    let mut server = launch_server(&unpacked_args)?;
 
     wait_for_banner(&mut server, args.timeout).await?;
 
@@ -71,10 +73,11 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
         server_message.name
     );
 
-    let server_address = async_dns::lookup(server_hostname)
+    let host = unpacked_args.remote_host();
+    let server_address = async_dns::lookup(host)
         .await
         .inspect_err(|e| {
-            error!("host name lookup failed: {e}");
+            error!("host name lookup for {host} failed: {e}");
         })?
         .next()
         .ok_or_else(|| {
@@ -114,7 +117,7 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
         },
     };
 
-    let success = process_request(&mut connection, args).await;
+    let success = manage_request(&mut connection, &unpacked_args).await;
 
     info!("shutting down");
     // close child process stdin, which should trigger its exit
@@ -131,7 +134,9 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     Ok(success)
 }
 
-async fn process_request(connection: &mut Connection, _args: &ClientArgs) -> bool {
+async fn manage_request(connection: &mut Connection, args: &ProcessedArgs<'_>) -> bool {
+    // TODO: This may spawn, if there are multiple files to transfer.
+
     // Hard wire a single GET for now.
     // TODO this will spawn ? or setup multiple futures and await all ?
     // Called function is responsible for tracing errors.
@@ -139,24 +144,42 @@ async fn process_request(connection: &mut Connection, _args: &ClientArgs) -> boo
     connection
         .open_bi()
         .map_err(|e| anyhow::anyhow!(e))
-        .and_then(|sp| do_get(sp, "testfile", "/tmp/"))
+        .and_then(|sp| process_request(sp, args))
         .inspect_err(|e| error!("{e}"))
         .map_ok_or_else(|_| false, |_| true)
         .await
 }
 
-fn launch_server(debug: bool) -> Result<Child> {
-    let mut server = Command::new("qcpt");
-    if debug {
-        server.args(["--debug"]);
+async fn process_request(
+    sp: (quinn::SendStream, quinn::RecvStream),
+    args: &ProcessedArgs<'_>,
+) -> anyhow::Result<()> {
+    if args.source.host.is_some() {
+        // This is a Get
+        do_get(sp, &args.source.filename, &args.destination.filename).await
+    } else {
+        todo!();
+        // do_put(sp, &args.source.filename, &args.destination.filename).await
+    }
+}
+
+fn launch_server(args: &ProcessedArgs) -> Result<Child> {
+    let remote_host = args.remote_host();
+    let mut server = Command::new("ssh");
+    // TODO extra ssh options
+    server.args([remote_host, "qcpt"]);
+    if args.original.debug {
+        server.arg("--debug");
     }
     server
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit()) // TODO: pipe this more nicely, output on error?
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    trace!("spawning command: {:?}", server);
+    server
         .spawn()
-        .context("Could not launch remote server")
+        .context("Could not launch control connection to remote server")
 }
 
 async fn wait_for_banner(server: &mut Child, timeout_s: u16) -> Result<()> {
@@ -166,12 +189,13 @@ async fn wait_for_banner(server: &mut Child, timeout_s: u16) -> Result<()> {
     let mut reader = channel.take(buf.len() as u64);
     let n_fut = reader.read(&mut buf);
 
-    let _n = timeout(Duration::from_secs(timeout_s.into()), n_fut)
+    let n = timeout(Duration::from_secs(timeout_s.into()), n_fut)
         .await
         .with_context(|| "timed out reading server banner")??;
 
     let read_banner = std::str::from_utf8(&buf).with_context(|| "bad server banner")?;
-    anyhow::ensure!(BANNER == read_banner, "banner not as expected");
+    anyhow::ensure!(n != 0, "failed to connect"); // the process closed its stdout
+    anyhow::ensure!(BANNER == read_banner, "server banner not as expected");
     Ok(())
 }
 
@@ -216,7 +240,7 @@ pub fn create_endpoint(
     Ok(endpoint)
 }
 
-async fn do_get(sp: RawStreamPair, filename: &str, dest_dir: &str) -> Result<()> {
+async fn do_get(sp: RawStreamPair, filename: &str, dest: &str) -> Result<()> {
     let mut stream: StreamPair = sp.into();
 
     let span = span!(Level::TRACE, "do_get");
@@ -250,9 +274,23 @@ async fn do_get(sp: RawStreamPair, filename: &str, dest_dir: &str) -> Result<()>
     let header = FileHeader::read(&mut stream.recv).await?;
     trace!("GET: HEADER {header:?}");
 
-    let mut path = PathBuf::from_str(dest_dir).unwrap();
-    path.push(filename);
-    let mut file = tokio::fs::File::create(path).await?;
+    let mut dest_path = PathBuf::from_str(dest).unwrap();
+    let dest_meta = tokio::fs::metadata(&dest_path).await;
+    if let Ok(meta) = dest_meta {
+        // if it's a file, proceed (overwriting)
+        if meta.is_dir() {
+            dest_path.push(header.filename);
+        } else if meta.is_symlink() {
+            // TODO: Need to cope with this case; test whether it's a directory?
+            let deref = std::fs::read_link(&dest_path)?;
+            if std::fs::metadata(deref).is_ok_and(|meta| meta.is_dir()) {
+                dest_path.push(header.filename);
+            }
+            // Else assume the link points to a file, which we will overwrite.
+        }
+    }
+
+    let mut file = tokio::fs::File::create(dest_path).await?;
 
     let mut read_n = stream.recv.get_mut().take(header.size);
     tokio::io::copy(&mut read_n, &mut file).await?;
