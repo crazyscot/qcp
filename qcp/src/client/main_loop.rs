@@ -283,6 +283,7 @@ async fn do_get(sp: RawStreamPair, filename: &str, dest: &str) -> Result<()> {
     }
 
     let mut file = tokio::fs::File::create(dest_path).await?;
+    file.set_len(header.size).await?;
 
     let mut read_n = stream.recv.get_mut().take(header.size);
     tokio::io::copy(&mut read_n, &mut file).await?;
