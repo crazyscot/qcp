@@ -17,9 +17,7 @@ use quinn::{rustls, Connection};
 use rustls::RootCertStore;
 use rustls_pki_types::CertificateDer;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
-use std::path::PathBuf;
 use std::process::Stdio;
-use std::str::FromStr as _;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
@@ -266,25 +264,7 @@ async fn do_get(sp: RawStreamPair, filename: &str, dest: &str) -> Result<()> {
     let header = FileHeader::read(&mut stream.recv).await?;
     trace!("GET: HEADER {header:?}");
 
-    let mut dest_path = PathBuf::from_str(dest).unwrap();
-    let dest_meta = tokio::fs::metadata(&dest_path).await;
-    if let Ok(meta) = dest_meta {
-        // if it's a file, proceed (overwriting)
-        if meta.is_dir() {
-            dest_path.push(header.filename);
-        } else if meta.is_symlink() {
-            // TODO: Need to cope with this case; test whether it's a directory?
-            let deref = std::fs::read_link(&dest_path)?;
-            if std::fs::metadata(deref).is_ok_and(|meta| meta.is_dir()) {
-                dest_path.push(header.filename);
-            }
-            // Else assume the link points to a file, which we will overwrite.
-        }
-    }
-
-    let mut file = tokio::fs::File::create(dest_path).await?;
-    file.set_len(header.size).await?;
-
+    let mut file = crate::util::open_file_write(dest, &header).await?;
     let mut read_n = stream.recv.get_mut().take(header.size);
     tokio::io::copy(&mut read_n, &mut file).await?;
 

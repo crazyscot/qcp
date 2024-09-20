@@ -1,15 +1,12 @@
 // qcp server event loop
 // (c) 2024 Ross Younger
 
-use std::fs::Metadata;
-use std::io::ErrorKind;
 use std::net::{Ipv4Addr, SocketAddr};
-use std::path::Path;
 use std::sync::Arc;
 
 use crate::cert::Credentials;
 use crate::protocol::control::{control_capnp, ClientMessage};
-use crate::protocol::session::session_capnp::{self};
+use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 
@@ -235,7 +232,7 @@ async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
 async fn handle_get(sp: &mut StreamPair, filename: String) -> anyhow::Result<()> {
     debug!("GET {filename}");
 
-    let result = open_file_read(&filename).await;
+    let result = crate::util::open_file_read(&filename).await;
     let (mut file, meta) = match result {
         Ok(res) => res,
         Err((status, message)) => {
@@ -270,31 +267,6 @@ async fn handle_get(sp: &mut StreamPair, filename: String) -> anyhow::Result<()>
     Ok(())
 }
 
-async fn open_file_read(
-    filename: &str,
-) -> anyhow::Result<(tokio::fs::File, Metadata), (Status, Option<String>)> {
-    let path = Path::new(&filename);
-
-    let fh = std::fs::File::open(path).map_err(|e| match e.kind() {
-        ErrorKind::NotFound => (Status::FileNotFound, Some(e.to_string())),
-        ErrorKind::PermissionDenied => (Status::IncorrectPermissions, Some(e.to_string())),
-        ErrorKind::Other => (Status::IoError, Some(e.to_string())),
-        _ => (
-            Status::IoError,
-            Some(format!("unhandled error from File::open: {e}")),
-        ),
-    })?;
-
-    let meta = fh.metadata().map_err(|e| {
-        (
-            Status::IoError,
-            Some(format!("unable to determine file size: {e}")),
-        )
-    })?;
-
-    Ok((fh.into(), meta))
-}
-
 async fn handle_put(_sp: &mut StreamPair, filename: String) -> anyhow::Result<()> {
     debug!("PUT {filename}");
 
@@ -303,7 +275,6 @@ async fn handle_put(_sp: &mut StreamPair, filename: String) -> anyhow::Result<()
     Ok(())
 }
 
-use session_capnp::Status;
 async fn send_response(
     send: &mut tokCompat<quinn::SendStream>,
     status: Status,

@@ -1,8 +1,15 @@
 // QCP general utility code that didn't fit anywhere else
 // (c) 2024 Ross Younger
 
-use std::net::IpAddr;
+use std::{
+    fs::Metadata,
+    io::ErrorKind,
+    net::IpAddr,
+    path::{Path, PathBuf},
+    str::FromStr as _,
+};
 
+use crate::protocol::session::session_capnp::Status;
 use anyhow::Context as _;
 
 /// Set up rust tracing.
@@ -53,4 +60,57 @@ pub fn lookup_host_by_family(host: &str, desired: AddressFamily) -> anyhow::Resu
     found
         .map(|i| i.to_owned())
         .ok_or(anyhow::anyhow!("host {host} found, but not as {desired:?}"))
+}
+
+/// Opens a local file for reading, returning a filehandle and metadata.
+/// Error type is a tuple ready to send as a Status response.
+pub async fn open_file_read(
+    filename: &str,
+) -> anyhow::Result<(tokio::fs::File, Metadata), (Status, Option<String>)> {
+    let path = Path::new(&filename);
+
+    let fh: tokio::fs::File = std::fs::File::open(path).map_err(|e| match e.kind() {
+        ErrorKind::NotFound => (Status::FileNotFound, Some(e.to_string())),
+        ErrorKind::PermissionDenied => (Status::IncorrectPermissions, Some(e.to_string())),
+        ErrorKind::Other => (Status::IoError, Some(e.to_string())),
+        _ => (
+            Status::IoError,
+            Some(format!("unhandled error from File::open: {e}")),
+        ),
+    })?;
+
+    let meta = fh.metadata().map_err(|e| {
+        (
+            Status::IoError,
+            Some(format!("unable to determine file size: {e}")),
+        )
+    })?;
+
+    Ok((fh, meta))
+}
+
+/// Opens a local file for writing, from an incoming FileHeader
+pub async fn open_file_write(
+    path: &str,
+    header: &crate::protocol::session::FileHeader,
+) -> anyhow::Result<tokio::fs::File> {
+    let mut dest_path = PathBuf::from_str(path).unwrap(); // this is marked as infallible
+    let dest_meta = tokio::fs::metadata(&dest_path).await;
+    if let Ok(meta) = dest_meta {
+        // if it's a file, proceed (overwriting)
+        if meta.is_dir() {
+            dest_path.push(header.filename.clone());
+        } else if meta.is_symlink() {
+            // TODO: Need to cope with this case; test whether it's a directory?
+            let deref = std::fs::read_link(&dest_path)?;
+            if std::fs::metadata(deref).is_ok_and(|meta| meta.is_dir()) {
+                dest_path.push(header.filename.clone());
+            }
+            // Else assume the link points to a file, which we will overwrite.
+        }
+    }
+
+    let file = tokio::fs::File::create(dest_path).await?;
+    file.set_len(header.size).await?;
+    Ok(file)
 }
