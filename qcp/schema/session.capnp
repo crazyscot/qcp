@@ -6,24 +6,31 @@
 struct Command {
     args : union {
         # Retrieves a file. This may fail if the file does not exist or the user doesn't have read permission.
-        # If status is OK, server immediately follows by sending: FileHeader; file data; FileTrailer.
-        # Then close the stream.
-        # If the client needs to abort the transfer, it closes the stream.
+        # Client -> Server: Command (Get)
+        # S->C: Response, FileHeader, file data, FileTrailer.
+        # Client closes the stream after transfer.
+        # If the client needs to abort transfer, it closes the stream.
+        # If the server needs to abort transfer, it closes the stream.
         get@0: GetCmdArgs;
 
         # Sends a file. This may fail for permissions or if the containing directory doesn't exist.
-        # If status is OK, client then sends: FileHeader; file data; FileTrailer.
+        # Client -> Server: Command (Put)
+        # S->C: Response (to the command)
+        # (if not OK - close stream or send another command)
+        # C->S: FileHeader, file data, FileTrailer
+        # S->C: Response (showing transfer status)
         # Then close the stream.
-        # If the server needs to abort the transfer, it sends a TransferAbortInformation as a QUIC datagram,
-        # then closes the stream.
-
+        # If the server needs to abort the transfer:
+        # S->C: Status (explaining why), then close the stream.
         put@1: PutCmdArgs;
     }
 
     struct GetCmdArgs {
+        # Filename is a file name only, without any directory components
         filename @0 : Text;
     }
     struct PutCmdArgs {
+        # Filename is a file name only, without any directory components
         filename @0 : Text;
     }
 }
@@ -42,6 +49,7 @@ enum Status {
     ioError @4;
     diskFull @5;
     notYetImplemented @6;
+    itIsADirectory @7;
 }
 
 struct FileHeader {
@@ -51,11 +59,4 @@ struct FileHeader {
 
 struct FileTrailer {
     # empty for now, this will probably have a checksum later
-}
-
-# Information about why a transfer was aborted. Intended to be displayed to the user.
-struct TransferAbortInformation {
-    filename @0 : Text; # The file we were transferring (our name for it)
-    status @1 : Status;
-    message @2 : Text; # Human-readable message explaining the situation
 }

@@ -2,6 +2,7 @@
 // (c) 2024 Ross Younger
 
 use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::cert::Credentials;
@@ -17,7 +18,8 @@ use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
 use rustls_pki_types::CertificateDer;
-use tokio::io::{AsyncWriteExt as _, Stdin};
+use tokio::fs;
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, Stdin};
 use tokio::time::Duration;
 use tokio_util::compat::Compat as tokCompat;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -100,7 +102,6 @@ pub async fn server_main() -> anyhow::Result<()> {
                 };
             },
             _ = &mut timeout_fut => {
-                debug!("Timed out waiting for connection");
                 break;
             },
         };
@@ -232,18 +233,24 @@ async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
 async fn handle_get(sp: &mut StreamPair, filename: String) -> anyhow::Result<()> {
     debug!("GET {filename}");
 
-    let result = crate::util::open_file_read(&filename).await;
-    let (mut file, meta) = match result {
+    let path = PathBuf::from(&filename);
+    let (mut file, meta) = match crate::util::open_file_read(&filename).await {
         Ok(res) => res,
-        Err((status, message)) => {
+        Err((status, message, _)) => {
             send_response(&mut sp.send, status, message.as_deref()).await?;
             return Ok(());
         }
     };
+    if meta.is_dir() {
+        send_response(&mut sp.send, Status::ItIsADirectory, None).await?;
+        return Ok(());
+    }
     // We believe we can fulfil this request.
     send_response(&mut sp.send, Status::Ok, None).await?;
 
-    let header = FileHeader::serialize_direct(meta.len(), &filename);
+    let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
+
+    let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
     sp.send.write_all(&header).await?;
 
     let result = tokio::io::copy(&mut file, sp.send.get_mut()).await;
@@ -264,14 +271,113 @@ async fn handle_get(sp: &mut StreamPair, filename: String) -> anyhow::Result<()>
 
     let trailer = FileTrailer::serialize_direct();
     sp.send.write_all(&trailer).await?;
+    sp.send.flush().await?;
     Ok(())
 }
 
-async fn handle_put(_sp: &mut StreamPair, filename: String) -> anyhow::Result<()> {
-    debug!("PUT {filename}");
+async fn dest_is_writeable(dest: &PathBuf) -> bool {
+    let meta = fs::metadata(dest).await;
+    match meta {
+        Ok(m) => !m.permissions().readonly(),
+        Err(_) => false,
+    }
+}
 
-    // TODO
-    send_response(&mut _sp.send, Status::NotYetImplemented, None).await?;
+async fn handle_put(sp: &mut StreamPair, destination: String) -> anyhow::Result<()> {
+    let span = trace_span!("handle_put");
+    let _guard = span.enter();
+    debug!("destination {destination}"); // this might be a file or a directory
+
+    // Initial checks. Is the destination valid?
+    let mut path = PathBuf::from(destination);
+    // This is moderately tricky. It might validly be empty, a directory, a file, it might be a nonexistent file in an extant directory.
+
+    if path.as_os_str().is_empty() {
+        // This is the case "qcp some-file host:"
+        // Copy to the current working directory
+        path.push(".");
+    }
+    let append_filename = if path.is_dir() || path.is_file() {
+        // Destination exists
+        if !dest_is_writeable(&path).await {
+            send_response(
+                &mut sp.send,
+                Status::IncorrectPermissions,
+                Some("cannot write to destination"),
+            )
+            .await?;
+            return Ok(());
+        }
+        // append filename only if it is a directory
+        path.is_dir()
+    } else {
+        // Is it a nonexistent file in a valid directory?
+        let mut path_test = path.clone();
+        path_test.pop();
+        if path_test.as_os_str().is_empty() {
+            // We're writing a file to the current working directory, so apply the is_dir writability check
+            path_test.push(".");
+        }
+        if path_test.is_dir() {
+            if !dest_is_writeable(&path_test).await {
+                send_response(
+                    &mut sp.send,
+                    Status::IncorrectPermissions,
+                    Some("cannot write to destination"),
+                )
+                .await?;
+                return Ok(());
+            }
+            // Yes, we can write there; destination path is fully specified.
+            false
+        } else {
+            // No parent directory
+            send_response(&mut sp.send, Status::DirectoryDoesNotExist, None).await?;
+            return Ok(());
+        }
+    };
+
+    // So far as we can tell, we believe we can fulfil this request.
+    send_response(&mut sp.send, Status::Ok, None).await?;
+
+    let header = FileHeader::read(&mut sp.recv).await?;
+    trace!("PUT: HEADER {header:?}");
+
+    if append_filename {
+        path.push(header.filename);
+    }
+    let mut file = match tokio::fs::File::create(path).await {
+        Ok(f) => f,
+        Err(e) => {
+            error!("Could not write to destination: {e}");
+            return Ok(());
+        }
+    };
+    if file
+        .set_len(header.size)
+        .await
+        .inspect_err(|e| error!("Could not set destination file length: {e}"))
+        .is_err()
+    {
+        return Ok(());
+    };
+
+    let mut read_n = sp.recv.get_mut().take(header.size);
+    if tokio::io::copy(&mut read_n, &mut file)
+        .await
+        .inspect_err(|e| error!("Failed to write to destination: {e}"))
+        .is_err()
+    {
+        return Ok(());
+    }
+
+    let _trailer = FileTrailer::read(&mut sp.recv).await?;
+    // TODO: Hash checks
+
+    file.flush().await?;
+    send_response(&mut sp.send, Status::Ok, None).await?;
+    sp.send.flush().await?;
+
     Ok(())
 }
 

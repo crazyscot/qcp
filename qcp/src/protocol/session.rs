@@ -18,6 +18,8 @@ pub mod session_capnp {
 
 pub const COMMAND_RESPONSE_MAX_LENGTH: u16 = 1024;
 
+use std::fmt::Display;
+
 use capnp::message::ReaderOptions;
 use quinn::RecvStream;
 use session_capnp::Status;
@@ -64,6 +66,15 @@ impl Response {
             None
         };
         Ok(Self { status, message })
+    }
+}
+
+impl Display for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.message {
+            Some(msg) => write!(f, "{:?} with message {}", self.status, msg),
+            None => write!(f, "{:?}", self.status),
+        }
     }
 }
 

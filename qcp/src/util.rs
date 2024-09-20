@@ -11,6 +11,7 @@ use std::{
 
 use crate::protocol::session::session_capnp::Status;
 use anyhow::Context as _;
+use futures_util::TryFutureExt as _;
 
 /// Set up rust tracing.
 /// By default we log only our events (qcp), at a given trace level.
@@ -66,25 +67,32 @@ pub fn lookup_host_by_family(host: &str, desired: AddressFamily) -> anyhow::Resu
 /// Error type is a tuple ready to send as a Status response.
 pub async fn open_file_read(
     filename: &str,
-) -> anyhow::Result<(tokio::fs::File, Metadata), (Status, Option<String>)> {
+) -> anyhow::Result<(tokio::fs::File, Metadata), (Status, Option<String>, tokio::io::Error)> {
     let path = Path::new(&filename);
 
-    let fh: tokio::fs::File = std::fs::File::open(path).map_err(|e| match e.kind() {
-        ErrorKind::NotFound => (Status::FileNotFound, Some(e.to_string())),
-        ErrorKind::PermissionDenied => (Status::IncorrectPermissions, Some(e.to_string())),
-        ErrorKind::Other => (Status::IoError, Some(e.to_string())),
-        _ => (
-            Status::IoError,
-            Some(format!("unhandled error from File::open: {e}")),
-        ),
-    })?;
+    let fh: tokio::fs::File = tokio::fs::File::open(path)
+        .await
+        .map_err(|e| match e.kind() {
+            ErrorKind::NotFound => (Status::FileNotFound, Some(e.to_string()), e),
+            ErrorKind::PermissionDenied => (Status::IncorrectPermissions, Some(e.to_string()), e),
+            ErrorKind::Other => (Status::IoError, Some(e.to_string()), e),
+            _ => (
+                Status::IoError,
+                Some(format!("unhandled error from File::open: {e}")),
+                e,
+            ),
+        })?;
 
-    let meta = fh.metadata().map_err(|e| {
-        (
-            Status::IoError,
-            Some(format!("unable to determine file size: {e}")),
-        )
-    })?;
+    let meta = fh
+        .metadata()
+        .map_err(|e| {
+            (
+                Status::IoError,
+                Some(format!("unable to determine file size: {e}")),
+                e,
+            )
+        })
+        .await?;
 
     Ok((fh, meta))
 }
