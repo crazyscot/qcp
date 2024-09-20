@@ -6,6 +6,7 @@ use crate::protocol::control::{control_capnp, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{session_capnp, FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
+use crate::util::{lookup_host_by_family, AddressFamily};
 use crate::{cert::Credentials, protocol};
 
 use anyhow::{Context, Result};
@@ -40,6 +41,9 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     let _guard = span.enter();
     let credentials = crate::cert::Credentials::generate()?;
 
+    let host = unpacked_args.remote_host();
+    let server_address = lookup_host_by_family(host, AddressFamily::Any)?;
+
     info!("connecting to remote");
     let mut server = launch_server(&unpacked_args)?;
 
@@ -73,19 +77,7 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
         server_message.name
     );
 
-    let host = unpacked_args.remote_host();
-    let server_address = async_dns::lookup(host)
-        .await
-        .inspect_err(|e| {
-            error!("host name lookup for {host} failed: {e}");
-        })?
-        .next()
-        .ok_or_else(|| {
-            error!("host name lookup failed2");
-            anyhow::anyhow!("host name lookup failed")
-        })?;
-
-    let server_address_port = match server_address.ip_address {
+    let server_address_port = match server_address {
         std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, server_message.port).into(),
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };

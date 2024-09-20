@@ -1,6 +1,10 @@
 // QCP general utility code that didn't fit anywhere else
 // (c) 2024 Ross Younger
 
+use std::net::IpAddr;
+
+use anyhow::Context as _;
+
 /// Set up rust tracing.
 /// By default we log only our events (qcp), at a given trace level.
 /// This can be overridden at any time by setting RUST_LOG.
@@ -22,4 +26,31 @@ pub fn setup_tracing(trace_level: &str) -> anyhow::Result<()> {
         .with(filter)
         .init();
     Ok(())
+}
+
+// I am a little surprised that this enum, or something similar, doesn't appear in std::net.
+#[derive(Debug)]
+pub enum AddressFamily {
+    Any,
+    IPv4,
+    IPv6,
+}
+
+/// DNS lookup helper
+/// Results can be restricted to a given address family.
+/// Only the first matching result is returned.
+/// If there are no matching records of the required type, returns an error.
+pub fn lookup_host_by_family(host: &str, desired: AddressFamily) -> anyhow::Result<IpAddr> {
+    let candidates = dns_lookup::lookup_host(host)
+        .with_context(|| format!("host name lookup for {host} failed"))?;
+    let mut it = candidates.iter();
+
+    let found = match desired {
+        AddressFamily::Any => it.next(),
+        AddressFamily::IPv4 => it.find(|addr| addr.is_ipv4()),
+        AddressFamily::IPv6 => it.find(|addr| addr.is_ipv6()),
+    };
+    found
+        .map(|i| i.to_owned())
+        .ok_or(anyhow::anyhow!("host {host} found, but not as {desired:?}"))
 }
