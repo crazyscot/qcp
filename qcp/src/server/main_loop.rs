@@ -8,10 +8,10 @@ use std::sync::Arc;
 use crate::cert::Credentials;
 use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
+use crate::protocol::session::Command;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 
-use capnp::message::ReaderOptions;
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
@@ -19,7 +19,6 @@ use rustls_pki_types::CertificateDer;
 use tokio::fs;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader, BufWriter};
 use tokio::time::Duration;
-use tokio_util::compat::TokioAsyncReadCompatExt;
 use tracing::{debug, error, info, trace, trace_span};
 
 use super::ServerArgs;
@@ -179,9 +178,6 @@ async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::R
 }
 
 async fn handle_stream(mut sp: StreamPair, args: ServerArgs) -> anyhow::Result<()> {
-    use crate::protocol::session::session_capnp::{self, command};
-    use crate::protocol::session::{Command, GetArgs, PutArgs};
-
     let span = tracing::span!(
         tracing::Level::TRACE,
         "stream",
@@ -190,28 +186,7 @@ async fn handle_stream(mut sp: StreamPair, args: ServerArgs) -> anyhow::Result<(
     let _guard = span.enter();
 
     trace!("reading command");
-    let mut compat = sp.recv.compat();
-    let reader = capnp_futures::serialize::read_message(&mut compat, ReaderOptions::new()).await?;
-    let msg_reader: session_capnp::command::Reader = reader.get_root()?;
-    sp.recv = compat.into_inner();
-
-    // I can't help but think there should be a better way to do this.
-    // If msg_reader is still alive when we call down to an async, compile fails as msg_reader is not Send.
-    // To work around this I'm creating objects from msg_reader, which I then proceed to pick apart.
-    // Doesn't this defeat the point of capnproto in avoiding allocs?
-    // Or do I need to find a clever lifetime spec?
-    let cmd: Command = match msg_reader.get_args().which() {
-        Ok(command::args::Get(get)) => Command::Get(GetArgs {
-            filename: get?.get_filename()?.to_string()?,
-        }),
-        Ok(command::args::Put(put)) => Command::Put(PutArgs {
-            filename: put?.get_filename()?.to_string()?,
-        }),
-        Err(e) => {
-            error!("error reading command: {e}");
-            anyhow::bail!("error reading command");
-        }
-    };
+    let cmd = Command::read(&mut sp.recv).await?;
     match cmd {
         Command::Get(get) => handle_get(sp, &args, get.filename).await,
         Command::Put(put) => handle_put(sp, &args, put.filename).await,

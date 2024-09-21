@@ -16,23 +16,80 @@ pub mod session_capnp {
     include!(concat!(env!("OUT_DIR"), "/session_capnp.rs"));
 }
 
-pub const COMMAND_RESPONSE_MAX_LENGTH: u16 = 1024;
-
 use std::fmt::Display;
 
+use anyhow::Result;
 use capnp::message::ReaderOptions;
 use session_capnp::Status;
-use tokio_util::compat::TokioAsyncReadCompatExt as _;
+use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
+#[derive(Debug)]
 pub enum Command {
     Get(GetArgs),
     Put(PutArgs),
 }
+#[derive(Debug)]
 pub struct GetArgs {
     pub filename: String,
 }
+#[derive(Debug)]
 pub struct PutArgs {
     pub filename: String,
+}
+
+impl Command {
+    pub fn new_get(filename: &str) -> Self {
+        Self::Get(GetArgs {
+            filename: filename.to_string(),
+        })
+    }
+    pub fn new_put(filename: &str) -> Self {
+        Self::Put(PutArgs {
+            filename: filename.to_string(),
+        })
+    }
+
+    pub async fn write<W>(&self, write: &mut W) -> Result<()>
+    where
+        W: tokio::io::AsyncWrite + Unpin,
+    {
+        use crate::protocol::session::Command::*;
+        let mut msg = ::capnp::message::Builder::new_default();
+        let builder = msg.init_root::<session_capnp::command::Builder>();
+        match self {
+            Get(args) => {
+                let mut build_args = builder.init_args().init_get();
+                build_args.set_filename(&args.filename);
+            }
+            Put(args) => {
+                let mut build_args = builder.init_args().init_put();
+                build_args.set_filename(&args.filename);
+            }
+        }
+        capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
+        Ok(())
+    }
+    pub async fn read<R>(read: &mut R) -> Result<Self>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+    {
+        use session_capnp::command::{self, args::*};
+        let reader =
+            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
+        let msg: command::Reader = reader.get_root()?;
+
+        Ok(match msg.get_args().which() {
+            Ok(Get(get)) => Command::Get(GetArgs {
+                filename: get?.get_filename()?.to_string()?,
+            }),
+            Ok(Put(put)) => Command::Put(PutArgs {
+                filename: put?.get_filename()?.to_string()?,
+            }),
+            Err(e) => {
+                anyhow::bail!("error reading command: {e}");
+            }
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -88,9 +145,6 @@ pub struct FileHeader {
 }
 
 impl FileHeader {
-    pub fn serialize(&self) -> Vec<u8> {
-        Self::serialize_direct(self.size, &self.filename)
-    }
     pub fn serialize_direct(size: u64, filename: &str) -> Vec<u8> {
         let mut msg = ::capnp::message::Builder::new_default();
 
@@ -117,9 +171,6 @@ impl FileHeader {
 pub struct FileTrailer {}
 
 impl FileTrailer {
-    pub fn serialize(&self) -> Vec<u8> {
-        Self::serialize_direct()
-    }
     pub fn serialize_direct() -> Vec<u8> {
         let mut msg = ::capnp::message::Builder::new_default();
 

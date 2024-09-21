@@ -4,14 +4,14 @@
 use crate::client::args::ProcessedArgs;
 use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
-use crate::protocol::session::{session_capnp, FileHeader, FileTrailer, Response};
+use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
 use crate::util::{lookup_host_by_family, AddressFamily};
 use crate::{cert::Credentials, protocol};
 
 use super::ClientArgs;
 use anyhow::{Context, Result};
-use futures_util::{FutureExt, TryFutureExt};
+use futures_util::{FutureExt as _, TryFutureExt as _};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection};
 use rustls::RootCertStore;
@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
-use tokio::process::{Child, Command};
+use tokio::process::Child;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Level};
 
@@ -134,7 +134,7 @@ async fn process_request(
 
 fn launch_server(args: &ProcessedArgs) -> Result<Child> {
     let remote_host = args.remote_host();
-    let mut server = Command::new("ssh");
+    let mut server = tokio::process::Command::new("ssh");
     // TODO extra ssh options
     server.args([
         remote_host,
@@ -225,15 +225,9 @@ async fn do_get(
     let span = span!(Level::TRACE, "do_get");
     let _guard = span.enter();
 
-    let mut msg = ::capnp::message::Builder::new_default();
-    {
-        let command_msg = msg.init_root::<session_capnp::command::Builder>();
-        let mut args = command_msg.init_args().init_get();
-        args.set_filename(filename);
-    }
-    trace!("send GET");
-    let buf = capnp::serialize::write_message_to_words(&msg);
-    stream.send.write_all(&buf).await?;
+    let cmd = crate::protocol::session::Command::new_get(filename);
+    cmd.write(&mut stream.send).await?;
+    stream.send.flush().await?;
 
     // TODO protocol timeout?
     trace!("await response");
@@ -288,15 +282,10 @@ async fn do_put(
     }
     let mut file = BufReader::with_capacity(cli_args.original.file_buffer_size(), file);
 
-    let mut msg = ::capnp::message::Builder::new_default();
-    {
-        let command_msg = msg.init_root::<session_capnp::command::Builder>();
-        let mut args = command_msg.init_args().init_put();
-        args.set_filename(dest_filename);
-    }
     trace!("send PUT");
-    let buf = capnp::serialize::write_message_to_words(&msg);
-    stream.send.write_all(&buf).await?;
+    let cmd = crate::protocol::session::Command::new_put(dest_filename);
+    cmd.write(&mut stream.send).await?;
+    stream.send.flush().await?;
 
     // TODO protocol timeout?
     trace!("await response");
