@@ -189,7 +189,6 @@ pub fn create_endpoint(
 ) -> Result<quinn::Endpoint> {
     let span = span!(Level::TRACE, "create_endpoint");
     let _guard = span.enter();
-    trace!("Set up root store");
     let mut root_store = RootCertStore::empty();
     root_store.add(server_cert).map_err(|e| {
         error!("{e}");
@@ -197,22 +196,20 @@ pub fn create_endpoint(
     })?;
     let root_store = Arc::new(root_store);
 
-    trace!("create tls_config");
     let tls_config = Arc::new(
         rustls::ClientConfig::builder()
             .with_root_certificates(root_store)
             .with_client_auth_cert(credentials.cert_chain(), credentials.keypair.clone_key())?,
     );
 
-    trace!("create client config");
     let qcc = Arc::new(QuicClientConfig::try_from(tls_config)?);
     let config = quinn::ClientConfig::new(qcc);
 
-    trace!("create endpoint");
     let addr: SocketAddr = match server_addr {
         SocketAddr::V4(_) => SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into(),
         SocketAddr::V6(_) => SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0).into(),
     };
+    trace!("create endpoint");
     let mut endpoint = quinn::Endpoint::client(addr)?;
     endpoint.set_default_client_config(config);
 
@@ -261,6 +258,7 @@ async fn do_get(
     // Trailer is empty for now, but its existence means the server believes the file was sent correctly
 
     file_buf.flush().await?;
+    trace!("complete");
     Ok(())
 }
 

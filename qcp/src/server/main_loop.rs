@@ -56,7 +56,7 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
     let credentials = crate::cert::Credentials::generate()?;
     let endpoint = create_endpoint(&credentials, client_message)?;
     let local_addr = endpoint.local_addr()?;
-    info!("{local_addr}");
+    debug!("Local address is {local_addr}");
     ServerMessage::write(
         &mut stdout,
         local_addr.port(),
@@ -212,6 +212,8 @@ async fn handle_get(
     args: &ServerArgs,
     filename: String,
 ) -> anyhow::Result<()> {
+    let span = tracing::span!(tracing::Level::TRACE, "GET", filename);
+    let _guard = span.enter();
     debug!("GET {filename}");
 
     let path = PathBuf::from(&filename);
@@ -229,6 +231,7 @@ async fn handle_get(
     let mut file = BufReader::with_capacity(args.file_buffer_size(), file);
 
     // We believe we can fulfil this request.
+    trace!("responding OK");
     send_response(&mut stream.send, Status::Ok, None).await?;
 
     let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
@@ -238,6 +241,7 @@ async fn handle_get(
     let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
     write_buf.write_all(&header).await?;
 
+    trace!("file body I/O");
     let result = tokio::io::copy_buf(&mut file, &mut write_buf).await;
     match result {
         Ok(sent) if sent == meta.len() => (),
@@ -254,9 +258,11 @@ async fn handle_get(
         }
     }
 
+    trace!("trailer");
     let trailer = FileTrailer::serialize_direct();
     write_buf.write_all(&trailer).await?;
     write_buf.flush().await?;
+    trace!("complete");
     Ok(())
 }
 
@@ -273,9 +279,9 @@ async fn handle_put(
     args: &ServerArgs,
     destination: String,
 ) -> anyhow::Result<()> {
-    let span = trace_span!("handle_put");
+    let span = tracing::span!(tracing::Level::TRACE, "PUT");
     let _guard = span.enter();
-    debug!("destination {destination}"); // this might be a file or a directory
+    debug!("starting, destination={destination}");
 
     // Initial checks. Is the destination valid?
     let mut path = PathBuf::from(destination);
@@ -327,12 +333,13 @@ async fn handle_put(
     };
 
     // So far as we can tell, we believe we can fulfil this request.
+    trace!("responding OK");
     send_response(&mut stream.send, Status::Ok, None).await?;
 
     let mut recv_buf = BufReader::with_capacity(args.buffer_size, stream.recv);
     let header = FileHeader::read(&mut recv_buf).await?;
-    trace!("PUT: HEADER {header:?}");
 
+    debug!("PUT {} -> destination", &header.filename);
     if append_filename {
         path.push(header.filename);
     }
@@ -352,6 +359,7 @@ async fn handle_put(
         return Ok(());
     };
 
+    trace!("file body I/O");
     let mut limited_recv = recv_buf.take(header.size);
     if tokio::io::copy_buf(&mut limited_recv, &mut file)
         .await
@@ -363,6 +371,7 @@ async fn handle_put(
     // recv_buf has been moved but we can get it back for further operations
     recv_buf = limited_recv.into_inner();
 
+    trace!("trailer");
     let _trailer = FileTrailer::read(&mut recv_buf).await?;
     // TODO: Hash checks
 
@@ -370,6 +379,7 @@ async fn handle_put(
     send_response(&mut stream.send, Status::Ok, None).await?;
     stream.send.flush().await?;
 
+    trace!("complete");
     Ok(())
 }
 
