@@ -6,22 +6,20 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::cert::Credentials;
-use crate::protocol::control::{control_capnp, ClientMessage};
+use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 
 use capnp::message::ReaderOptions;
-use futures_util::io::AsyncReadExt as _;
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
 use rustls_pki_types::CertificateDer;
 use tokio::fs;
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader, BufWriter, Stdin};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader, BufWriter};
 use tokio::time::Duration;
-use tokio_util::compat::Compat as tokCompat;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use tokio_util::compat::TokioAsyncReadCompatExt;
 use tracing::{debug, error, info, trace, trace_span};
 
 use super::ServerArgs;
@@ -34,15 +32,17 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
     let span = trace_span!("SERVER");
     let _guard = span.enter();
 
-    let mut stdin = tokio::io::stdin().compat();
-    let mut stdout = unbuffered_stdout();
+    let mut stdin = tokio::io::stdin();
+    let mut stdout = tokio::io::stdout();
+    // There are tricks you can use to get an unbuffered handle to stdout, but at a typing cost.
+    // For now we'll manually flush after each write.
 
     stdout
         .write_all(protocol::control::BANNER.as_bytes())
         .await?;
+    stdout.flush().await?;
 
-    let credentials = crate::cert::Credentials::generate()?;
-    let client_message = read_client_message(&mut stdin).await.unwrap_or_else(|e| {
+    let client_message = ClientMessage::read(&mut stdin).await.unwrap_or_else(|e| {
         // try to be helpful if there's a human reading
         eprintln!("ERROR: This program expects a binary data packet on stdin.\n{e}");
         std::process::exit(1);
@@ -50,17 +50,18 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
     trace!("got client message length {}", client_message.cert.len());
 
     // TODO: Allow port to be specified
+    let credentials = crate::cert::Credentials::generate()?;
     let endpoint = create_endpoint(&credentials, client_message.cert.into())?;
-    info!("Server endpoint port={}", endpoint.local_addr()?.port());
-    {
-        let mut msg = ::capnp::message::Builder::new_default();
-        let mut server_msg = msg.init_root::<control_capnp::server_message::Builder>();
-        server_msg.set_cert(&credentials.certificate);
-        server_msg.set_port(endpoint.local_addr()?.port());
-        server_msg.set_name(&credentials.hostname);
-        trace!("sending server message");
-        capnp_futures::serialize::write_message(stdout.compat_write(), msg).await?;
-    }
+    let port = endpoint.local_addr()?.port();
+    info!("Server endpoint port={}", port);
+    ServerMessage::write(
+        &mut stdout,
+        port,
+        &credentials.certificate,
+        &credentials.hostname,
+    )
+    .await?;
+    stdout.flush().await?;
 
     loop {
         // Control channel main loop.
@@ -113,22 +114,6 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
     endpoint.wait_idle().await;
     trace!("finished");
     Ok(())
-}
-
-#[cfg(unix)]
-fn unbuffered_stdout() -> tokio::fs::File {
-    use std::os::fd::AsFd;
-    let owned = std::io::stdout().as_fd().try_clone_to_owned().unwrap();
-    let file = std::fs::File::from(owned);
-    tokio::fs::File::from_std(file)
-}
-
-async fn read_client_message(stdin: &mut tokCompat<Stdin>) -> anyhow::Result<ClientMessage> {
-    debug!("waiting for client message");
-    let reader = capnp_futures::serialize::read_message(stdin, ReaderOptions::new()).await?;
-    let msg_reader: control_capnp::client_message::Reader = reader.get_root()?;
-    let cert = Vec::<u8>::from(msg_reader.get_cert()?);
-    Ok(ClientMessage { cert })
 }
 
 fn create_endpoint(

@@ -18,6 +18,10 @@
  * On the wire the Client and Server messages are sent using capnproto with standard framing.
  */
 
+use anyhow::Result;
+use capnp::message::ReaderOptions;
+use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
+
 pub mod control_capnp {
     include!(concat!(env!("OUT_DIR"), "/control_capnp.rs"));
 }
@@ -25,11 +29,37 @@ pub mod control_capnp {
 pub const BANNER: &str = "qcpcs\n";
 
 /// Rust type analogue to the capnproto struct
+#[derive(Debug)]
 pub struct ClientMessage {
     pub cert: Vec<u8>,
 }
 
+impl ClientMessage {
+    // This is weirdly asymmetric to avoid needless allocs.
+    pub async fn write<W>(write: &mut W, cert: &[u8]) -> Result<()>
+    where
+        W: tokio::io::AsyncWrite + Unpin,
+    {
+        let mut msg = ::capnp::message::Builder::new_default();
+        let mut builder = msg.init_root::<control_capnp::client_message::Builder>();
+        builder.set_cert(cert);
+        capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
+        Ok(())
+    }
+    pub async fn read<R>(read: &mut R) -> Result<Self>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+    {
+        let reader =
+            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
+        let msg_reader: control_capnp::client_message::Reader = reader.get_root()?;
+        let cert = msg_reader.get_cert()?.to_vec();
+        Ok(Self { cert })
+    }
+}
+
 /// Rust type analogue to the capnproto struct
+#[derive(Debug)]
 pub struct ServerMessage {
     /// Port the server is bound to
     pub port: u16,
@@ -37,6 +67,35 @@ pub struct ServerMessage {
     pub cert: Vec<u8>,
     /// Server's idea of its hostname (should match the certificate)
     pub name: String,
+}
+
+impl ServerMessage {
+    // This is weirdly asymmetric to avoid needless allocs.
+    pub async fn write<W>(write: &mut W, port: u16, cert: &[u8], name: &str) -> Result<()>
+    where
+        W: tokio::io::AsyncWrite + Unpin,
+    {
+        let mut msg = ::capnp::message::Builder::new_default();
+        let mut builder = msg.init_root::<control_capnp::server_message::Builder>();
+        builder.set_port(port);
+        builder.set_cert(cert);
+        builder.set_name(name);
+        capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
+        Ok(())
+    }
+
+    pub async fn read<R>(read: &mut R) -> anyhow::Result<Self>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+    {
+        let reader =
+            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
+        let msg_reader: control_capnp::server_message::Reader = reader.get_root()?;
+        let cert = msg_reader.get_cert()?.to_vec();
+        let name = msg_reader.get_name()?.to_str()?.to_string();
+        let port = msg_reader.get_port();
+        Ok(Self { port, cert, name })
+    }
 }
 
 #[cfg(test)]

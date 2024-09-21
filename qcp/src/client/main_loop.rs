@@ -2,7 +2,7 @@
 // (c) 2024 Ross Younger
 
 use crate::client::args::ProcessedArgs;
-use crate::protocol::control::{control_capnp, ServerMessage};
+use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{session_capnp, FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
@@ -11,7 +11,6 @@ use crate::{cert::Credentials, protocol};
 
 use super::ClientArgs;
 use anyhow::{Context, Result};
-use capnp::message::ReaderOptions;
 use futures_util::{FutureExt, TryFutureExt};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection};
@@ -24,7 +23,6 @@ use std::sync::Arc;
 use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, Command};
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
-use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Level};
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
@@ -46,28 +44,12 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     let mut server = launch_server(&unpacked_args)?;
 
     wait_for_banner(&mut server, args.timeout).await?;
+    let mut server_input = server.stdin.take().unwrap();
+    ClientMessage::write(&mut server_input, &credentials.certificate).await?;
 
-    let mut server_input = server.stdin.take().unwrap().compat_write();
-    {
-        let mut msg = ::capnp::message::Builder::new_default();
-        let mut client_msg = msg.init_root::<control_capnp::client_message::Builder>();
-        client_msg.set_cert(&credentials.certificate);
-        trace!("sending client message");
-        capnp_futures::serialize::write_message(&mut server_input, msg).await?;
-    }
-
-    let server_output = server.stdout.take().unwrap();
-    let server_message = {
-        trace!("waiting for server message");
-        let reader =
-            capnp_futures::serialize::read_message(server_output.compat(), ReaderOptions::new())
-                .await?;
-        let msg_reader: control_capnp::server_message::Reader = reader.get_root()?;
-        let cert = Vec::<u8>::from(msg_reader.get_cert()?);
-        let port = msg_reader.get_port();
-        let name = msg_reader.get_name()?.to_string()?;
-        ServerMessage { port, cert, name }
-    };
+    let mut server_output = server.stdout.take().unwrap();
+    trace!("waiting for server message");
+    let server_message = ServerMessage::read(&mut server_output).await?;
     debug!(
         "Got server message; cert length {}, port {}, hostname {}",
         server_message.cert.len(),
@@ -111,7 +93,7 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
 
     info!("shutting down");
     // close child process stdin, which should trigger its exit
-    server_input.into_inner().shutdown().await?;
+    server_input.shutdown().await?;
     // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
     connection.close(0u8.into(), "".as_bytes());
     let closedown_fut = endpoint.wait_idle().then(|_| server.wait());
