@@ -10,7 +10,7 @@ fn main() -> anyhow::Result<()> {
         qcp::util::setup_tracing("trace")?;
     }
 
-    qcp::server::main().map_err(|e| {
+    qcp::server::main(&args).map_err(|e| {
         tracing::error!("{e}");
         // TODO: Decide about error handling. For now detailed anyhow output is fine.
         e

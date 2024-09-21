@@ -13,23 +13,24 @@ use crate::protocol::{self, StreamPair};
 
 use capnp::message::ReaderOptions;
 use futures_util::io::AsyncReadExt as _;
-use futures_util::AsyncWriteExt;
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
 use rustls_pki_types::CertificateDer;
 use tokio::fs;
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, Stdin};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader, BufWriter, Stdin};
 use tokio::time::Duration;
 use tokio_util::compat::Compat as tokCompat;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{debug, error, info, trace, trace_span};
 
+use super::ServerArgs;
+
 const PROTOCOL_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Main entrypoint
 #[tokio::main]
-pub async fn server_main() -> anyhow::Result<()> {
+pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
     let span = trace_span!("SERVER");
     let _guard = span.enter();
 
@@ -92,7 +93,7 @@ pub async fn server_main() -> anyhow::Result<()> {
                         break;
                     },
                     Some(conn) => {
-                        let conn_fut = handle_connection(conn);
+                        let conn_fut = handle_connection(conn, *args);
                         tokio::spawn(async move {
                             if let Err(e) = conn_fut.await {
                                 error!("inward stream failed: {reason}", reason = e.to_string());
@@ -154,7 +155,7 @@ fn create_endpoint(
     Ok(endpoint)
 }
 
-async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
+async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::Result<()> {
     let span = trace_span!("incoming");
     let _guard = span.enter();
 
@@ -180,7 +181,7 @@ async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
                 Ok(s) => StreamPair::from(s),
             };
             trace!("opened stream");
-            let fut = handle_stream(stream);
+            let fut = handle_stream(stream, args);
             tokio::spawn(async move {
                 if let Err(e) = fut.await {
                     error!("stream failed: {e}",);
@@ -192,20 +193,22 @@ async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
+async fn handle_stream(mut sp: StreamPair, args: ServerArgs) -> anyhow::Result<()> {
     use crate::protocol::session::session_capnp::{self, command};
     use crate::protocol::session::{Command, GetArgs, PutArgs};
 
     let span = tracing::span!(
         tracing::Level::TRACE,
         "stream",
-        id = sp.send.get_ref().id().to_string()
+        id = sp.send.id().to_string()
     );
     let _guard = span.enter();
 
     trace!("reading command");
-    let reader = capnp_futures::serialize::read_message(&mut sp.recv, ReaderOptions::new()).await?;
+    let mut compat = sp.recv.compat();
+    let reader = capnp_futures::serialize::read_message(&mut compat, ReaderOptions::new()).await?;
     let msg_reader: session_capnp::command::Reader = reader.get_root()?;
+    sp.recv = compat.into_inner();
 
     // I can't help but think there should be a better way to do this.
     // If msg_reader is still alive when we call down to an async, compile fails as msg_reader is not Send.
@@ -225,35 +228,43 @@ async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
         }
     };
     match cmd {
-        Command::Get(args) => handle_get(&mut sp, args.filename).await,
-        Command::Put(args) => handle_put(&mut sp, args.filename).await,
+        Command::Get(get) => handle_get(sp, &args, get.filename).await,
+        Command::Put(put) => handle_put(sp, &args, put.filename).await,
     }
 }
 
-async fn handle_get(sp: &mut StreamPair, filename: String) -> anyhow::Result<()> {
+async fn handle_get(
+    mut stream: StreamPair,
+    args: &ServerArgs,
+    filename: String,
+) -> anyhow::Result<()> {
     debug!("GET {filename}");
 
     let path = PathBuf::from(&filename);
-    let (mut file, meta) = match crate::util::open_file_read(&filename).await {
+    let (file, meta) = match crate::util::open_file_read(&filename).await {
         Ok(res) => res,
         Err((status, message, _)) => {
-            send_response(&mut sp.send, status, message.as_deref()).await?;
+            send_response(&mut stream.send, status, message.as_deref()).await?;
             return Ok(());
         }
     };
     if meta.is_dir() {
-        send_response(&mut sp.send, Status::ItIsADirectory, None).await?;
+        send_response(&mut stream.send, Status::ItIsADirectory, None).await?;
         return Ok(());
     }
+    let mut file = BufReader::with_capacity(args.file_buffer_size(), file);
+
     // We believe we can fulfil this request.
-    send_response(&mut sp.send, Status::Ok, None).await?;
+    send_response(&mut stream.send, Status::Ok, None).await?;
 
     let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
 
-    let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
-    sp.send.write_all(&header).await?;
+    let mut write_buf = BufWriter::with_capacity(args.buffer_size, stream.send);
 
-    let result = tokio::io::copy(&mut file, sp.send.get_mut()).await;
+    let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
+    write_buf.write_all(&header).await?;
+
+    let result = tokio::io::copy_buf(&mut file, &mut write_buf).await;
     match result {
         Ok(sent) if sent == meta.len() => (),
         Ok(sent) => {
@@ -270,8 +281,8 @@ async fn handle_get(sp: &mut StreamPair, filename: String) -> anyhow::Result<()>
     }
 
     let trailer = FileTrailer::serialize_direct();
-    sp.send.write_all(&trailer).await?;
-    sp.send.flush().await?;
+    write_buf.write_all(&trailer).await?;
+    write_buf.flush().await?;
     Ok(())
 }
 
@@ -283,7 +294,11 @@ async fn dest_is_writeable(dest: &PathBuf) -> bool {
     }
 }
 
-async fn handle_put(sp: &mut StreamPair, destination: String) -> anyhow::Result<()> {
+async fn handle_put(
+    mut stream: StreamPair,
+    args: &ServerArgs,
+    destination: String,
+) -> anyhow::Result<()> {
     let span = trace_span!("handle_put");
     let _guard = span.enter();
     debug!("destination {destination}"); // this might be a file or a directory
@@ -301,7 +316,7 @@ async fn handle_put(sp: &mut StreamPair, destination: String) -> anyhow::Result<
         // Destination exists
         if !dest_is_writeable(&path).await {
             send_response(
-                &mut sp.send,
+                &mut stream.send,
                 Status::IncorrectPermissions,
                 Some("cannot write to destination"),
             )
@@ -321,7 +336,7 @@ async fn handle_put(sp: &mut StreamPair, destination: String) -> anyhow::Result<
         if path_test.is_dir() {
             if !dest_is_writeable(&path_test).await {
                 send_response(
-                    &mut sp.send,
+                    &mut stream.send,
                     Status::IncorrectPermissions,
                     Some("cannot write to destination"),
                 )
@@ -332,15 +347,16 @@ async fn handle_put(sp: &mut StreamPair, destination: String) -> anyhow::Result<
             false
         } else {
             // No parent directory
-            send_response(&mut sp.send, Status::DirectoryDoesNotExist, None).await?;
+            send_response(&mut stream.send, Status::DirectoryDoesNotExist, None).await?;
             return Ok(());
         }
     };
 
     // So far as we can tell, we believe we can fulfil this request.
-    send_response(&mut sp.send, Status::Ok, None).await?;
+    send_response(&mut stream.send, Status::Ok, None).await?;
 
-    let header = FileHeader::read(&mut sp.recv).await?;
+    let mut recv_buf = BufReader::with_capacity(args.buffer_size, stream.recv);
+    let header = FileHeader::read(&mut recv_buf).await?;
     trace!("PUT: HEADER {header:?}");
 
     if append_filename {
@@ -362,27 +378,29 @@ async fn handle_put(sp: &mut StreamPair, destination: String) -> anyhow::Result<
         return Ok(());
     };
 
-    let mut read_n = sp.recv.get_mut().take(header.size);
-    if tokio::io::copy(&mut read_n, &mut file)
+    let mut limited_recv = recv_buf.take(header.size);
+    if tokio::io::copy_buf(&mut limited_recv, &mut file)
         .await
         .inspect_err(|e| error!("Failed to write to destination: {e}"))
         .is_err()
     {
         return Ok(());
     }
+    // recv_buf has been moved but we can get it back for further operations
+    recv_buf = limited_recv.into_inner();
 
-    let _trailer = FileTrailer::read(&mut sp.recv).await?;
+    let _trailer = FileTrailer::read(&mut recv_buf).await?;
     // TODO: Hash checks
 
     file.flush().await?;
-    send_response(&mut sp.send, Status::Ok, None).await?;
-    sp.send.flush().await?;
+    send_response(&mut stream.send, Status::Ok, None).await?;
+    stream.send.flush().await?;
 
     Ok(())
 }
 
 async fn send_response(
-    send: &mut tokCompat<quinn::SendStream>,
+    send: &mut quinn::SendStream,
     status: Status,
     message: Option<&str>,
 ) -> anyhow::Result<()> {

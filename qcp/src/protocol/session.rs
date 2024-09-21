@@ -21,9 +21,8 @@ pub const COMMAND_RESPONSE_MAX_LENGTH: u16 = 1024;
 use std::fmt::Display;
 
 use capnp::message::ReaderOptions;
-use quinn::RecvStream;
 use session_capnp::Status;
-use tokio_util::compat::Compat as tokCompat;
+use tokio_util::compat::TokioAsyncReadCompatExt as _;
 
 pub enum Command {
     Get(GetArgs),
@@ -56,8 +55,12 @@ impl Response {
         }
         capnp::serialize::write_message_to_words(&msg)
     }
-    pub async fn read(read: &mut tokCompat<RecvStream>) -> anyhow::Result<Self> {
-        let reader = capnp_futures::serialize::read_message(read, ReaderOptions::new()).await?;
+    pub async fn read<R>(read: &mut R) -> anyhow::Result<Self>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+    {
+        let reader =
+            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
         let msg_reader: session_capnp::response::Reader = reader.get_root()?;
         let status = msg_reader.get_status()?;
         let message = if msg_reader.has_message() {
@@ -96,8 +99,12 @@ impl FileHeader {
         response_msg.set_filename(filename);
         capnp::serialize::write_message_to_words(&msg)
     }
-    pub async fn read(read: &mut tokCompat<RecvStream>) -> anyhow::Result<Self> {
-        let reader = capnp_futures::serialize::read_message(read, ReaderOptions::new()).await?;
+    pub async fn read<R>(read: &mut R) -> anyhow::Result<Self>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+    {
+        let reader =
+            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
         let msg_reader: session_capnp::file_header::Reader = reader.get_root()?;
         Ok(Self {
             size: msg_reader.get_size(),
@@ -119,8 +126,12 @@ impl FileTrailer {
         let mut _response_msg = msg.init_root::<session_capnp::file_trailer::Builder>();
         capnp::serialize::write_message_to_words(&msg)
     }
-    pub async fn read(read: &mut tokCompat<RecvStream>) -> anyhow::Result<Self> {
-        let reader = capnp_futures::serialize::read_message(read, ReaderOptions::new()).await?;
+    pub async fn read<R>(read: &mut R) -> anyhow::Result<Self>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+    {
+        let reader =
+            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
         let _msg_reader: session_capnp::file_trailer::Reader = reader.get_root()?;
         Ok(Self {})
     }

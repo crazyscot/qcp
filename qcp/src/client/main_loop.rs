@@ -9,9 +9,10 @@ use crate::protocol::{RawStreamPair, StreamPair};
 use crate::util::{lookup_host_by_family, AddressFamily};
 use crate::{cert::Credentials, protocol};
 
+use super::ClientArgs;
 use anyhow::{Context, Result};
 use capnp::message::ReaderOptions;
-use futures_util::{AsyncWriteExt as _, FutureExt, TryFutureExt};
+use futures_util::{FutureExt, TryFutureExt};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection};
 use rustls::RootCertStore;
@@ -20,13 +21,11 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, Command};
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Level};
-
-use super::ClientArgs;
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -145,9 +144,9 @@ async fn process_request(
 ) -> anyhow::Result<()> {
     if args.source.host.is_some() {
         // This is a Get
-        do_get(sp, &args.source.filename, &args.destination.filename).await
+        do_get(sp, &args.source.filename, &args.destination.filename, args).await
     } else {
-        do_put(sp, &args.source.filename, &args.destination.filename).await
+        do_put(sp, &args.source.filename, &args.destination.filename, args).await
     }
 }
 
@@ -155,7 +154,12 @@ fn launch_server(args: &ProcessedArgs) -> Result<Child> {
     let remote_host = args.remote_host();
     let mut server = Command::new("ssh");
     // TODO extra ssh options
-    server.args([remote_host, "qcpt"]);
+    server.args([
+        remote_host,
+        "qcpt",
+        "-b",
+        &args.original.buffer_size.to_string(),
+    ]);
     if args.original.server_debug {
         server.arg("--debug");
     }
@@ -228,7 +232,12 @@ pub fn create_endpoint(
     Ok(endpoint)
 }
 
-async fn do_get(sp: RawStreamPair, filename: &str, dest: &str) -> Result<()> {
+async fn do_get(
+    sp: RawStreamPair,
+    filename: &str,
+    dest: &str,
+    cli_args: &ProcessedArgs<'_>,
+) -> Result<()> {
     let mut stream: StreamPair = sp.into();
 
     let span = span!(Level::TRACE, "do_get");
@@ -241,7 +250,8 @@ async fn do_get(sp: RawStreamPair, filename: &str, dest: &str) -> Result<()> {
         args.set_filename(filename);
     }
     trace!("send GET");
-    capnp_futures::serialize::write_message(&mut stream.send, msg).await?;
+    let buf = capnp::serialize::write_message_to_words(&msg);
+    stream.send.write_all(&buf).await?;
 
     // TODO protocol timeout?
     trace!("await response");
@@ -252,28 +262,40 @@ async fn do_get(sp: RawStreamPair, filename: &str, dest: &str) -> Result<()> {
         anyhow::bail!(format!("GET ({filename}) failed: {response}"));
     }
 
-    let header = FileHeader::read(&mut stream.recv).await?;
+    let mut recv_buf = BufReader::with_capacity(cli_args.original.buffer_size, stream.recv);
+
+    let header = FileHeader::read(&mut recv_buf).await?;
     trace!("GET: HEADER {header:?}");
 
-    let mut file = crate::util::open_file_write(dest, &header).await?;
-    let mut read_n = stream.recv.get_mut().take(header.size);
-    tokio::io::copy(&mut read_n, &mut file).await?;
+    let file = crate::util::open_file_write(dest, &header).await?;
+    let mut file_buf = BufWriter::with_capacity(cli_args.original.file_buffer_size(), file);
 
-    let _trailer = FileTrailer::read(&mut stream.recv).await?;
+    let mut limited_recv = recv_buf.take(header.size);
+    tokio::io::copy_buf(&mut limited_recv, &mut file_buf).await?;
+
+    // stream.recv has been moved but we can get it back for further operations
+    recv_buf = limited_recv.into_inner();
+
+    let _trailer = FileTrailer::read(&mut recv_buf).await?;
     // Trailer is empty for now, but its existence means the server believes the file was sent correctly
 
-    file.flush().await?;
+    file_buf.flush().await?;
     Ok(())
 }
 
-async fn do_put(sp: RawStreamPair, src_filename: &str, dest_filename: &str) -> Result<()> {
+async fn do_put(
+    sp: RawStreamPair,
+    src_filename: &str,
+    dest_filename: &str,
+    cli_args: &ProcessedArgs<'_>,
+) -> Result<()> {
     let mut stream: StreamPair = sp.into();
 
     let span = span!(Level::TRACE, "do_put");
     let _guard = span.enter();
 
     let path = PathBuf::from(src_filename);
-    let (mut file, meta) = match crate::util::open_file_read(src_filename).await {
+    let (file, meta) = match crate::util::open_file_read(src_filename).await {
         Ok(res) => res,
         Err((_, _, error)) => {
             return Err(error.into());
@@ -282,6 +304,7 @@ async fn do_put(sp: RawStreamPair, src_filename: &str, dest_filename: &str) -> R
     if meta.is_dir() {
         anyhow::bail!("PUT: Source is a directory");
     }
+    let mut file = BufReader::with_capacity(cli_args.original.file_buffer_size(), file);
 
     let mut msg = ::capnp::message::Builder::new_default();
     {
@@ -290,7 +313,8 @@ async fn do_put(sp: RawStreamPair, src_filename: &str, dest_filename: &str) -> R
         args.set_filename(dest_filename);
     }
     trace!("send PUT");
-    capnp_futures::serialize::write_message(&mut stream.send, msg).await?;
+    let buf = capnp::serialize::write_message_to_words(&msg);
+    stream.send.write_all(&buf).await?;
 
     // TODO protocol timeout?
     trace!("await response");
@@ -301,15 +325,16 @@ async fn do_put(sp: RawStreamPair, src_filename: &str, dest_filename: &str) -> R
         anyhow::bail!(format!("PUT ({src_filename}) failed: {response}"));
     }
 
+    let mut send_buf = BufWriter::with_capacity(cli_args.original.buffer_size, stream.send);
+
     // The filename in the protocol is the file part only of src_filename
     let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
     let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
-    stream.send.write_all(&header).await?;
+    send_buf.write_all(&header).await?;
 
     // A server-side abort might happen part-way through a large transfer.
+    let result = tokio::io::copy_buf(&mut file, &mut send_buf).await;
 
-    // HERE: For this to not deadlock, we need to also read from the reader side.
-    let result = tokio::io::copy(&mut file, stream.send.get_mut()).await;
     match result {
         Ok(sent) if sent == meta.len() => (),
         Ok(sent) => {
@@ -339,8 +364,8 @@ async fn do_put(sp: RawStreamPair, src_filename: &str, dest_filename: &str) -> R
     }
 
     let trailer = FileTrailer::serialize_direct();
-    stream.send.write_all(&trailer).await?;
-    stream.send.flush().await?;
+    send_buf.write_all(&trailer).await?;
+    send_buf.flush().await?;
 
     let response = Response::read(&mut stream.recv).await?;
     if response.status != Status::Ok {
