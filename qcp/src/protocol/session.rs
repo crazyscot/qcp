@@ -23,7 +23,7 @@ use capnp::message::ReaderOptions;
 use session_capnp::Status;
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
-#[derive(Debug)]
+#[derive(Debug, strum_macros::Display)]
 pub enum Command {
     Get(GetArgs),
     Put(PutArgs),

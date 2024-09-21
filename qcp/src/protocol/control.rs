@@ -18,6 +18,8 @@
  * On the wire the Client and Server messages are sent using capnproto with standard framing.
  */
 
+use crate::util::AddressFamily;
+
 use anyhow::Result;
 use capnp::message::ReaderOptions;
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
@@ -32,17 +34,19 @@ pub const BANNER: &str = "qcpcs\n";
 #[derive(Debug)]
 pub struct ClientMessage {
     pub cert: Vec<u8>,
+    pub connection_type: AddressFamily,
 }
 
 impl ClientMessage {
     // This is weirdly asymmetric to avoid needless allocs.
-    pub async fn write<W>(write: &mut W, cert: &[u8]) -> Result<()>
+    pub async fn write<W>(write: &mut W, cert: &[u8], conn_type: AddressFamily) -> Result<()>
     where
         W: tokio::io::AsyncWrite + Unpin,
     {
         let mut msg = ::capnp::message::Builder::new_default();
         let mut builder = msg.init_root::<control_capnp::client_message::Builder>();
         builder.set_cert(cert);
+        builder.set_connection_type(conn_type.try_into()?);
         capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
         Ok(())
     }
@@ -50,11 +54,17 @@ impl ClientMessage {
     where
         R: tokio::io::AsyncRead + Unpin,
     {
+        use control_capnp::client_message::ConnectionType as wire_af;
+
         let reader =
             capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
         let msg_reader: control_capnp::client_message::Reader = reader.get_root()?;
         let cert = msg_reader.get_cert()?.to_vec();
-        Ok(Self { cert })
+        let conn_type: wire_af = msg_reader.get_connection_type()?;
+        Ok(Self {
+            cert,
+            connection_type: conn_type.into(),
+        })
     }
 }
 
@@ -103,6 +113,8 @@ mod tests {
 
     // These tests are really only exercising capnp, proving that we know how to drive it correctly.
 
+    use crate::util::AddressFamily;
+
     use super::{control_capnp, ClientMessage, ServerMessage};
     use anyhow::Result;
     use capnp::{message::ReaderOptions, serialize};
@@ -115,11 +127,15 @@ mod tests {
     }
 
     pub fn decode_client(wire: &[u8]) -> Result<ClientMessage> {
-        use control_capnp::client_message;
+        use control_capnp::client_message::{self};
         let reader = serialize::read_message(wire, ReaderOptions::new())?;
         let cert_reader: client_message::Reader = reader.get_root()?;
         let cert = Vec::<u8>::from(cert_reader.get_cert()?);
-        Ok(ClientMessage { cert })
+        let family: AddressFamily = cert_reader.get_connection_type()?.into();
+        Ok(ClientMessage {
+            cert,
+            connection_type: family,
+        })
     }
     pub fn encode_server(port: u16, cert: &[u8]) -> Vec<u8> {
         let mut msg = ::capnp::message::Builder::new_default();

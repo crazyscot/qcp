@@ -19,6 +19,7 @@ gethostname = "0.5.0"
 quinn = "0.11.5"
 rcgen = { version = "0.13.1", features = ["crypto", "pem", "ring"] }
 rustls-pki-types = "1.8.0"
+strum_macros = "0.26.4"
 tokio = { version = "1.40.0", default-features = true, features = ["full", "io-std", "io-util"] }
 tokio-util = { version = "0.7.12", features = ["compat"] }
 tracing = { workspace = true }

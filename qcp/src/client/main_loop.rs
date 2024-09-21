@@ -6,7 +6,7 @@ use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
-use crate::util::{lookup_host_by_family, AddressFamily};
+use crate::util::lookup_host_by_family;
 use crate::{cert::Credentials, protocol};
 
 use super::ClientArgs;
@@ -38,14 +38,19 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     let credentials = crate::cert::Credentials::generate()?;
 
     let host = unpacked_args.remote_host();
-    let server_address = lookup_host_by_family(host, AddressFamily::Any)?;
+    let server_address = lookup_host_by_family(host, args.address_family())?;
 
     info!("connecting to remote");
     let mut server = launch_server(&unpacked_args)?;
 
     wait_for_banner(&mut server, args.timeout).await?;
     let mut server_input = server.stdin.take().unwrap();
-    ClientMessage::write(&mut server_input, &credentials.certificate).await?;
+    ClientMessage::write(
+        &mut server_input,
+        &credentials.certificate,
+        server_address.into(),
+    )
+    .await?;
 
     let mut server_output = server.stdout.take().unwrap();
     trace!("waiting for server message");

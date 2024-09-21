@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 // qcp client - command line interface
 // (c) 2024 Ross Younger
-use crate::build_info;
+use crate::{build_info, util::AddressFamily};
 use clap::Parser;
 
 #[derive(Debug, Parser)]
@@ -39,6 +39,12 @@ pub struct ClientArgs {
     /// The network buffer size to use (default 2MB; tune to your needs)
     #[arg(short('b'), long, default_value("2097152"))]
     pub buffer_size: usize,
+    /// Forces IPv4 connection (default: autodetect)
+    #[arg(short = '4', long, action)]
+    pub ipv4: bool,
+    /// Forces IPv6 connection (default: autodetect)
+    #[arg(short = '6', long, action, conflicts_with("ipv4"))]
+    pub ipv6: bool,
 
     // Positional arguments
     #[arg()]
@@ -53,6 +59,16 @@ impl ClientArgs {
     // When reading, it's unclear whether it is material but it might come into play if you have a slow source disk.
     pub(crate) fn file_buffer_size(&self) -> usize {
         self.buffer_size * 4
+    }
+
+    pub(crate) fn address_family(&self) -> AddressFamily {
+        if self.ipv4 {
+            AddressFamily::IPv4
+        } else if self.ipv6 {
+            AddressFamily::IPv6
+        } else {
+            AddressFamily::Any
+        }
     }
 }
 

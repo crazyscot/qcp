@@ -9,6 +9,7 @@ use std::{
     str::FromStr as _,
 };
 
+use crate::protocol::control::control_capnp;
 use crate::protocol::session::session_capnp::Status;
 use anyhow::Context as _;
 use futures_util::TryFutureExt as _;
@@ -37,11 +38,43 @@ pub fn setup_tracing(trace_level: &str) -> anyhow::Result<()> {
 }
 
 // I am a little surprised that this enum, or something similar, doesn't appear in std::net.
-#[derive(Debug)]
+#[derive(Debug, strum_macros::Display)]
 pub enum AddressFamily {
     Any,
     IPv4,
     IPv6,
+}
+
+impl From<control_capnp::client_message::ConnectionType> for AddressFamily {
+    fn from(value: control_capnp::client_message::ConnectionType) -> Self {
+        use control_capnp::client_message::ConnectionType as wire_af;
+        match value {
+            wire_af::Ipv4 => AddressFamily::IPv4,
+            wire_af::Ipv6 => AddressFamily::IPv6,
+        }
+    }
+}
+
+impl From<std::net::IpAddr> for AddressFamily {
+    fn from(value: std::net::IpAddr) -> Self {
+        match value {
+            IpAddr::V4(_) => AddressFamily::IPv4,
+            IpAddr::V6(_) => AddressFamily::IPv6,
+        }
+    }
+}
+
+impl TryFrom<AddressFamily> for control_capnp::client_message::ConnectionType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: AddressFamily) -> Result<Self, Self::Error> {
+        use control_capnp::client_message::ConnectionType as wire_af;
+        match value {
+            AddressFamily::Any => anyhow::bail!("AddressFamily::Any not supported by protocol"),
+            AddressFamily::IPv4 => Ok(wire_af::Ipv4),
+            AddressFamily::IPv6 => Ok(wire_af::Ipv6),
+        }
+    }
 }
 
 /// DNS lookup helper

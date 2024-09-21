@@ -3,6 +3,12 @@
 
 struct ClientMessage {
     cert @0: Data; # Client's self-signed certificate (DER)
+    connectionType @1: ConnectionType; # Specified by client
+
+    enum ConnectionType {
+        ipv4 @0;
+        ipv6 @1;
+    }
 }
 
 struct ServerMessage {

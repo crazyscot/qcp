@@ -1,7 +1,7 @@
 // qcp server event loop
 // (c) 2024 Ross Younger
 
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -46,16 +46,20 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
         eprintln!("ERROR: This program expects a binary data packet on stdin.\n{e}");
         std::process::exit(1);
     });
-    trace!("got client message length {}", client_message.cert.len());
+    trace!(
+        "got client message length {}, using {}",
+        client_message.cert.len(),
+        client_message.connection_type,
+    );
 
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
-    let endpoint = create_endpoint(&credentials, client_message.cert.into())?;
-    let port = endpoint.local_addr()?.port();
-    info!("Server endpoint port={}", port);
+    let endpoint = create_endpoint(&credentials, client_message)?;
+    let local_addr = endpoint.local_addr()?;
+    info!("{local_addr}");
     ServerMessage::write(
         &mut stdout,
-        port,
+        local_addr.port(),
         &credentials.certificate,
         &credentials.hostname,
     )
@@ -117,8 +121,10 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
 
 fn create_endpoint(
     credentials: &Credentials,
-    client_cert: CertificateDer<'_>,
+    client_message: ClientMessage,
 ) -> anyhow::Result<quinn::Endpoint> {
+    let client_cert: CertificateDer<'_> = client_message.cert.into();
+
     let mut root_store = RootCertStore::empty();
     root_store.add(client_cert)?;
     let root_store = Arc::new(root_store);
@@ -133,10 +139,18 @@ fn create_endpoint(
     let config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
 
     // TODO let caller specify port
-    let addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-    let endpoint = quinn::Endpoint::server(config, addr)?;
-
-    Ok(endpoint)
+    let addr = match client_message.connection_type {
+        crate::util::AddressFamily::Any => {
+            anyhow::bail!("address family Any not supported here (can't happen)")
+        }
+        crate::util::AddressFamily::IPv4 => {
+            SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0)
+        }
+        crate::util::AddressFamily::IPv6 => {
+            SocketAddr::new(std::net::IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0)
+        }
+    };
+    Ok(quinn::Endpoint::server(config, addr)?)
 }
 
 async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::Result<()> {
