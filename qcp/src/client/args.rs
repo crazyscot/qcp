@@ -46,6 +46,9 @@ pub struct ClientArgs {
     /// Forces IPv6 connection (default: autodetect)
     #[arg(short = '6', long, action, conflicts_with("ipv4"))]
     pub ipv6: bool,
+    /// Prints timing profile data after completion
+    #[arg(long, action)]
+    pub profile: bool,
 
     // Positional arguments
     #[arg()]

@@ -6,5 +6,7 @@ pub use dns::{lookup_host_by_family, AddressFamily};
 
 pub mod io;
 
+pub mod time;
+
 mod tracing;
 pub use tracing::setup_tracing;

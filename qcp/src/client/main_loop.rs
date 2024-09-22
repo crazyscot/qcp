@@ -6,7 +6,7 @@ use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
-use crate::util::lookup_host_by_family;
+use crate::util::{lookup_host_by_family, time::StopwatchChain};
 use crate::{cert::Credentials, protocol};
 
 use super::ClientArgs;
@@ -23,13 +23,15 @@ use std::sync::Arc;
 use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::Child;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
-use tracing::{debug, error, info, span, trace, trace_span, warn, Level};
+use tracing::{debug, error, span, trace, trace_span, warn, Level};
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Main CLI entrypoint
 #[tokio::main]
 pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
+    let mut timers = StopwatchChain::default();
+    timers.next("setup");
     let unpacked_args = ProcessedArgs::try_from(args)?;
     //println!("{unpacked_args:?}"); // TEMP
 
@@ -40,7 +42,8 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     let host = unpacked_args.remote_host();
     let server_address = lookup_host_by_family(host, args.address_family())?;
 
-    info!("connecting to remote");
+    timers.next("control channel");
+    debug!("connecting to remote");
     let mut server = launch_server(&unpacked_args)?;
 
     wait_for_banner(&mut server, args.timeout).await?;
@@ -67,6 +70,7 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
+    timers.next("quic setup");
     let endpoint = create_endpoint(
         &credentials,
         server_message.cert.into(),
@@ -94,9 +98,11 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
         },
     };
 
+    timers.next("show time");
     let success = manage_request(&mut connection, &unpacked_args).await;
 
-    info!("shutting down");
+    timers.next("shutdown");
+    debug!("shutting down");
     // close child process stdin, which should trigger its exit
     server_input.shutdown().await?;
     // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
@@ -111,6 +117,12 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     trace!("waiting for child");
     server.wait().await?;
     trace!("finished");
+    timers.stop();
+
+    if args.profile {
+        println!("Elapsed time by phase:");
+        print!("{timers}");
+    }
     Ok(success)
 }
 
