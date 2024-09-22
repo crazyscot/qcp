@@ -12,6 +12,7 @@ use crate::{cert::Credentials, protocol};
 use super::ClientArgs;
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
+use human_repr::{HumanCount, HumanDuration};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection};
 use rustls::RootCertStore;
@@ -26,6 +27,8 @@ use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, span, trace, trace_span, warn, Level};
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
+
+const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 #[tokio::main]
@@ -77,8 +80,8 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
         &server_address_port,
     )?;
 
-    trace!("Connecting to {server_address_port:?}");
-    trace!("Local connection address is {:?}", endpoint.local_addr()?);
+    debug!("Opening QUIC connection to {server_address_port:?}");
+    debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
 
     let connection_fut = endpoint.connect(server_address_port, &server_message.name)?;
     let timeout_fut = tokio::time::sleep(CONNECTION_TIMEOUT);
@@ -98,7 +101,7 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
         },
     };
 
-    timers.next("show time");
+    timers.next(SHOW_TIME);
     let result = manage_request(&mut connection, &unpacked_args).await;
 
     timers.next("shutdown");
@@ -119,14 +122,30 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     trace!("finished");
     timers.stop();
 
-    let transport_time = timers.find("show time").and_then(|sw| sw.elapsed());
+    let transport_time = timers.find(SHOW_TIME).and_then(|sw| sw.elapsed());
     let transport_time_str = transport_time
-        .map(|d| humantime::format_duration(d).to_string())
+        .map(|d| d.human_duration().to_string())
         .unwrap_or("unknown".to_string());
 
     if !args.quiet {
         if let Some(payload_size) = result.payload_size {
-            println!("Transferred {payload_size} bytes in {transport_time_str}");
+            let size = payload_size.human_count("B");
+            let rate = crate::util::stats::DataRate::new(payload_size, transport_time);
+            println!("Transferred {size} in {transport_time_str}; average {rate}");
+        }
+        let stats = connection.stats();
+        if stats.path.congestion_events > 0 {
+            warn!(
+                "Congestion events: {}",
+                stats.path.congestion_events.human_count_bare()
+            );
+        }
+        if stats.path.lost_packets > 0 {
+            warn!(
+                "Lost packets: {} ({})",
+                stats.path.lost_packets.human_count_bare(),
+                stats.path.lost_bytes.human_count_bytes()
+            );
         }
     }
 

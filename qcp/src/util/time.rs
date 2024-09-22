@@ -6,6 +6,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use human_repr::HumanDuration;
+
 #[derive(Debug, Default, Clone)]
 /// A simple named stopwatch.
 /// This stopwatch does not currently support resuming or splits.
@@ -73,12 +75,7 @@ impl Stopwatch {
     fn fmt_ln(&self, f: &mut std::fmt::Formatter<'_>, width: usize) -> std::fmt::Result {
         let t = self.elapsed();
         if let Some(t) = t {
-            writeln!(
-                f,
-                "  {:width$}: {}",
-                self.name,
-                humantime::format_duration(t)
-            )
+            writeln!(f, "  {:width$}: {}", self.name, t.human_duration())
         } else {
             writeln!(f, "  {:width$}: None", self.name)
         }

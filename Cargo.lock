@@ -436,10 +436,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
-name = "humantime"
-version = "2.1.0"
+name = "human-repr"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
+checksum = "f58b778a5761513caf593693f8951c97a5b610841e754788400f32102eefdff1"
 
 [[package]]
 name = "idna"
@@ -747,7 +747,7 @@ dependencies = [
  "fastrand",
  "futures-util",
  "gethostname",
- "humantime",
+ "human-repr",
  "quinn",
  "rcgen",
  "rustls-pki-types",
