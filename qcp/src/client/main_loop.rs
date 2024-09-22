@@ -99,7 +99,7 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     };
 
     timers.next("show time");
-    let success = manage_request(&mut connection, &unpacked_args).await;
+    let result = manage_request(&mut connection, &unpacked_args).await;
 
     timers.next("shutdown");
     debug!("shutting down");
@@ -119,14 +119,46 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     trace!("finished");
     timers.stop();
 
+    let transport_time = timers.find("show time").and_then(|sw| sw.elapsed());
+    let transport_time_str = transport_time
+        .map(|d| humantime::format_duration(d).to_string())
+        .unwrap_or("unknown".to_string());
+
+    if !args.quiet {
+        if let Some(payload_size) = result.payload_size {
+            println!("Transferred {payload_size} bytes in {transport_time_str}");
+        }
+    }
+
     if args.profile {
         println!("Elapsed time by phase:");
         print!("{timers}");
     }
-    Ok(success)
+    Ok(result.is_success())
 }
 
-async fn manage_request(connection: &mut Connection, args: &ProcessedArgs<'_>) -> bool {
+#[derive(Default)]
+struct RequestResult {
+    // If present, we were successful.
+    // If not present, we were not successful.
+    payload_size: Option<u64>,
+}
+
+impl RequestResult {
+    fn failure() -> Self {
+        Self::default()
+    }
+    fn success(payload_size: u64) -> Self {
+        Self {
+            payload_size: Some(payload_size),
+        }
+    }
+    fn is_success(&self) -> bool {
+        self.payload_size.is_some()
+    }
+}
+
+async fn manage_request(connection: &mut Connection, args: &ProcessedArgs<'_>) -> RequestResult {
     // TODO: This may spawn, if there are multiple files to transfer.
 
     // Called function is responsible for tracing errors.
@@ -136,14 +168,14 @@ async fn manage_request(connection: &mut Connection, args: &ProcessedArgs<'_>) -
         .map_err(|e| anyhow::anyhow!(e))
         .and_then(|sp| process_request(sp, args))
         .inspect_err(|e| error!("{e}"))
-        .map_ok_or_else(|_| false, |_| true)
+        .map_ok_or_else(|_| RequestResult::failure(), RequestResult::success)
         .await
 }
 
 async fn process_request(
     sp: (quinn::SendStream, quinn::RecvStream),
     args: &ProcessedArgs<'_>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<u64> {
     if args.source.host.is_some() {
         // This is a Get
         do_get(sp, &args.source.filename, &args.destination.filename, args).await
@@ -236,7 +268,7 @@ async fn do_get(
     filename: &str,
     dest: &str,
     cli_args: &ProcessedArgs<'_>,
-) -> Result<()> {
+) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
 
     let span = span!(Level::TRACE, "do_get", filename = filename);
@@ -276,7 +308,7 @@ async fn do_get(
     file_buf.flush().await?;
     stream.send.finish()?;
     trace!("complete");
-    Ok(())
+    Ok(header.size)
 }
 
 async fn do_put(
@@ -284,7 +316,7 @@ async fn do_put(
     src_filename: &str,
     dest_filename: &str,
     cli_args: &ProcessedArgs<'_>,
-) -> Result<()> {
+) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
 
     let span = span!(Level::TRACE, "do_put");
@@ -300,6 +332,7 @@ async fn do_put(
     if meta.is_dir() {
         anyhow::bail!("PUT: Source is a directory");
     }
+    let payload_len = meta.len();
     trace!("starting");
     let mut file = BufReader::with_capacity(cli_args.original.file_buffer_size(), file);
 
@@ -319,7 +352,7 @@ async fn do_put(
     // The filename in the protocol is the file part only of src_filename
     trace!("send header");
     let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
-    let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
+    let header = FileHeader::serialize_direct(payload_len, protocol_filename);
     send_buf.write_all(&header).await?;
 
     // A server-side abort might happen part-way through a large transfer.
@@ -368,5 +401,5 @@ async fn do_put(
 
     send_buf.into_inner().finish()?;
     trace!("complete");
-    Ok(())
+    Ok(payload_len)
 }

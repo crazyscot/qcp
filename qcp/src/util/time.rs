@@ -104,6 +104,16 @@ impl StopwatchChain {
     pub fn stop(&mut self) {
         self.watches.last_mut().map(|sw| sw.stop());
     }
+
+    /// Data accessor
+    pub fn data(&self) -> &Vec<Stopwatch> {
+        &self.watches
+    }
+
+    /// Extracts a single stopwatch by name, if it was present
+    pub fn find(&self, name: &str) -> Option<&Stopwatch> {
+        self.watches.iter().find(|&sw| sw.name == name)
+    }
 }
 
 /// Simple display formatting
