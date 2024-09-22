@@ -25,18 +25,13 @@ use clap::Parser;
 #[command(styles=crate::styles::get())]
 /// The arguments we need to set up a client
 pub struct ClientArgs {
-    /// Enable detailed debug output
-    #[arg(short, long, action)]
-    pub debug: bool,
-    /// Quiet mode (reduced chatter)
+    /// Quiet mode (no statistics or progress, report only errors)
     #[arg(short, long, action)]
     pub quiet: bool,
     /// Connection timeout (seconds)
     #[arg(short, long, default_value("10"))]
     pub timeout: u16,
-    /// Enables server debug output
-    #[arg(short, long, action)]
-    pub server_debug: bool,
+
     /// The network buffer size to use (default 2MB; tune to your needs)
     #[arg(short('b'), long, default_value("2097152"))]
     pub buffer_size: usize,
@@ -46,8 +41,15 @@ pub struct ClientArgs {
     /// Forces IPv6 connection (default: autodetect)
     #[arg(short = '6', long, action, conflicts_with("ipv4"))]
     pub ipv6: bool,
+
+    /// Enables server debug output
+    #[arg(short, long, action, help_heading("Debug options"))]
+    pub server_debug: bool,
+    /// Enable detailed debug output
+    #[arg(short, long, action, help_heading("Debug options"))]
+    pub debug: bool,
     /// Prints timing profile data after completion
-    #[arg(long, action)]
+    #[arg(long, action, help_heading("Debug options"))]
     pub profile: bool,
 
     // Positional arguments
@@ -55,7 +57,7 @@ pub struct ClientArgs {
     /// Source file. This may be a local filename, or remote specified as HOST:FILE.
     pub source: String,
     #[arg()]
-    /// Destination. This may be a file or directory; local, or remote
+    /// Destination. This may be a file or directory. It may be local or remote
     /// (specified as HOST:DESTINATION, or simply HOST: to copy to your home directory there).
     pub destination: String,
     // TODO support multiple sources, cp-like?
