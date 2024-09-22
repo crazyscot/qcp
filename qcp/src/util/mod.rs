@@ -4,8 +4,7 @@
 mod dns;
 pub use dns::{lookup_host_by_family, AddressFamily};
 
-mod io;
-pub use io::{open_file_read, open_file_write};
+pub mod io;
 
 mod tracing;
 pub use tracing::setup_tracing;

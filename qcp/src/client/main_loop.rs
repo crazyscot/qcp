@@ -247,7 +247,7 @@ async fn do_get(
     let header = FileHeader::read(&mut recv_buf).await?;
     trace!("got {header:?}");
 
-    let file = crate::util::open_file_write(dest, &header).await?;
+    let file = crate::util::io::create_truncate_file(dest, &header).await?;
     let mut file_buf = BufWriter::with_capacity(cli_args.original.file_buffer_size(), file);
 
     let mut limited_recv = recv_buf.take(header.size);
@@ -279,7 +279,7 @@ async fn do_put(
     let _guard = span.enter();
 
     let path = PathBuf::from(src_filename);
-    let (file, meta) = match crate::util::open_file_read(src_filename).await {
+    let (file, meta) = match crate::util::io::open_file(src_filename).await {
         Ok(res) => res,
         Err((_, _, error)) => {
             return Err(error.into());

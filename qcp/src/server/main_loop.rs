@@ -201,7 +201,7 @@ async fn handle_get(
     debug!("begin");
 
     let path = PathBuf::from(&filename);
-    let (file, meta) = match crate::util::open_file_read(&filename).await {
+    let (file, meta) = match crate::util::io::open_file(&filename).await {
         Ok(res) => res,
         Err((status, message, _)) => {
             send_response(&mut stream.send, status, message.as_deref()).await?;

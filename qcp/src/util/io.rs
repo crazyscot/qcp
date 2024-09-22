@@ -7,7 +7,7 @@ use std::{fs::Metadata, io::ErrorKind, path::Path, path::PathBuf, str::FromStr a
 
 /// Opens a local file for reading, returning a filehandle and metadata.
 /// Error type is a tuple ready to send as a Status response.
-pub async fn open_file_read(
+pub async fn open_file(
     filename: &str,
 ) -> anyhow::Result<(tokio::fs::File, Metadata), (Status, Option<String>, tokio::io::Error)> {
     let path = Path::new(&filename);
@@ -40,7 +40,7 @@ pub async fn open_file_read(
 }
 
 /// Opens a local file for writing, from an incoming FileHeader
-pub async fn open_file_write(
+pub async fn create_truncate_file(
     path: &str,
     header: &crate::protocol::session::FileHeader,
 ) -> anyhow::Result<tokio::fs::File> {
