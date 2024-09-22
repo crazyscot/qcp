@@ -11,7 +11,7 @@ use crate::{cert::Credentials, protocol};
 
 use super::ClientArgs;
 use anyhow::{Context, Result};
-use futures_util::{FutureExt as _, TryFutureExt as _};
+use futures_util::TryFutureExt as _;
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection};
 use rustls::RootCertStore;
@@ -100,14 +100,17 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     // close child process stdin, which should trigger its exit
     server_input.shutdown().await?;
     // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
-    connection.close(0u8.into(), "".as_bytes());
-    let closedown_fut = endpoint.wait_idle().then(|_| server.wait());
+    endpoint.close(1u8.into(), "finished".as_bytes());
+    let closedown_fut = endpoint.wait_idle();
     let timeout_fut = tokio::time::sleep(CONNECTION_TIMEOUT);
     tokio::pin!(closedown_fut, timeout_fut);
     tokio::select! {
-        _ = timeout_fut => warn!("shutdown timed out"),
+        _ = timeout_fut => warn!("QUIC shutdown timed out"),
         _ = closedown_fut => (),
     };
+    trace!("waiting for child");
+    server.wait().await?;
+    trace!("finished");
     Ok(success)
 }
 
@@ -224,7 +227,7 @@ async fn do_get(
 ) -> Result<()> {
     let mut stream: StreamPair = sp.into();
 
-    let span = span!(Level::TRACE, "do_get");
+    let span = span!(Level::TRACE, "do_get", filename = filename);
     let _guard = span.enter();
 
     let cmd = crate::protocol::session::Command::new_get(filename);
@@ -234,30 +237,32 @@ async fn do_get(
     // TODO protocol timeout?
     trace!("await response");
     let response = Response::read(&mut stream.recv).await?;
-    trace!("GET {response:?}");
-
     if response.status != Status::Ok {
         anyhow::bail!(format!("GET ({filename}) failed: {response}"));
     }
 
+    trace!("starting");
     let mut recv_buf = BufReader::with_capacity(cli_args.original.buffer_size, stream.recv);
 
     let header = FileHeader::read(&mut recv_buf).await?;
-    trace!("GET: HEADER {header:?}");
+    trace!("got {header:?}");
 
     let file = crate::util::open_file_write(dest, &header).await?;
     let mut file_buf = BufWriter::with_capacity(cli_args.original.file_buffer_size(), file);
 
     let mut limited_recv = recv_buf.take(header.size);
+    trace!("payload");
     tokio::io::copy_buf(&mut limited_recv, &mut file_buf).await?;
 
     // stream.recv has been moved but we can get it back for further operations
     recv_buf = limited_recv.into_inner();
 
+    trace!("trailer");
     let _trailer = FileTrailer::read(&mut recv_buf).await?;
     // Trailer is empty for now, but its existence means the server believes the file was sent correctly
 
     file_buf.flush().await?;
+    stream.send.finish()?;
     trace!("complete");
     Ok(())
 }
@@ -283,9 +288,9 @@ async fn do_put(
     if meta.is_dir() {
         anyhow::bail!("PUT: Source is a directory");
     }
+    trace!("starting");
     let mut file = BufReader::with_capacity(cli_args.original.file_buffer_size(), file);
 
-    trace!("send PUT");
     let cmd = crate::protocol::session::Command::new_put(dest_filename);
     cmd.write(&mut stream.send).await?;
     stream.send.flush().await?;
@@ -293,8 +298,6 @@ async fn do_put(
     // TODO protocol timeout?
     trace!("await response");
     let response = Response::read(&mut stream.recv).await?;
-    trace!("PUT -> {response:?}");
-
     if response.status != Status::Ok {
         anyhow::bail!(format!("PUT ({src_filename}) failed: {response}"));
     }
@@ -302,11 +305,13 @@ async fn do_put(
     let mut send_buf = BufWriter::with_capacity(cli_args.original.buffer_size, stream.send);
 
     // The filename in the protocol is the file part only of src_filename
+    trace!("send header");
     let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
     let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
     send_buf.write_all(&header).await?;
 
     // A server-side abort might happen part-way through a large transfer.
+    trace!("send payload");
     let result = tokio::io::copy_buf(&mut file, &mut send_buf).await;
 
     match result {
@@ -337,6 +342,7 @@ async fn do_put(
         }
     }
 
+    trace!("send trailer");
     let trailer = FileTrailer::serialize_direct();
     send_buf.write_all(&trailer).await?;
     send_buf.flush().await?;
@@ -348,6 +354,7 @@ async fn do_put(
         ));
     }
 
+    send_buf.into_inner().finish()?;
     trace!("complete");
     Ok(())
 }

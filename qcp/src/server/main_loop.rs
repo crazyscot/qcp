@@ -18,6 +18,7 @@ use quinn::rustls::{self, RootCertStore};
 use rustls_pki_types::CertificateDer;
 use tokio::fs;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader, BufWriter};
+use tokio::task::JoinSet;
 use tokio::time::Duration;
 use tracing::{debug, error, info, trace, trace_span};
 
@@ -66,54 +67,43 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
     .await?;
     stdout.flush().await?;
 
-    loop {
-        // Control channel main loop.
-        // Wait for new connections OR for stdin to be closed.
+    let mut tasks = JoinSet::new();
 
-        let mut buf = [0u8; 1];
-        let endpoint_fut = endpoint.accept();
-        let stdin_fut = stdin.read(&mut buf);
-        let timeout_fut = tokio::time::sleep(PROTOCOL_TIMEOUT);
-        tokio::pin!(endpoint_fut, stdin_fut, timeout_fut);
+    // Control channel main logic:
+    // Wait for a successful connection OR timeout OR for stdin to be closed (implicitly handled).
+    // We have tight control over what we expect (TLS peer certificate/name) so only need to handle one successful connection,
+    // but a timeout is useful to give the user a cue that UDP isn't getting there.
+    let endpoint_fut = endpoint.accept();
+    let timeout_fut = tokio::time::sleep(PROTOCOL_TIMEOUT);
+    tokio::pin!(endpoint_fut, timeout_fut);
 
-        tokio::select! {
-            s = &mut stdin_fut => {
-                match s {
-                    Ok(0) => {
-                        debug!("stdin was closed");
-                        break;
-                    }
-                    Ok(_) => (), // ignore any data
-                    Err(e) => { // can't happen but treat as if closed
-                        debug!("error reading stdin: {e}");
-                        break;
-                    }
-                };
-            },
-            e = &mut endpoint_fut => {
-                match e {
-                    None => {
-                        debug!("Endpoint future returned None");
-                        break;
-                    },
-                    Some(conn) => {
-                        let conn_fut = handle_connection(conn, *args);
-                        tokio::spawn(async move {
-                            if let Err(e) = conn_fut.await {
-                                error!("inward stream failed: {reason}", reason = e.to_string());
-                            }
-                        });
-                    },
-                };
-            },
-            _ = &mut timeout_fut => {
-                break;
-            },
-        };
-    }
+    trace!("main select");
+    tokio::select! {
+        e = &mut endpoint_fut => {
+            match e {
+                None => {
+                    info!("Endpoint was expectedly closed");
+                },
+                Some(conn) => {
+                    let conn_fut = handle_connection(conn, *args);
+                    tasks.spawn(async move {
+                        if let Err(e) = conn_fut.await {
+                            error!("inward stream failed: {reason}", reason = e.to_string());
+                        }
+                        trace!("connection completed");
+                    });
+                },
+            };
+        },
+        _ = &mut timeout_fut => {
+            info!("timed out waiting for connection");
+        },
+    };
 
     // Graceful closedown. Wait for all connections and streams to finish.
     info!("waiting for completion");
+    let _ = tasks.join_all().await;
+    endpoint.close(1u8.into(), "finished".as_bytes());
     endpoint.wait_idle().await;
     trace!("finished");
     Ok(())
@@ -166,10 +156,11 @@ async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::R
             let stream = match stream {
                 Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
                     // we're closing down
+                    debug!("application closing");
                     return Ok::<(), anyhow::Error>(());
                 }
                 Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                    info!("remote closed connection");
+                    debug!("connection closed by remote");
                     return Ok::<(), anyhow::Error>(());
                 }
                 Err(e) => {
@@ -192,13 +183,6 @@ async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::R
 }
 
 async fn handle_stream(mut sp: StreamPair, args: ServerArgs) -> anyhow::Result<()> {
-    let span = tracing::span!(
-        tracing::Level::TRACE,
-        "stream",
-        id = sp.send.id().to_string()
-    );
-    let _guard = span.enter();
-
     trace!("reading command");
     let cmd = Command::read(&mut sp.recv).await?;
     match cmd {
@@ -212,9 +196,9 @@ async fn handle_get(
     args: &ServerArgs,
     filename: String,
 ) -> anyhow::Result<()> {
-    let span = tracing::span!(tracing::Level::TRACE, "GET", filename);
+    let span = tracing::span!(tracing::Level::TRACE, "GET", filename = filename);
     let _guard = span.enter();
-    debug!("GET {filename}");
+    debug!("begin");
 
     let path = PathBuf::from(&filename);
     let (file, meta) = match crate::util::open_file_read(&filename).await {
@@ -241,7 +225,7 @@ async fn handle_get(
     let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
     write_buf.write_all(&header).await?;
 
-    trace!("file body I/O");
+    trace!("sending file payload");
     let result = tokio::io::copy_buf(&mut file, &mut write_buf).await;
     match result {
         Ok(sent) if sent == meta.len() => (),
@@ -258,10 +242,11 @@ async fn handle_get(
         }
     }
 
-    trace!("trailer");
+    trace!("sending trailer");
     let trailer = FileTrailer::serialize_direct();
     write_buf.write_all(&trailer).await?;
     write_buf.flush().await?;
+    write_buf.into_inner().finish()?;
     trace!("complete");
     Ok(())
 }
@@ -281,7 +266,7 @@ async fn handle_put(
 ) -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::TRACE, "PUT");
     let _guard = span.enter();
-    debug!("starting, destination={destination}");
+    debug!("begin, destination={destination}");
 
     // Initial checks. Is the destination valid?
     let mut path = PathBuf::from(destination);
@@ -359,7 +344,7 @@ async fn handle_put(
         return Ok(());
     };
 
-    trace!("file body I/O");
+    trace!("receiving file payload");
     let mut limited_recv = recv_buf.take(header.size);
     if tokio::io::copy_buf(&mut limited_recv, &mut file)
         .await
@@ -371,14 +356,14 @@ async fn handle_put(
     // recv_buf has been moved but we can get it back for further operations
     recv_buf = limited_recv.into_inner();
 
-    trace!("trailer");
+    trace!("receiving trailer");
     let _trailer = FileTrailer::read(&mut recv_buf).await?;
     // TODO: Hash checks
 
     file.flush().await?;
     send_response(&mut stream.send, Status::Ok, None).await?;
     stream.send.flush().await?;
-
+    stream.send.finish()?;
     trace!("complete");
     Ok(())
 }
