@@ -10,14 +10,15 @@ use clap::Parser;
     author,
     version(build_info::GIT_VERSION),
     about,
-    long_about = "QUIC file copy utility"
+    long_about = "QUIC file copy utility",
+    before_help = "Example:   qcp some/file my-server:some-directory/"
 )]
 #[command(help_template(
     "\
-{before-help}{name} {version}
+{name} version {version}
 (c) {author-with-newline}{about-with-newline}
 {usage-heading} {usage}
-
+{before-help}
 {all-args}{after-help}
 "
 ))]
@@ -48,8 +49,11 @@ pub struct ClientArgs {
 
     // Positional arguments
     #[arg()]
+    /// Source file. This may be a local filename, or remote specified as HOST:FILE.
     pub source: String,
     #[arg()]
+    /// Destination. This may be a file or directory; local, or remote
+    /// (specified as HOST:DESTINATION, or simply HOST: to copy to your home directory there).
     pub destination: String,
     // TODO support multiple sources, cp-like?
 }
