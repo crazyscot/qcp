@@ -11,7 +11,8 @@ use clap::Parser;
     version(build_info::GIT_VERSION),
     about,
     long_about = "QUIC file copy utility",
-    before_help = "Example:   qcp some/file my-server:some-directory/"
+    before_help = "Example:   qcp some/file my-server:some-directory/",
+    infer_long_args(true)
 )]
 #[command(help_template(
     "\
@@ -42,7 +43,7 @@ pub struct ClientArgs {
     #[arg(short = '6', long, action, conflicts_with("ipv4"))]
     pub ipv6: bool,
     /// Outputs additional transfer statistics
-    #[arg(short = 's', long, action, conflicts_with("quiet"))]
+    #[arg(short = 's', long, alias("stats"), action, conflicts_with("quiet"))]
     pub statistics: bool,
 
     /// Enable detailed debug output
