@@ -41,13 +41,16 @@ pub struct ClientArgs {
     /// Forces IPv6 connection (default: autodetect)
     #[arg(short = '6', long, action, conflicts_with("ipv4"))]
     pub ipv6: bool,
+    /// Outputs additional transfer statistics
+    #[arg(short = 's', long, action, conflicts_with("quiet"))]
+    pub statistics: bool,
 
-    /// Enables server debug output
-    #[arg(short, long, action, help_heading("Debug options"))]
-    pub server_debug: bool,
     /// Enable detailed debug output
     #[arg(short, long, action, help_heading("Debug options"))]
     pub debug: bool,
+    /// Enables detailed server (remote) debug output
+    #[arg(long, action, help_heading("Debug options"))]
+    pub remote_debug: bool,
     /// Prints timing profile data after completion
     #[arg(long, action, help_heading("Debug options"))]
     pub profile: bool,

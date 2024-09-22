@@ -12,7 +12,6 @@ use crate::{cert::Credentials, protocol};
 use super::ClientArgs;
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
-use human_repr::{HumanCount, HumanDuration};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection};
 use rustls::RootCertStore;
@@ -24,7 +23,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::Child;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
-use tracing::{debug, error, span, trace, trace_span, warn, Level};
+use tracing::{debug, error, info, span, trace, trace_span, warn, Level};
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -122,36 +121,21 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     trace!("finished");
     timers.stop();
 
+    drop(_guard);
+
     let transport_time = timers.find(SHOW_TIME).and_then(|sw| sw.elapsed());
-    let transport_time_str = transport_time
-        .map(|d| d.human_duration().to_string())
-        .unwrap_or("unknown".to_string());
 
     if !args.quiet {
-        if let Some(payload_size) = result.payload_size {
-            let size = payload_size.human_count("B");
-            let rate = crate::util::stats::DataRate::new(payload_size, transport_time);
-            println!("Transferred {size} in {transport_time_str}; average {rate}");
-        }
-        let stats = connection.stats();
-        if stats.path.congestion_events > 0 {
-            warn!(
-                "Congestion events: {}",
-                stats.path.congestion_events.human_count_bare()
-            );
-        }
-        if stats.path.lost_packets > 0 {
-            warn!(
-                "Lost packets: {} ({})",
-                stats.path.lost_packets.human_count_bare(),
-                stats.path.lost_bytes.human_count_bytes()
-            );
-        }
+        crate::util::stats::output_statistics(
+            args,
+            connection.stats(),
+            result.payload_size,
+            transport_time,
+        );
     }
 
     if args.profile {
-        println!("Elapsed time by phase:");
-        print!("{timers}");
+        info!("Elapsed time by phase:\n{timers}");
     }
     Ok(result.is_success())
 }
@@ -213,7 +197,7 @@ fn launch_server(args: &ProcessedArgs) -> Result<Child> {
         "-b",
         &args.original.buffer_size.to_string(),
     ]);
-    if args.original.server_debug {
+    if args.original.remote_debug {
         server.arg("--debug");
     }
     server

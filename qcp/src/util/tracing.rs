@@ -16,7 +16,10 @@ pub fn setup_tracing(trace_level: &str) -> anyhow::Result<()> {
         // It was unset.
         Ok(EnvFilter::new(trace_expr))
     })?;
-    let format = fmt::layer().compact().with_writer(std::io::stderr);
+    let format = fmt::layer()
+        .compact()
+        .with_target(false)
+        .with_writer(std::io::stderr);
     tracing_subscriber::registry()
         .with(format)
         .with(filter)

@@ -1,8 +1,12 @@
-// Statistics processing
+// Statistics processing and output
 // (c) 2024 Ross Younger
 
-use human_repr::HumanThroughput;
+use human_repr::{HumanCount, HumanDuration, HumanThroughput};
+use quinn::ConnectionStats;
 use std::{fmt::Display, time::Duration};
+use tracing::{info, warn};
+
+use crate::client::ClientArgs;
 
 /// Human friendly output helper
 pub struct DataRate {
@@ -34,6 +38,59 @@ impl Display for DataRate {
             None => f.write_str("unknown"),
             Some(rate) => rate.human_throughput("bit").fmt(f),
         }
+    }
+}
+
+pub fn output_statistics(
+    args: &ClientArgs,
+    stats: ConnectionStats,
+    payload_size: Option<u64>,
+    transport_time: Option<Duration>,
+) {
+    if stats.path.congestion_events > 0 {
+        warn!(
+            "Congestion events: {}",
+            stats.path.congestion_events.human_count_bare()
+        );
+    }
+    if args.statistics {
+        info!("Sent packets: {}", stats.path.sent_packets);
+    }
+    if stats.path.lost_packets > 0 {
+        warn!(
+            "Lost packets: {} ({})",
+            stats.path.lost_packets.human_count_bare(),
+            stats.path.lost_bytes.human_count_bytes()
+        );
+    }
+
+    let total_bytes = stats.udp_tx.bytes + stats.udp_rx.bytes;
+    if args.statistics {
+        info!(
+            "Path MTU {}, round-trip time {}",
+            stats.path.current_mtu,
+            stats.path.rtt.human_duration()
+        );
+        info!(
+            "{} frames sent, {} received",
+            stats.udp_tx.datagrams.human_count_bare(),
+            stats.udp_rx.datagrams.human_count_bare()
+        );
+        if let Some(payload_bytes) = payload_size {
+            let overhead_pct = 100. * (total_bytes - payload_bytes) as f64 / payload_bytes as f64;
+            info!(
+                "{} total bytes transferred for {} bytes payload ({:.2}% overhead)",
+                total_bytes, payload_bytes, overhead_pct
+            );
+        }
+    }
+    if let Some(payload_bytes) = payload_size {
+        let size = payload_bytes.human_count("B");
+        let rate = crate::util::stats::DataRate::new(payload_bytes, transport_time);
+        let transport_time_str = transport_time
+            .map(|d| d.human_duration().to_string())
+            .unwrap_or("unknown".to_string());
+        info!("Transferred {size} in {transport_time_str}; average {rate}");
     }
 }
 
