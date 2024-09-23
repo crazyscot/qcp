@@ -32,7 +32,7 @@ const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 #[tokio::main]
-pub async fn client_main(args: &ClientArgs, progress: MultiProgress) -> anyhow::Result<bool> {
+pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::Result<bool> {
     // Caution: As we are using ProgressBar, anything to be printed to console should
     // use progress.println() !
     let spinner = progress.add(ProgressBar::new_spinner());
@@ -42,6 +42,7 @@ pub async fn client_main(args: &ClientArgs, progress: MultiProgress) -> anyhow::
     let mut timers = StopwatchChain::default();
     timers.next("setup");
     let unpacked_args = ProcessedArgs::try_from(args)?;
+    let args = &unpacked_args.original;
     //let _ = progress.println(format!("{unpacked_args:?}")); // TEMP
 
     let span = trace_span!("CLIENT");
@@ -176,7 +177,7 @@ impl RequestResult {
     }
 }
 
-async fn manage_request(connection: &mut Connection, args: &ProcessedArgs<'_>) -> RequestResult {
+async fn manage_request(connection: &mut Connection, args: &ProcessedArgs) -> RequestResult {
     // TODO: This may spawn, if there are multiple files to transfer.
 
     // Called function is responsible for tracing errors.
@@ -192,7 +193,7 @@ async fn manage_request(connection: &mut Connection, args: &ProcessedArgs<'_>) -
 
 async fn process_request(
     sp: (quinn::SendStream, quinn::RecvStream),
-    args: &ProcessedArgs<'_>,
+    args: &ProcessedArgs,
 ) -> anyhow::Result<u64> {
     if args.source.host.is_some() {
         // This is a Get
@@ -285,7 +286,7 @@ async fn do_get(
     sp: RawStreamPair,
     filename: &str,
     dest: &str,
-    cli_args: &ProcessedArgs<'_>,
+    cli_args: &ProcessedArgs,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
 
@@ -333,7 +334,7 @@ async fn do_put(
     sp: RawStreamPair,
     src_filename: &str,
     dest_filename: &str,
-    cli_args: &ProcessedArgs<'_>,
+    cli_args: &ProcessedArgs,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
 

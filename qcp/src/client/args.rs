@@ -5,7 +5,7 @@ use std::str::FromStr;
 use crate::{build_info, util::AddressFamily};
 use clap::Parser;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 #[command(
     author,
     version(build_info::GIT_VERSION),
@@ -117,14 +117,14 @@ impl FromStr for FileSpec {
 
 /// Wrapper type for ClientArgs after we've thought about them
 #[derive(Debug, Clone)]
-pub struct ProcessedArgs<'a> {
+pub struct ProcessedArgs {
     pub source: FileSpec,
     pub destination: FileSpec,
-    pub original: &'a ClientArgs,
+    pub original: ClientArgs,
 }
 
-impl<'a> ProcessedArgs<'_> {
-    pub fn remote_host(&'a self) -> &'a str {
+impl ProcessedArgs {
+    pub fn remote_host(&self) -> &str {
         self.source
             .host
             .as_ref()
@@ -132,10 +132,10 @@ impl<'a> ProcessedArgs<'_> {
     }
 }
 
-impl<'a> TryFrom<&'a ClientArgs> for ProcessedArgs<'a> {
+impl TryFrom<ClientArgs> for ProcessedArgs {
     type Error = anyhow::Error;
 
-    fn try_from(args: &'a ClientArgs) -> Result<Self, Self::Error> {
+    fn try_from(args: ClientArgs) -> Result<Self, Self::Error> {
         let source = FileSpec::from_str(&args.source)?;
         let destination = FileSpec::from_str(&args.destination)?;
         if (source.host.is_none() && destination.host.is_none())
