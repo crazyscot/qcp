@@ -2,11 +2,13 @@
 // (c) 2024 Ross Younger
 
 use clap::Parser as _;
+use indicatif::MultiProgress;
 use qcp::client::ClientArgs;
 use std::process::ExitCode;
 
 fn main() -> anyhow::Result<ExitCode> {
     let args = ClientArgs::parse();
+    let progress = MultiProgress::new();
     let trace_level = match args.debug {
         true => "trace",
         false => match args.quiet {
@@ -14,8 +16,8 @@ fn main() -> anyhow::Result<ExitCode> {
             false => "info",
         },
     };
-    qcp::util::setup_tracing(trace_level)
-        .and_then(|_| qcp::client::main(&args))
+    qcp::util::setup_tracing(trace_level, Some(&progress))
+        .and_then(|_| qcp::client::main(&args, progress))
         .inspect_err(|e| tracing::error!("{e}"))
         .or_else(|_| Ok(false))
         .map(|success| match success {

@@ -12,6 +12,7 @@ use crate::{cert::Credentials, protocol};
 use super::ClientArgs;
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
+use indicatif::{MultiProgress, ProgressBar};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection};
 use rustls::RootCertStore;
@@ -31,11 +32,17 @@ const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 #[tokio::main]
-pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
+pub async fn client_main(args: &ClientArgs, progress: MultiProgress) -> anyhow::Result<bool> {
+    // Caution: As we are using ProgressBar, anything to be printed to console should
+    // use progress.println() !
+    let spinner = progress.add(ProgressBar::new_spinner());
+    spinner.set_message("Setting up");
+    spinner.enable_steady_tick(Duration::from_millis(150));
+
     let mut timers = StopwatchChain::default();
     timers.next("setup");
     let unpacked_args = ProcessedArgs::try_from(args)?;
-    //println!("{unpacked_args:?}"); // TEMP
+    //let _ = progress.println(format!("{unpacked_args:?}")); // TEMP
 
     let span = trace_span!("CLIENT");
     let _guard = span.enter();
@@ -44,6 +51,7 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     let host = unpacked_args.remote_host();
     let server_address = lookup_host_by_family(host, args.address_family())?;
 
+    spinner.set_message("Connecting control channel...");
     timers.next("control channel");
     debug!("connecting to remote");
     let mut server = launch_server(&unpacked_args)?;
@@ -72,6 +80,7 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
+    spinner.set_message("Establishing data channel");
     timers.next("quic setup");
     let endpoint = create_endpoint(
         &credentials,
@@ -100,8 +109,13 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
         },
     };
 
+    spinner.set_message("Transferring data");
+    spinner.enable_steady_tick(Duration::from_secs(1));
     timers.next(SHOW_TIME);
     let result = manage_request(&mut connection, &unpacked_args).await;
+
+    spinner.set_message("Shutting down");
+    spinner.enable_steady_tick(Duration::from_millis(250));
 
     timers.next("shutdown");
     debug!("shutting down");
@@ -120,6 +134,7 @@ pub async fn client_main(args: &ClientArgs) -> anyhow::Result<bool> {
     server.wait().await?;
     trace!("finished");
     timers.stop();
+    spinner.finish_and_clear();
 
     drop(_guard);
 

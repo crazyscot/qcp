@@ -7,7 +7,7 @@ use qcp::server::ServerArgs;
 fn main() -> anyhow::Result<()> {
     let args = ServerArgs::parse();
     if args.debug {
-        qcp::util::setup_tracing("trace")?;
+        qcp::util::setup_tracing("trace", None)?;
     }
 
     qcp::server::main(&args).map_err(|e| {
