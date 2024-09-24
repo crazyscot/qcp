@@ -21,7 +21,7 @@ use std::fmt::Display;
 use anyhow::Result;
 use capnp::message::ReaderOptions;
 use session_capnp::Status;
-use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
+use tokio_util::compat::TokioAsyncReadCompatExt as _;
 
 #[derive(Debug, strum_macros::Display)]
 pub enum Command {
@@ -49,10 +49,7 @@ impl Command {
         })
     }
 
-    pub async fn write<W>(&self, write: &mut W) -> Result<()>
-    where
-        W: tokio::io::AsyncWrite + Unpin,
-    {
+    pub fn serialize(&self) -> Vec<u8> {
         use crate::protocol::session::Command::*;
         let mut msg = ::capnp::message::Builder::new_default();
         let builder = msg.init_root::<session_capnp::command::Builder>();
@@ -66,9 +63,9 @@ impl Command {
                 build_args.set_filename(&args.filename);
             }
         }
-        capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
-        Ok(())
+        capnp::serialize::write_message_to_words(&msg)
     }
+
     pub async fn read<R>(read: &mut R) -> Result<Self>
     where
         R: tokio::io::AsyncRead + Unpin,

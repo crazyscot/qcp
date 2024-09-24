@@ -344,8 +344,11 @@ async fn do_get(
     let span = span!(Level::TRACE, "do_get", filename = filename);
     let _guard = span.enter();
 
-    let cmd = crate::protocol::session::Command::new_get(filename);
-    cmd.write(&mut stream.send).await?;
+    {
+        let cmd = crate::protocol::session::Command::new_get(filename);
+        let buf = cmd.serialize();
+        stream.send.write_all(&buf).await?;
+    }
     stream.send.flush().await?;
 
     // TODO protocol timeout?
@@ -410,8 +413,11 @@ async fn do_put(
     trace!("starting");
     let mut file = BufReader::with_capacity(cli_args.original.file_buffer_size(), file);
 
-    let cmd = crate::protocol::session::Command::new_put(dest_filename);
-    cmd.write(&mut stream.send).await?;
+    {
+        let cmd = crate::protocol::session::Command::new_put(dest_filename);
+        let buf = cmd.serialize();
+        stream.send.write_all(&buf).await?;
+    }
     stream.send.flush().await?;
     let progress_async = progress.wrap_async_write(stream.send);
 
