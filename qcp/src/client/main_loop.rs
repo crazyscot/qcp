@@ -12,7 +12,7 @@ use crate::{cert::Credentials, protocol};
 use super::ClientArgs;
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
-use indicatif::{MultiProgress, ProgressBar};
+use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection};
 use rustls::RootCertStore;
@@ -113,10 +113,9 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
     spinner.set_message("Transferring data");
     spinner.enable_steady_tick(Duration::from_secs(1));
     timers.next(SHOW_TIME);
-    let result = manage_request(&mut connection, &unpacked_args).await;
+    let result = manage_request(&mut connection, &unpacked_args, &progress).await;
 
-    spinner.set_message("Shutting down");
-    spinner.enable_steady_tick(Duration::from_millis(250));
+    spinner.finish_and_clear();
 
     timers.next("shutdown");
     debug!("shutting down");
@@ -135,7 +134,6 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
     server.wait().await?;
     trace!("finished");
     timers.stop();
-    spinner.finish_and_clear();
 
     drop(_guard);
 
@@ -153,6 +151,7 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
     if args.profile {
         info!("Elapsed time by phase:\n{timers}");
     }
+    //progress.clear()?;
     Ok(result.is_success())
 }
 
@@ -177,15 +176,25 @@ impl RequestResult {
     }
 }
 
-async fn manage_request(connection: &mut Connection, args: &ProcessedArgs) -> RequestResult {
+async fn manage_request(
+    connection: &mut Connection,
+    args: &ProcessedArgs,
+    progress: &MultiProgress,
+) -> RequestResult {
     // TODO: This may spawn, if there are multiple files to transfer.
+    // FIXME: It is currently not spawnable, because of a rather deep chain of non-Send types
 
-    // Called function is responsible for tracing errors.
-    // We return a simple true/false to show success.
-    connection
-        .open_bi()
-        .map_err(|e| anyhow::anyhow!(e))
-        .and_then(|sp| process_request(sp, args))
+    let sp = match connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("{e}");
+            return RequestResult::failure();
+        }
+    };
+
+    // Called function returns its payload size.
+    // This function exists only to report any errors and return true/false to show success.
+    process_request(sp, args, progress.clone())
         .inspect_err(|e| error!("{e}"))
         .map_ok_or_else(|_| RequestResult::failure(), RequestResult::success)
         .await
@@ -194,13 +203,54 @@ async fn manage_request(connection: &mut Connection, args: &ProcessedArgs) -> Re
 async fn process_request(
     sp: (quinn::SendStream, quinn::RecvStream),
     args: &ProcessedArgs,
+    mp: MultiProgress,
 ) -> anyhow::Result<u64> {
-    if args.source.host.is_some() {
+    let progress_bar = mp.add(
+        ProgressBar::new(1)
+            .with_elapsed(Duration::ZERO)
+            .with_finish(ProgressFinish::Abandon),
+    );
+    // TODO: We might dynamically set style based on console width, or even make it user-specifiable.
+    // (e.g. if wide, include decimal bytes and maybe time elapsed.)
+    // Whatever it is, it must look good at a standard 80 columns.
+    // filename [==============================              ] 2m30s [1.24GB] 123.4MB/s
+    // fairly-long-filename [========================        ] 2m30s [1.24GB] 123.4MB/s
+    // extremely-long-filename-no-really-very-long [====     ] 2m30s [1.24GB] 123.4MB/s
+    // 11111111111111111111111111111111111111111111111111111111111111111111111111111111
+    progress_bar.set_style(indicatif::ProgressStyle::with_template(
+        "{msg:!.dim} {wide_bar:.cyan} {eta} @ {decimal_bytes_per_sec} [{decimal_total_bytes:.dim}]",
+    )?);
+    let completion_style = indicatif::ProgressStyle::with_template(
+        "{msg:!.dim} {wide_bar:.green} [{elapsed:.green} @ {decimal_bytes_per_sec:.green} {decimal_total_bytes:.dim}]"
+    )?;
+    // Handler manages the progress bar length field.
+
+    let result = if args.source.host.is_some() {
         // This is a Get
-        do_get(sp, &args.source.filename, &args.destination.filename, args).await
+        do_get(
+            sp,
+            &args.source.filename,
+            &args.destination.filename,
+            args,
+            progress_bar.clone(),
+        )
+        .await
     } else {
-        do_put(sp, &args.source.filename, &args.destination.filename, args).await
+        // This is a Put
+        do_put(
+            sp,
+            &args.source.filename,
+            &args.destination.filename,
+            args,
+            progress_bar.clone(),
+        )
+        .await
+    };
+    if result.is_ok() {
+        progress_bar.set_style(completion_style);
+        progress_bar.finish();
     }
+    result
 }
 
 fn launch_server(args: &ProcessedArgs) -> Result<Child> {
@@ -287,9 +337,9 @@ async fn do_get(
     filename: &str,
     dest: &str,
     cli_args: &ProcessedArgs,
+    progress: ProgressBar,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
-
     let span = span!(Level::TRACE, "do_get", filename = filename);
     let _guard = span.enter();
 
@@ -305,14 +355,18 @@ async fn do_get(
     }
 
     trace!("starting");
-    let mut recv_buf = BufReader::with_capacity(cli_args.original.buffer_size, stream.recv);
+    let progress_async = progress.wrap_async_read(stream.recv);
+    let mut recv_buf = BufReader::with_capacity(cli_args.original.buffer_size, progress_async);
 
     let header = FileHeader::read(&mut recv_buf).await?;
     trace!("got {header:?}");
 
+    progress.set_message(header.filename.clone());
     let file = crate::util::io::create_truncate_file(dest, &header).await?;
     let mut file_buf = BufWriter::with_capacity(cli_args.original.file_buffer_size(), file);
 
+    progress.set_position(0);
+    progress.set_length(header.size);
     let mut limited_recv = recv_buf.take(header.size);
     trace!("payload");
     tokio::io::copy_buf(&mut limited_recv, &mut file_buf).await?;
@@ -335,6 +389,7 @@ async fn do_put(
     src_filename: &str,
     dest_filename: &str,
     cli_args: &ProcessedArgs,
+    progress: ProgressBar,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
 
@@ -358,6 +413,7 @@ async fn do_put(
     let cmd = crate::protocol::session::Command::new_put(dest_filename);
     cmd.write(&mut stream.send).await?;
     stream.send.flush().await?;
+    let progress_async = progress.wrap_async_write(stream.send);
 
     // TODO protocol timeout?
     trace!("await response");
@@ -366,13 +422,16 @@ async fn do_put(
         anyhow::bail!(format!("PUT ({src_filename}) failed: {response}"));
     }
 
-    let mut send_buf = BufWriter::with_capacity(cli_args.original.buffer_size, stream.send);
+    let mut send_buf = BufWriter::with_capacity(cli_args.original.buffer_size, progress_async);
 
     // The filename in the protocol is the file part only of src_filename
     trace!("send header");
-    let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
-    let header = FileHeader::serialize_direct(payload_len, protocol_filename);
+    let protocol_filename = path.file_name().unwrap().to_str().unwrap().to_string(); // can't fail with the preceding checks
+    let header = FileHeader::serialize_direct(payload_len, &protocol_filename);
     send_buf.write_all(&header).await?;
+    progress.set_message(protocol_filename.clone());
+    progress.set_position(0);
+    progress.set_length(payload_len);
 
     // A server-side abort might happen part-way through a large transfer.
     trace!("send payload");
@@ -418,7 +477,8 @@ async fn do_put(
         ));
     }
 
-    send_buf.into_inner().finish()?;
+    // TODO: It would be ideal to call finish on the Quinn sendstream within, but it's hard to extract from the ProgressBarIter.
+    // send_buf.into_inner().finish();
     trace!("complete");
     Ok(payload_len)
 }

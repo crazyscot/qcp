@@ -79,7 +79,7 @@ pub fn output_statistics(
         if let Some(payload_bytes) = payload_size {
             let overhead_pct = 100. * (total_bytes - payload_bytes) as f64 / payload_bytes as f64;
             info!(
-                "{} total bytes transferred for {} bytes payload ({:.2}% overhead)",
+                "{} total bytes transferred for {} bytes payload  ({:.2}% overhead)",
                 total_bytes, payload_bytes, overhead_pct
             );
         }
