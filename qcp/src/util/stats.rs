@@ -34,9 +34,9 @@ impl DataRate {
 
 impl Display for DataRate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.bit_rate() {
+        match self.byte_rate() {
             None => f.write_str("unknown"),
-            Some(rate) => rate.human_throughput("bit").fmt(f),
+            Some(rate) => rate.human_throughput_bytes().fmt(f),
         }
     }
 }
@@ -116,9 +116,9 @@ mod tests {
     }
     #[test]
     fn valid() {
-        test_case(42, 1, "336bit/s");
-        test_case(1234, 1, "9.9kbit/s");
-        test_case(10000000000, 500, "160Mbit/s");
-        test_case(1000000000000000, 1234, "6.48Tbit/s");
+        test_case(42, 1, "42B/s");
+        test_case(1234, 1, "1.2kB/s");
+        test_case(10000000000, 500, "20MB/s");
+        test_case(1000000000000000, 1234, "810.37GB/s");
     }
 }
