@@ -172,6 +172,14 @@ impl RequestResult {
     fn is_success(&self) -> bool {
         self.payload_size.is_some()
     }
+    /// Merges another result into this one
+    fn fold(&mut self, other: Self) {
+        self.payload_size = if let Some(a) = self.payload_size {
+            other.payload_size.map(|b| a + b)
+        } else {
+            None
+        };
+    }
 }
 
 async fn manage_request(
@@ -179,23 +187,35 @@ async fn manage_request(
     args: ProcessedArgs,
     progress: MultiProgress,
 ) -> RequestResult {
-    // TODO: This may spawn, if there are multiple files to transfer.
-    // FIXME: It is currently not spawnable, because of a rather deep chain of non-Send types
+    // For now there is only one task, but we anticipate moving multiple files in future.
+    let mut tasks = tokio::task::JoinSet::new();
+    tasks.spawn(async move {
+        let sp = match connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await {
+            Ok(r) => r,
+            Err(e) => {
+                error!("{e}");
+                return RequestResult::failure();
+            }
+        };
 
-    let sp = match connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await {
-        Ok(r) => r,
-        Err(e) => {
-            error!("{e}");
-            return RequestResult::failure();
-        }
-    };
+        // Called function returns its payload size.
+        // This function exists only to report any errors and return true/false to show success.
+        process_request(sp, args, progress)
+            .inspect_err(|e| error!("{e}"))
+            .map_ok_or_else(|_| RequestResult::failure(), RequestResult::success)
+            .await
+    });
 
-    // Called function returns its payload size.
-    // This function exists only to report any errors and return true/false to show success.
-    process_request(sp, args, progress)
-        .inspect_err(|e| error!("{e}"))
-        .map_ok_or_else(|_| RequestResult::failure(), RequestResult::success)
-        .await
+    let mut result = RequestResult::success(0);
+    loop {
+        let rr = match tasks.join_next().await {
+            Some(Ok(res)) => res,
+            Some(Err(_)) => RequestResult::failure(),
+            None => break, // all joined
+        };
+        result.fold(rr);
+    }
+    result
 }
 
 async fn process_request(
