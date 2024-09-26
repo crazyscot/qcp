@@ -376,29 +376,29 @@ async fn do_get(
     }
 
     trace!("starting");
-    let progress_async = progress.wrap_async_read(stream.recv);
-    let mut recv_buf = BufReader::with_capacity(cli_args.original.buffer_size, progress_async);
 
-    let header = FileHeader::read(&mut recv_buf).await?;
+    let recv_buf = BufReader::with_capacity(cli_args.original.buffer_size, stream.recv);
+    let mut progress_async = progress.wrap_async_read(recv_buf);
+
+    let header = FileHeader::read(&mut progress_async).await?;
     trace!("got {header:?}");
 
-    let file = crate::util::io::create_truncate_file(dest, &header).await?;
-    let mut file_buf = BufWriter::with_capacity(cli_args.original.file_buffer_size(), file);
+    let mut file = crate::util::io::create_truncate_file(dest, &header).await?;
 
     progress.set_position(0);
     progress.set_length(header.size);
-    let mut limited_recv = recv_buf.take(header.size);
+    let mut limited_recv = progress_async.take(header.size);
     trace!("payload");
-    tokio::io::copy_buf(&mut limited_recv, &mut file_buf).await?;
+    tokio::io::copy_buf(&mut limited_recv, &mut file).await?;
 
     // stream.recv has been moved but we can get it back for further operations
-    recv_buf = limited_recv.into_inner();
+    progress_async = limited_recv.into_inner();
 
     trace!("trailer");
-    let _trailer = FileTrailer::read(&mut recv_buf).await?;
+    let _trailer = FileTrailer::read(&mut progress_async).await?;
     // Trailer is empty for now, but its existence means the server believes the file was sent correctly
 
-    file_buf.flush().await?;
+    file.flush().await?;
     stream.send.finish()?;
     trace!("complete");
     Ok(header.size)
