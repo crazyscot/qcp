@@ -8,7 +8,7 @@ use std::process::ExitCode;
 
 fn main() -> anyhow::Result<ExitCode> {
     let args = ClientArgs::parse();
-    let progress = MultiProgress::new();
+    let progress = MultiProgress::new(); // This writes to stderr
     let trace_level = match args.debug {
         true => "trace",
         false => match args.quiet {

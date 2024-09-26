@@ -111,13 +111,11 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
     };
 
     spinner.set_message("Transferring data");
-    spinner.enable_steady_tick(Duration::from_secs(1));
     timers.next(SHOW_TIME);
     let result = manage_request(&mut connection, &unpacked_args, &progress).await;
 
-    spinner.finish_and_clear();
-
     timers.next("shutdown");
+    spinner.set_message("Shutting down");
     debug!("shutting down");
     // close child process stdin, which should trigger its exit
     server_input.shutdown().await?;
@@ -151,7 +149,7 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
     if args.profile {
         info!("Elapsed time by phase:\n{timers}");
     }
-    //progress.clear()?;
+    progress.clear()?;
     Ok(result.is_success())
 }
 
@@ -210,20 +208,24 @@ async fn process_request(
             .with_elapsed(Duration::ZERO)
             .with_finish(ProgressFinish::Abandon),
     );
-    // TODO: We might dynamically set style based on console width, or even make it user-specifiable.
-    // (e.g. if wide, include decimal bytes and maybe time elapsed.)
-    // Whatever it is, it must look good at a standard 80 columns.
-    // filename [==============================              ] 2m30s [1.24GB] 123.4MB/s
-    // fairly-long-filename [========================        ] 2m30s [1.24GB] 123.4MB/s
-    // extremely-long-filename-no-really-very-long [====     ] 2m30s [1.24GB] 123.4MB/s
-    // 11111111111111111111111111111111111111111111111111111111111111111111111111111111
+
+    let output = console::Term::stderr();
+
+    // The displayed message is the filename part of the source
+    let display_filename = {
+        let component = PathBuf::from(&args.source.filename);
+        component
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string()
+    };
+
     progress_bar.set_style(indicatif::ProgressStyle::with_template(
-        "{msg:!.dim} {wide_bar:.cyan} {eta} @ {decimal_bytes_per_sec} [{decimal_total_bytes:.dim}]",
+        crate::console::progress_style_for(&output, display_filename.len()),
     )?);
-    let completion_style = indicatif::ProgressStyle::with_template(
-        "{msg:!.dim} {wide_bar:.green} [{elapsed:.green} @ {decimal_bytes_per_sec:.green} {decimal_total_bytes:.dim}]"
-    )?;
-    // Handler manages the progress bar length field.
+    progress_bar.set_message(display_filename);
+    // N.B. The command handler manages the progress bar length field, once it is known.
 
     let result = if args.source.host.is_some() {
         // This is a Get
@@ -247,8 +249,7 @@ async fn process_request(
         .await
     };
     if result.is_ok() {
-        progress_bar.set_style(completion_style);
-        progress_bar.finish();
+        progress_bar.finish_and_clear();
     }
     result
 }
@@ -361,7 +362,6 @@ async fn do_get(
     let header = FileHeader::read(&mut recv_buf).await?;
     trace!("got {header:?}");
 
-    progress.set_message(header.filename.clone());
     let file = crate::util::io::create_truncate_file(dest, &header).await?;
     let mut file_buf = BufWriter::with_capacity(cli_args.original.file_buffer_size(), file);
 
@@ -429,7 +429,6 @@ async fn do_put(
     let protocol_filename = path.file_name().unwrap().to_str().unwrap().to_string(); // can't fail with the preceding checks
     let header = FileHeader::serialize_direct(payload_len, &protocol_filename);
     send_buf.write_all(&header).await?;
-    progress.set_message(protocol_filename.clone());
     progress.set_position(0);
     progress.set_length(payload_len);
 

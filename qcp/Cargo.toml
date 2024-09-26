@@ -13,6 +13,7 @@ anyhow = { workspace = true }
 capnp = "0.19.7"
 capnp-futures = "0.19.1"
 clap = { workspace = true, features = ["wrap_help", "derive", "cargo", "help"] }
+console = "0.15.8"
 dns-lookup = "2.0.4"
 futures-util = { version = "0.3.30", default-features = false, features = ["compat"] }
 gethostname = "0.5.0"
