@@ -42,8 +42,7 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
     let mut timers = StopwatchChain::default();
     timers.next("setup");
     let unpacked_args = ProcessedArgs::try_from(args)?;
-    let args = &unpacked_args.original;
-    //let _ = progress.println(format!("{unpacked_args:?}")); // TEMP
+    let args = unpacked_args.original.clone();
 
     let span = trace_span!("CLIENT");
     let _guard = span.enter();
@@ -96,7 +95,7 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
     let timeout_fut = tokio::time::sleep(CONNECTION_TIMEOUT);
     tokio::pin!(connection_fut, timeout_fut);
 
-    let mut connection = tokio::select! {
+    let connection = tokio::select! {
         _ = timeout_fut => {
             anyhow::bail!("UDP connection to QUIC endpoint timed out");
         },
@@ -109,10 +108,11 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
             }
         },
     };
+    let connection2 = connection.clone();
 
     spinner.set_message("Transferring data");
     timers.next(SHOW_TIME);
-    let result = manage_request(&mut connection, &unpacked_args, &progress).await;
+    let result = manage_request(connection, unpacked_args, progress.clone()).await;
 
     timers.next("shutdown");
     spinner.set_message("Shutting down");
@@ -139,8 +139,8 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
 
     if !args.quiet {
         crate::util::stats::output_statistics(
-            args,
-            connection.stats(),
+            &args,
+            connection2.stats(),
             result.payload_size,
             transport_time,
         );
@@ -175,9 +175,9 @@ impl RequestResult {
 }
 
 async fn manage_request(
-    connection: &mut Connection,
-    args: &ProcessedArgs,
-    progress: &MultiProgress,
+    connection: Connection,
+    args: ProcessedArgs,
+    progress: MultiProgress,
 ) -> RequestResult {
     // TODO: This may spawn, if there are multiple files to transfer.
     // FIXME: It is currently not spawnable, because of a rather deep chain of non-Send types
@@ -192,7 +192,7 @@ async fn manage_request(
 
     // Called function returns its payload size.
     // This function exists only to report any errors and return true/false to show success.
-    process_request(sp, args, progress.clone())
+    process_request(sp, args, progress)
         .inspect_err(|e| error!("{e}"))
         .map_ok_or_else(|_| RequestResult::failure(), RequestResult::success)
         .await
@@ -200,7 +200,7 @@ async fn manage_request(
 
 async fn process_request(
     sp: (quinn::SendStream, quinn::RecvStream),
-    args: &ProcessedArgs,
+    args: ProcessedArgs,
     mp: MultiProgress,
 ) -> anyhow::Result<u64> {
     let progress_bar = mp.add(
@@ -233,7 +233,7 @@ async fn process_request(
             sp,
             &args.source.filename,
             &args.destination.filename,
-            args,
+            &args,
             progress_bar.clone(),
         )
         .await
@@ -243,7 +243,7 @@ async fn process_request(
             sp,
             &args.source.filename,
             &args.destination.filename,
-            args,
+            &args,
             progress_bar.clone(),
         )
         .await
