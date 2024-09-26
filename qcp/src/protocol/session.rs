@@ -184,3 +184,36 @@ impl FileTrailer {
         Ok(Self {})
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Command, FileHeader, FileTrailer, Response, Status};
+    #[test]
+    fn marshal_size() {
+        // not really a test - just a sanity check that nothing has broken
+        let c = Command::new_get("filename").serialize();
+        println!("Command len {}", c.len());
+        assert!(c.len() > 32);
+
+        let r = Response {
+            status: Status::ItIsADirectory,
+            message: None,
+        }
+        .serialize();
+        println!("Response no msg {}", r.len());
+        assert!(r.len() >= 32);
+        let r = Response {
+            status: Status::Ok,
+            message: Some("hello".to_string()),
+        }
+        .serialize();
+        assert!(r.len() >= 32);
+        println!("Response with msg 5 {}", r.len());
+        let head = FileHeader::serialize_direct(1234, "foo");
+        println!("File Header {}", head.len());
+        assert!(head.len() >= 32);
+        let trail = FileTrailer::serialize_direct();
+        println!("File Trailer {}", trail.len());
+        assert!(trail.len() >= 16);
+    }
+}

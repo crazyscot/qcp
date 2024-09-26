@@ -169,6 +169,7 @@ mod tests {
         };
 
         let wire = encode_client(&cert);
+        println!("Client message encoded size is {}", wire.len());
         let decoded = decode_client(&wire)?;
         assert_eq!(cert, decoded.cert);
         Ok(())
@@ -187,6 +188,7 @@ mod tests {
         let port = fastrand::u16(1..65535);
 
         let wire = encode_server(port, &cert);
+        println!("Server message encoded size is {}", wire.len());
         let decoded = decode_server(&wire)?;
         assert_eq!(cert, decoded.cert);
         assert_eq!(port, decoded.port);
