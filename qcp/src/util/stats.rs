@@ -44,7 +44,7 @@ impl Display for DataRate {
 pub fn output_statistics(
     args: &ClientArgs,
     stats: ConnectionStats,
-    payload_size: Option<u64>,
+    payload_bytes: u64,
     transport_time: Option<Duration>,
 ) {
     if stats.path.congestion_events > 0 {
@@ -76,7 +76,7 @@ pub fn output_statistics(
             stats.udp_tx.datagrams.human_count_bare(),
             stats.udp_rx.datagrams.human_count_bare()
         );
-        if let Some(payload_bytes) = payload_size {
+        if payload_bytes != 0 {
             let overhead_pct = 100. * (total_bytes - payload_bytes) as f64 / payload_bytes as f64;
             info!(
                 "{} total bytes transferred for {} bytes payload  ({:.2}% overhead)",
@@ -84,7 +84,7 @@ pub fn output_statistics(
             );
         }
     }
-    if let Some(payload_bytes) = payload_size {
+    if payload_bytes != 0 {
         let size = payload_bytes.human_count("B");
         let rate = crate::util::stats::DataRate::new(payload_bytes, transport_time);
         let transport_time_str = transport_time

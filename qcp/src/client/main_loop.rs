@@ -113,6 +113,10 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
     spinner.set_message("Transferring data");
     timers.next(SHOW_TIME);
     let result = manage_request(connection, unpacked_args, progress.clone()).await;
+    let total_bytes = match result {
+        Ok(b) => b,
+        Err(b) => b,
+    };
 
     timers.next("shutdown");
     spinner.set_message("Shutting down");
@@ -141,7 +145,7 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
         crate::util::stats::output_statistics(
             &args,
             connection2.stats(),
-            result.payload_size,
+            total_bytes,
             transport_time,
         );
     }
@@ -150,74 +154,67 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
         info!("Elapsed time by phase:\n{timers}");
     }
     progress.clear()?;
-    Ok(result.is_success())
+    Ok(result.is_ok())
 }
 
-#[derive(Default)]
-struct RequestResult {
-    // If present, we were successful.
-    // If not present, we were not successful.
-    payload_size: Option<u64>,
-}
-
-impl RequestResult {
-    fn failure() -> Self {
-        Self::default()
-    }
-    fn success(payload_size: u64) -> Self {
-        Self {
-            payload_size: Some(payload_size),
-        }
-    }
-    fn is_success(&self) -> bool {
-        self.payload_size.is_some()
-    }
-    /// Merges another result into this one
-    fn fold(&mut self, other: Self) {
-        self.payload_size = if let Some(a) = self.payload_size {
-            other.payload_size.map(|b| a + b)
-        } else {
-            None
-        };
-    }
-}
-
+/// Do whatever it is we were asked to.
+/// On success: returns the number of bytes transferred.
+/// On error: returns the number of bytes that were transferred, as far as we know.
 async fn manage_request(
     connection: Connection,
     args: ProcessedArgs,
     progress: MultiProgress,
-) -> RequestResult {
-    // For now there is only one task, but we anticipate moving multiple files in future.
+) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
     tasks.spawn(async move {
-        let sp = match connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await {
+        // This async block returns a Result<u64>
+        let sp = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
+
+        // Called function returns its payload size.
+        // This async block reports on errors.
+        process_request(sp, args, progress).await
+    });
+
+    let mut total_bytes = 0u64;
+    let mut success = true;
+    loop {
+        let result = match tasks.join_next().await {
+            Some(res) => res,
+            None => break, // all have joined
+        };
+        // The first layer of possible errors are Join errors
+        let result = match result {
             Ok(r) => r,
-            Err(e) => {
-                error!("{e}");
-                return RequestResult::failure();
+            Err(err) => {
+                // This is either a panic, or a cancellation.
+                if let Ok(reason) = err.try_into_panic() {
+                    // Resume the panic on the main task
+                    std::panic::resume_unwind(reason);
+                } else {
+                    // task cancellation (not currently in use, but might be later; this is conceptually benign)
+                    warn!("unexpected task join failure (shouldn't happen)");
+                    Ok(0)
+                }
             }
         };
 
-        // Called function returns its payload size.
-        // This function exists only to report any errors and return true/false to show success.
-        process_request(sp, args, progress)
-            .inspect_err(|e| error!("{e}"))
-            .map_ok_or_else(|_| RequestResult::failure(), RequestResult::success)
-            .await
-    });
-
-    let mut result = RequestResult::success(0);
-    loop {
-        let rr = match tasks.join_next().await {
-            Some(Ok(res)) => res,
-            Some(Err(_)) => RequestResult::failure(),
-            None => break, // all joined
-        };
-        result.fold(rr);
+        // The second layer of possible errors are failures in the protocol. Continue with other jobs as far as possible.
+        match result {
+            Ok(size) => total_bytes += size,
+            Err(e) => {
+                error!("{e}");
+                success = false;
+            }
+        }
     }
-    result
+    if success {
+        Ok(total_bytes)
+    } else {
+        Err(total_bytes)
+    }
 }
 
+/// Deal with a single request
 async fn process_request(
     sp: (quinn::SendStream, quinn::RecvStream),
     args: ProcessedArgs,
