@@ -56,15 +56,19 @@ pub struct ClientArgs {
     #[arg(long, action, help_heading("Debug options"))]
     pub profile: bool,
 
+    // Special option (a form of help message)
+    /// Outputs a help message about UDP buffer sizes
+    #[arg(long, action, hide(true))]
+    pub help_socket_bufsize: bool,
+
     // Positional arguments
-    #[arg()]
     /// Source file. This may be a local filename, or remote specified as HOST:FILE.
-    pub source: String,
-    #[arg()]
+    pub source: Option<String>,
+
     /// Destination. This may be a file or directory. It may be local or remote
     /// (specified as HOST:DESTINATION, or simply HOST: to copy to your home directory there).
-    pub destination: String,
-    // TODO support multiple sources, cp-like?
+    pub destination: Option<String>,
+    // SOMEDAY: we might support arbitrarily many positional args, cp-like.
 }
 
 impl ClientArgs {
@@ -136,8 +140,15 @@ impl TryFrom<ClientArgs> for ProcessedArgs {
     type Error = anyhow::Error;
 
     fn try_from(args: ClientArgs) -> Result<Self, Self::Error> {
-        let source = FileSpec::from_str(&args.source)?;
-        let destination = FileSpec::from_str(&args.destination)?;
+        let source = match &args.source {
+            Some(s) => FileSpec::from_str(s)?,
+            None => anyhow::bail!("Source and destination are required"),
+        };
+        let destination = match &args.destination {
+            Some(d) => FileSpec::from_str(d)?,
+            None => anyhow::bail!("Destination is required"),
+        };
+
         if (source.host.is_none() && destination.host.is_none())
             || (source.host.is_some() && destination.host.is_some())
         {

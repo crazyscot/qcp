@@ -8,6 +8,11 @@ use std::process::ExitCode;
 
 fn main() -> anyhow::Result<ExitCode> {
     let args = ClientArgs::parse();
+    if args.help_socket_bufsize {
+        qcp::os::os::print_udp_buffer_size_help_message();
+        return Ok(ExitCode::SUCCESS);
+    }
+
     let progress = MultiProgress::new(); // This writes to stderr
     let trace_level = match args.debug {
         true => "trace",

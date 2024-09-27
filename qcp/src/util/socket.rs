@@ -6,7 +6,9 @@ use human_repr::HumanCount as _;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket};
 use tracing::{debug, info, warn};
 
-pub fn set_udp_buffer_sizes(socket: &UdpSocket) -> anyhow::Result<()> {
+/// Set the buffer size options on a UDP socket.
+/// Returns an optional warning message.
+pub fn set_udp_buffer_sizes(socket: &UdpSocket) -> anyhow::Result<Option<String>> {
     let wanted = os::preferred_udp_buffer_size();
     let mut send = os::get_sendbuf(socket)?;
     let mut recv = os::get_recvbuf(socket)?;
@@ -34,16 +36,21 @@ pub fn set_udp_buffer_sizes(socket: &UdpSocket) -> anyhow::Result<()> {
 
     send = os::get_sendbuf(socket)?;
     recv = os::get_recvbuf(socket)?;
+    let mut message: Option<String> = None;
     if send < wanted || recv < wanted {
-        warn!(
+        message = Some(
+        format!(
             "Unable to set UDP send buffer sizes (got send {}, receive {}; wanted {}). This may affect performance.",
             send.human_count_bytes(),
             recv.human_count_bytes(),
             wanted.human_count_bytes()
-        );
+        ));
         if let Some(e) = force_err {
             warn!("While attempting to set kernel buffer size, this happened: {e}")
         }
+        let mut args = std::env::args();
+        let ego = args.next().unwrap_or("<this program>".to_string());
+        info!("For more information, run: `{} --help-socket-bufsize`", ego);
         // TODO: Make buffer size configurable, the user might have a better idea than we do of what's good for their network.
         // SOMEDAY: We might offer to set sysctl, write sysctl files, etc. if run as root.
     } else {
@@ -53,7 +60,16 @@ pub fn set_udp_buffer_sizes(socket: &UdpSocket) -> anyhow::Result<()> {
             recv.human_count_bare()
         );
     }
-    Ok(())
+    Ok(message)
+}
+
+/// Creates and binds a UDP socket for the address family necessary to reach the given peer address
+pub fn bind_unspecified_for(peer: &SocketAddr) -> anyhow::Result<std::net::UdpSocket> {
+    let addr: SocketAddr = match peer {
+        SocketAddr::V4(_) => SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into(),
+        SocketAddr::V6(_) => SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0).into(),
+    };
+    Ok(UdpSocket::bind(addr)?)
 }
 
 #[cfg(test)]

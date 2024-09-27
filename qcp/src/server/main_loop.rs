@@ -11,15 +11,17 @@ use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::Command;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
+use crate::util;
 
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
+use quinn::EndpointConfig;
 use rustls_pki_types::CertificateDer;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader, BufWriter};
 use tokio::task::JoinSet;
 use tokio::time::Duration;
-use tracing::{debug, error, info, trace, trace_span};
+use tracing::{debug, error, info, trace, trace_span, warn};
 
 use super::ServerArgs;
 
@@ -139,7 +141,18 @@ fn create_endpoint(
             SocketAddr::new(std::net::IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0)
         }
     };
-    Ok(quinn::Endpoint::server(config, addr)?)
+    let socket = std::net::UdpSocket::bind(addr)?;
+    let _ = util::socket::set_udp_buffer_sizes(&socket)?.inspect(|s| warn!("{s}"));
+
+    // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
+    let runtime =
+        quinn::default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
+    Ok(quinn::Endpoint::new(
+        EndpointConfig::default(),
+        Some(config),
+        socket,
+        runtime,
+    )?)
 }
 
 async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::Result<()> {

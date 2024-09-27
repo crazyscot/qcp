@@ -6,7 +6,7 @@ use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
-use crate::util::{lookup_host_by_family, time::StopwatchChain};
+use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
 use crate::{cert::Credentials, protocol};
 
 use super::ClientArgs;
@@ -14,10 +14,10 @@ use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
 use quinn::crypto::rustls::QuicClientConfig;
-use quinn::{rustls, Connection};
+use quinn::{rustls, Connection, EndpointConfig};
 use rustls::RootCertStore;
 use rustls_pki_types::CertificateDer;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -339,12 +339,15 @@ pub fn create_endpoint(
     let qcc = Arc::new(QuicClientConfig::try_from(tls_config)?);
     let config = quinn::ClientConfig::new(qcc);
 
-    let addr: SocketAddr = match server_addr {
-        SocketAddr::V4(_) => SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into(),
-        SocketAddr::V6(_) => SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0).into(),
-    };
+    trace!("bind socket");
+    let socket = util::socket::bind_unspecified_for(server_addr)?;
+    let _ = util::socket::set_udp_buffer_sizes(&socket)?.inspect(|msg| warn!("{msg}"));
+
     trace!("create endpoint");
-    let mut endpoint = quinn::Endpoint::client(addr)?;
+    // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
+    let runtime =
+        quinn::default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
+    let mut endpoint = quinn::Endpoint::new(EndpointConfig::default(), None, socket, runtime)?;
     endpoint.set_default_client_config(config);
 
     Ok(endpoint)
