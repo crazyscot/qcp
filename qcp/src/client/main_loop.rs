@@ -69,11 +69,15 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
     trace!("waiting for server message");
     let server_message = ServerMessage::read(&mut server_output).await?;
     debug!(
-        "Got server message; cert length {}, port {}, hostname {}",
+        "Got server message; cert length {}, port {}, hostname {}, warning {:?}",
         server_message.cert.len(),
         server_message.port,
-        server_message.name
+        server_message.name,
+        server_message.warning
     );
+    if let Some(w) = server_message.warning {
+        warn!("Remote endpoint warning: {w}");
+    }
 
     let server_address_port = match server_address {
         std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, server_message.port).into(),

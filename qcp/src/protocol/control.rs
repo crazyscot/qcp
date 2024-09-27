@@ -77,11 +77,19 @@ pub struct ServerMessage {
     pub cert: Vec<u8>,
     /// Server's idea of its hostname (should match the certificate)
     pub name: String,
+    /// Server warning message (if any)
+    pub warning: Option<String>,
 }
 
 impl ServerMessage {
     // This is weirdly asymmetric to avoid needless allocs.
-    pub async fn write<W>(write: &mut W, port: u16, cert: &[u8], name: &str) -> Result<()>
+    pub async fn write<W>(
+        write: &mut W,
+        port: u16,
+        cert: &[u8],
+        name: &str,
+        warning: Option<&str>,
+    ) -> Result<()>
     where
         W: tokio::io::AsyncWrite + Unpin,
     {
@@ -90,6 +98,9 @@ impl ServerMessage {
         builder.set_port(port);
         builder.set_cert(cert);
         builder.set_name(name);
+        if let Some(w) = warning {
+            builder.set_warning(w);
+        }
         capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
         Ok(())
     }
@@ -104,7 +115,18 @@ impl ServerMessage {
         let cert = msg_reader.get_cert()?.to_vec();
         let name = msg_reader.get_name()?.to_str()?.to_string();
         let port = msg_reader.get_port();
-        Ok(Self { port, cert, name })
+        let warning = msg_reader.get_warning()?.to_str()?.to_string();
+        let warning = if warning.is_empty() {
+            None
+        } else {
+            Some(warning)
+        };
+        Ok(Self {
+            port,
+            cert,
+            name,
+            warning,
+        })
     }
 }
 
@@ -154,6 +176,7 @@ mod tests {
             port,
             cert,
             name: "localhost".to_string(),
+            warning: Some("foo".to_string()),
         })
     }
 

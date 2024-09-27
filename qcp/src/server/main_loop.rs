@@ -56,7 +56,7 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
 
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
-    let endpoint = create_endpoint(&credentials, client_message)?;
+    let (endpoint, warning) = create_endpoint(&credentials, client_message)?;
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");
     ServerMessage::write(
@@ -64,6 +64,7 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
         local_addr.port(),
         &credentials.certificate,
         &credentials.hostname,
+        warning.as_deref(),
     )
     .await?;
     stdout.flush().await?;
@@ -113,7 +114,7 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
 fn create_endpoint(
     credentials: &Credentials,
     client_message: ClientMessage,
-) -> anyhow::Result<quinn::Endpoint> {
+) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
 
     let mut root_store = RootCertStore::empty();
@@ -142,17 +143,15 @@ fn create_endpoint(
         }
     };
     let socket = std::net::UdpSocket::bind(addr)?;
-    let _ = util::socket::set_udp_buffer_sizes(&socket)?.inspect(|s| warn!("{s}"));
+    let warning = util::socket::set_udp_buffer_sizes(&socket)?.inspect(|s| warn!("{s}"));
 
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
     let runtime =
         quinn::default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
-    Ok(quinn::Endpoint::new(
-        EndpointConfig::default(),
-        Some(config),
-        socket,
-        runtime,
-    )?)
+    Ok((
+        quinn::Endpoint::new(EndpointConfig::default(), Some(config), socket, runtime)?,
+        warning,
+    ))
 }
 
 async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::Result<()> {

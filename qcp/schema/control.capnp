@@ -15,4 +15,5 @@ struct ServerMessage {
     port @0: UInt16; # UDP port the server has bound to
     cert @1: Data; # Server's self-signed certificate (DER)
     name @2: Text; # Name in the server cert (this saves us having to unpick it from the certificate)
+    warning @3: Text; # If present, a warning message to be relayed to a human
 }
