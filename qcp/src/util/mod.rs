@@ -5,6 +5,7 @@ mod dns;
 pub use dns::{lookup_host_by_family, AddressFamily};
 
 pub mod io;
+pub mod socket;
 pub mod stats;
 pub mod time;
 

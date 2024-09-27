@@ -4,6 +4,7 @@
 pub mod cert;
 pub mod client;
 mod console;
+pub mod os;
 pub mod protocol;
 pub mod server;
 pub mod styles;

@@ -71,3 +71,11 @@ impl Write for ProgressWriter {
         Ok(())
     }
 }
+
+#[cfg(test)]
+pub fn setup_tracing_for_tests() {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_max_level(tracing::Level::DEBUG)
+        .init()
+}
