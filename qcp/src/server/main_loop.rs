@@ -16,7 +16,6 @@ use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
 use rustls_pki_types::CertificateDer;
-use tokio::fs;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader, BufWriter};
 use tokio::task::JoinSet;
 use tokio::time::Duration;
@@ -251,14 +250,6 @@ async fn handle_get(
     Ok(())
 }
 
-async fn dest_is_writeable(dest: &PathBuf) -> bool {
-    let meta = fs::metadata(dest).await;
-    match meta {
-        Ok(m) => !m.permissions().readonly(),
-        Err(_) => false,
-    }
-}
-
 async fn handle_put(
     mut stream: StreamPair,
     args: &ServerArgs,
@@ -279,7 +270,7 @@ async fn handle_put(
     }
     let append_filename = if path.is_dir() || path.is_file() {
         // Destination exists
-        if !dest_is_writeable(&path).await {
+        if !crate::util::io::dest_is_writeable(&path).await {
             send_response(
                 &mut stream.send,
                 Status::IncorrectPermissions,
@@ -299,7 +290,7 @@ async fn handle_put(
             path_test.push(".");
         }
         if path_test.is_dir() {
-            if !dest_is_writeable(&path_test).await {
+            if !crate::util::io::dest_is_writeable(&path_test).await {
                 send_response(
                     &mut stream.send,
                     Status::IncorrectPermissions,

@@ -64,3 +64,11 @@ pub async fn create_truncate_file(
     file.set_len(header.size).await?;
     Ok(file)
 }
+
+pub async fn dest_is_writeable(dest: &PathBuf) -> bool {
+    let meta = tokio::fs::metadata(dest).await;
+    match meta {
+        Ok(m) => !m.permissions().readonly(),
+        Err(_) => false,
+    }
+}
