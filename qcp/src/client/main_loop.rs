@@ -90,6 +90,7 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
         &credentials,
         server_message.cert.into(),
         &server_address_port,
+        args.kernel_buffer_size,
     )?;
 
     debug!("Opening QUIC connection to {server_address_port:?}");
@@ -324,6 +325,7 @@ pub fn create_endpoint(
     credentials: &Credentials,
     server_cert: CertificateDer<'_>,
     server_addr: &SocketAddr,
+    kernel_buffer_size: usize,
 ) -> Result<quinn::Endpoint> {
     let span = span!(Level::TRACE, "create_endpoint");
     let _guard = span.enter();
@@ -345,7 +347,8 @@ pub fn create_endpoint(
 
     trace!("bind socket");
     let socket = util::socket::bind_unspecified_for(server_addr)?;
-    let _ = util::socket::set_udp_buffer_sizes(&socket)?.inspect(|msg| warn!("{msg}"));
+    let _ = util::socket::set_udp_buffer_sizes(&socket, kernel_buffer_size)?
+        .inspect(|msg| warn!("{msg}"));
 
     trace!("create endpoint");
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames

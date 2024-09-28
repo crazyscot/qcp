@@ -8,8 +8,7 @@ use tracing::{debug, info, warn};
 
 /// Set the buffer size options on a UDP socket.
 /// Returns an optional warning message.
-pub fn set_udp_buffer_sizes(socket: &UdpSocket) -> anyhow::Result<Option<String>> {
-    let wanted = os::preferred_udp_buffer_size();
+pub fn set_udp_buffer_sizes(socket: &UdpSocket, wanted: usize) -> anyhow::Result<Option<String>> {
     let mut send = os::get_sendbuf(socket)?;
     let mut recv = os::get_recvbuf(socket)?;
     debug!(
@@ -51,7 +50,6 @@ pub fn set_udp_buffer_sizes(socket: &UdpSocket) -> anyhow::Result<Option<String>
         let mut args = std::env::args();
         let ego = args.next().unwrap_or("<this program>".to_string());
         info!("For more information, run: `{} --help-socket-bufsize`", ego);
-        // TODO: Make buffer size configurable, the user might have a better idea than we do of what's good for their network.
         // SOMEDAY: We might offer to set sysctl, write sysctl files, etc. if run as root.
     } else {
         debug!(
@@ -84,7 +82,7 @@ mod test {
     fn set_socket_bufsize() -> anyhow::Result<()> {
         setup_tracing_for_tests();
         let sock = UdpSocket::bind("0.0.0.0:0")?;
-        super::set_udp_buffer_sizes(&sock)?;
+        super::set_udp_buffer_sizes(&sock, crate::os::os::preferred_udp_buffer_size())?;
         Ok(())
     }
 }

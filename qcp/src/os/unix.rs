@@ -18,8 +18,11 @@ pub struct Unix {}
 
 impl Unix {
     pub fn preferred_udp_buffer_size() -> usize {
-        1048576
+        1048576 * 7
     }
+
+    // Caution: On Linux, according to socket(7), the kernel doubles the buffer size
+    // you set in setsockopt, and returns the doubled value in getsockopt!
 
     pub fn get_sendbuf(socket: &UdpSocket) -> Result<usize> {
         Ok(socket::getsockopt(socket, sockopt::SndBuf)?)

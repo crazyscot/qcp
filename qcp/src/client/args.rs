@@ -46,6 +46,15 @@ pub struct ClientArgs {
     #[arg(short = 's', long, alias("stats"), action, conflicts_with("quiet"))]
     pub statistics: bool,
 
+    /// The UDP buffer size to request from the operating system kernel.
+    /// This should be larger than the file-to-network buffer size.
+    #[arg(
+        short('k'),
+        long,
+        default_value("7340032" /*7MB*/)
+    )]
+    pub kernel_buffer_size: usize,
+
     /// Enable detailed debug output
     #[arg(short, long, action, help_heading("Debug options"))]
     pub debug: bool,

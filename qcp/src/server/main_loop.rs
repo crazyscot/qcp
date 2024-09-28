@@ -143,7 +143,9 @@ fn create_endpoint(
         }
     };
     let socket = std::net::UdpSocket::bind(addr)?;
-    let warning = util::socket::set_udp_buffer_sizes(&socket)?.inspect(|s| warn!("{s}"));
+    let warning =
+        util::socket::set_udp_buffer_sizes(&socket, crate::os::os::preferred_udp_buffer_size())?
+            .inspect(|s| warn!("{s}"));
 
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
     let runtime =
