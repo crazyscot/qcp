@@ -15,6 +15,7 @@ pub fn setup_tracing(trace_level: &str, progress: Option<&MultiProgress>) -> any
     let filter = EnvFilter::try_from_default_env().or_else(|_| {
         // The env var was unset or invalid. Which is it?
         if std::env::var("RUST_LOG").is_ok() {
+            eprintln!("ERROR: RUST_LOG (set in environment) was invalid"); // or they may not see it :o)
             anyhow::bail!("RUST_LOG (set in environment) was invalid");
         }
         // It was unset.
