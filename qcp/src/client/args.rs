@@ -33,7 +33,10 @@ pub struct ClientArgs {
     #[arg(short, long, default_value("10"))]
     pub timeout: u16,
 
-    /// The network buffer size to use (default 2MB; tune to your needs)
+    /// The file buffer size to use (default 2MB; tune to your needs).
+    /// We use a network buffer 4x this size.
+    /// Setting the buffer too small will harm performance; too large is inefficient.
+    /// See also kernel-buffer-size.
     #[arg(short('b'), long, default_value("2097152"))]
     pub buffer_size: usize,
     /// Forces IPv4 connection (default: autodetect)
@@ -47,7 +50,7 @@ pub struct ClientArgs {
     pub statistics: bool,
 
     /// The UDP buffer size to request from the operating system kernel.
-    /// This should be larger than the file-to-network buffer size.
+    /// This should be larger than the file buffer size.
     #[arg(
         short('k'),
         long,
@@ -81,10 +84,14 @@ pub struct ClientArgs {
 }
 
 impl ClientArgs {
-    // Buffer size for disk I/O. When writing, this ought to be larger than the network buffer size to prevent bottlenecks.
-    // When reading, it's unclear whether it is material but it might come into play if you have a slow source disk.
-    pub(crate) fn file_buffer_size(&self) -> usize {
+    /// Buffer size to use for network operations
+    pub(crate) fn network_buffer_size(&self) -> usize {
         self.buffer_size * 4
+    }
+
+    /// Buffer size to use for file operations
+    pub(crate) fn file_buffer_size(&self) -> usize {
+        self.buffer_size
     }
 
     pub(crate) fn address_family(&self) -> AddressFamily {

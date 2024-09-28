@@ -18,7 +18,7 @@ use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
 use quinn::EndpointConfig;
 use rustls_pki_types::CertificateDer;
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader, BufWriter};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::task::JoinSet;
 use tokio::time::Duration;
 use tracing::{debug, error, info, trace, trace_span, warn};
@@ -233,13 +233,11 @@ async fn handle_get(
 
     let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
 
-    let mut write_buf = BufWriter::with_capacity(args.buffer_size, stream.send);
-
     let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
-    write_buf.write_all(&header).await?;
+    stream.send.write_all(&header).await?;
 
     trace!("sending file payload");
-    let result = tokio::io::copy_buf(&mut file, &mut write_buf).await;
+    let result = tokio::io::copy_buf(&mut file, &mut stream.send).await;
     match result {
         Ok(sent) if sent == meta.len() => (),
         Ok(sent) => {
@@ -257,9 +255,8 @@ async fn handle_get(
 
     trace!("sending trailer");
     let trailer = FileTrailer::serialize_direct();
-    write_buf.write_all(&trailer).await?;
-    write_buf.flush().await?;
-    write_buf.into_inner().finish()?;
+    stream.send.write_all(&trailer).await?;
+    stream.send.flush().await?;
     trace!("complete");
     Ok(())
 }
@@ -326,7 +323,7 @@ async fn handle_put(
     trace!("responding OK");
     send_response(&mut stream.send, Status::Ok, None).await?;
 
-    let mut recv_buf = BufReader::with_capacity(args.buffer_size, stream.recv);
+    let mut recv_buf = BufReader::with_capacity(args.network_buffer_size(), stream.recv);
     let header = FileHeader::read(&mut recv_buf).await?;
 
     debug!("PUT {} -> destination", &header.filename);
@@ -368,7 +365,6 @@ async fn handle_put(
     file.flush().await?;
     send_response(&mut stream.send, Status::Ok, None).await?;
     stream.send.flush().await?;
-    stream.send.finish()?;
     trace!("complete");
     Ok(())
 }

@@ -21,8 +21,9 @@ use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
-use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
+use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Child;
+use tokio::time::Instant;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Level};
 
@@ -219,21 +220,7 @@ async fn manage_request(
     }
 }
 
-/// Deal with a single request
-async fn process_request(
-    sp: (quinn::SendStream, quinn::RecvStream),
-    args: ProcessedArgs,
-    mp: MultiProgress,
-) -> anyhow::Result<u64> {
-    let progress_bar = mp.add(
-        ProgressBar::new(1)
-            .with_elapsed(Duration::ZERO)
-            .with_finish(ProgressFinish::Abandon),
-    );
-
-    let output = console::Term::stderr();
-
-    // The displayed message is the filename part of the source
+fn progress_bar_for(mp: &MultiProgress, args: &ProcessedArgs, steps: u64) -> Result<ProgressBar> {
     let display_filename = {
         let component = PathBuf::from(&args.source.filename);
         component
@@ -242,21 +229,33 @@ async fn process_request(
             .to_string_lossy()
             .to_string()
     };
+    Ok(mp.add(
+        ProgressBar::new(steps)
+            .with_style(indicatif::ProgressStyle::with_template(
+                crate::console::progress_style_for(
+                    &console::Term::stderr(),
+                    display_filename.len(),
+                ),
+            )?)
+            .with_message(display_filename)
+            .with_finish(ProgressFinish::Abandon),
+    ))
+}
 
-    progress_bar.set_style(indicatif::ProgressStyle::with_template(
-        crate::console::progress_style_for(&output, display_filename.len()),
-    )?);
-    progress_bar.set_message(display_filename);
-    // N.B. The command handler manages the progress bar length field, once it is known.
-
-    let result = if args.source.host.is_some() {
+/// Deal with a single request
+async fn process_request(
+    sp: (quinn::SendStream, quinn::RecvStream),
+    args: ProcessedArgs,
+    mp: MultiProgress,
+) -> anyhow::Result<u64> {
+    if args.source.host.is_some() {
         // This is a Get
         do_get(
             sp,
             &args.source.filename,
             &args.destination.filename,
             &args,
-            progress_bar.clone(),
+            mp.clone(),
         )
         .await
     } else {
@@ -266,14 +265,10 @@ async fn process_request(
             &args.source.filename,
             &args.destination.filename,
             &args,
-            progress_bar.clone(),
+            mp.clone(),
         )
         .await
-    };
-    if result.is_ok() {
-        progress_bar.finish_and_clear();
     }
-    result
 }
 
 fn launch_server(args: &ProcessedArgs) -> Result<Child> {
@@ -365,11 +360,12 @@ async fn do_get(
     filename: &str,
     dest: &str,
     cli_args: &ProcessedArgs,
-    progress: ProgressBar,
+    multi_progress: MultiProgress,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
     let span = span!(Level::TRACE, "do_get", filename = filename);
     let _guard = span.enter();
+    let real_start = Instant::now();
 
     {
         let cmd = crate::protocol::session::Command::new_get(filename);
@@ -386,31 +382,39 @@ async fn do_get(
     }
 
     trace!("starting");
+    let mut recv_buf =
+        BufReader::with_capacity(cli_args.original.network_buffer_size(), stream.recv);
 
-    let recv_buf = BufReader::with_capacity(cli_args.original.buffer_size, stream.recv);
-    let mut progress_async = progress.wrap_async_read(recv_buf);
-
-    let header = FileHeader::read(&mut progress_async).await?;
+    let header = FileHeader::read(&mut recv_buf).await?;
     trace!("got {header:?}");
 
     let mut file = crate::util::io::create_truncate_file(dest, &header).await?;
 
-    progress.set_position(0);
-    progress.set_length(header.size);
-    let mut limited_recv = progress_async.take(header.size);
-    trace!("payload");
-    tokio::io::copy_buf(&mut limited_recv, &mut file).await?;
+    // Now we know how much we're receiving, update the chrome.
+    // File Trailers are currently 16 bytes on the wire.
 
-    // stream.recv has been moved but we can get it back for further operations
-    progress_async = limited_recv.into_inner();
+    // Unfortunately, the file data is already well in flight at this point, leading to a flood of packets
+    // that causes the estimated rate to spike unhelpfully at the beginning of the transfer.
+    // Therefore we incorporate time in flight so far to get the estimate closer to reality.
+    let progress_bar = progress_bar_for(&multi_progress, cli_args, header.size + 16)?
+        .with_elapsed(Instant::now().duration_since(real_start));
+
+    let inbound = progress_bar.wrap_async_read(recv_buf);
+
+    let mut inbound = inbound.take(header.size);
+    trace!("payload");
+    tokio::io::copy_buf(&mut inbound, &mut file).await?;
+    // Retrieve the stream from within the Take wrapper for further operations
+    let mut inbound = inbound.into_inner();
 
     trace!("trailer");
-    let _trailer = FileTrailer::read(&mut progress_async).await?;
+    let _trailer = FileTrailer::read(&mut inbound).await?;
     // Trailer is empty for now, but its existence means the server believes the file was sent correctly
 
+    // Note that the Quinn send stream automatically calls finish on drop.
     file.flush().await?;
-    stream.send.finish()?;
     trace!("complete");
+    progress_bar.finish_and_clear();
     Ok(header.size)
 }
 
@@ -419,7 +423,7 @@ async fn do_put(
     src_filename: &str,
     dest_filename: &str,
     cli_args: &ProcessedArgs,
-    progress: ProgressBar,
+    multi_progress: MultiProgress,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
 
@@ -436,17 +440,25 @@ async fn do_put(
     if meta.is_dir() {
         anyhow::bail!("PUT: Source is a directory");
     }
+
     let payload_len = meta.len();
+
+    // Now we can compute how much we're going to send, update the chrome.
+    // Marshalled commands are currently 48 bytes + filename length
+    // File headers are currently 36 + filename length; Trailers are 16 bytes.
+    let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
+    let progress_bar = progress_bar_for(&multi_progress, cli_args, steps)?;
+    let mut outbound = progress_bar.wrap_async_write(stream.send);
+
     trace!("starting");
     let mut file = BufReader::with_capacity(cli_args.original.file_buffer_size(), file);
 
     {
         let cmd = crate::protocol::session::Command::new_put(dest_filename);
         let buf = cmd.serialize();
-        stream.send.write_all(&buf).await?;
+        outbound.write_all(&buf).await?;
     }
-    stream.send.flush().await?;
-    let progress_async = progress.wrap_async_write(stream.send);
+    outbound.flush().await?;
 
     // TODO protocol timeout?
     trace!("await response");
@@ -455,19 +467,15 @@ async fn do_put(
         anyhow::bail!(format!("PUT ({src_filename}) failed: {response}"));
     }
 
-    let mut send_buf = BufWriter::with_capacity(cli_args.original.buffer_size, progress_async);
-
     // The filename in the protocol is the file part only of src_filename
     trace!("send header");
     let protocol_filename = path.file_name().unwrap().to_str().unwrap().to_string(); // can't fail with the preceding checks
     let header = FileHeader::serialize_direct(payload_len, &protocol_filename);
-    send_buf.write_all(&header).await?;
-    progress.set_position(0);
-    progress.set_length(payload_len);
+    outbound.write_all(&header).await?;
 
     // A server-side abort might happen part-way through a large transfer.
     trace!("send payload");
-    let result = tokio::io::copy_buf(&mut file, &mut send_buf).await;
+    let result = tokio::io::copy_buf(&mut file, &mut outbound).await;
 
     match result {
         Ok(sent) if sent == meta.len() => (),
@@ -499,8 +507,8 @@ async fn do_put(
 
     trace!("send trailer");
     let trailer = FileTrailer::serialize_direct();
-    send_buf.write_all(&trailer).await?;
-    send_buf.flush().await?;
+    outbound.write_all(&trailer).await?;
+    outbound.flush().await?;
 
     let response = Response::read(&mut stream.recv).await?;
     if response.status != Status::Ok {
@@ -509,8 +517,8 @@ async fn do_put(
         ));
     }
 
-    // TODO: It would be ideal to call finish on the Quinn sendstream within, but it's hard to extract from the ProgressBarIter.
-    // send_buf.into_inner().finish();
+    // Note that the Quinn sendstream calls finish() on drop.
     trace!("complete");
+    progress_bar.finish_and_clear();
     Ok(payload_len)
 }
