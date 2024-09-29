@@ -38,4 +38,17 @@ pub struct ServerArgs {
         value_name("ms")
     )]
     pub rtt: u16,
+
+    /// (Network wizards only! Setting this too high causes a reduction in throughput.)
+    /// The initial value for the sending congestion control window.
+    /// qcp uses the CUBIC congestion control algorithm. The window grows by the number of bytes acknowledged each time,
+    /// until encountering saturation or congestion.
+    #[arg(
+        short('w'),
+        long,
+        help_heading("Network tuning"),
+        default_value("14720"),
+        value_name = "bytes"
+    )]
+    pub initial_congestion_window: u64,
 }

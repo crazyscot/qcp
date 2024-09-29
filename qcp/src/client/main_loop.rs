@@ -341,7 +341,12 @@ pub fn create_endpoint(
     );
 
     let qcc = Arc::new(QuicClientConfig::try_from(tls_config)?);
-    let transport = crate::transport::config_factory(*args.bandwidth, args.rtt)?;
+    let transport = crate::transport::config_factory(
+        *args.bandwidth,
+        args.rtt,
+        args.initial_congestion_window,
+    )?;
+
     let mut config = quinn::ClientConfig::new(qcc);
     config.transport_config(transport);
 

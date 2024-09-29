@@ -130,7 +130,11 @@ fn create_endpoint(
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
     let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
-    config.transport_config(crate::transport::config_factory(*args.bandwidth, args.rtt)?);
+    config.transport_config(crate::transport::config_factory(
+        *args.bandwidth,
+        args.rtt,
+        args.initial_congestion_window,
+    )?);
 
     // TODO let caller specify port
     let addr = match client_message.connection_type {
