@@ -4,6 +4,7 @@ use std::str::FromStr;
 // (c) 2024 Ross Younger
 use crate::{build_info, util::AddressFamily};
 use clap::Parser;
+use human_units::Size;
 
 #[derive(Debug, Parser, Clone)]
 #[command(
@@ -29,16 +30,10 @@ pub struct ClientArgs {
     /// Quiet mode (no statistics or progress, report only errors)
     #[arg(short, long, action)]
     pub quiet: bool,
-    /// Connection timeout (seconds)
-    #[arg(short, long, default_value("10"))]
+    /// Connection timeout
+    #[arg(short, long, default_value("10"), value_name("seconds"))]
     pub timeout: u16,
 
-    /// The file buffer size to use (default 2MB; tune to your needs).
-    /// We use a network buffer 4x this size.
-    /// Setting the buffer too small will harm performance; too large is inefficient.
-    /// See also kernel-buffer-size.
-    #[arg(short('b'), long, default_value("2097152"))]
-    pub buffer_size: usize,
     /// Forces IPv4 connection (default: autodetect)
     #[arg(short = '4', long, action)]
     pub ipv4: bool,
@@ -49,14 +44,26 @@ pub struct ClientArgs {
     #[arg(short = 's', long, alias("stats"), action, conflicts_with("quiet"))]
     pub statistics: bool,
 
-    /// The UDP buffer size to request from the operating system kernel.
-    /// This should be larger than the file buffer size.
+    /// The maximum network bandwidth we expect to/from the target system.
+    /// Along with the initial RTT, this directly affects the buffer sizes used.
+    /// This may be specified directly as a number of bytes, or as an SI quantity
+    /// e.g. "10M" or "256k". Note that this is described in bytes, not bits;
+    /// if (for example) you expect to fill a 1Gbit ethernet connection,
+    /// 125M might be a suitable upper limit.
+    #[arg(short('b'), long, help_heading("Network tuning"), default_value("12M"), value_name="bytes", value_parser=clap::value_parser!(Size))]
+    pub bandwidth: Size,
+
+    /// The expected network Round Trip time to the target system, in milliseconds.
+    /// Along with the bandwidth limit, this directly affects the buffer sizes used.
+    /// (Buffer size = bandwidth * RTT)
     #[arg(
-        short('k'),
+        short('r'),
         long,
-        default_value("7340032" /*7MB*/)
+        help_heading("Network tuning"),
+        default_value("300"),
+        value_name("ms")
     )]
-    pub kernel_buffer_size: usize,
+    pub rtt: u16,
 
     /// Enable detailed debug output
     #[arg(short, long, action, help_heading("Debug options"))]
@@ -84,16 +91,6 @@ pub struct ClientArgs {
 }
 
 impl ClientArgs {
-    /// Buffer size to use for network operations
-    pub(crate) fn network_buffer_size(&self) -> usize {
-        self.buffer_size * 4
-    }
-
-    /// Buffer size to use for file operations
-    pub(crate) fn file_buffer_size(&self) -> usize {
-        self.buffer_size
-    }
-
     pub(crate) fn address_family(&self) -> AddressFamily {
         if self.ipv4 {
             AddressFamily::IPv4

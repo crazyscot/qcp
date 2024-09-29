@@ -7,8 +7,12 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSo
 use tracing::{debug, info, warn};
 
 /// Set the buffer size options on a UDP socket.
-/// Returns an optional warning message.
-pub fn set_udp_buffer_sizes(socket: &UdpSocket, wanted: usize) -> anyhow::Result<Option<String>> {
+/// May return a warning message, if we weren't able to do so.
+pub fn set_udp_buffer_sizes(
+    socket: &UdpSocket,
+    wanted_send: usize,
+    wanted_recv: usize,
+) -> anyhow::Result<Option<String>> {
     let mut send = os::get_sendbuf(socket)?;
     let mut recv = os::get_recvbuf(socket)?;
     debug!(
@@ -16,33 +20,34 @@ pub fn set_udp_buffer_sizes(socket: &UdpSocket, wanted: usize) -> anyhow::Result
         send.human_count_bare(),
         recv.human_count_bare()
     );
-    if send < wanted {
-        let _ = os::set_sendbuf(socket, wanted);
+    if send < wanted_send {
+        let _ = os::set_sendbuf(socket, wanted_send);
         send = os::get_sendbuf(socket)?;
     }
-    if recv < wanted {
-        let _ = os::set_recvbuf(socket, wanted);
+    if recv < wanted_recv {
+        let _ = os::set_recvbuf(socket, wanted_recv);
         recv = os::get_recvbuf(socket)?;
     }
 
     let mut force_err: Option<anyhow::Error> = None;
-    if send < wanted {
-        force_err = os::force_sendbuf(socket, wanted).err();
+    if send < wanted_send {
+        force_err = os::force_sendbuf(socket, wanted_send).err();
     }
-    if recv < wanted {
-        force_err = os::force_recvbuf(socket, wanted).err().or(force_err);
+    if recv < wanted_recv {
+        force_err = os::force_recvbuf(socket, wanted_recv).err().or(force_err);
     }
 
     send = os::get_sendbuf(socket)?;
     recv = os::get_recvbuf(socket)?;
     let mut message: Option<String> = None;
-    if send < wanted || recv < wanted {
+    if send < wanted_send || recv < wanted_recv {
         message = Some(
         format!(
-            "Unable to set UDP send buffer sizes (got send {}, receive {}; wanted {}). This may affect performance.",
+            "Unable to set UDP send buffer sizes (send wanted {}, got {}; receive wanted {}, got {}). This may affect performance.",
+            wanted_send.human_count_bytes(),
             send.human_count_bytes(),
+            wanted_recv.human_count_bytes(),
             recv.human_count_bytes(),
-            wanted.human_count_bytes()
         ));
         if let Some(e) = force_err {
             warn!("While attempting to set kernel buffer size, this happened: {e}")
@@ -82,7 +87,7 @@ mod test {
     fn set_socket_bufsize() -> anyhow::Result<()> {
         setup_tracing_for_tests();
         let sock = UdpSocket::bind("0.0.0.0:0")?;
-        super::set_udp_buffer_sizes(&sock, crate::os::os::preferred_udp_buffer_size())?;
+        super::set_udp_buffer_sizes(&sock, 1048576, 10485760)?;
         Ok(())
     }
 }

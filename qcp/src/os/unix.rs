@@ -17,10 +17,6 @@ fn bsdish() -> bool {
 pub struct Unix {}
 
 impl Unix {
-    pub fn preferred_udp_buffer_size() -> usize {
-        1048576 * 7
-    }
-
     // Caution: On Linux, according to socket(7), the kernel doubles the buffer size
     // you set in setsockopt, and returns the doubled value in getsockopt!
 
@@ -52,7 +48,7 @@ impl Unix {
         Ok(())
     }
 
-    pub fn print_udp_buffer_size_help_message() {
+    pub fn print_udp_buffer_size_help_message(rmem: usize, wmem: usize) {
         println!(
             r#"For best performance, it is necessary to set the kernel UDP buffer size limits.
 This program attempts to automatically set buffer sizes for itself,
@@ -60,27 +56,26 @@ but this normally requires system administrator (root) privileges."#
         );
 
         if bsdish() {
+            let size = std::cmp::max(rmem, wmem) * 115 / 100;
             println!(
                 r#"
 To set the kernel limits immediately, run the following command as root:
     sysctl -w kern.ipc.maxsockbuf={size}
 To have this setting apply at boot, add this line to /etc/sysctl.conf:
     kern.ipc.maxsockbuf={size}
-            "#,
-                size = Unix::preferred_udp_buffer_size() * 115 / 100
+            "#
             );
         } else {
             println!(
                 r#"
 To set the kernel limits immediately, run the following command as root:
-    sysctl -w net.core.rmem_max={bufsize} -w net.core.wmem_max={bufsize}
+    sysctl -w net.core.rmem_max={rmem} -w net.core.wmem_max={wmem}
 
 To have this setting apply at boot, on most Linux distributions you
 can create a file /etc/sysctl.d/99-udp-buffer-for-qcp.conf containing:
-    net.core.rmem_max={bufsize}
-    net.core.wmem_max={bufsize}
-"#,
-                bufsize = Unix::preferred_udp_buffer_size() * 2
+    net.core.rmem_max={rmem}
+    net.core.wmem_max={wmem}
+"#
             );
         }
         // TODO add other OS-specific notes here

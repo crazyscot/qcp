@@ -3,6 +3,7 @@
 
 use crate::build_info;
 use clap::Parser;
+use human_units::Size;
 
 #[derive(Clone, Copy, Debug, Parser)]
 #[command(
@@ -16,20 +17,25 @@ pub struct ServerArgs {
     /// Enable detailed debug output
     #[arg(short, long, action)]
     pub debug: bool,
-    /// The file buffer size to use (default 2MB; tune to your needs).
-    /// We use a larger buffer for network operations.
-    #[arg(short('b'), long, default_value("2097152"))]
-    pub buffer_size: usize,
-}
 
-impl ServerArgs {
-    /// Buffer size to use for network operations
-    pub(crate) fn network_buffer_size(&self) -> usize {
-        self.buffer_size * 4
-    }
+    /// The maximum network bandwidth we expect to/from the target system.
+    /// Along with the initial RTT, this directly affects the buffer sizes used.
+    /// This may be specified directly as a number of bytes, or as an SI quantity
+    /// e.g. "10M" or "256k". Note that this is described in bytes, not bits;
+    /// if (for example) you expect to fill a 1Gbit ethernet connection,
+    /// 125M might be a suitable upper limit.
+    #[arg(short('b'), long, help_heading("Network tuning"), default_value("12M"), value_name="bytes", value_parser=clap::value_parser!(Size))]
+    pub bandwidth: Size,
 
-    /// Buffer size to use for file operations
-    pub(crate) fn file_buffer_size(&self) -> usize {
-        self.buffer_size
-    }
+    /// The expected network Round Trip time to the target system, in milliseconds.
+    /// Along with the bandwidth limit, this directly affects the buffer sizes used.
+    /// (Buffer size = bandwidth * RTT)
+    #[arg(
+        short('r'),
+        long,
+        help_heading("Network tuning"),
+        default_value("300"),
+        value_name("ms")
+    )]
+    pub rtt: u16,
 }

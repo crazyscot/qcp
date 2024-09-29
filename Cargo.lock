@@ -467,6 +467,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f58b778a5761513caf593693f8951c97a5b610841e754788400f32102eefdff1"
 
 [[package]]
+name = "human-units"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "225fc99dfa2f0b9bb52aee5afd649f8419bb6add95c9973327a76c7793363206"
+
+[[package]]
 name = "idna"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -831,6 +837,7 @@ dependencies = [
  "futures-util",
  "gethostname",
  "human-repr",
+ "human-units",
  "indicatif",
  "nix",
  "quinn",

@@ -11,7 +11,7 @@ use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::Command;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
-use crate::util;
+use crate::{transport, util};
 
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
@@ -56,7 +56,7 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
 
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
-    let (endpoint, warning) = create_endpoint(&credentials, client_message)?;
+    let (endpoint, warning) = create_endpoint(&credentials, client_message, args)?;
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");
     ServerMessage::write(
@@ -114,6 +114,7 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
 fn create_endpoint(
     credentials: &Credentials,
     client_message: ClientMessage,
+    args: &ServerArgs,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
 
@@ -128,7 +129,8 @@ fn create_endpoint(
     // N.B.: in ServerConfig docs, max_early_data_size should be set to u32::MAX
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
-    let config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
+    let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
+    config.transport_config(crate::transport::config_factory(*args.bandwidth, args.rtt)?);
 
     // TODO let caller specify port
     let addr = match client_message.connection_type {
@@ -143,9 +145,12 @@ fn create_endpoint(
         }
     };
     let socket = std::net::UdpSocket::bind(addr)?;
-    let warning =
-        util::socket::set_udp_buffer_sizes(&socket, crate::os::os::preferred_udp_buffer_size())?
-            .inspect(|s| warn!("{s}"));
+    let warning = util::socket::set_udp_buffer_sizes(
+        &socket,
+        transport::SEND_BUFFER_SIZE,
+        transport::receive_window_for(*args.bandwidth, args.rtt) as usize,
+    )?
+    .inspect(|s| warn!("{s}"));
 
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
     let runtime =
@@ -206,7 +211,7 @@ async fn handle_stream(mut sp: StreamPair, args: ServerArgs) -> anyhow::Result<(
 
 async fn handle_get(
     mut stream: StreamPair,
-    args: &ServerArgs,
+    _args: &ServerArgs,
     filename: String,
 ) -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::TRACE, "GET", filename = filename);
@@ -225,7 +230,7 @@ async fn handle_get(
         send_response(&mut stream.send, Status::ItIsADirectory, None).await?;
         return Ok(());
     }
-    let mut file = BufReader::with_capacity(args.file_buffer_size(), file);
+    let mut file = BufReader::with_capacity(crate::transport::SEND_BUFFER_SIZE * 2, file);
 
     // We believe we can fulfil this request.
     trace!("responding OK");
@@ -263,7 +268,7 @@ async fn handle_get(
 
 async fn handle_put(
     mut stream: StreamPair,
-    args: &ServerArgs,
+    _args: &ServerArgs,
     destination: String,
 ) -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::TRACE, "PUT");
@@ -323,8 +328,7 @@ async fn handle_put(
     trace!("responding OK");
     send_response(&mut stream.send, Status::Ok, None).await?;
 
-    let mut recv_buf = BufReader::with_capacity(args.network_buffer_size(), stream.recv);
-    let header = FileHeader::read(&mut recv_buf).await?;
+    let header = FileHeader::read(&mut stream.recv).await?;
 
     debug!("PUT {} -> destination", &header.filename);
     if append_filename {
@@ -347,8 +351,8 @@ async fn handle_put(
     };
 
     trace!("receiving file payload");
-    let mut limited_recv = recv_buf.take(header.size);
-    if tokio::io::copy_buf(&mut limited_recv, &mut file)
+    let mut limited_recv = stream.recv.take(header.size);
+    if tokio::io::copy(&mut limited_recv, &mut file)
         .await
         .inspect_err(|e| error!("Failed to write to destination: {e}"))
         .is_err()
@@ -356,10 +360,10 @@ async fn handle_put(
         return Ok(());
     }
     // recv_buf has been moved but we can get it back for further operations
-    recv_buf = limited_recv.into_inner();
+    stream.recv = limited_recv.into_inner();
 
     trace!("receiving trailer");
-    let _trailer = FileTrailer::read(&mut recv_buf).await?;
+    let _trailer = FileTrailer::read(&mut stream.recv).await?;
     // TODO: Hash checks
 
     file.flush().await?;

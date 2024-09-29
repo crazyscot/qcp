@@ -8,6 +8,7 @@ pub mod os;
 pub mod protocol;
 pub mod server;
 pub mod styles;
+pub mod transport;
 pub mod util;
 
 /// Build-time info (from `built`)

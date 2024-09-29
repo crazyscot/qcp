@@ -6,6 +6,7 @@ use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
+use crate::transport;
 use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
 use crate::{cert::Credentials, protocol};
 
@@ -91,7 +92,7 @@ pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::R
         &credentials,
         server_message.cert.into(),
         &server_address_port,
-        args.kernel_buffer_size,
+        &args,
     )?;
 
     debug!("Opening QUIC connection to {server_address_port:?}");
@@ -279,7 +280,9 @@ fn launch_server(args: &ProcessedArgs) -> Result<Child> {
         remote_host,
         "qcpt",
         "-b",
-        &args.original.buffer_size.to_string(),
+        &args.original.bandwidth.to_string(),
+        "--rtt",
+        &args.original.rtt.to_string(),
     ]);
     if args.original.remote_debug {
         server.arg("--debug");
@@ -320,7 +323,7 @@ pub fn create_endpoint(
     credentials: &Credentials,
     server_cert: CertificateDer<'_>,
     server_addr: &SocketAddr,
-    kernel_buffer_size: usize,
+    args: &ClientArgs,
 ) -> Result<quinn::Endpoint> {
     let span = span!(Level::TRACE, "create_endpoint");
     let _guard = span.enter();
@@ -338,12 +341,18 @@ pub fn create_endpoint(
     );
 
     let qcc = Arc::new(QuicClientConfig::try_from(tls_config)?);
-    let config = quinn::ClientConfig::new(qcc);
+    let transport = crate::transport::config_factory(*args.bandwidth, args.rtt)?;
+    let mut config = quinn::ClientConfig::new(qcc);
+    config.transport_config(transport);
 
     trace!("bind socket");
     let socket = util::socket::bind_unspecified_for(server_addr)?;
-    let _ = util::socket::set_udp_buffer_sizes(&socket, kernel_buffer_size)?
-        .inspect(|msg| warn!("{msg}"));
+    let _ = util::socket::set_udp_buffer_sizes(
+        &socket,
+        transport::SEND_BUFFER_SIZE,
+        transport::receive_window_for(*args.bandwidth, args.rtt) as usize,
+    )?
+    .inspect(|msg| warn!("{msg}"));
 
     trace!("create endpoint");
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
@@ -382,10 +391,7 @@ async fn do_get(
     }
 
     trace!("starting");
-    let mut recv_buf =
-        BufReader::with_capacity(cli_args.original.network_buffer_size(), stream.recv);
-
-    let header = FileHeader::read(&mut recv_buf).await?;
+    let header = FileHeader::read(&mut stream.recv).await?;
     trace!("got {header:?}");
 
     let mut file = crate::util::io::create_truncate_file(dest, &header).await?;
@@ -399,11 +405,11 @@ async fn do_get(
     let progress_bar = progress_bar_for(&multi_progress, cli_args, header.size + 16)?
         .with_elapsed(Instant::now().duration_since(real_start));
 
-    let inbound = progress_bar.wrap_async_read(recv_buf);
+    let inbound = progress_bar.wrap_async_read(stream.recv);
 
     let mut inbound = inbound.take(header.size);
     trace!("payload");
-    tokio::io::copy_buf(&mut inbound, &mut file).await?;
+    tokio::io::copy(&mut inbound, &mut file).await?;
     // Retrieve the stream from within the Take wrapper for further operations
     let mut inbound = inbound.into_inner();
 
@@ -451,7 +457,7 @@ async fn do_put(
     let mut outbound = progress_bar.wrap_async_write(stream.send);
 
     trace!("starting");
-    let mut file = BufReader::with_capacity(cli_args.original.file_buffer_size(), file);
+    let mut file = BufReader::with_capacity(crate::transport::SEND_BUFFER_SIZE * 2, file);
 
     {
         let cmd = crate::protocol::session::Command::new_put(dest_filename);
