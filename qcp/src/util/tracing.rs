@@ -1,45 +1,108 @@
 // Tracing helpers
 // (c) 2024 Ross Younger
 
-use std::{io::Write, sync::Mutex};
+use std::{
+    fs::File,
+    io::Write,
+    sync::{Arc, Mutex},
+};
 
+use anyhow::Context;
 use indicatif::MultiProgress;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter, Layer};
 
-/// Set up rust tracing.
+const STANDARD_ENV_VAR: &str = "RUST_LOG";
+const LOG_FILE_DETAIL_ENV_VAR: &str = "RUST_LOG_FILE_DETAIL";
+
+/// Result type for filter_for()
+struct FilterResult {
+    filter: EnvFilter,
+    used_env: bool, // Did we use the environment variable we were requested to?
+}
+
+/// Log filter setup:
+/// Use a given environment variable; if it wasn't present, log only qcp items at a given trace level.
+fn filter_for(trace_level: &str, key: &str) -> anyhow::Result<FilterResult> {
+    EnvFilter::try_from_env(key)
+        .map(|filter| FilterResult {
+            filter,
+            used_env: true,
+        })
+        .or_else(|e| {
+            // The env var was unset or invalid. Which is it?
+            if std::env::var(key).is_ok() {
+                anyhow::bail!("{key} (set in environment) was invalid: {e}");
+            }
+            // It was unset. Fall back.
+            Ok(FilterResult {
+                filter: EnvFilter::new(format!("qcp={trace_level}")),
+                used_env: false,
+            })
+        })
+}
+
+/// Set up rust tracing, to console (via an optional MultiProgress) and optionally to file.
 /// By default we log only our events (qcp), at a given trace level.
-/// This can be overridden at any time by setting RUST_LOG.
+/// This can be overridden by setting RUST_LOG.
 /// For examples, see https://docs.rs/tracing-subscriber/0.3.18/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables
-pub fn setup_tracing(trace_level: &str, progress: Option<&MultiProgress>) -> anyhow::Result<()> {
-    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-    let trace_expr = format!("qcp={trace_level}");
-    let filter = EnvFilter::try_from_default_env().or_else(|_| {
-        // The env var was unset or invalid. Which is it?
-        if std::env::var("RUST_LOG").is_ok() {
-            eprintln!("ERROR: RUST_LOG (set in environment) was invalid"); // or they may not see it :o)
-            anyhow::bail!("RUST_LOG (set in environment) was invalid");
-        }
-        // It was unset.
-        Ok(EnvFilter::new(trace_expr))
-    })?;
+/// CAUTION: If this function fails, tracing won't be set up; callers must take extra care to report the error.
+pub fn setup_tracing(
+    trace_level: &str,
+    progress: Option<&MultiProgress>,
+    filename: &Option<String>,
+) -> anyhow::Result<()> {
+    let mut layers = Vec::new();
 
-    let format = fmt::layer().compact().with_target(false);
+    /////// Console output, via the MultiProgress if there is one
+
+    let filter = filter_for(trace_level, STANDARD_ENV_VAR)?;
+    // If we used the environment variable, show log targets; if we did not, we're only logging qcp, so do not show targets.
+    let format = fmt::layer().compact().with_target(filter.used_env);
 
     match progress {
         None => {
-            let format = format.with_writer(std::io::stderr);
-            tracing_subscriber::registry()
-                .with(format)
-                .with(filter)
-                .init();
+            let format = format
+                .with_writer(std::io::stderr)
+                .with_filter(filter.filter)
+                .boxed();
+            layers.push(format);
         }
         Some(mp) => {
-            let format = format.with_writer(ProgressWriter::wrap(mp));
-            tracing_subscriber::registry()
-                .with(format)
-                .with(filter)
-                .init();
+            let format = format
+                .with_writer(ProgressWriter::wrap(mp))
+                .with_filter(filter.filter)
+                .boxed();
+            layers.push(format);
         }
     };
+
+    //////// File output
+
+    if let Some(filename) = filename {
+        let out_file = Arc::new(File::create(filename).context("Failed to open log file")?);
+        let filter = if std::env::var(LOG_FILE_DETAIL_ENV_VAR).is_ok() {
+            FilterResult {
+                filter: EnvFilter::try_from_env(LOG_FILE_DETAIL_ENV_VAR)?,
+                used_env: true,
+            }
+        } else {
+            filter_for(trace_level, STANDARD_ENV_VAR)?
+        };
+        let layer = tracing_subscriber::fmt::layer()
+            .with_writer(out_file)
+            // Same logic for if we used the environment variable.
+            .with_target(filter.used_env)
+            .compact()
+            .with_ansi(false)
+            .with_filter(filter.filter)
+            .boxed();
+        layers.push(layer);
+    }
+
+    ////////
+
+    tracing_subscriber::registry().with(layers).init();
+
     Ok(())
 }
 

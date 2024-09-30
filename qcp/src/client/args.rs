@@ -87,6 +87,10 @@ pub struct ClientArgs {
     /// Prints timing profile data after completion
     #[arg(long, action, help_heading("Debug options"))]
     pub profile: bool,
+    /// Log to a file. By default the log receives everything printed to stderr.
+    /// This can be overridden by setting the environment variable RUST_LOG_FILE_DETAIL (same semantics as RUST_LOG).
+    #[arg(short('l'), long, action, help_heading("Debug options"))]
+    pub log_file: Option<String>,
 
     // Special option (a form of help message)
     /// Outputs a help message about UDP buffer sizes

@@ -87,7 +87,7 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
                     info!("Endpoint was expectedly closed");
                 },
                 Some(conn) => {
-                    let conn_fut = handle_connection(conn, *args);
+                    let conn_fut = handle_connection(conn, (*args).clone());
                     tasks.spawn(async move {
                         if let Err(e) = conn_fut.await {
                             error!("inward stream failed: {reason}", reason = e.to_string());
@@ -171,6 +171,7 @@ async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::R
 
     let connection = conn.await?;
     info!("accepted connection from {}", connection.remote_address());
+    let args = Arc::new(args);
 
     async {
         loop {
@@ -192,7 +193,7 @@ async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::R
                 Ok(s) => StreamPair::from(s),
             };
             trace!("opened stream");
-            let fut = handle_stream(stream, args);
+            let fut = handle_stream(stream, args.clone());
             tokio::spawn(async move {
                 if let Err(e) = fut.await {
                     error!("stream failed: {e}",);
@@ -204,18 +205,18 @@ async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::R
     Ok(())
 }
 
-async fn handle_stream(mut sp: StreamPair, args: ServerArgs) -> anyhow::Result<()> {
+async fn handle_stream(mut sp: StreamPair, args: Arc<ServerArgs>) -> anyhow::Result<()> {
     trace!("reading command");
     let cmd = Command::read(&mut sp.recv).await?;
     match cmd {
-        Command::Get(get) => handle_get(sp, &args, get.filename).await,
-        Command::Put(put) => handle_put(sp, &args, put.filename).await,
+        Command::Get(get) => handle_get(sp, args, get.filename).await,
+        Command::Put(put) => handle_put(sp, args, put.filename).await,
     }
 }
 
 async fn handle_get(
     mut stream: StreamPair,
-    _args: &ServerArgs,
+    _args: Arc<ServerArgs>,
     filename: String,
 ) -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::TRACE, "GET", filename = filename);
@@ -272,7 +273,7 @@ async fn handle_get(
 
 async fn handle_put(
     mut stream: StreamPair,
-    _args: &ServerArgs,
+    _args: Arc<ServerArgs>,
     destination: String,
 ) -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::TRACE, "PUT");

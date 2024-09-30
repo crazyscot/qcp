@@ -5,7 +5,7 @@ use crate::build_info;
 use clap::Parser;
 use human_units::Size;
 
-#[derive(Clone, Copy, Debug, Parser)]
+#[derive(Clone, Debug, Parser)]
 #[command(
     author,
     version(build_info::GIT_VERSION),
@@ -15,8 +15,13 @@ use human_units::Size;
 #[command(styles=crate::styles::get())]
 pub struct ServerArgs {
     /// Enable detailed debug output
-    #[arg(short, long, action)]
+    #[arg(short, long, help_heading("Debug options"))]
     pub debug: bool,
+
+    /// Log to a file. By default the log receives everything printed to stderr.
+    /// This can be overridden by setting the environment variable RUST_LOG_FILE_DETAIL (same semantics as RUST_LOG).
+    #[arg(short('l'), long, help_heading("Debug options"))]
+    pub log_file: Option<String>,
 
     /// The maximum network bandwidth we expect to/from the target system.
     /// Along with the initial RTT, this directly affects the buffer sizes used.

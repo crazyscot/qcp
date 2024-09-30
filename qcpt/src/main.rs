@@ -6,9 +6,12 @@ use qcp::server::ServerArgs;
 
 fn main() -> anyhow::Result<()> {
     let args = ServerArgs::parse();
-    if args.debug {
-        qcp::util::setup_tracing("trace", None)?;
-    }
+    let trace_level = match args.debug {
+        true => "trace",
+        false => "error",
+    };
+    qcp::util::setup_tracing(trace_level, None, &args.log_file)
+        .inspect_err(|e| eprintln!("{e:?}"))?;
 
     qcp::server::main(&args).map_err(|e| {
         tracing::error!("{e}");

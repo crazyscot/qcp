@@ -25,8 +25,10 @@ fn main() -> anyhow::Result<ExitCode> {
             false => "info",
         },
     };
-    qcp::util::setup_tracing(trace_level, Some(&progress))
-        .and_then(|_| qcp::client::main(args, progress))
+    qcp::util::setup_tracing(trace_level, Some(&progress), &args.log_file)
+        .inspect_err(|e| eprintln!("{e:?}"))?;
+
+    qcp::client::main(args, progress)
         .inspect_err(|e| tracing::error!("{e}"))
         .or_else(|_| Ok(false))
         .map(|success| match success {

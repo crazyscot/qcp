@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 version.workspace = true
 license.workspace = true
-rust-version = "1.74.0"
+rust-version = "1.76.0"
 
 [dependencies]
 anyhow = { workspace = true }
