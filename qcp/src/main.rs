@@ -11,7 +11,8 @@ fn main() -> anyhow::Result<ExitCode> {
     if args.help_socket_bufsize {
         // One day we might make this a function of the remote host.
         let send_window = qcp::transport::SEND_BUFFER_SIZE;
-        let recv_window = qcp::transport::receive_window_for(*args.bandwidth, args.rtt) as usize;
+        let recv_window =
+            qcp::transport::practical_receive_window_for(*args.bandwidth, args.rtt)? as usize;
         qcp::os::os::print_udp_buffer_size_help_message(recv_window, send_window);
         return Ok(ExitCode::SUCCESS);
     }
