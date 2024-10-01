@@ -10,8 +10,8 @@ package.authors = ["Ross Younger <crazyscot@gmail.com>"]
 package.license = "AGPL-3.0-or-later"
 
 [workspace.dependencies]
-anyhow = "1.0.88"
-clap = "4.5.17"
+anyhow = "1.0.89"
+clap = "4.5.18"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 
