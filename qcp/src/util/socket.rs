@@ -54,7 +54,7 @@ pub fn set_udp_buffer_sizes(
         }
         let mut args = std::env::args();
         let ego = args.next().unwrap_or("<this program>".to_string());
-        info!("For more information, run: `{} --help-socket-bufsize`", ego);
+        info!("For more information, run: `{} --help-buffers`", ego);
         // SOMEDAY: We might offer to set sysctl, write sysctl files, etc. if run as root.
     } else {
         debug!(

@@ -1,6 +1,6 @@
 [package]
 name = "qcp"
-description = "QCP file copy utility"
+description = "A remote file copy utility much like scp, but using the QUIC protocol"
 edition.workspace = true
 authors.workspace = true
 version.workspace = true

@@ -2,6 +2,8 @@
 // (c) 2024 Ross Younger
 
 pub mod cert;
+mod cli;
+pub use cli::cli_main;
 pub mod client;
 mod console;
 pub mod os;

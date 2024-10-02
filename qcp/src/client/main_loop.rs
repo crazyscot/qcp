@@ -1,7 +1,7 @@
 // qcp client event loop
 // (c) 2024 Ross Younger
 
-use crate::client::args::ProcessedArgs;
+use crate::cli::{Cli, ProcessedArgs};
 use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
@@ -10,7 +10,6 @@ use crate::transport;
 use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
 use crate::{cert::Credentials, protocol};
 
-use super::ClientArgs;
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
@@ -34,7 +33,7 @@ const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 #[tokio::main]
-pub async fn client_main(args: ClientArgs, progress: MultiProgress) -> anyhow::Result<bool> {
+pub(crate) async fn client_main(args: Cli, progress: MultiProgress) -> anyhow::Result<bool> {
     // Caution: As we are using ProgressBar, anything to be printed to console should
     // use progress.println() !
     let spinner = progress.add(ProgressBar::new_spinner());
@@ -323,7 +322,7 @@ pub fn create_endpoint(
     credentials: &Credentials,
     server_cert: CertificateDer<'_>,
     server_addr: &SocketAddr,
-    args: &ClientArgs,
+    args: &Cli,
 ) -> Result<quinn::Endpoint> {
     let span = span!(Level::TRACE, "create_endpoint");
     let _guard = span.enter();
