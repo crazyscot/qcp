@@ -6,6 +6,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Result;
 use quinn::{congestion::CubicConfig, TransportConfig};
 
+/// Network buffer size (hard-wired)
 pub const SEND_BUFFER_SIZE: usize = 1048576;
 
 /// Computes the theoretical receive window for a given bandwidth/RTT configuration
@@ -23,6 +24,7 @@ pub fn practical_receive_window_for(bandwidth_limit: u64, rtt_ms: u16) -> Result
     Ok(std::cmp::max(theoretical, current))
 }
 
+/// Creates a config for quinn::TransportConfig
 pub fn config_factory(
     bandwidth_limit: u64,
     rtt_ms: u16,

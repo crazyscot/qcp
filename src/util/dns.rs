@@ -6,8 +6,10 @@ use std::net::IpAddr;
 use crate::protocol::control::control_capnp;
 use anyhow::Context as _;
 
+/// Specifies an IP address family
 // I am a little surprised that this enum, or something similar, doesn't appear in std::net.
 #[derive(Debug, Clone, Copy, strum_macros::Display)]
+#[allow(missing_docs)]
 pub enum AddressFamily {
     Any,
     IPv4,

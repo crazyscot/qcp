@@ -16,6 +16,7 @@ pub struct DataRate {
 }
 
 impl DataRate {
+    /// Standard constructor
     pub fn new(bytes: u64, time: Option<Duration>) -> Self {
         match time {
             None => Self { rate: None },
@@ -25,9 +26,11 @@ impl DataRate {
             },
         }
     }
+    /// Accessor
     pub fn byte_rate(&self) -> Option<f64> {
         self.rate
     }
+    /// Converting accessor
     pub fn bit_rate(&self) -> Option<f64> {
         self.rate.map(|r| r * 8.)
     }

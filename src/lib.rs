@@ -1,16 +1,23 @@
-// QCP client & server library
+//! QCP client & server library
 // (c) 2024 Ross Younger
 
+/// X509 certificate helpers
 pub mod cert;
 mod cli;
 pub use cli::cli_main;
+/// qcp client
 pub mod client;
 mod console;
+/// OS abstraction layer
 pub mod os;
+/// qcp's protocol structures
 pub mod protocol;
+/// qcp server
 pub mod server;
-pub mod styles;
+mod styles;
+/// QUIC transport configuration
 pub mod transport;
+/// Utilities
 pub mod util;
 
 /// Build-time info (from `built`)

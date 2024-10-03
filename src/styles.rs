@@ -1,7 +1,8 @@
 // Default styling for qcp's help output
 
 #[must_use]
-pub fn get() -> clap::builder::Styles {
+/// Styling factory
+pub(crate) fn get() -> clap::builder::Styles {
     clap::builder::Styles::styled()
         .usage(
             anstyle::Style::new()

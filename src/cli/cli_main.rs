@@ -9,6 +9,7 @@ use crate::{client, os::os, server, transport, util::setup_tracing};
 use clap::Parser;
 use indicatif::MultiProgress;
 
+/// Main CLI entrypoint
 pub fn cli_main() -> anyhow::Result<ExitCode> {
     let args = CliArgs::parse();
     if args.help_buffers {
