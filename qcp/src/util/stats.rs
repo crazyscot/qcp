@@ -6,7 +6,7 @@ use quinn::ConnectionStats;
 use std::{fmt::Display, time::Duration};
 use tracing::{info, warn};
 
-use crate::cli::Cli;
+use crate::cli::CliArgs;
 
 /// Human friendly output helper
 pub struct DataRate {
@@ -42,7 +42,7 @@ impl Display for DataRate {
 }
 
 pub(crate) fn output_statistics(
-    args: &Cli,
+    args: &CliArgs,
     stats: ConnectionStats,
     payload_bytes: u64,
     transport_time: Option<Duration>,

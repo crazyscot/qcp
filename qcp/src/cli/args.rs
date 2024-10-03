@@ -1,18 +1,11 @@
 // QCP command-line arguments
 // (c) 2024 Ross Younger
 
-use std::process::ExitCode;
 use std::str::FromStr;
 
-use crate::{
-    build_info, client,
-    os::os,
-    transport,
-    util::{setup_tracing, AddressFamily},
-};
+use crate::{build_info, util::AddressFamily};
 use clap::Parser;
 use human_units::Size;
-use indicatif::MultiProgress;
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
 const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
@@ -35,7 +28,7 @@ const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
 "
 ))]
 #[command(styles=crate::styles::get())]
-pub(crate) struct Cli {
+pub(crate) struct CliArgs {
     // MODE SELECTION ======================================================================
     /// Operates in server mode. This is what we run on the remote machine; it is not
     /// intended for interactive use.
@@ -43,7 +36,7 @@ pub(crate) struct Cli {
         long, help_heading("Modes"), hide = true,
         conflicts_with_all(["help_buffers", "quiet", "statistics", "timeout", "ipv4", "ipv6", "remote_debug", "profile"])
     )]
-    server: bool,
+    pub server: bool,
 
     /// Outputs additional information about kernel UDP buffer sizes and platform-specific tips
     #[arg(long, action, help_heading("Network tuning"))]
@@ -111,7 +104,7 @@ pub(crate) struct Cli {
     /// qcp uses the CUBIC congestion control algorithm. The window grows by the number of bytes acknowledged each time,
     /// until encountering saturation or congestion.
     #[arg(
-        short('w'),
+        hide(true),
         long,
         help_heading("Network tuning"),
         default_value("14720"),
@@ -126,7 +119,7 @@ pub(crate) struct Cli {
         required = true,
         value_name = "SOURCE"
     )]
-    source: Option<String>,
+    pub source: Option<FileSpec>,
 
     /// Destination. This may be a file or directory. It may be local or remote
     /// (specified as HOST:DESTINATION, or simply HOST: to copy to your home directory there).
@@ -135,10 +128,10 @@ pub(crate) struct Cli {
         required = true,
         value_name = "DESTINATION"
     )]
-    destination: Option<String>,
+    pub destination: Option<FileSpec>,
 }
 
-impl Cli {
+impl CliArgs {
     pub(crate) fn address_family(&self) -> AddressFamily {
         if self.ipv4 {
             AddressFamily::IPv4
@@ -148,10 +141,23 @@ impl Cli {
             AddressFamily::Any
         }
     }
+
+    pub(crate) fn remote_host(&self) -> anyhow::Result<&str> {
+        let src = self.source.as_ref().ok_or(anyhow::anyhow!(
+            "both source and destination must be specified"
+        ))?;
+        let dest = self.destination.as_ref().ok_or(anyhow::anyhow!(
+            "both source and destination must be specified"
+        ))?;
+        Ok(src
+            .host
+            .as_ref()
+            .unwrap_or_else(|| dest.host.as_ref().unwrap()))
+    }
 }
 
-/// An unpicked file source or destination specified by the user
-#[derive(Debug, Clone)]
+/// An unpacked file source or destination specified by the user
+#[derive(Debug, Clone, Default)]
 pub struct FileSpec {
     pub host: Option<String>,
     pub filename: String,
@@ -180,79 +186,82 @@ impl FromStr for FileSpec {
     }
 }
 
-/// Wrapper type for ClientArgs after we've thought about them
-#[derive(Debug, Clone)]
-pub(crate) struct ProcessedArgs {
+/// Convenience struct for the members of the `CliArgs` struct which are required in most circumstances
+pub(crate) struct UnpackedArgs {
     pub(crate) source: FileSpec,
     pub(crate) destination: FileSpec,
-    pub(crate) original: Cli,
 }
 
-impl ProcessedArgs {
-    pub fn remote_host(&self) -> &str {
-        self.source
-            .host
-            .as_ref()
-            .unwrap_or_else(|| self.destination.host.as_ref().unwrap())
-    }
-}
-
-impl TryFrom<Cli> for ProcessedArgs {
+impl TryFrom<&CliArgs> for UnpackedArgs {
     type Error = anyhow::Error;
 
-    fn try_from(args: Cli) -> Result<Self, Self::Error> {
-        let source = match &args.source {
-            Some(s) => FileSpec::from_str(s)?,
-            None => anyhow::bail!("Source and destination are required"),
-        };
-        let destination = match &args.destination {
-            Some(d) => FileSpec::from_str(d)?,
-            None => anyhow::bail!("Destination is required"),
-        };
+    fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
+        let source = args
+            .source
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
+            .clone();
+        let destination = args
+            .destination
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
+            .clone();
 
-        if (source.host.is_none() && destination.host.is_none())
-            || (source.host.is_some() && destination.host.is_some())
-        {
+        if !(source.host.is_none() ^ destination.host.is_none()) {
             anyhow::bail!("One file argument must be remote");
         }
+
         Ok(Self {
             source,
             destination,
-            original: args,
         })
     }
 }
 
-pub fn cli_main() -> anyhow::Result<ExitCode> {
-    let args = Cli::parse();
-    if args.help_buffers {
-        // One day we might make this a function of the remote host.
-        let send_window = transport::SEND_BUFFER_SIZE;
-        let recv_window =
-            transport::practical_receive_window_for(*args.bandwidth, args.rtt)? as usize;
-        os::print_udp_buffer_size_help_message(recv_window, send_window);
-        return Ok(ExitCode::SUCCESS);
-    }
-    if args.server {
-        anyhow::bail!("Not yet implemented");
+#[cfg(test)]
+mod test {
+    type Res = anyhow::Result<()>;
+    use super::FileSpec;
+    use std::str::FromStr;
+
+    #[test]
+    fn filename_no_host() -> Res {
+        let fs = FileSpec::from_str("/dir/file")?;
+        assert!(fs.host.is_none());
+        assert_eq!(fs.filename, "/dir/file");
+        Ok(())
     }
 
-    let progress = MultiProgress::new(); // This writes to stderr
-    let trace_level = match args.debug {
-        true => "trace",
-        false => match args.quiet {
-            true => "error",
-            false => "info",
-        },
-    };
-    setup_tracing(trace_level, Some(&progress), &args.log_file)
-        .inspect_err(|e| eprintln!("{e:?}"))?;
+    #[test]
+    fn host_no_file() -> Res {
+        let fs = FileSpec::from_str("host:")?;
+        assert_eq!(fs.host.unwrap(), "host");
+        assert_eq!(fs.filename, "");
+        Ok(())
+    }
 
-    client::client_main(args, progress)
-        .inspect_err(|e| tracing::error!("{e}"))
-        .or_else(|_| Ok(false))
-        .map(|success| match success {
-            true => ExitCode::SUCCESS,
-            false => ExitCode::FAILURE,
-        })
+    #[test]
+    fn host_and_file() -> Res {
+        let fs = FileSpec::from_str("host:file")?;
+        assert_eq!(fs.host.unwrap(), "host");
+        assert_eq!(fs.filename, "file");
+        Ok(())
+    }
+
+    #[test]
+    fn bare_ipv4() -> Res {
+        let fs = FileSpec::from_str("1.2.3.4:file")?;
+        assert_eq!(fs.host.unwrap(), "1.2.3.4");
+        assert_eq!(fs.filename, "file");
+        Ok(())
+    }
+
+    #[test]
+    #[ignore] // nyi
+    fn bare_ipv6() -> Res {
+        let fs = FileSpec::from_str("[1:2:3:4::5]:file")?;
+        assert_eq!(fs.host.unwrap(), "[1:2:3:4::5]");
+        assert_eq!(fs.filename, "file");
+        Ok(())
+    }
 }

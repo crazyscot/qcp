@@ -1,7 +1,7 @@
 // qcp client event loop
 // (c) 2024 Ross Younger
 
-use crate::cli::{Cli, ProcessedArgs};
+use crate::cli::{CliArgs, UnpackedArgs};
 use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
@@ -33,29 +33,29 @@ const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 #[tokio::main]
-pub(crate) async fn client_main(args: Cli, progress: MultiProgress) -> anyhow::Result<bool> {
+pub(crate) async fn client_main(args: CliArgs, progress: MultiProgress) -> anyhow::Result<bool> {
     // Caution: As we are using ProgressBar, anything to be printed to console should
     // use progress.println() !
+    let processed_args = UnpackedArgs::try_from(&args)?;
+
     let spinner = progress.add(ProgressBar::new_spinner());
     spinner.set_message("Setting up");
     spinner.enable_steady_tick(Duration::from_millis(150));
 
     let mut timers = StopwatchChain::default();
     timers.next("setup");
-    let unpacked_args = ProcessedArgs::try_from(args)?;
-    let args = unpacked_args.original.clone();
 
     let span = trace_span!("CLIENT");
     let _guard = span.enter();
     let credentials = crate::cert::Credentials::generate()?;
 
-    let host = unpacked_args.remote_host();
+    let host = args.remote_host()?;
     let server_address = lookup_host_by_family(host, args.address_family())?;
 
     spinner.set_message("Connecting control channel...");
     timers.next("control channel");
     debug!("connecting to remote");
-    let mut server = launch_server(&unpacked_args)?;
+    let mut server = launch_server(&args)?;
 
     wait_for_banner(&mut server, args.timeout).await?;
     let mut server_input = server.stdin.take().unwrap();
@@ -118,7 +118,7 @@ pub(crate) async fn client_main(args: Cli, progress: MultiProgress) -> anyhow::R
 
     spinner.set_message("Transferring data");
     timers.next(SHOW_TIME);
-    let result = manage_request(connection, unpacked_args, progress.clone()).await;
+    let result = manage_request(connection, processed_args, progress.clone()).await;
     let total_bytes = match result {
         Ok(b) => b,
         Err(b) => b,
@@ -168,7 +168,7 @@ pub(crate) async fn client_main(args: Cli, progress: MultiProgress) -> anyhow::R
 /// On error: returns the number of bytes that were transferred, as far as we know.
 async fn manage_request(
     connection: Connection,
-    args: ProcessedArgs,
+    args: UnpackedArgs,
     progress: MultiProgress,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
@@ -220,7 +220,7 @@ async fn manage_request(
     }
 }
 
-fn progress_bar_for(mp: &MultiProgress, args: &ProcessedArgs, steps: u64) -> Result<ProgressBar> {
+fn progress_bar_for(mp: &MultiProgress, args: &UnpackedArgs, steps: u64) -> Result<ProgressBar> {
     let display_filename = {
         let component = PathBuf::from(&args.source.filename);
         component
@@ -245,16 +245,16 @@ fn progress_bar_for(mp: &MultiProgress, args: &ProcessedArgs, steps: u64) -> Res
 /// Deal with a single request
 async fn process_request(
     sp: (quinn::SendStream, quinn::RecvStream),
-    args: ProcessedArgs,
+    processed: UnpackedArgs,
     mp: MultiProgress,
 ) -> anyhow::Result<u64> {
-    if args.source.host.is_some() {
+    if processed.source.host.is_some() {
         // This is a Get
         do_get(
             sp,
-            &args.source.filename,
-            &args.destination.filename,
-            &args,
+            &processed.source.filename,
+            &processed.destination.filename,
+            &processed,
             mp.clone(),
         )
         .await
@@ -262,28 +262,28 @@ async fn process_request(
         // This is a Put
         do_put(
             sp,
-            &args.source.filename,
-            &args.destination.filename,
-            &args,
+            &processed.source.filename,
+            &processed.destination.filename,
+            &processed,
             mp.clone(),
         )
         .await
     }
 }
 
-fn launch_server(args: &ProcessedArgs) -> Result<Child> {
-    let remote_host = args.remote_host();
+fn launch_server(args: &CliArgs) -> Result<Child> {
+    let remote_host = args.remote_host()?;
     let mut server = tokio::process::Command::new("ssh");
     // TODO extra ssh options
     server.args([
         remote_host,
         "qcpt",
         "-b",
-        &args.original.bandwidth.to_string(),
+        &args.bandwidth.to_string(),
         "--rtt",
-        &args.original.rtt.to_string(),
+        &args.rtt.to_string(),
     ]);
-    if args.original.remote_debug {
+    if args.remote_debug {
         server.arg("--debug");
     }
     server
@@ -322,7 +322,7 @@ pub fn create_endpoint(
     credentials: &Credentials,
     server_cert: CertificateDer<'_>,
     server_addr: &SocketAddr,
-    args: &Cli,
+    args: &CliArgs,
 ) -> Result<quinn::Endpoint> {
     let span = span!(Level::TRACE, "create_endpoint");
     let _guard = span.enter();
@@ -372,7 +372,7 @@ async fn do_get(
     sp: RawStreamPair,
     filename: &str,
     dest: &str,
-    cli_args: &ProcessedArgs,
+    cli_args: &UnpackedArgs,
     multi_progress: MultiProgress,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
@@ -432,7 +432,7 @@ async fn do_put(
     sp: RawStreamPair,
     src_filename: &str,
     dest_filename: &str,
-    cli_args: &ProcessedArgs,
+    cli_args: &UnpackedArgs,
     multi_progress: MultiProgress,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
