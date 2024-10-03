@@ -7,8 +7,11 @@ use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 /// In-memory represenatation of X509 credentials (for TLS)
 #[derive(Debug)]
 pub struct Credentials {
+    /// X509 certificate
     pub certificate: CertificateDer<'static>,
+    /// Keypair the certificate relates to
     pub keypair: PrivateKeyDer<'static>,
+    /// Hostname the certificate relates to (convenience member)
     pub hostname: String,
 }
 
@@ -19,6 +22,7 @@ fn dump(creds: &rcgen::CertifiedKey) {
 */
 
 impl Credentials {
+    /// Factory method
     pub fn generate() -> Result<Self> {
         let hostname = gethostname::gethostname()
             .into_string()
@@ -32,6 +36,7 @@ impl Credentials {
         })
     }
 
+    /// Cloning accessor
     pub fn cert_chain(&self) -> Vec<CertificateDer<'static>> {
         vec![self.certificate.clone()]
     }

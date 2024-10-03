@@ -12,6 +12,7 @@ use human_repr::HumanDuration;
 /// A simple named stopwatch.
 /// This stopwatch does not currently support resuming or splits.
 pub struct Stopwatch {
+    /// Descriptive name
     pub name: String,
     start_: Option<Instant>,
     stop_: Option<Instant>,
@@ -52,6 +53,7 @@ impl Stopwatch {
         self.elapsed()
     }
 
+    /// Returns the elapsed duration so far
     pub fn elapsed(&self) -> Option<Duration> {
         if let Some(start) = self.start_ {
             if let Some(stop) = self.stop_ {

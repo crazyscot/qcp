@@ -1,14 +1,19 @@
 // qcp::protocol
 
+/// Control protocol definitions and helper types
 pub mod control;
+/// Session protocol definitions and helper types
 pub mod session;
 
-pub type RawStreamPair = (quinn::SendStream, quinn::RecvStream);
+/// Helper type definition (syntactic sugar)
+pub(crate) type RawStreamPair = (quinn::SendStream, quinn::RecvStream);
 
 /// Syntactic sugar type (though I expect some might call it salt)
 #[derive(Debug)]
-pub struct StreamPair {
+pub(crate) struct StreamPair {
+    /// outbound data
     pub send: quinn::SendStream,
+    /// inbound data
     pub recv: quinn::RecvStream,
     // The underlying Send/Recv stream objects have Drop handlers which do the Right Thing.
 }
