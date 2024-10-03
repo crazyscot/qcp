@@ -87,7 +87,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
                 },
                 Some(conn) => {
                     let conn_fut = handle_connection(conn);
-                    tasks.spawn(async move {
+                    let _ = tasks.spawn(async move {
                         if let Err(e) = conn_fut.await {
                             error!("inward stream failed: {reason}", reason = e.to_string());
                         }
@@ -129,7 +129,7 @@ fn create_endpoint(
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
     let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
-    config.transport_config(crate::transport::config_factory(
+    let _ = config.transport_config(crate::transport::config_factory(
         *args.bandwidth,
         args.rtt,
         args.initial_congestion_window,
@@ -191,8 +191,8 @@ async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
                 Ok(s) => StreamPair::from(s),
             };
             trace!("opened stream");
-            let fut = handle_stream(stream);
-            tokio::spawn(async move {
+            let _j = tokio::spawn(async move {
+                let fut = handle_stream(stream);
                 if let Err(e) = fut.await {
                     error!("stream failed: {e}",);
                 }
@@ -295,7 +295,7 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
     } else {
         // Is it a nonexistent file in a valid directory?
         let mut path_test = path.clone();
-        path_test.pop();
+        let _ = path_test.pop();
         if path_test.as_os_str().is_empty() {
             // We're writing a file to the current working directory, so apply the is_dir writability check
             path_test.push(".");

@@ -32,7 +32,7 @@ pub fn config_factory(
     let receive_window = practical_receive_window_for(bandwidth_limit, rtt_ms)?;
 
     let mut config = TransportConfig::default();
-    config
+    let _ = config
         .max_concurrent_bidi_streams(1u8.into())
         .max_concurrent_uni_streams(0u8.into())
         .initial_rtt(rtt)
@@ -42,8 +42,8 @@ pub fn config_factory(
         .datagram_send_buffer_size(SEND_BUFFER_SIZE);
 
     let mut cubic = CubicConfig::default();
-    cubic.initial_window(initial_window);
-    config.congestion_controller_factory(Arc::new(cubic));
+    let _ = cubic.initial_window(initial_window);
+    let _ = config.congestion_controller_factory(Arc::new(cubic));
 
     Ok(config.into())
 }

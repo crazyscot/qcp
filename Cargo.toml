@@ -60,7 +60,7 @@ unreachable_pub = "deny"
 # unused_crate_dependencies = "deny" # false positives
 unused_extern_crates = "deny"
 unused_lifetimes = "deny"
-#unused_results = "deny"
+unused_results = "deny"
 variant_size_differences = "deny"
 
 [lints.clippy]

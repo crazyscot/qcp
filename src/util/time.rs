@@ -63,7 +63,7 @@ impl Stopwatch {
 
     /// Stops this stopwatch, starts a new one where it left off
     pub fn chain(&mut self, new_name: &str) -> Self {
-        self.stop();
+        let _ = self.stop();
         Self {
             name: new_name.to_string(),
             start_: self.stop_,
@@ -99,7 +99,7 @@ impl StopwatchChain {
     }
     /// Stops the chain. This is final, you cannot restart or call next().
     pub fn stop(&mut self) {
-        self.watches.last_mut().map(|sw| sw.stop());
+        let _ = self.watches.last_mut().map(|sw| sw.stop());
     }
 
     /// Data accessor
@@ -151,8 +151,8 @@ mod tests {
     #[should_panic]
     fn cannot_stop() {
         let mut a = Stopwatch::new("a");
-        a.stop();
-        a.stop();
+        let _ = a.stop();
+        let _ = a.stop();
     }
 
     #[test]

@@ -87,7 +87,7 @@ mod test {
     fn set_socket_bufsize() -> anyhow::Result<()> {
         setup_tracing_for_tests();
         let sock = UdpSocket::bind("0.0.0.0:0")?;
-        super::set_udp_buffer_sizes(&sock, 1048576, 10485760)?;
+        let _ = super::set_udp_buffer_sizes(&sock, 1048576, 10485760)?;
         Ok(())
     }
 }
