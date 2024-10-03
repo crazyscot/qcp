@@ -14,6 +14,7 @@ fn bsdish() -> bool {
     ))
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Unix {}
 
 impl Unix {

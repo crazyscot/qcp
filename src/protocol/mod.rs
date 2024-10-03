@@ -6,6 +6,7 @@ pub mod session;
 pub type RawStreamPair = (quinn::SendStream, quinn::RecvStream);
 
 /// Syntactic sugar type (though I expect some might call it salt)
+#[derive(Debug)]
 pub struct StreamPair {
     pub send: quinn::SendStream,
     pub recv: quinn::RecvStream,
