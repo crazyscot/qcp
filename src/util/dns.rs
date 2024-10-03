@@ -7,7 +7,7 @@ use crate::protocol::control::control_capnp;
 use anyhow::Context as _;
 
 // I am a little surprised that this enum, or something similar, doesn't appear in std::net.
-#[derive(Debug, strum_macros::Display)]
+#[derive(Debug, Clone, Copy, strum_macros::Display)]
 pub enum AddressFamily {
     Any,
     IPv4,

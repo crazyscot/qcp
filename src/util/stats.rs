@@ -9,6 +9,7 @@ use tracing::{info, warn};
 use crate::cli::CliArgs;
 
 /// Human friendly output helper
+#[derive(Debug, Clone, Copy)]
 pub struct DataRate {
     /// Bytes per second; if None, we were unable to compute a rate.
     rate: Option<f64>,

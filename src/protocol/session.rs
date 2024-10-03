@@ -12,6 +12,7 @@
  * (Then they do whatever is appropriate for the command. See the notes in session.capnp.)
  */
 
+#[allow(missing_debug_implementations, single_use_lifetimes)]
 pub mod session_capnp {
     include!(concat!(env!("OUT_DIR"), "/session_capnp.rs"));
 }
@@ -164,7 +165,7 @@ impl FileHeader {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct FileTrailer {}
 
 impl FileTrailer {

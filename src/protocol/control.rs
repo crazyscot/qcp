@@ -24,6 +24,7 @@ use anyhow::Result;
 use capnp::message::ReaderOptions;
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
+#[allow(missing_debug_implementations, single_use_lifetimes)]
 pub mod control_capnp {
     include!(concat!(env!("OUT_DIR"), "/control_capnp.rs"));
 }
