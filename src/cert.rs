@@ -41,6 +41,6 @@ impl Credentials {
 mod tests {
     #[test]
     fn generate_works() {
-        super::Credentials::generate().unwrap();
+        let _ = super::Credentials::generate().unwrap();
     }
 }

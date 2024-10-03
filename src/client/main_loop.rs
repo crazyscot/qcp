@@ -139,7 +139,7 @@ pub(crate) async fn client_main(args: CliArgs, progress: MultiProgress) -> anyho
         _ = closedown_fut => (),
     };
     trace!("waiting for child");
-    server.wait().await?;
+    let _ = server.wait().await?;
     trace!("finished");
     timers.stop();
 
@@ -172,7 +172,7 @@ async fn manage_request(
     progress: MultiProgress,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
-    tasks.spawn(async move {
+    let _jh = tasks.spawn(async move {
         // This async block returns a Result<u64>
         let sp = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
 
@@ -275,7 +275,7 @@ fn launch_server(args: &CliArgs) -> Result<Child> {
     let remote_host = args.remote_host()?;
     let mut server = tokio::process::Command::new("ssh");
     // TODO extra ssh options
-    server.args([
+    let _ = server.args([
         remote_host,
         "qcp",
         "--server",
@@ -285,9 +285,9 @@ fn launch_server(args: &CliArgs) -> Result<Child> {
         &args.rtt.to_string(),
     ]);
     if args.remote_debug {
-        server.arg("--debug");
+        let _ = server.arg("--debug");
     }
-    server
+    let _ = server
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit()) // TODO: pipe this more nicely, output on error?
@@ -348,7 +348,7 @@ pub(crate) fn create_endpoint(
     )?;
 
     let mut config = quinn::ClientConfig::new(qcc);
-    config.transport_config(transport);
+    let _ = config.transport_config(transport);
 
     trace!("bind socket");
     let socket = util::socket::bind_unspecified_for(server_addr)?;
@@ -414,7 +414,7 @@ async fn do_get(
 
     let mut inbound = inbound.take(header.size);
     trace!("payload");
-    tokio::io::copy(&mut inbound, &mut file).await?;
+    let _ = tokio::io::copy(&mut inbound, &mut file).await?;
     // Retrieve the stream from within the Take wrapper for further operations
     let mut inbound = inbound.into_inner();
 
