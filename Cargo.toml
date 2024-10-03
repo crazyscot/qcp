@@ -1,40 +1,68 @@
-[workspace]
-members = [
-    "qcp",
-]
+[package]
+name = "qcp"
+description = "A remote file copy utility much like scp, but using the QUIC protocol"
+rust-version = "1.81.0"
 resolver = "2"
-package.version = "0.1.0"
-package.edition = "2021"
-package.authors = ["Ross Younger <crazyscot@gmail.com>"]
-package.license = "AGPL-3.0-or-later"
+version = "0.1.0"
+edition = "2021"
+authors = ["Ross Younger <crazyscot@gmail.com>"]
+license = "AGPL-3.0-or-later"
 
-[workspace.dependencies]
+[dependencies]
+anstyle = "1.0.8"
 anyhow = "1.0.88"
-clap = "4.5.17"
+capnp = "0.19.7"
+capnp-futures = "0.19.1"
+clap = { version = "4.5.17", features = ["wrap_help", "derive", "cargo", "help"] }
+console = "0.15.8"
+dns-lookup = "2.0.4"
+futures-util = { version = "0.3.30", default-features = false, features = ["compat"] }
+gethostname = "0.5.0"
+human-repr = "1.1.0"
+human-units = "0.2.0"
+indicatif = { version = "0.17.8", features = ["tokio"] }
+quinn = "0.11.5"
+rcgen = { version = "0.13.1", features = ["crypto", "pem", "ring"] }
+rustls-pki-types = "1.8.0"
+static_assertions = "1.1.0"
+strum_macros = "0.26.4"
+tokio = { version = "1.40.0", default-features = true, features = ["full", "io-std", "io-util"] }
+tokio-util = { version = "0.7.12", features = ["compat"] }
 tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
-[workspace.lints.rust]
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29.0", features = ["socket"] }
+
+[build-dependencies]
+built = { version = "0.7.4", features = ["git2"] }
+capnpc = "0.19.0"
+
+[dev-dependencies]
+fastrand = "2.1.1"
+
+
+[lints.rust]
 dead_code = "warn"
-elided_lifetimes_in_paths = "deny"
+#elided_lifetimes_in_paths = "deny"
 meta_variable_misuse = "deny"
 missing_abi = "deny"
-missing_copy_implementations = "deny"
-missing_debug_implementations = "deny"
-missing_docs = "warn"
+#missing_copy_implementations = "deny"
+#missing_debug_implementations = "deny"
+#missing_docs = "warn"
 non_ascii_idents = "deny"
-single_use_lifetimes = "deny"
+#single_use_lifetimes = "deny"
 trivial_casts = "deny"
 trivial_numeric_casts = "deny"
 unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "deny"
-unreachable_pub = "deny"
+#unreachable_pub = "deny"
 # unused_crate_dependencies = "deny" # false positives
 unused_extern_crates = "deny"
 unused_lifetimes = "deny"
-unused_results = "deny"
+#unused_results = "deny"
 variant_size_differences = "deny"
 
-[workspace.lints.clippy]
-pedantic = { level = "deny", priority = -1 }
+[lints.clippy]
+#pedantic = { level = "deny", priority = -1 }
 missing_errors_doc = "allow"
