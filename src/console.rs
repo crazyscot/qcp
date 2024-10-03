@@ -30,7 +30,7 @@ fn use_long_style(terminal: &Term, msg_size: usize) -> bool {
     msg_size + DATA_AND_PROGRESS > term_width
 }
 
-pub fn progress_style_for(terminal: &Term, msg_size: usize) -> &str {
+pub(crate) fn progress_style_for(terminal: &Term, msg_size: usize) -> &str {
     match use_long_style(terminal, msg_size) {
         true => PROGRESS_STYLE_OVERLONG,
         false => PROGRESS_STYLE_COMPACT,

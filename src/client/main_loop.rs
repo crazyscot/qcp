@@ -319,7 +319,7 @@ async fn wait_for_banner(server: &mut Child, timeout_s: u16) -> Result<()> {
 /// `credentials` are generated locally.
 /// `server_cert` comes from the control channel server message.
 /// `destination` is the server's address (port from the control channel server message).
-pub fn create_endpoint(
+pub(crate) fn create_endpoint(
     credentials: &Credentials,
     server_cert: CertificateDer<'_>,
     server_addr: &SocketAddr,

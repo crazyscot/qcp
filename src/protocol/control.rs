@@ -24,7 +24,7 @@ use anyhow::Result;
 use capnp::message::ReaderOptions;
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
-#[allow(missing_debug_implementations, single_use_lifetimes)]
+#[allow(missing_debug_implementations, single_use_lifetimes, unreachable_pub)]
 pub mod control_capnp {
     include!(concat!(env!("OUT_DIR"), "/control_capnp.rs"));
 }
@@ -143,14 +143,14 @@ mod tests {
     use anyhow::Result;
     use capnp::{message::ReaderOptions, serialize};
 
-    pub fn encode_client(cert: &[u8]) -> Vec<u8> {
+    fn encode_client(cert: &[u8]) -> Vec<u8> {
         let mut msg = ::capnp::message::Builder::new_default();
         let mut client_msg = msg.init_root::<control_capnp::client_message::Builder<'_>>();
         client_msg.set_cert(cert);
         serialize::write_message_to_words(&msg)
     }
 
-    pub fn decode_client(wire: &[u8]) -> Result<ClientMessage> {
+    fn decode_client(wire: &[u8]) -> Result<ClientMessage> {
         use control_capnp::client_message::{self};
         let reader = serialize::read_message(wire, ReaderOptions::new())?;
         let cert_reader: client_message::Reader<'_> = reader.get_root()?;
@@ -161,14 +161,14 @@ mod tests {
             connection_type: family,
         })
     }
-    pub fn encode_server(port: u16, cert: &[u8]) -> Vec<u8> {
+    fn encode_server(port: u16, cert: &[u8]) -> Vec<u8> {
         let mut msg = ::capnp::message::Builder::new_default();
         let mut server_msg = msg.init_root::<control_capnp::server_message::Builder<'_>>();
         server_msg.set_port(port);
         server_msg.set_cert(cert);
         serialize::write_message_to_words(&msg)
     }
-    pub fn decode_server(wire: &[u8]) -> Result<ServerMessage> {
+    fn decode_server(wire: &[u8]) -> Result<ServerMessage> {
         use control_capnp::server_message;
         let reader = serialize::read_message(wire, ReaderOptions::new())?;
         let msg_reader: server_message::Reader<'_> = reader.get_root()?;

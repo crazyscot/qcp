@@ -158,7 +158,7 @@ impl CliArgs {
 
 /// An unpacked file source or destination specified by the user
 #[derive(Debug, Clone, Default)]
-pub struct FileSpec {
+pub(crate) struct FileSpec {
     pub host: Option<String>,
     pub filename: String,
 }
