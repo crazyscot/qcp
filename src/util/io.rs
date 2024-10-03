@@ -39,7 +39,8 @@ pub async fn open_file(
     Ok((fh, meta))
 }
 
-/// Opens a local file for writing, from an incoming FileHeader
+/// Opens a local file for writing, from an incoming `FileHeader`
+#[allow(clippy::missing_panics_doc)]
 pub async fn create_truncate_file(
     path: &str,
     header: &crate::protocol::session::FileHeader,

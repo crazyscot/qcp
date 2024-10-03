@@ -13,5 +13,6 @@ pub mod stats;
 /// Time utilities
 pub mod time;
 
+/// Tracing helpers
 mod tracing;
-pub use tracing::setup_tracing;
+pub use tracing::setup as setup_tracing;

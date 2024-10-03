@@ -22,35 +22,35 @@ impl Unix {
     // Caution: On Linux, according to socket(7), the kernel doubles the buffer size
     // you set in setsockopt, and returns the doubled value in getsockopt!
 
-    /// Wrapper for getsockopt SO_SNDBUF
+    /// Wrapper for getsockopt `SO_SNDBUF`
     pub fn get_sendbuf(socket: &UdpSocket) -> Result<usize> {
         Ok(socket::getsockopt(socket, sockopt::SndBuf)?)
     }
 
-    /// Wrapper for setsockopt SO_SNDBUF
+    /// Wrapper for setsockopt `SO_SNDBUF`
     pub fn set_sendbuf(socket: &UdpSocket, size: usize) -> Result<()> {
         socket::setsockopt(socket, sockopt::SndBuf, &size)?;
         Ok(())
     }
 
-    /// Wrapper for setsockopt SO_SNDBUFFORCE
+    /// Wrapper for setsockopt `SO_SNDBUFFORCE`
     pub fn force_sendbuf(socket: &UdpSocket, size: usize) -> Result<()> {
         socket::setsockopt(socket, sockopt::SndBufForce, &size)?;
         Ok(())
     }
 
-    /// Wrapper for getsockopt SO_RCVBUF
+    /// Wrapper for getsockopt `SO_RCVBUF`
     pub fn get_recvbuf(socket: &UdpSocket) -> Result<usize> {
         Ok(socket::getsockopt(socket, sockopt::RcvBuf)?)
     }
 
-    /// Wrapper for setsockopt SO_RCVBUF
+    /// Wrapper for setsockopt `SO_RCVBUF`
     pub fn set_recvbuf(socket: &UdpSocket, size: usize) -> Result<()> {
         socket::setsockopt(socket, sockopt::RcvBuf, &size)?;
         Ok(())
     }
 
-    /// Wrapper for setsockopt SO_RCVBUFFORCE
+    /// Wrapper for setsockopt `SO_RCVBUFFORCE`
     pub fn force_recvbuf(socket: &UdpSocket, size: usize) -> Result<()> {
         socket::setsockopt(socket, sockopt::RcvBufForce, &size)?;
         Ok(())

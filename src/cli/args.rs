@@ -28,6 +28,7 @@ const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
 "
 ))]
 #[command(styles=crate::styles::get())]
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct CliArgs {
     // MODE SELECTION ======================================================================
     /// Operates in server mode. This is what we run on the remote machine; it is not
@@ -73,7 +74,7 @@ pub(crate) struct CliArgs {
     #[arg(long, action, help_heading("Debug options"))]
     pub profile: bool,
     /// Log to a file. By default the log receives everything printed to stderr.
-    /// This can be overridden by setting the environment variable RUST_LOG_FILE_DETAIL (same semantics as RUST_LOG).
+    /// This can be overridden by setting the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
     #[arg(short('l'), long, action, help_heading("Debug options"))]
     pub log_file: Option<String>,
 

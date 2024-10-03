@@ -50,7 +50,7 @@ pub fn set_udp_buffer_sizes(
             recv.human_count_bytes(),
         ));
         if let Some(e) = force_err {
-            warn!("While attempting to set kernel buffer size, this happened: {e}")
+            warn!("While attempting to set kernel buffer size, this happened: {e}");
         }
         let mut args = std::env::args();
         let ego = args.next().unwrap_or("<this program>".to_string());
@@ -87,7 +87,7 @@ mod test {
     fn set_socket_bufsize() -> anyhow::Result<()> {
         setup_tracing_for_tests();
         let sock = UdpSocket::bind("0.0.0.0:0")?;
-        let _ = super::set_udp_buffer_sizes(&sock, 1048576, 10485760)?;
+        let _ = super::set_udp_buffer_sizes(&sock, 1_048_576, 10_485_760)?;
         Ok(())
     }
 }

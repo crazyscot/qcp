@@ -4,7 +4,7 @@
 /// X509 certificate helpers
 pub mod cert;
 mod cli;
-pub use cli::cli_main;
+pub use cli::cli;
 /// qcp client
 pub mod client;
 mod console;

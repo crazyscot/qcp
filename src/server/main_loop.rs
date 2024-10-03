@@ -96,7 +96,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
                 },
             };
         },
-        _ = &mut timeout_fut => {
+        () = &mut timeout_fut => {
             info!("timed out waiting for connection");
         },
     };
@@ -148,6 +148,7 @@ fn create_endpoint(
         }
     };
     let socket = std::net::UdpSocket::bind(addr)?;
+    #[allow(clippy::cast_possible_truncation)]
     let warning = util::socket::set_udp_buffer_sizes(
         &socket,
         transport::SEND_BUFFER_SIZE,

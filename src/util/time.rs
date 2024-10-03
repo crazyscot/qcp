@@ -21,6 +21,7 @@ pub struct Stopwatch {
 impl Stopwatch {
     /// Creates a running stopwatch.
     /// If you wanted to create a stopped stopwatch, use `::default()` or `::new_stopped()`
+    #[must_use]
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -30,6 +31,7 @@ impl Stopwatch {
     }
     /// Creates a stopped stopwatch.
     /// If you wanted to create a running stopwatch, use `::new()`
+    #[must_use]
     pub fn new_stopped(name: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -39,14 +41,17 @@ impl Stopwatch {
     }
 
     /// Starts this stopwatch
-    /// Panics: It is a logic error to call start more than once.
+    /// # Panics
+    /// It is a logic error to call start more than once.
     pub fn start(&mut self) {
         assert!(self.start_.is_none(), "Stopwatch already started");
         self.start_ = Some(Instant::now());
     }
 
     /// Starts this stopwatch
-    /// Panics: It is a logic error to call stop more than once.
+    /// # Panics
+    /// It is a logic error to call stop more than once.
+    #[must_use]
     pub fn stop(&mut self) -> Option<Duration> {
         assert!(self.stop_.is_none(), "Stopwatch already stopped");
         self.stop_ = Some(Instant::now());
@@ -54,6 +59,7 @@ impl Stopwatch {
     }
 
     /// Returns the elapsed duration so far
+    #[must_use]
     pub fn elapsed(&self) -> Option<Duration> {
         if let Some(start) = self.start_ {
             if let Some(stop) = self.stop_ {
@@ -64,6 +70,7 @@ impl Stopwatch {
     }
 
     /// Stops this stopwatch, starts a new one where it left off
+    #[must_use]
     pub fn chain(&mut self, new_name: &str) -> Self {
         let _ = self.stop();
         Self {
@@ -99,17 +106,19 @@ impl StopwatchChain {
         };
         self.watches.push(new1);
     }
-    /// Stops the chain. This is final, you cannot restart or call next().
+    /// Stops the chain. This is final, you cannot restart or call `next()`.
     pub fn stop(&mut self) {
-        let _ = self.watches.last_mut().map(|sw| sw.stop());
+        let _ = self.watches.last_mut().map(Stopwatch::stop);
     }
 
     /// Data accessor
+    #[must_use]
     pub fn data(&self) -> &Vec<Stopwatch> {
         &self.watches
     }
 
     /// Extracts a single stopwatch by name, if it was present
+    #[must_use]
     pub fn find(&self, name: &str) -> Option<&Stopwatch> {
         self.watches.iter().find(|&sw| sw.name == name)
     }
@@ -144,13 +153,13 @@ mod tests {
         assert!(a.stop().is_none());
     }
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "Stopwatch already started")]
     fn cannot_start_twice() {
         let mut a = Stopwatch::new("a");
         a.start();
     }
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "Stopwatch already stopped")]
     fn cannot_stop() {
         let mut a = Stopwatch::new("a");
         let _ = a.stop();
@@ -180,7 +189,7 @@ mod tests {
         println!("{c}");
     }
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "Stopwatch already stopped")]
     fn cannot_restart_stopped_chain() {
         let mut c = StopwatchChain::default();
         c.next("a");
