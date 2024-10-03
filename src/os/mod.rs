@@ -5,6 +5,6 @@
 mod unix;
 
 #[cfg(unix)]
-pub use crate::os::unix::Unix as os;
+pub(crate) use crate::os::unix::Unix as os;
 
 static_assertions::assert_cfg!(unix, "This OS is not yet supported");

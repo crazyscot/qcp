@@ -4,12 +4,12 @@
 /// X509 certificate helpers
 pub mod cert;
 mod cli;
+/// Command Line Interface
 pub use cli::cli;
 /// qcp client
 pub mod client;
 mod console;
-/// OS abstraction layer
-pub mod os;
+mod os;
 /// qcp's protocol structures
 pub mod protocol;
 /// qcp server
