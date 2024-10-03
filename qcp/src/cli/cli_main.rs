@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 use super::args::CliArgs;
 
-use crate::{client, os::os, transport, util::setup_tracing};
+use crate::{client, os::os, server, transport, util::setup_tracing};
 use clap::Parser;
 use indicatif::MultiProgress;
 
@@ -20,9 +20,12 @@ pub fn cli_main() -> anyhow::Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
     if args.server {
-        anyhow::bail!("Not yet implemented");
+        return server_main(args);
     }
+    client_main(args)
+}
 
+fn client_main(args: CliArgs) -> anyhow::Result<ExitCode> {
     let progress = MultiProgress::new(); // This writes to stderr
     let trace_level = match args.debug {
         true => "trace",
@@ -40,5 +43,21 @@ pub fn cli_main() -> anyhow::Result<ExitCode> {
         .map(|success| match success {
             true => ExitCode::SUCCESS,
             false => ExitCode::FAILURE,
+        })
+}
+
+fn server_main(args: CliArgs) -> anyhow::Result<ExitCode> {
+    let trace_level = match args.debug {
+        true => "trace",
+        false => "error",
+    };
+    setup_tracing(trace_level, None, &args.log_file).inspect_err(|e| eprintln!("{e:?}"))?;
+
+    server::main(&args)
+        .map(|()| ExitCode::SUCCESS)
+        .map_err(|e| {
+            tracing::error!("{e}");
+            // TODO: Decide about error handling. For now detailed anyhow output is fine.
+            e
         })
 }

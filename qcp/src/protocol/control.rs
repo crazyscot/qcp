@@ -28,7 +28,8 @@ pub mod control_capnp {
     include!(concat!(env!("OUT_DIR"), "/control_capnp.rs"));
 }
 
-pub const BANNER: &str = "qcpcs\n";
+/// Server banner message, sent on stdout and checked by the client
+pub const BANNER: &str = "qcp-server-1\n";
 
 /// Rust type analogue to the capnproto struct
 #[derive(Debug)]

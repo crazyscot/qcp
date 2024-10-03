@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "qcp",
-    "qcpt",
 ]
 resolver = "2"
 package.version = "0.1.0"

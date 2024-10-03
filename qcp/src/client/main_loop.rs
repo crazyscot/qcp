@@ -277,7 +277,8 @@ fn launch_server(args: &CliArgs) -> Result<Child> {
     // TODO extra ssh options
     server.args([
         remote_host,
-        "qcpt",
+        "qcp",
+        "--server",
         "-b",
         &args.bandwidth.to_string(),
         "--rtt",

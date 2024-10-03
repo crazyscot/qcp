@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::cert::Credentials;
+use crate::cli::CliArgs;
 use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::Command;
@@ -23,13 +24,11 @@ use tokio::task::JoinSet;
 use tokio::time::Duration;
 use tracing::{debug, error, info, trace, trace_span, warn};
 
-use super::ServerArgs;
-
 const PROTOCOL_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Main entrypoint
 #[tokio::main]
-pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
+pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     let span = trace_span!("SERVER");
     let _guard = span.enter();
 
@@ -87,7 +86,7 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
                     info!("Endpoint was expectedly closed");
                 },
                 Some(conn) => {
-                    let conn_fut = handle_connection(conn, (*args).clone());
+                    let conn_fut = handle_connection(conn);
                     tasks.spawn(async move {
                         if let Err(e) = conn_fut.await {
                             error!("inward stream failed: {reason}", reason = e.to_string());
@@ -114,7 +113,7 @@ pub async fn server_main(args: &ServerArgs) -> anyhow::Result<()> {
 fn create_endpoint(
     credentials: &Credentials,
     client_message: ClientMessage,
-    args: &ServerArgs,
+    args: &CliArgs,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
 
@@ -165,13 +164,12 @@ fn create_endpoint(
     ))
 }
 
-async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::Result<()> {
+async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
     let span = trace_span!("incoming");
     let _guard = span.enter();
 
     let connection = conn.await?;
     info!("accepted connection from {}", connection.remote_address());
-    let args = Arc::new(args);
 
     async {
         loop {
@@ -193,7 +191,7 @@ async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::R
                 Ok(s) => StreamPair::from(s),
             };
             trace!("opened stream");
-            let fut = handle_stream(stream, args.clone());
+            let fut = handle_stream(stream);
             tokio::spawn(async move {
                 if let Err(e) = fut.await {
                     error!("stream failed: {e}",);
@@ -205,20 +203,16 @@ async fn handle_connection(conn: quinn::Incoming, args: ServerArgs) -> anyhow::R
     Ok(())
 }
 
-async fn handle_stream(mut sp: StreamPair, args: Arc<ServerArgs>) -> anyhow::Result<()> {
+async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
     trace!("reading command");
     let cmd = Command::read(&mut sp.recv).await?;
     match cmd {
-        Command::Get(get) => handle_get(sp, args, get.filename).await,
-        Command::Put(put) => handle_put(sp, args, put.filename).await,
+        Command::Get(get) => handle_get(sp, get.filename).await,
+        Command::Put(put) => handle_put(sp, put.filename).await,
     }
 }
 
-async fn handle_get(
-    mut stream: StreamPair,
-    _args: Arc<ServerArgs>,
-    filename: String,
-) -> anyhow::Result<()> {
+async fn handle_get(mut stream: StreamPair, filename: String) -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::TRACE, "GET", filename = filename);
     let _guard = span.enter();
     debug!("begin");
@@ -271,11 +265,7 @@ async fn handle_get(
     Ok(())
 }
 
-async fn handle_put(
-    mut stream: StreamPair,
-    _args: Arc<ServerArgs>,
-    destination: String,
-) -> anyhow::Result<()> {
+async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::TRACE, "PUT");
     let _guard = span.enter();
     debug!("begin, destination={destination}");
