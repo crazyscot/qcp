@@ -10,10 +10,10 @@ license = "AGPL-3.0-or-later"
 
 [dependencies]
 anstyle = "1.0.8"
-anyhow = "1.0.88"
-capnp = "0.19.7"
-capnp-futures = "0.19.1"
-clap = { version = "4.5.17", features = ["wrap_help", "derive", "cargo", "help"] }
+anyhow = "1.0.89"
+capnp = "0.20.1"
+capnp-futures = "0.20.0"
+clap = { version = "4.5.19", features = ["wrap_help", "derive", "cargo", "help"] }
 console = "0.15.8"
 dns-lookup = "2.0.4"
 futures-util = { version = "0.3.30", default-features = false, features = ["compat"] }
@@ -23,7 +23,7 @@ human-units = "0.2.0"
 indicatif = { version = "0.17.8", features = ["tokio"] }
 quinn = "0.11.5"
 rcgen = { version = "0.13.1", features = ["crypto", "pem", "ring"] }
-rustls-pki-types = "1.8.0"
+rustls-pki-types = "1.9.0"
 static_assertions = "1.1.0"
 strum_macros = "0.26.4"
 tokio = { version = "1.40.0", default-features = true, features = ["full", "io-std", "io-util"] }
@@ -36,7 +36,7 @@ nix = { version = "0.29.0", features = ["socket"] }
 
 [build-dependencies]
 built = { version = "0.7.4", features = ["git2"] }
-capnpc = "0.19.0"
+capnpc = "0.20.0"
 
 [dev-dependencies]
 fastrand = "2.1.1"
