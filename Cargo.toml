@@ -44,7 +44,7 @@ fastrand = "2.1.1"
 
 [lints.rust]
 dead_code = "warn"
-#elided_lifetimes_in_paths = "deny"
+elided_lifetimes_in_paths = "deny"
 meta_variable_misuse = "deny"
 missing_abi = "deny"
 #missing_copy_implementations = "deny"

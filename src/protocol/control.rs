@@ -45,7 +45,7 @@ impl ClientMessage {
         W: tokio::io::AsyncWrite + Unpin,
     {
         let mut msg = ::capnp::message::Builder::new_default();
-        let mut builder = msg.init_root::<control_capnp::client_message::Builder>();
+        let mut builder = msg.init_root::<control_capnp::client_message::Builder<'_>>();
         builder.set_cert(cert);
         builder.set_connection_type(conn_type.try_into()?);
         capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
@@ -59,7 +59,7 @@ impl ClientMessage {
 
         let reader =
             capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
-        let msg_reader: control_capnp::client_message::Reader = reader.get_root()?;
+        let msg_reader: control_capnp::client_message::Reader<'_> = reader.get_root()?;
         let cert = msg_reader.get_cert()?.to_vec();
         let conn_type: wire_af = msg_reader.get_connection_type()?;
         Ok(Self {
@@ -95,7 +95,7 @@ impl ServerMessage {
         W: tokio::io::AsyncWrite + Unpin,
     {
         let mut msg = ::capnp::message::Builder::new_default();
-        let mut builder = msg.init_root::<control_capnp::server_message::Builder>();
+        let mut builder = msg.init_root::<control_capnp::server_message::Builder<'_>>();
         builder.set_port(port);
         builder.set_cert(cert);
         builder.set_name(name);
@@ -112,7 +112,7 @@ impl ServerMessage {
     {
         let reader =
             capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
-        let msg_reader: control_capnp::server_message::Reader = reader.get_root()?;
+        let msg_reader: control_capnp::server_message::Reader<'_> = reader.get_root()?;
         let cert = msg_reader.get_cert()?.to_vec();
         let name = msg_reader.get_name()?.to_str()?.to_string();
         let port = msg_reader.get_port();
@@ -144,7 +144,7 @@ mod tests {
 
     pub fn encode_client(cert: &[u8]) -> Vec<u8> {
         let mut msg = ::capnp::message::Builder::new_default();
-        let mut client_msg = msg.init_root::<control_capnp::client_message::Builder>();
+        let mut client_msg = msg.init_root::<control_capnp::client_message::Builder<'_>>();
         client_msg.set_cert(cert);
         serialize::write_message_to_words(&msg)
     }
@@ -152,7 +152,7 @@ mod tests {
     pub fn decode_client(wire: &[u8]) -> Result<ClientMessage> {
         use control_capnp::client_message::{self};
         let reader = serialize::read_message(wire, ReaderOptions::new())?;
-        let cert_reader: client_message::Reader = reader.get_root()?;
+        let cert_reader: client_message::Reader<'_> = reader.get_root()?;
         let cert = Vec::<u8>::from(cert_reader.get_cert()?);
         let family: AddressFamily = cert_reader.get_connection_type()?.into();
         Ok(ClientMessage {
@@ -162,7 +162,7 @@ mod tests {
     }
     pub fn encode_server(port: u16, cert: &[u8]) -> Vec<u8> {
         let mut msg = ::capnp::message::Builder::new_default();
-        let mut server_msg = msg.init_root::<control_capnp::server_message::Builder>();
+        let mut server_msg = msg.init_root::<control_capnp::server_message::Builder<'_>>();
         server_msg.set_port(port);
         server_msg.set_cert(cert);
         serialize::write_message_to_words(&msg)
@@ -170,7 +170,7 @@ mod tests {
     pub fn decode_server(wire: &[u8]) -> Result<ServerMessage> {
         use control_capnp::server_message;
         let reader = serialize::read_message(wire, ReaderOptions::new())?;
-        let msg_reader: server_message::Reader = reader.get_root()?;
+        let msg_reader: server_message::Reader<'_> = reader.get_root()?;
         let cert = Vec::<u8>::from(msg_reader.get_cert()?);
         let port = msg_reader.get_port();
         Ok(ServerMessage {
