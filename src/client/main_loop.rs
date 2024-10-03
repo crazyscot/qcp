@@ -332,7 +332,6 @@ pub(crate) fn create_endpoint(
         error!("{e}");
         e
     })?;
-    let root_store = Arc::new(root_store);
 
     let tls_config = Arc::new(
         rustls::ClientConfig::builder()
@@ -340,15 +339,12 @@ pub(crate) fn create_endpoint(
             .with_client_auth_cert(credentials.cert_chain(), credentials.keypair.clone_key())?,
     );
 
-    let qcc = Arc::new(QuicClientConfig::try_from(tls_config)?);
-    let transport = crate::transport::config_factory(
+    let mut config = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
+    let _ = config.transport_config(crate::transport::config_factory(
         *args.bandwidth,
         args.rtt,
         args.initial_congestion_window,
-    )?;
-
-    let mut config = quinn::ClientConfig::new(qcc);
-    let _ = config.transport_config(transport);
+    )?);
 
     trace!("bind socket");
     let socket = util::socket::bind_unspecified_for(server_addr)?;

@@ -119,13 +119,11 @@ fn create_endpoint(
 
     let mut root_store = RootCertStore::empty();
     root_store.add(client_cert)?;
-    let root_store = Arc::new(root_store);
-    let verifier = WebPkiClientVerifier::builder(root_store.clone()).build()?;
-    let tls_config = rustls::ServerConfig::builder()
+    let verifier = WebPkiClientVerifier::builder(root_store.into()).build()?;
+    let mut tls_config = rustls::ServerConfig::builder()
         .with_client_cert_verifier(verifier)
         .with_single_cert(credentials.cert_chain(), credentials.keypair.clone_key())?;
-
-    // N.B.: in ServerConfig docs, max_early_data_size should be set to u32::MAX
+    tls_config.max_early_data_size = u32::MAX;
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
     let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
