@@ -37,6 +37,7 @@ impl Credentials {
     }
 
     /// Cloning accessor
+    #[must_use]
     pub fn cert_chain(&self) -> Vec<CertificateDer<'static>> {
         vec![self.certificate.clone()]
     }

@@ -7,6 +7,7 @@ use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
 use crate::transport;
+use crate::util::time::Stopwatch;
 use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
 use crate::{cert::Credentials, protocol};
 
@@ -33,10 +34,11 @@ const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 #[tokio::main]
-pub(crate) async fn client_main(args: CliArgs, progress: MultiProgress) -> anyhow::Result<bool> {
+#[allow(clippy::too_many_lines)]
+pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> anyhow::Result<bool> {
     // Caution: As we are using ProgressBar, anything to be printed to console should
     // use progress.println() !
-    let processed_args = UnpackedArgs::try_from(&args)?;
+    let processed_args = UnpackedArgs::try_from(args)?;
 
     let spinner = progress.add(ProgressBar::new_spinner());
     spinner.set_message("Setting up");
@@ -46,7 +48,7 @@ pub(crate) async fn client_main(args: CliArgs, progress: MultiProgress) -> anyho
     timers.next("setup");
 
     let span = trace_span!("CLIENT");
-    let _guard = span.enter();
+    let guard = span.enter();
     let credentials = crate::cert::Credentials::generate()?;
 
     let host = args.remote_host()?;
@@ -55,7 +57,7 @@ pub(crate) async fn client_main(args: CliArgs, progress: MultiProgress) -> anyho
     spinner.set_message("Connecting control channel...");
     timers.next("control channel");
     debug!("connecting to remote");
-    let mut server = launch_server(&args)?;
+    let mut server = launch_server(args)?;
 
     wait_for_banner(&mut server, args.timeout).await?;
     let mut server_input = server.stdin.take().unwrap();
@@ -91,7 +93,7 @@ pub(crate) async fn client_main(args: CliArgs, progress: MultiProgress) -> anyho
         &credentials,
         server_message.cert.into(),
         &server_address_port,
-        &args,
+        args,
     )?;
 
     debug!("Opening QUIC connection to {server_address_port:?}");
@@ -102,7 +104,7 @@ pub(crate) async fn client_main(args: CliArgs, progress: MultiProgress) -> anyho
     tokio::pin!(connection_fut, timeout_fut);
 
     let connection = tokio::select! {
-        _ = timeout_fut => {
+        () = timeout_fut => {
             anyhow::bail!("UDP connection to QUIC endpoint timed out");
         },
         c = &mut connection_fut => {
@@ -120,8 +122,7 @@ pub(crate) async fn client_main(args: CliArgs, progress: MultiProgress) -> anyho
     timers.next(SHOW_TIME);
     let result = manage_request(connection, processed_args, progress.clone()).await;
     let total_bytes = match result {
-        Ok(b) => b,
-        Err(b) => b,
+        Err(b) | Ok(b) => b,
     };
 
     timers.next("shutdown");
@@ -135,22 +136,22 @@ pub(crate) async fn client_main(args: CliArgs, progress: MultiProgress) -> anyho
     let timeout_fut = tokio::time::sleep(CONNECTION_TIMEOUT);
     tokio::pin!(closedown_fut, timeout_fut);
     tokio::select! {
-        _ = timeout_fut => warn!("QUIC shutdown timed out"),
-        _ = closedown_fut => (),
+        () = timeout_fut => warn!("QUIC shutdown timed out"),
+        () = closedown_fut => (),
     };
     trace!("waiting for child");
     let _ = server.wait().await?;
     trace!("finished");
     timers.stop();
 
-    drop(_guard);
+    drop(guard);
 
-    let transport_time = timers.find(SHOW_TIME).and_then(|sw| sw.elapsed());
+    let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
 
     if !args.quiet {
         crate::util::stats::output_statistics(
-            &args,
-            connection2.stats(),
+            args,
+            &connection2.stats(),
             total_bytes,
             transport_time,
         );
@@ -184,9 +185,8 @@ async fn manage_request(
     let mut total_bytes = 0u64;
     let mut success = true;
     loop {
-        let result = match tasks.join_next().await {
-            Some(res) => res,
-            None => break, // all have joined
+        let Some(result) = tasks.join_next().await else {
+            break;
         };
         // The first layer of possible errors are Join errors
         let result = match result {
@@ -352,6 +352,7 @@ pub(crate) fn create_endpoint(
 
     trace!("bind socket");
     let socket = util::socket::bind_unspecified_for(server_addr)?;
+    #[allow(clippy::cast_possible_truncation)]
     let _ = util::socket::set_udp_buffer_sizes(
         &socket,
         transport::SEND_BUFFER_SIZE,

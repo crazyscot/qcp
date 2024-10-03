@@ -31,8 +31,9 @@ fn use_long_style(terminal: &Term, msg_size: usize) -> bool {
 }
 
 pub(crate) fn progress_style_for(terminal: &Term, msg_size: usize) -> &str {
-    match use_long_style(terminal, msg_size) {
-        true => PROGRESS_STYLE_OVERLONG,
-        false => PROGRESS_STYLE_COMPACT,
+    if use_long_style(terminal, msg_size) {
+        PROGRESS_STYLE_OVERLONG
+    } else {
+        PROGRESS_STYLE_COMPACT
     }
 }

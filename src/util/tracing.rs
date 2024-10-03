@@ -14,7 +14,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter, Layer};
 const STANDARD_ENV_VAR: &str = "RUST_LOG";
 const LOG_FILE_DETAIL_ENV_VAR: &str = "RUST_LOG_FILE_DETAIL";
 
-/// Result type for filter_for()
+/// Result type for `filter_for()`
 struct FilterResult {
     filter: EnvFilter,
     used_env: bool, // Did we use the environment variable we were requested to?
@@ -41,12 +41,12 @@ fn filter_for(trace_level: &str, key: &str) -> anyhow::Result<FilterResult> {
         })
 }
 
-/// Set up rust tracing, to console (via an optional MultiProgress) and optionally to file.
+/// Set up rust tracing, to console (via an optional `MultiProgress`) and optionally to file.
 /// By default we log only our events (qcp), at a given trace level.
-/// This can be overridden by setting RUST_LOG.
-/// For examples, see https://docs.rs/tracing-subscriber/0.3.18/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables
+/// This can be overridden by setting `RUST_LOG`.
+/// For examples, see <https://docs.rs/tracing-subscriber/0.3.18/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables>
 /// CAUTION: If this function fails, tracing won't be set up; callers must take extra care to report the error.
-pub fn setup_tracing(
+pub fn setup(
     trace_level: &str,
     progress: Option<&MultiProgress>,
     filename: &Option<String>,
@@ -106,7 +106,7 @@ pub fn setup_tracing(
     Ok(())
 }
 
-/// A wrapper type so tracing can output in a way that doesn't mess up MultiProgress
+/// A wrapper type so tracing can output in a way that doesn't mess up `MultiProgress`
 struct ProgressWriter {
     progress: MultiProgress,
 }
@@ -141,5 +141,5 @@ pub(crate) fn setup_tracing_for_tests() {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_max_level(tracing::Level::DEBUG)
-        .init()
+        .init();
 }

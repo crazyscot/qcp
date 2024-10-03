@@ -17,20 +17,24 @@ pub struct DataRate {
 
 impl DataRate {
     /// Standard constructor
+    #[must_use]
     pub fn new(bytes: u64, time: Option<Duration>) -> Self {
         match time {
             None => Self { rate: None },
             Some(time) if time.is_zero() => Self { rate: None }, // divide by zero is not meaningful
             Some(time) => Self {
+                #[allow(clippy::cast_precision_loss)]
                 rate: Some((bytes as f64) / time.as_secs_f64()),
             },
         }
     }
     /// Accessor
+    #[must_use]
     pub fn byte_rate(&self) -> Option<f64> {
         self.rate
     }
     /// Converting accessor
+    #[must_use]
     pub fn bit_rate(&self) -> Option<f64> {
         self.rate.map(|r| r * 8.)
     }
@@ -47,7 +51,7 @@ impl Display for DataRate {
 
 pub(crate) fn output_statistics(
     args: &CliArgs,
-    stats: ConnectionStats,
+    stats: &ConnectionStats,
     payload_bytes: u64,
     transport_time: Option<Duration>,
 ) {
@@ -81,6 +85,7 @@ pub(crate) fn output_statistics(
             stats.udp_rx.datagrams.human_count_bare()
         );
         if payload_bytes != 0 {
+            #[allow(clippy::cast_precision_loss)]
             let overhead_pct = 100. * (total_bytes - payload_bytes) as f64 / payload_bytes as f64;
             info!(
                 "{} total bytes transferred for {} bytes payload  ({:.2}% overhead)",
@@ -91,9 +96,8 @@ pub(crate) fn output_statistics(
     if payload_bytes != 0 {
         let size = payload_bytes.human_count("B");
         let rate = crate::util::stats::DataRate::new(payload_bytes, transport_time);
-        let transport_time_str = transport_time
-            .map(|d| d.human_duration().to_string())
-            .unwrap_or("unknown".to_string());
+        let transport_time_str =
+            transport_time.map_or("unknown".to_string(), |d| d.human_duration().to_string());
         info!("Transferred {size} in {transport_time_str}; average {rate}");
     }
 }
@@ -122,7 +126,7 @@ mod tests {
     fn valid() {
         test_case(42, 1, "42B/s");
         test_case(1234, 1, "1.2kB/s");
-        test_case(10000000000, 500, "20MB/s");
-        test_case(1000000000000000, 1234, "810.37GB/s");
+        test_case(10_000_000_000, 500, "20MB/s");
+        test_case(1_000_000_000_000_000, 1234, "810.37GB/s");
     }
 }

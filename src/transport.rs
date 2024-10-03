@@ -7,31 +7,34 @@ use anyhow::Result;
 use quinn::{congestion::CubicConfig, TransportConfig};
 
 /// Network buffer size (hard-wired)
-pub const SEND_BUFFER_SIZE: usize = 1048576;
+pub const SEND_BUFFER_SIZE: usize = 1_048_576;
 
 /// Computes the theoretical receive window for a given bandwidth/RTT configuration
-pub fn receive_window_for(bandwidth_limit: u64, rtt_ms: u16) -> u32 {
-    (bandwidth_limit * (rtt_ms as u64) / 1000) as u32
+#[must_use]
+pub fn receive_window_for(bandwidth_limit: u64, rtt_ms: u16) -> u64 {
+    bandwidth_limit * u64::from(rtt_ms) / 1000
 }
 
 /// In some cases the theoretical receive window is less than the system default.
 /// In such a case, don't suggest setting it smaller, that would be silly.
-pub fn practical_receive_window_for(bandwidth_limit: u64, rtt_ms: u16) -> Result<u32> {
+pub fn practical_receive_window_for(bandwidth_limit: u64, rtt_ms: u16) -> Result<u64> {
     use std::net::UdpSocket;
     let theoretical = receive_window_for(bandwidth_limit, rtt_ms);
     let sock = UdpSocket::bind("0.0.0.0:0")?;
-    let current = crate::os::os::get_recvbuf(&sock)? as u32;
+    let current = crate::os::os::get_recvbuf(&sock)? as u64;
     Ok(std::cmp::max(theoretical, current))
 }
 
-/// Creates a config for quinn::TransportConfig
+/// Creates a config for `quinn::TransportConfig`
 pub fn config_factory(
     bandwidth_limit: u64,
     rtt_ms: u16,
     initial_window: u64,
 ) -> Result<Arc<TransportConfig>> {
-    let rtt = Duration::from_millis(rtt_ms as u64);
-    let receive_window = practical_receive_window_for(bandwidth_limit, rtt_ms)?;
+    let rtt = Duration::from_millis(u64::from(rtt_ms));
+    #[allow(clippy::cast_possible_truncation)]
+    let receive_window =
+        practical_receive_window_for(bandwidth_limit, rtt_ms)?.clamp(0, u64::from(u32::MAX)) as u32;
 
     let mut config = TransportConfig::default();
     let _ = config

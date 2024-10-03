@@ -63,6 +63,6 @@ pub fn lookup_host_by_family(host: &str, desired: AddressFamily) -> anyhow::Resu
         AddressFamily::IPv6 => it.find(|addr| addr.is_ipv6()),
     };
     found
-        .map(|i| i.to_owned())
+        .map(std::borrow::ToOwned::to_owned)
         .ok_or(anyhow::anyhow!("host {host} found, but not as {desired:?}"))
 }
