@@ -12,7 +12,7 @@
  * (Then they do whatever is appropriate for the command. See the notes in session.capnp.)
  */
 
-#[allow(missing_debug_implementations, single_use_lifetimes)]
+#[allow(missing_debug_implementations, single_use_lifetimes, unreachable_pub)]
 pub mod session_capnp {
     include!(concat!(env!("OUT_DIR"), "/session_capnp.rs"));
 }
