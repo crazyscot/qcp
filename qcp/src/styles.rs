@@ -15,13 +15,11 @@ pub fn get() -> clap::builder::Styles {
                 .underline()
                 .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Yellow))),
         )
-        .literal(
-            anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green))),
-        )
+        .literal(anstyle::Style::new().bold())
         .invalid(
             anstyle::Style::new()
                 .bold()
-                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red))),
+                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Yellow))),
         )
         .error(
             anstyle::Style::new()
@@ -32,9 +30,9 @@ pub fn get() -> clap::builder::Styles {
             anstyle::Style::new()
                 .bold()
                 .underline()
-                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green))),
+                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Cyan))),
         )
         .placeholder(
-            anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::White))),
+            anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Cyan))),
         )
 }
