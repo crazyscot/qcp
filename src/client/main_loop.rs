@@ -44,9 +44,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     let spinner = progress.add(ProgressBar::new_spinner());
     spinner.set_message("Setting up");
     spinner.enable_steady_tick(Duration::from_millis(150));
-
-    let mut timers = StopwatchChain::default();
-    timers.next("setup");
+    let mut timers = StopwatchChain::new_running("setup");
 
     let span = trace_span!("CLIENT");
     let guard = span.enter();

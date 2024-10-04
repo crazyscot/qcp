@@ -98,6 +98,13 @@ pub struct StopwatchChain {
 }
 
 impl StopwatchChain {
+    /// Convenience method: constructs and starts a stopwatch chain
+    #[must_use]
+    pub fn new_running(name: &str) -> Self {
+        let mut r = Self::default();
+        r.next(name);
+        r
+    }
     /// Stops the current stopwatch (if there is one), adds a new stopwatch to the chain and starts it.
     pub fn next(&mut self, name: &str) {
         let new1 = match self.watches.last_mut() {
