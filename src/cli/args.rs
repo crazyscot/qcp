@@ -58,9 +58,9 @@ pub(crate) struct CliArgs {
     #[arg(short = 's', long, alias("stats"), action, conflicts_with("quiet"))]
     pub statistics: bool,
 
-    /// The connection timeout on the control channel
-    #[arg(short, long, default_value("10"), value_name("seconds"))]
-    pub timeout: u16,
+    /// Connection timeout. This applies to the control channel, and QUIC endpoints alike.
+    /// This needs to be long enough for your network connection, but short enough to provide
+    /// a timely indication that ssh and/or UDP may be blocked.
     #[arg(short, long, default_value("5"), value_name("seconds"), value_parser=parse_duration)]
     pub timeout: Duration,
 

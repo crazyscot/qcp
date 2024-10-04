@@ -38,14 +38,7 @@ use std::fmt::Display;
 use anyhow::Result;
 use capnp::message::ReaderOptions;
 use session_capnp::Status;
-use tokio::time::Duration;
 use tokio_util::compat::TokioAsyncReadCompatExt as _;
-
-/// The standard timeout for either end to establish a QUIC (UDP) connection.
-/// This needs to be long enough to cope with network congestion but short enough
-/// to provide a reliable timely feedback mechanism to the user that there may be
-/// a firewall issue.
-pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Command packet
 #[derive(Debug, strum_macros::Display)]

@@ -9,7 +9,7 @@ use crate::cert::Credentials;
 use crate::cli::CliArgs;
 use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
-use crate::protocol::session::{Command, DEFAULT_CONNECTION_TIMEOUT};
+use crate::protocol::session::Command;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 use crate::{transport, util};
@@ -74,7 +74,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     // We have tight control over what we expect (TLS peer certificate/name) so only need to handle one successful connection,
     // but a timeout is useful to give the user a cue that UDP isn't getting there.
     trace!("waiting for QUIC");
-    if let Some(conn) = timeout(DEFAULT_CONNECTION_TIMEOUT, endpoint.accept())
+    if let Some(conn) = timeout(args.timeout, endpoint.accept())
         .await
         .with_context(|| "Timed out waiting for QUIC connection")?
     {
