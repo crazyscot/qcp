@@ -30,9 +30,6 @@ const PROTOCOL_TIMEOUT: Duration = Duration::from_secs(10);
 /// Main entrypoint
 #[tokio::main]
 pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
-    let span = trace_span!("SERVER");
-    let _guard = span.enter();
-
     let mut stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     // There are tricks you can use to get an unbuffered handle to stdout, but at a typing cost.
