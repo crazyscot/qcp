@@ -127,7 +127,7 @@ fn create_endpoint(
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
     let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
-    let _ = config.transport_config(crate::transport::config_factory(
+    let _ = config.transport_config(crate::transport::create_config(
         *args.bandwidth,
         args.rtt,
         args.initial_congestion_window,

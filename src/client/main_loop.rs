@@ -340,7 +340,7 @@ pub(crate) fn create_endpoint(
     );
 
     let mut config = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
-    let _ = config.transport_config(crate::transport::config_factory(
+    let _ = config.transport_config(crate::transport::create_config(
         *args.bandwidth,
         args.rtt,
         args.initial_congestion_window,
