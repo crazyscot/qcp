@@ -15,6 +15,9 @@ use tracing::{debug, info};
 /// Network buffer size (hard-wired)
 pub const SEND_BUFFER_SIZE: usize = 1_048_576;
 
+/// Keepalive interval for the QUIC connection
+pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
+
 const LOCALHOST_UNSPECIFIED: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
 
@@ -54,7 +57,10 @@ pub fn create_config(
         .stream_receive_window(receive_window.into())
         .send_window(send_window.into())
         .datagram_receive_buffer_size(Some(receive_window as usize))
-        .datagram_send_buffer_size(SEND_BUFFER_SIZE);
+        .datagram_send_buffer_size(SEND_BUFFER_SIZE)
+        .keep_alive_interval(Some(PROTOCOL_KEEPALIVE))
+        .allow_spin(true)
+        .crypto_buffer_size(receive_window as usize / 2);
 
     let mut cubic = CubicConfig::default();
     let _ = cubic.initial_window(initial_window);
