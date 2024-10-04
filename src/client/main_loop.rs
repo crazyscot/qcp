@@ -34,11 +34,9 @@ const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
+// Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 #[tokio::main]
-#[allow(clippy::too_many_lines)]
 pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> anyhow::Result<bool> {
-    // Caution: As we are using ProgressBar, anything to be printed to console should
-    // use progress.println() !
     let processed_args = UnpackedArgs::try_from(args)?;
 
     let spinner = progress.add(ProgressBar::new_spinner());
