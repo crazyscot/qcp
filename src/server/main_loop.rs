@@ -14,6 +14,7 @@ use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 use crate::{transport, util};
 
+use anyhow::Context as _;
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
@@ -21,7 +22,7 @@ use quinn::EndpointConfig;
 use rustls_pki_types::CertificateDer;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::task::JoinSet;
-use tokio::time::Duration;
+use tokio::time::{timeout, Duration};
 use tracing::{debug, error, info, trace, trace_span, warn};
 
 const PROTOCOL_TIMEOUT: Duration = Duration::from_secs(10);
@@ -77,31 +78,23 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     // Wait for a successful connection OR timeout OR for stdin to be closed (implicitly handled).
     // We have tight control over what we expect (TLS peer certificate/name) so only need to handle one successful connection,
     // but a timeout is useful to give the user a cue that UDP isn't getting there.
-    let endpoint_fut = endpoint.accept();
-    let timeout_fut = tokio::time::sleep(PROTOCOL_TIMEOUT);
-    tokio::pin!(endpoint_fut, timeout_fut);
-
-    trace!("main select");
-    tokio::select! {
-        e = &mut endpoint_fut => {
-            match e {
-                None => {
-                    info!("Endpoint was expectedly closed");
-                },
-                Some(conn) => {
-                    let conn_fut = handle_connection(conn);
-                    let _ = tasks.spawn(async move {
-                        if let Err(e) = conn_fut.await {
-                            error!("inward stream failed: {reason}", reason = e.to_string());
-                        }
-                        trace!("connection completed");
-                    });
-                },
-            };
-        },
-        () = &mut timeout_fut => {
-            info!("timed out waiting for connection");
-        },
+    trace!("waiting for QUIC");
+    match timeout(PROTOCOL_TIMEOUT, endpoint.accept())
+        .await
+        .with_context(|| "Timed out waiting for QUIC connection")?
+    {
+        None => {
+            info!("Endpoint was expectedly closed");
+        }
+        Some(conn) => {
+            let conn_fut = handle_connection(conn);
+            let _ = tasks.spawn(async move {
+                if let Err(e) = conn_fut.await {
+                    error!("inward stream failed: {reason}", reason = e.to_string());
+                }
+                trace!("connection completed");
+            });
+        }
     };
 
     // Graceful closedown. Wait for all connections and streams to finish.

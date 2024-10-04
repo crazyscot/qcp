@@ -105,23 +105,12 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     debug!("Opening QUIC connection to {server_address_port:?}");
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
 
-    let connection_fut = endpoint.connect(server_address_port, &server_message.name)?;
-    let timeout_fut = tokio::time::sleep(CONNECTION_TIMEOUT);
-    tokio::pin!(connection_fut, timeout_fut);
-
-    let connection = tokio::select! {
-        () = timeout_fut => {
-            anyhow::bail!("UDP connection to QUIC endpoint timed out");
-        },
-        c = &mut connection_fut => {
-            match c {
-                Ok(conn) => conn,
-                Err(e) => {
-                    anyhow::bail!("Failed to connect: {e}");
-                },
-            }
-        },
-    };
+    let connection = timeout(
+        CONNECTION_TIMEOUT,
+        endpoint.connect(server_address_port, &server_message.name)?,
+    )
+    .await
+    .with_context(|| "UDP connection to QUIC endpoint timed out")??;
     let connection2 = connection.clone();
 
     spinner.set_message("Transferring data");
@@ -138,13 +127,9 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     server_input.shutdown().await?;
     // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
     endpoint.close(1u8.into(), "finished".as_bytes());
-    let closedown_fut = endpoint.wait_idle();
-    let timeout_fut = tokio::time::sleep(CONNECTION_TIMEOUT);
-    tokio::pin!(closedown_fut, timeout_fut);
-    tokio::select! {
-        () = timeout_fut => warn!("QUIC shutdown timed out"),
-        () = closedown_fut => (),
-    };
+    let _ = timeout(CONNECTION_TIMEOUT, endpoint.wait_idle())
+        .await
+        .inspect_err(|_| warn!("QUIC shutdown timed out"));
     trace!("waiting for child");
     let _ = server.wait().await?;
     trace!("finished");
