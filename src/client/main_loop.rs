@@ -27,7 +27,7 @@ use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::process::Child;
 use tokio::time::Instant;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
-use tracing::{debug, error, info, span, trace, trace_span, warn, Level};
+use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _, Level};
 
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -44,8 +44,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     spinner.enable_steady_tick(Duration::from_millis(150));
     let mut timers = StopwatchChain::new_running("setup");
 
-    let span = trace_span!("CLIENT");
-    let guard = span.enter();
+    let guard = trace_span!("CLIENT").entered();
     let credentials = crate::cert::Credentials::generate()?;
 
     let host = args.remote_host()?;
@@ -168,6 +167,7 @@ async fn manage_request(
                 &processed,
                 mp.clone(),
             )
+            .instrument(trace_span!("GET", filename = processed.source.filename))
             .await
         } else {
             // This is a Put
@@ -178,6 +178,7 @@ async fn manage_request(
                 &processed,
                 mp.clone(),
             )
+            .instrument(trace_span!("PUT", filename = processed.source.filename))
             .await
         }
     });
@@ -296,8 +297,7 @@ pub(crate) fn create_endpoint(
     server_addr: &SocketAddr,
     args: &CliArgs,
 ) -> Result<quinn::Endpoint> {
-    let span = span!(Level::TRACE, "create_endpoint");
-    let _guard = span.enter();
+    let _ = span!(Level::TRACE, "create_endpoint").entered();
     let mut root_store = RootCertStore::empty();
     root_store.add(server_cert).map_err(|e| {
         error!("{e}");
@@ -348,10 +348,8 @@ async fn do_get(
     multi_progress: MultiProgress,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
-    let span = span!(Level::TRACE, "do_get", filename = filename);
-    let _guard = span.enter();
     let real_start = Instant::now();
-
+    trace!("send command");
     {
         let cmd = crate::protocol::session::Command::new_get(filename);
         let buf = cmd.serialize();
@@ -366,9 +364,8 @@ async fn do_get(
         anyhow::bail!(format!("GET ({filename}) failed: {response}"));
     }
 
-    trace!("starting");
     let header = FileHeader::read(&mut stream.recv).await?;
-    trace!("got {header:?}");
+    trace!("{header:?}");
 
     let mut file = crate::util::io::create_truncate_file(dest, &header).await?;
 
@@ -409,9 +406,6 @@ async fn do_put(
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
 
-    let span = span!(Level::TRACE, "do_put");
-    let _guard = span.enter();
-
     let path = PathBuf::from(src_filename);
     let (file, meta) = match crate::util::io::open_file(src_filename).await {
         Ok(res) => res,
@@ -432,7 +426,7 @@ async fn do_put(
     let progress_bar = progress_bar_for(&multi_progress, cli_args, steps)?;
     let mut outbound = progress_bar.wrap_async_write(stream.send);
 
-    trace!("starting");
+    trace!("sending command");
     let mut file = BufReader::with_capacity(crate::transport::SEND_BUFFER_SIZE * 2, file);
 
     {

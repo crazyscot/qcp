@@ -8,7 +8,7 @@ use super::args::CliArgs;
 use crate::{client, os::os, server, transport, util::setup_tracing};
 use clap::Parser;
 use indicatif::MultiProgress;
-use tracing::{error_span, trace_span};
+use tracing::error_span;
 
 /// Main CLI entrypoint
 pub fn cli() -> anyhow::Result<ExitCode> {
@@ -55,10 +55,7 @@ fn client_main(args: &CliArgs) -> anyhow::Result<ExitCode> {
 fn server_main(args: &CliArgs) -> anyhow::Result<ExitCode> {
     let trace_level = if args.debug { "trace" } else { "error" };
     setup_tracing(trace_level, None, &args.log_file).inspect_err(|e| eprintln!("{e:?}"))?;
-    let span = error_span!("SERVER");
-    let _guard = span.enter();
-    let span = trace_span!("SERVER");
-    let _guard = span.enter();
+    let _span = error_span!("SERVER").entered();
 
     server::main(args).map(|()| ExitCode::SUCCESS).map_err(|e| {
         tracing::error!("{e}");

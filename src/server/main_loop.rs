@@ -23,7 +23,7 @@ use rustls_pki_types::CertificateDer;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::task::JoinSet;
 use tokio::time::{timeout, Duration};
-use tracing::{debug, error, info, trace, trace_span, warn};
+use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
 const PROTOCOL_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -156,9 +156,6 @@ fn create_endpoint(
 }
 
 async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
-    let span = trace_span!("incoming");
-    let _guard = span.enter();
-
     let connection = conn.await?;
     info!("accepted connection from {}", connection.remote_address());
 
@@ -198,15 +195,21 @@ async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
     trace!("reading command");
     let cmd = Command::read(&mut sp.recv).await?;
     match cmd {
-        Command::Get(get) => handle_get(sp, get.filename).await,
-        Command::Put(put) => handle_put(sp, put.filename).await,
+        Command::Get(get) => {
+            handle_get(sp, get.filename.clone())
+                .instrument(trace_span!("SERVER:GET", filename = get.filename))
+                .await
+        }
+        Command::Put(put) => {
+            handle_put(sp, put.filename.clone())
+                .instrument(trace_span!("SERVER:PUT", destination = put.filename))
+                .await
+        }
     }
 }
 
 async fn handle_get(mut stream: StreamPair, filename: String) -> anyhow::Result<()> {
-    let span = tracing::span!(tracing::Level::TRACE, "GET", filename = filename);
-    let _guard = span.enter();
-    debug!("begin");
+    trace!("begin");
 
     let path = PathBuf::from(&filename);
     let (file, meta) = match crate::util::io::open_file(&filename).await {
@@ -257,9 +260,7 @@ async fn handle_get(mut stream: StreamPair, filename: String) -> anyhow::Result<
 }
 
 async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Result<()> {
-    let span = tracing::span!(tracing::Level::TRACE, "PUT");
-    let _guard = span.enter();
-    debug!("begin, destination={destination}");
+    trace!("begin");
 
     // Initial checks. Is the destination valid?
     let mut path = PathBuf::from(destination);
