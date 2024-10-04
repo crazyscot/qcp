@@ -154,6 +154,8 @@ fn create_endpoint(
         &socket,
         transport::SEND_BUFFER_SIZE,
         transport::receive_window_for(*args.bandwidth, args.rtt) as usize,
+        *args.bandwidth,
+        args.rtt,
     )?
     .inspect(|s| warn!("{s}"));
 

@@ -12,6 +12,8 @@ pub fn set_udp_buffer_sizes(
     socket: &UdpSocket,
     wanted_send: usize,
     wanted_recv: usize,
+    bandwidth_limit: u64,
+    rtt_ms: u16,
 ) -> anyhow::Result<Option<String>> {
     let mut send = os::get_sendbuf(socket)?;
     let mut recv = os::get_recvbuf(socket)?;
@@ -41,9 +43,8 @@ pub fn set_udp_buffer_sizes(
     recv = os::get_recvbuf(socket)?;
     let mut message: Option<String> = None;
     if send < wanted_send || recv < wanted_recv {
-        message = Some(
-        format!(
-            "Unable to set UDP send buffer sizes (send wanted {}, got {}; receive wanted {}, got {}). This may affect performance.",
+        message = Some(format!(
+            "Unable to set UDP buffer sizes (send wanted {}, got {}; receive wanted {}, got {}). This may affect performance.",
             wanted_send.human_count_bytes(),
             send.human_count_bytes(),
             wanted_recv.human_count_bytes(),
@@ -54,7 +55,10 @@ pub fn set_udp_buffer_sizes(
         }
         let mut args = std::env::args();
         let ego = args.next().unwrap_or("<this program>".to_string());
-        info!("For more information, run: `{} --help-buffers`", ego);
+        info!(
+            "For more information, run: `{} --help-buffers --bandwidth {bandwidth_limit} --rtt {rtt_ms}`",
+            ego
+        );
         // SOMEDAY: We might offer to set sysctl, write sysctl files, etc. if run as root.
     } else {
         debug!(
@@ -87,7 +91,7 @@ mod test {
     fn set_socket_bufsize() -> anyhow::Result<()> {
         setup_tracing_for_tests();
         let sock = UdpSocket::bind("0.0.0.0:0")?;
-        let _ = super::set_udp_buffer_sizes(&sock, 1_048_576, 10_485_760)?;
+        let _ = super::set_udp_buffer_sizes(&sock, 1_048_576, 10_485_760, 12_000_000, 300)?;
         Ok(())
     }
 }
