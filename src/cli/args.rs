@@ -170,7 +170,17 @@ impl FromStr for FileSpec {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.starts_with('[') {
             // Assume raw IPv6 address [1:2:3::4]:File
-            todo!("Raw IPv6 addresses are not yet implemented");
+            match s.split_once("]:") {
+                Some((hostish, filename)) => Ok(Self {
+                    // lose the leading bracket as well so it can be looked up as if a hostname
+                    host: Some(hostish[1..].to_owned()),
+                    filename: filename.into(),
+                }),
+                None => Ok(Self {
+                    host: None,
+                    filename: s.to_owned(),
+                }),
+            }
         } else {
             // Host:File or raw IPv4 address 1.2.3.4:File; or just a filename
             match s.split_once(':') {
@@ -258,10 +268,16 @@ mod test {
     }
 
     #[test]
-    #[ignore] // nyi
     fn bare_ipv6() -> Res {
         let fs = FileSpec::from_str("[1:2:3:4::5]:file")?;
-        assert_eq!(fs.host.unwrap(), "[1:2:3:4::5]");
+        assert_eq!(fs.host.unwrap(), "1:2:3:4::5");
+        assert_eq!(fs.filename, "file");
+        Ok(())
+    }
+    #[test]
+    fn bare_ipv6_localhost() -> Res {
+        let fs = FileSpec::from_str("[::1]:file")?;
+        assert_eq!(fs.host.unwrap(), "::1");
         assert_eq!(fs.filename, "file");
         Ok(())
     }
