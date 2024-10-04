@@ -19,12 +19,17 @@ fn bsdish() -> bool {
 pub(crate) struct Unix {}
 
 impl Unix {
-    // Caution: On Linux, according to socket(7), the kernel doubles the buffer size
-    // you set in setsockopt, and returns the doubled value in getsockopt!
-
-    /// Wrapper for getsockopt `SO_SNDBUF`
+    /// Wrapper for getsockopt `SO_SNDBUF`.
+    /// On Linux, this call halves the number returned from the kernel.
+    /// This takes account of kernel behaviour: the internal buffer
+    /// allocation is _double_ the size you set with setsockopt,
+    /// and getsockopt returns the doubled value.
     pub(crate) fn get_sendbuf(socket: &UdpSocket) -> Result<usize> {
-        Ok(socket::getsockopt(socket, sockopt::SndBuf)?)
+        #[cfg(target_os = "linux")]
+        let divisor = 2;
+        #[cfg(not(target_os = "linux"))]
+        let divisor = 1;
+        Ok(socket::getsockopt(socket, sockopt::SndBuf)? / divisor)
     }
 
     /// Wrapper for setsockopt `SO_SNDBUF`
@@ -39,9 +44,17 @@ impl Unix {
         Ok(())
     }
 
-    /// Wrapper for getsockopt `SO_RCVBUF`
+    /// Wrapper for getsockopt `SO_RCVBUF`.
+    /// On Linux, this call halves the number returned from the kernel.
+    /// This takes account of kernel behaviour: the internal buffer
+    /// allocation is _double_ the size you set with setsockopt,
+    /// and getsockopt returns the doubled value.
     pub(crate) fn get_recvbuf(socket: &UdpSocket) -> Result<usize> {
-        Ok(socket::getsockopt(socket, sockopt::RcvBuf)?)
+        #[cfg(target_os = "linux")]
+        let divisor = 2;
+        #[cfg(not(target_os = "linux"))]
+        let divisor = 1;
+        Ok(socket::getsockopt(socket, sockopt::RcvBuf)? / divisor)
     }
 
     /// Wrapper for setsockopt `SO_RCVBUF`
