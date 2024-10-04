@@ -76,23 +76,19 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     // We have tight control over what we expect (TLS peer certificate/name) so only need to handle one successful connection,
     // but a timeout is useful to give the user a cue that UDP isn't getting there.
     trace!("waiting for QUIC");
-    match timeout(PROTOCOL_TIMEOUT, endpoint.accept())
+    if let Some(conn) = timeout(PROTOCOL_TIMEOUT, endpoint.accept())
         .await
         .with_context(|| "Timed out waiting for QUIC connection")?
     {
-        None => {
-            info!("Endpoint was expectedly closed");
-        }
-        Some(conn) => {
-            let conn_fut = handle_connection(conn);
-            let _ = tasks.spawn(async move {
-                if let Err(e) = conn_fut.await {
-                    error!("inward stream failed: {reason}", reason = e.to_string());
-                }
-                trace!("connection completed");
-            });
-        }
-    };
+        let _ = tasks.spawn(async move {
+            if let Err(e) = handle_connection(conn).await {
+                error!("inward stream failed: {reason}", reason = e.to_string());
+            }
+            trace!("connection completed");
+        });
+    } else {
+        info!("Endpoint was expectedly closed");
+    }
 
     // Graceful closedown. Wait for all connections and streams to finish.
     info!("waiting for completion");
