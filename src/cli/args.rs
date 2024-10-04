@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use crate::{build_info, util::AddressFamily};
 use clap::Parser;
-use human_units::Size;
+use humanize_rs::bytes::Bytes;
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
 const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
@@ -85,8 +85,8 @@ pub(crate) struct CliArgs {
     /// e.g. "10M" or "256k". Note that this is described in bytes, not bits;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable upper limit.
-    #[arg(short('b'), long, help_heading("Network tuning"), display_order(50), default_value("12M"), value_name="bytes", value_parser=clap::value_parser!(Size))]
-    pub bandwidth: Size,
+    #[arg(short('b'), long, help_heading("Network tuning"), display_order(50), default_value("12M"), value_name="bytes", value_parser=clap::value_parser!(Bytes))]
+    pub bandwidth: Bytes,
 
     /// The expected network Round Trip time to the target system, in milliseconds.
     /// Along with the bandwidth limit, this directly affects the buffer sizes used.
@@ -154,6 +154,10 @@ impl CliArgs {
             .host
             .as_ref()
             .unwrap_or_else(|| dest.host.as_ref().unwrap()))
+    }
+
+    pub(crate) fn bandwidth_bytes(&self) -> anyhow::Result<u64> {
+        Ok(self.bandwidth.size().try_into()?)
     }
 }
 
@@ -232,6 +236,8 @@ impl TryFrom<&CliArgs> for UnpackedArgs {
 #[cfg(test)]
 mod test {
     type Res = anyhow::Result<()>;
+    use human_repr::HumanCount;
+
     use super::FileSpec;
     use std::str::FromStr;
 
@@ -280,5 +286,16 @@ mod test {
         assert_eq!(fs.host.unwrap(), "::1");
         assert_eq!(fs.filename, "file");
         Ok(())
+    }
+    #[test]
+    fn size_is_kb_not_kib() {
+        // same mechanism that clap uses
+        use humanize_rs::bytes::Bytes;
+        let s = "1k".parse::<Bytes>().unwrap();
+        assert_eq!(s.size(), 1000);
+    }
+    #[test]
+    fn human_repr_test() {
+        assert_eq!(1000.human_count_bare(), "1k");
     }
 }

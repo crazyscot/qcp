@@ -53,7 +53,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
         client_message.connection_type,
     );
 
-    let bandwidth_info = transport::network_config_info(*args.bandwidth, args.rtt);
+    let bandwidth_info = transport::network_config_info(args.bandwidth_bytes()?, args.rtt);
 
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
@@ -119,6 +119,7 @@ fn create_endpoint(
     args: &CliArgs,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
+    let bandwidth_bytes: u64 = args.bandwidth_bytes()?;
 
     let mut root_store = RootCertStore::empty();
     root_store.add(client_cert)?;
@@ -131,7 +132,7 @@ fn create_endpoint(
     let qsc = QuicServerConfig::try_from(tls_config)?;
     let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
     let _ = config.transport_config(crate::transport::create_config(
-        *args.bandwidth,
+        bandwidth_bytes,
         args.rtt,
         args.initial_congestion_window,
     )?);
@@ -153,8 +154,8 @@ fn create_endpoint(
     let warning = util::socket::set_udp_buffer_sizes(
         &socket,
         transport::SEND_BUFFER_SIZE,
-        transport::receive_window_for(*args.bandwidth, args.rtt) as usize,
-        *args.bandwidth,
+        transport::receive_window_for(bandwidth_bytes, args.rtt) as usize,
+        bandwidth_bytes,
         args.rtt,
     )?
     .inspect(|s| warn!("{s}"));

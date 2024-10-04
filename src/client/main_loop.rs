@@ -13,6 +13,7 @@ use crate::{cert::Credentials, protocol};
 
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
+use human_repr::HumanCount;
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection, EndpointConfig};
@@ -285,7 +286,7 @@ fn launch_server(args: &CliArgs) -> Result<Child> {
         "qcp",
         "--server",
         "-b",
-        &args.bandwidth.to_string(),
+        &args.bandwidth.size().human_count_bare().to_string(),
         "--rtt",
         &args.rtt.to_string(),
     ]);
@@ -337,6 +338,7 @@ pub(crate) fn create_endpoint(
         error!("{e}");
         e
     })?;
+    let bandwidth_bytes: u64 = args.bandwidth_bytes()?;
 
     let tls_config = Arc::new(
         rustls::ClientConfig::builder()
@@ -346,7 +348,7 @@ pub(crate) fn create_endpoint(
 
     let mut config = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
     let _ = config.transport_config(crate::transport::create_config(
-        *args.bandwidth,
+        bandwidth_bytes,
         args.rtt,
         args.initial_congestion_window,
     )?);
@@ -357,8 +359,8 @@ pub(crate) fn create_endpoint(
     let _ = util::socket::set_udp_buffer_sizes(
         &socket,
         transport::SEND_BUFFER_SIZE,
-        transport::receive_window_for(*args.bandwidth, args.rtt) as usize,
-        *args.bandwidth,
+        transport::receive_window_for(bandwidth_bytes, args.rtt) as usize,
+        bandwidth_bytes,
         args.rtt,
     )?
     .inspect(|msg| warn!("{msg}"));
