@@ -53,6 +53,8 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
         client_message.connection_type,
     );
 
+    let bandwidth_info = transport::network_config_info(*args.bandwidth, args.rtt);
+
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
     let (endpoint, warning) = create_endpoint(&credentials, client_message, args)?;
@@ -64,6 +66,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
         &credentials.certificate,
         &credentials.hostname,
         warning.as_deref(),
+        &bandwidth_info,
     )
     .await?;
     stdout.flush().await?;

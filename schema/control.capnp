@@ -16,4 +16,5 @@ struct ServerMessage {
     cert @1: Data; # Server's self-signed certificate (DER)
     name @2: Text; # Name in the server cert (this saves us having to unpick it from the certificate)
     warning @3: Text; # If present, a warning message to be relayed to a human
+    bandwidthInfo @4: Text; # Reports the server's active bandwidth configuration
 }

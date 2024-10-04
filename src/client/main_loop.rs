@@ -76,7 +76,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
         server_message.cert.len(),
         server_message.port,
         server_message.name,
-        server_message.warning
+        server_message.warning,
     );
     if let Some(w) = server_message.warning {
         warn!("Remote endpoint warning: {w}");
@@ -95,6 +95,11 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
         &server_address_port,
         args,
     )?;
+
+    debug!(
+        "Remote endpoint network config: {}",
+        server_message.bandwidth_info
+    );
 
     debug!("Opening QUIC connection to {server_address_port:?}");
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);

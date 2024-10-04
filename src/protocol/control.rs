@@ -101,6 +101,8 @@ pub struct ServerMessage {
     pub name: String,
     /// Server warning message (if any)
     pub warning: Option<String>,
+    /// Server bandwidth information message
+    pub bandwidth_info: String,
 }
 
 impl ServerMessage {
@@ -112,6 +114,7 @@ impl ServerMessage {
         cert: &[u8],
         name: &str,
         warning: Option<&str>,
+        bandwidth_info: &str,
     ) -> Result<()>
     where
         W: tokio::io::AsyncWrite + Unpin,
@@ -124,6 +127,7 @@ impl ServerMessage {
         if let Some(w) = warning {
             builder.set_warning(w);
         }
+        builder.set_bandwidth_info(bandwidth_info);
         capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
         Ok(())
     }
@@ -145,11 +149,13 @@ impl ServerMessage {
         } else {
             Some(warning)
         };
+        let bandwidth_info = msg_reader.get_bandwidth_info()?.to_str()?.to_string();
         Ok(Self {
             port,
             cert,
             name,
             warning,
+            bandwidth_info,
         })
     }
 }
@@ -201,6 +207,7 @@ mod tests {
             cert,
             name: "localhost".to_string(),
             warning: Some("foo".to_string()),
+            bandwidth_info: "bar".into(),
         })
     }
 
