@@ -91,7 +91,6 @@ impl ClientMessage {
 }
 
 /// Rust type analogue to the capnproto struct
-#[derive(Debug)]
 pub struct ServerMessage {
     /// Port the server is bound to
     pub port: u16,
@@ -103,6 +102,18 @@ pub struct ServerMessage {
     pub warning: Option<String>,
     /// Server bandwidth information message
     pub bandwidth_info: String,
+}
+
+impl std::fmt::Debug for ServerMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServerMessage")
+            .field("port", &self.port)
+            .field("cert length", &self.cert.len())
+            .field("name", &self.name)
+            .field("warning", &self.warning)
+            .field("bandwidth_info", &self.bandwidth_info)
+            .finish()
+    }
 }
 
 impl ServerMessage {

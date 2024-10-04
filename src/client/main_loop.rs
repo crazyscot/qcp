@@ -72,13 +72,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     let mut server_output = server.stdout.take().unwrap();
     trace!("waiting for server message");
     let server_message = ServerMessage::read(&mut server_output).await?;
-    debug!(
-        "Got server message; cert length {}, port {}, hostname {}, warning {:?}",
-        server_message.cert.len(),
-        server_message.port,
-        server_message.name,
-        server_message.warning,
-    );
+    debug!("Got server message {server_message:?}");
     if let Some(w) = server_message.warning {
         warn!("Remote endpoint warning: {w}");
     }
