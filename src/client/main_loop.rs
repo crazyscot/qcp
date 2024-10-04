@@ -299,7 +299,7 @@ async fn wait_for_banner(server: &mut Child, timeout_s: u16) -> Result<()> {
     let channel = server.stdout.as_mut().expect("missing server stdout");
     let mut buf = [0u8; BANNER.len()];
     let mut reader = channel.take(buf.len() as u64);
-    let n_fut = reader.read(&mut buf);
+    let n_fut = reader.read_exact(&mut buf);
 
     let n = timeout(Duration::from_secs(timeout_s.into()), n_fut)
         .await
