@@ -268,14 +268,14 @@ fn launch_server(args: &CliArgs) -> Result<Child> {
         .context("Could not launch control connection to remote server")
 }
 
-async fn wait_for_banner(server: &mut Child, timeout_s: u16) -> Result<()> {
+async fn wait_for_banner(server: &mut Child, limit: Duration) -> Result<()> {
     use protocol::control::BANNER;
     let channel = server.stdout.as_mut().expect("missing server stdout");
     let mut buf = [0u8; BANNER.len()];
     let mut reader = channel.take(buf.len() as u64);
     let n_fut = reader.read_exact(&mut buf);
 
-    let n = timeout(Duration::from_secs(timeout_s.into()), n_fut)
+    let n = timeout(limit, n_fut)
         .await
         .with_context(|| "timed out reading server banner")??;
 

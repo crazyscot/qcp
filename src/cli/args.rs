@@ -6,9 +6,15 @@ use std::str::FromStr;
 use crate::{build_info, util::AddressFamily};
 use clap::Parser;
 use humanize_rs::bytes::Bytes;
+use tokio::time::Duration;
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
 const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
+
+fn parse_duration(arg: &str) -> Result<std::time::Duration, std::num::ParseIntError> {
+    let seconds = arg.parse()?;
+    Ok(std::time::Duration::from_secs(seconds))
+}
 
 #[derive(Debug, Parser, Clone)]
 #[command(
@@ -55,6 +61,8 @@ pub(crate) struct CliArgs {
     /// The connection timeout on the control channel
     #[arg(short, long, default_value("10"), value_name("seconds"))]
     pub timeout: u16,
+    #[arg(short, long, default_value("5"), value_name("seconds"), value_parser=parse_duration)]
+    pub timeout: Duration,
 
     /// Forces IPv4 connection (default: autodetect)
     #[arg(short = '4', long, action)]
