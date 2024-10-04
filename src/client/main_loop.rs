@@ -175,17 +175,36 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
 /// On error: returns the number of bytes that were transferred, as far as we know.
 async fn manage_request(
     connection: Connection,
-    args: UnpackedArgs,
-    progress: MultiProgress,
+    processed: UnpackedArgs,
+    mp: MultiProgress,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
     let _jh = tasks.spawn(async move {
         // This async block returns a Result<u64>
         let sp = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
-
         // Called function returns its payload size.
         // This async block reports on errors.
-        process_request(sp, args, progress).await
+        if processed.source.host.is_some() {
+            // This is a Get
+            do_get(
+                sp,
+                &processed.source.filename,
+                &processed.destination.filename,
+                &processed,
+                mp.clone(),
+            )
+            .await
+        } else {
+            // This is a Put
+            do_put(
+                sp,
+                &processed.source.filename,
+                &processed.destination.filename,
+                &processed,
+                mp.clone(),
+            )
+            .await
+        }
     });
 
     let mut total_bytes = 0u64;
@@ -246,35 +265,6 @@ fn progress_bar_for(mp: &MultiProgress, args: &UnpackedArgs, steps: u64) -> Resu
             .with_message(display_filename)
             .with_finish(ProgressFinish::Abandon),
     ))
-}
-
-/// Deal with a single request
-async fn process_request(
-    sp: (quinn::SendStream, quinn::RecvStream),
-    processed: UnpackedArgs,
-    mp: MultiProgress,
-) -> anyhow::Result<u64> {
-    if processed.source.host.is_some() {
-        // This is a Get
-        do_get(
-            sp,
-            &processed.source.filename,
-            &processed.destination.filename,
-            &processed,
-            mp.clone(),
-        )
-        .await
-    } else {
-        // This is a Put
-        do_put(
-            sp,
-            &processed.source.filename,
-            &processed.destination.filename,
-            &processed,
-            mp.clone(),
-        )
-        .await
-    }
 }
 
 fn launch_server(args: &CliArgs) -> Result<Child> {
