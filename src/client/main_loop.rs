@@ -4,7 +4,7 @@
 use crate::cli::{CliArgs, UnpackedArgs};
 use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::session_capnp::Status;
-use crate::protocol::session::{FileHeader, FileTrailer, Response};
+use crate::protocol::session::{FileHeader, FileTrailer, Response, DEFAULT_CONNECTION_TIMEOUT};
 use crate::protocol::{RawStreamPair, StreamPair};
 use crate::transport;
 use crate::util::time::Stopwatch;
@@ -28,8 +28,6 @@ use tokio::process::Child;
 use tokio::time::Instant;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _, Level};
-
-const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 const SHOW_TIME: &str = "file transfer";
 
@@ -95,7 +93,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
 
     let connection = timeout(
-        CONNECTION_TIMEOUT,
+        DEFAULT_CONNECTION_TIMEOUT,
         endpoint.connect(server_address_port, &server_message.name)?,
     )
     .await
@@ -116,7 +114,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     server_input.shutdown().await?;
     // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
     endpoint.close(1u8.into(), "finished".as_bytes());
-    let _ = timeout(CONNECTION_TIMEOUT, endpoint.wait_idle())
+    let _ = timeout(DEFAULT_CONNECTION_TIMEOUT, endpoint.wait_idle())
         .await
         .inspect_err(|_| warn!("QUIC shutdown timed out"));
     trace!("waiting for child");
