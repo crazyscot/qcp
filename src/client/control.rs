@@ -46,7 +46,8 @@ pub struct ControlChannel {
 }
 
 impl ControlChannel {
-    /// A reasonably controlled shutdown
+    /// A reasonably controlled shutdown.
+    /// (If you want to be rough, simply drop the `ControlChannel`.)
     pub async fn close(&mut self) -> Result<()> {
         // wait() closes the child process stdin
         let _ = self.process.wait().await?;
@@ -85,6 +86,7 @@ impl ControlChannel {
     /// This is effectively a constructor. At present, it launches a subprocess.
     fn launch(args: &Parameters) -> Result<Self> {
         let mut server = tokio::process::Command::new("ssh");
+        let _ = server.kill_on_drop(true);
         // TODO extra ssh options
         let _ = server.args([
             &args.remote_host,

@@ -32,19 +32,19 @@ const SHOW_TIME: &str = "file transfer";
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 #[tokio::main]
 pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> anyhow::Result<bool> {
+    let guard = trace_span!("CLIENT").entered();
     let processed_args = UnpackedArgs::try_from(args)?;
-
     let spinner = progress.add(ProgressBar::new_spinner());
     spinner.set_message("Setting up");
     spinner.enable_steady_tick(Duration::from_millis(150));
     let mut timers = StopwatchChain::new_running("setup");
 
-    let guard = trace_span!("CLIENT").entered();
+    // Prep --------------------------
     let credentials = crate::cert::Credentials::generate()?;
-
     let host = args.remote_host()?;
     let server_address = lookup_host_by_family(host, args.address_family())?;
 
+    // Control channel ---------------
     spinner.set_message("Connecting control channel...");
     timers.next("control channel");
     let (mut control, server_message) =
@@ -54,28 +54,26 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
         warn!("Remote endpoint warning: {w}");
     }
 
+    // Data channel ------------------
     let server_address_port = match server_address {
         std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, server_message.port).into(),
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
     spinner.set_message("Establishing data channel");
-    timers.next("quic setup");
+    timers.next("data channel setup");
     let endpoint = create_endpoint(
         &credentials,
         server_message.cert.into(),
         &server_address_port,
         args,
     )?;
-
     debug!(
         "Remote endpoint network config: {}",
         server_message.bandwidth_info
     );
-
     debug!("Opening QUIC connection to {server_address_port:?}");
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
-
     let connection = timeout(
         args.timeout,
         endpoint.connect(server_address_port, &server_message.name)?,
@@ -84,6 +82,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     .with_context(|| "UDP connection to QUIC endpoint timed out")??;
     let connection2 = connection.clone();
 
+    // Show time! ---------------------
     spinner.set_message("Transferring data");
     timers.next(SHOW_TIME);
     let result = manage_request(connection, processed_args, progress.clone()).await;
@@ -91,25 +90,28 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
         Err(b) | Ok(b) => b,
     };
 
+    // Closedown ----------------------
     timers.next("shutdown");
     spinner.set_message("Shutting down");
-    debug!("shutting down");
     // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
     endpoint.close(1u8.into(), "finished".as_bytes());
     let control_fut = control.close();
     let _ = timeout(args.timeout, endpoint.wait_idle())
         .await
-        .inspect_err(|_| warn!("QUIC shutdown timed out"));
-    trace!("waiting for child");
-    control_fut.await?;
+        .inspect_err(|_| warn!("QUIC shutdown timed out")); // otherwise ignore errors
+    trace!("QUIC closed; waiting for control channel");
+    let _ = timeout(args.timeout, control_fut)
+        .await
+        .inspect_err(|_| warn!("control channel timed out"));
+    // Ignore errors. If the control channel closedown times out, we expect its drop handler will do the Right Thing.
+
     trace!("finished");
     timers.stop();
-
     drop(guard);
 
-    let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
-
+    // Post-transfer chatter -----------
     if !args.quiet {
+        let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
         crate::util::stats::output_statistics(
             args,
             &connection2.stats(),
