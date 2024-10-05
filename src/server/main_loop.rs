@@ -213,13 +213,11 @@ async fn handle_get(mut stream: StreamPair, filename: String) -> anyhow::Result<
     let (file, meta) = match crate::util::io::open_file(&filename).await {
         Ok(res) => res,
         Err((status, message, _)) => {
-            send_response(&mut stream.send, status, message.as_deref()).await?;
-            return Ok(());
+            return send_response(&mut stream.send, status, message.as_deref()).await;
         }
     };
     if meta.is_dir() {
-        send_response(&mut stream.send, Status::ItIsADirectory, None).await?;
-        return Ok(());
+        return send_response(&mut stream.send, Status::ItIsADirectory, None).await;
     }
     let mut file = BufReader::with_capacity(crate::transport::SEND_BUFFER_SIZE * 2, file);
 
@@ -272,13 +270,12 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
     let append_filename = if path.is_dir() || path.is_file() {
         // Destination exists
         if !crate::util::io::dest_is_writeable(&path).await {
-            send_response(
+            return send_response(
                 &mut stream.send,
                 Status::IncorrectPermissions,
                 Some("cannot write to destination"),
             )
-            .await?;
-            return Ok(());
+            .await;
         }
         // append filename only if it is a directory
         path.is_dir()
@@ -292,20 +289,18 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
         }
         if path_test.is_dir() {
             if !crate::util::io::dest_is_writeable(&path_test).await {
-                send_response(
+                return send_response(
                     &mut stream.send,
                     Status::IncorrectPermissions,
                     Some("cannot write to destination"),
                 )
-                .await?;
-                return Ok(());
+                .await;
             }
             // Yes, we can write there; destination path is fully specified.
             false
         } else {
             // No parent directory
-            send_response(&mut stream.send, Status::DirectoryDoesNotExist, None).await?;
-            return Ok(());
+            return send_response(&mut stream.send, Status::DirectoryDoesNotExist, None).await;
         }
     };
 
@@ -364,6 +359,5 @@ async fn send_response(
     message: Option<&str>,
 ) -> anyhow::Result<()> {
     let buf = Response::serialize_direct(status, message);
-    send.write_all(&buf).await?;
-    Ok(())
+    Ok(send.write_all(&buf).await?)
 }
