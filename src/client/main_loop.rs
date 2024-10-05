@@ -1,19 +1,18 @@
 // qcp client event loop
 // (c) 2024 Ross Younger
 
+use crate::cert::Credentials;
 use crate::cli::{CliArgs, UnpackedArgs};
-use crate::protocol::control::{ClientMessage, ServerMessage};
+use crate::client::control::ControlChannel;
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
 use crate::transport;
 use crate::util::time::Stopwatch;
 use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
-use crate::{cert::Credentials, protocol};
 
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
-use human_repr::HumanCount;
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{rustls, Connection, EndpointConfig};
@@ -21,10 +20,8 @@ use rustls::RootCertStore;
 use rustls_pki_types::CertificateDer;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::{AsyncWriteExt, BufReader};
-use tokio::process::Child;
 use tokio::time::Instant;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _, Level};
@@ -50,21 +47,8 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
 
     spinner.set_message("Connecting control channel...");
     timers.next("control channel");
-    debug!("connecting to remote");
-    let mut server = launch_server(args)?;
-
-    wait_for_banner(&mut server, args.timeout).await?;
-    let mut server_input = server.stdin.take().unwrap();
-    ClientMessage::write(
-        &mut server_input,
-        &credentials.certificate,
-        server_address.into(),
-    )
-    .await?;
-
-    let mut server_output = server.stdout.take().unwrap();
-    trace!("waiting for server message");
-    let server_message = ServerMessage::read(&mut server_output).await?;
+    let (mut control, server_message) =
+        ControlChannel::transact(&args.try_into()?, &credentials, server_address).await?;
     debug!("Got server message {server_message:?}");
     if let Some(w) = server_message.warning {
         warn!("Remote endpoint warning: {w}");
@@ -110,15 +94,14 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     timers.next("shutdown");
     spinner.set_message("Shutting down");
     debug!("shutting down");
-    // close child process stdin, which should trigger its exit
-    server_input.shutdown().await?;
     // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
     endpoint.close(1u8.into(), "finished".as_bytes());
+    let control_fut = control.close();
     let _ = timeout(args.timeout, endpoint.wait_idle())
         .await
         .inspect_err(|_| warn!("QUIC shutdown timed out"));
     trace!("waiting for child");
-    let _ = server.wait().await?;
+    control_fut.await?;
     trace!("finished");
     timers.stop();
 
@@ -241,50 +224,6 @@ fn progress_bar_for(mp: &MultiProgress, args: &UnpackedArgs, steps: u64) -> Resu
     ))
 }
 
-fn launch_server(args: &CliArgs) -> Result<Child> {
-    let remote_host = args.remote_host()?;
-    let mut server = tokio::process::Command::new("ssh");
-    // TODO extra ssh options
-    let _ = server.args([
-        remote_host,
-        "qcp",
-        "--server",
-        "-b",
-        &args.bandwidth.size().human_count_bare().to_string(),
-        "--rtt",
-        &args.rtt.to_string(),
-    ]);
-    if args.remote_debug {
-        let _ = server.arg("--debug");
-    }
-    let _ = server
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit()) // TODO: pipe this more nicely, output on error?
-        .kill_on_drop(true);
-    trace!("spawning command: {:?}", server);
-    server
-        .spawn()
-        .context("Could not launch control connection to remote server")
-}
-
-async fn wait_for_banner(server: &mut Child, limit: Duration) -> Result<()> {
-    use protocol::control::BANNER;
-    let channel = server.stdout.as_mut().expect("missing server stdout");
-    let mut buf = [0u8; BANNER.len()];
-    let mut reader = channel.take(buf.len() as u64);
-    let n_fut = reader.read_exact(&mut buf);
-
-    let n = timeout(limit, n_fut)
-        .await
-        .with_context(|| "timed out reading server banner")??;
-
-    let read_banner = std::str::from_utf8(&buf).with_context(|| "bad server banner")?;
-    anyhow::ensure!(n != 0, "failed to connect"); // the process closed its stdout
-    anyhow::ensure!(BANNER == read_banner, "server banner not as expected");
-    Ok(())
-}
-
 /// Creates the client endpoint:
 /// `credentials` are generated locally.
 /// `server_cert` comes from the control channel server message.
@@ -301,7 +240,7 @@ pub(crate) fn create_endpoint(
         error!("{e}");
         e
     })?;
-    let bandwidth_bytes: u64 = args.bandwidth_bytes()?;
+    let bandwidth_bytes: u64 = args.bandwidth.size();
 
     let tls_config = Arc::new(
         rustls::ClientConfig::builder()

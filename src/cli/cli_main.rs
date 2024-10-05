@@ -18,7 +18,7 @@ pub fn cli() -> anyhow::Result<ExitCode> {
         let send_window = transport::SEND_BUFFER_SIZE;
         #[allow(clippy::cast_possible_truncation)]
         let recv_window =
-            transport::practical_receive_window_for(args.bandwidth_bytes()?, args.rtt)? as usize;
+            transport::practical_receive_window_for(args.bandwidth.size(), args.rtt)? as usize;
         os::print_udp_buffer_size_help_message(recv_window, send_window);
         return Ok(ExitCode::SUCCESS);
     }

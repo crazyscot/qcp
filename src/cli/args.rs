@@ -93,8 +93,8 @@ pub(crate) struct CliArgs {
     /// e.g. "10M" or "256k". Note that this is described in bytes, not bits;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable upper limit.
-    #[arg(short('b'), long, help_heading("Network tuning"), display_order(50), default_value("12M"), value_name="bytes", value_parser=clap::value_parser!(Bytes))]
-    pub bandwidth: Bytes,
+    #[arg(short('b'), long, help_heading("Network tuning"), display_order(50), default_value("12M"), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
+    pub bandwidth: Bytes<u64>,
 
     /// The expected network Round Trip time to the target system, in milliseconds.
     /// Along with the bandwidth limit, this directly affects the buffer sizes used.
@@ -162,10 +162,6 @@ impl CliArgs {
             .host
             .as_ref()
             .unwrap_or_else(|| dest.host.as_ref().unwrap()))
-    }
-
-    pub(crate) fn bandwidth_bytes(&self) -> anyhow::Result<u64> {
-        Ok(self.bandwidth.size().try_into()?)
     }
 }
 

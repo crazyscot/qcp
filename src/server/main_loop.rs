@@ -49,7 +49,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
         client_message.connection_type,
     );
 
-    let bandwidth_info = transport::network_config_info(args.bandwidth_bytes()?, args.rtt);
+    let bandwidth_info = transport::network_config_info(args.bandwidth.size(), args.rtt);
 
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
@@ -103,7 +103,7 @@ fn create_endpoint(
     args: &CliArgs,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
-    let bandwidth_bytes: u64 = args.bandwidth_bytes()?;
+    let bandwidth_bytes: u64 = args.bandwidth.size();
 
     let mut root_store = RootCertStore::empty();
     root_store.add(client_cert)?;
