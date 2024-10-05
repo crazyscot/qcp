@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 use super::args::CliArgs;
 
-use crate::{client, os::os, server, transport, util::setup_tracing};
+use crate::{client::client_main, os::os, server::server_main, transport, util::setup_tracing};
 use clap::Parser;
 use indicatif::MultiProgress;
 use tracing::error_span;
@@ -23,12 +23,13 @@ pub fn cli() -> anyhow::Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
     if args.server {
-        return server_main(&args);
+        return run_server(&args);
     }
-    client_main(&args)
+    run_client(&args)
 }
 
-fn client_main(args: &CliArgs) -> anyhow::Result<ExitCode> {
+#[tokio::main]
+async fn run_client(args: &CliArgs) -> anyhow::Result<ExitCode> {
     let progress = MultiProgress::new(); // This writes to stderr
     let trace_level = if args.debug {
         "trace"
@@ -40,7 +41,8 @@ fn client_main(args: &CliArgs) -> anyhow::Result<ExitCode> {
     setup_tracing(trace_level, Some(&progress), &args.log_file)
         .inspect_err(|e| eprintln!("{e:?}"))?;
 
-    client::client_main(args, &progress)
+    client_main(args, &progress)
+        .await
         .inspect_err(|e| tracing::error!("{e}"))
         .or_else(|_| Ok(false))
         .map(|success| {
@@ -52,14 +54,18 @@ fn client_main(args: &CliArgs) -> anyhow::Result<ExitCode> {
         })
 }
 
-fn server_main(args: &CliArgs) -> anyhow::Result<ExitCode> {
+#[tokio::main]
+async fn run_server(args: &CliArgs) -> anyhow::Result<ExitCode> {
     let trace_level = if args.debug { "trace" } else { "error" };
     setup_tracing(trace_level, None, &args.log_file).inspect_err(|e| eprintln!("{e:?}"))?;
     let _span = error_span!("SERVER").entered();
 
-    server::main(args).map(|()| ExitCode::SUCCESS).map_err(|e| {
-        tracing::error!("{e}");
-        // TODO: Decide about error handling. For now detailed anyhow output is fine.
-        e
-    })
+    server_main(args)
+        .await
+        .map(|()| ExitCode::SUCCESS)
+        .map_err(|e| {
+            tracing::error!("{e}");
+            // TODO: Decide about error handling. For now detailed anyhow output is fine.
+            e
+        })
 }

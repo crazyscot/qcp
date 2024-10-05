@@ -30,7 +30,6 @@ const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
-#[tokio::main]
 pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> anyhow::Result<bool> {
     let guard = trace_span!("CLIENT").entered();
     let processed_args = UnpackedArgs::try_from(args)?;

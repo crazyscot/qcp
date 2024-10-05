@@ -26,7 +26,6 @@ use tokio::time::timeout;
 use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
 /// Main entrypoint
-#[tokio::main]
 pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     let mut stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
