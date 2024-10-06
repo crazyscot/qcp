@@ -5,7 +5,13 @@ use std::process::ExitCode;
 
 use super::args::CliArgs;
 
-use crate::{client::client_main, os::os, server::server_main, transport, util::setup_tracing};
+use crate::{
+    client::client_main,
+    os::os,
+    server::server_main,
+    transport::{BandwidthParams, BufferConfig},
+    util::setup_tracing,
+};
 use clap::Parser;
 use indicatif::MultiProgress;
 use tracing::error_span;
@@ -15,11 +21,11 @@ pub fn cli() -> anyhow::Result<ExitCode> {
     let args = CliArgs::parse();
     if args.help_buffers {
         // One day we might make this a function of the remote host.
-        let send_window = transport::SEND_BUFFER_SIZE;
-        #[allow(clippy::cast_possible_truncation)]
-        let recv_window =
-            transport::practical_receive_window_for(args.bandwidth.size(), args.rtt)? as usize;
-        os::print_udp_buffer_size_help_message(recv_window, send_window);
+        let buffer_config = BufferConfig::from(BandwidthParams::from(&args));
+        os::print_udp_buffer_size_help_message(
+            buffer_config.recv_buffer,
+            buffer_config.send_buffer,
+        );
         return Ok(ExitCode::SUCCESS);
     }
     if args.server {

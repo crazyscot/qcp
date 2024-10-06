@@ -8,10 +8,9 @@ use std::sync::Arc;
 use crate::cert::Credentials;
 use crate::cli::CliArgs;
 use crate::protocol::control::{ClientMessage, ServerMessage};
-use crate::protocol::session::session_capnp::Status;
-use crate::protocol::session::Command;
-use crate::protocol::session::{FileHeader, FileTrailer, Response};
+use crate::protocol::session::{session_capnp::Status, Command, FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
+use crate::transport::{BandwidthParams, BufferConfig};
 use crate::{transport, util};
 
 use anyhow::Context as _;
@@ -49,7 +48,9 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
         client_message.connection_type,
     );
 
-    let bandwidth_info = transport::network_config_info(args.bandwidth.size(), args.rtt);
+    let bandwidth = BandwidthParams::from(args);
+    let bandwidth_info = format!("{bandwidth:?}");
+    let file_buffer_size = usize::try_from(BufferConfig::from(bandwidth).send_buffer * 2)?;
 
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
@@ -79,7 +80,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
         .with_context(|| "Timed out waiting for QUIC connection")?
     {
         let _ = tasks.spawn(async move {
-            if let Err(e) = handle_connection(conn).await {
+            if let Err(e) = handle_connection(conn, file_buffer_size).await {
                 error!("inward stream failed: {reason}", reason = e.to_string());
             }
             trace!("connection completed");
@@ -103,7 +104,6 @@ fn create_endpoint(
     args: &CliArgs,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
-    let bandwidth_bytes: u64 = args.bandwidth.size();
 
     let mut root_store = RootCertStore::empty();
     root_store.add(client_cert)?;
@@ -115,10 +115,10 @@ fn create_endpoint(
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
     let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
+    let bandwidth = BandwidthParams::from(args);
     let _ = config.transport_config(crate::transport::create_config(
-        bandwidth_bytes,
-        args.rtt,
-        args.initial_congestion_window,
+        bandwidth,
+        transport::ThroughputMode::Both,
     )?);
 
     // TODO let caller specify port
@@ -134,12 +134,18 @@ fn create_endpoint(
         }
     };
     let socket = std::net::UdpSocket::bind(addr)?;
+    // We don't know whether client will send or receive, so configure for both.
+    let buffer_config = BufferConfig::from(&bandwidth);
     #[allow(clippy::cast_possible_truncation)]
+    let wanted_send = Some(buffer_config.send_buffer as usize);
+    #[allow(clippy::cast_possible_truncation)]
+    let wanted_recv = Some(buffer_config.recv_buffer as usize);
     let warning = util::socket::set_udp_buffer_sizes(
         &socket,
-        transport::SEND_BUFFER_SIZE,
-        transport::receive_window_for(bandwidth_bytes, args.rtt) as usize,
-        bandwidth_bytes,
+        wanted_send,
+        wanted_recv,
+        args.bandwidth.size(),
+        args.bandwidth_outbound.map(|b| b.size()),
         args.rtt,
     )?
     .inspect(|s| warn!("{s}"));
@@ -153,7 +159,7 @@ fn create_endpoint(
     ))
 }
 
-async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
+async fn handle_connection(conn: quinn::Incoming, file_buffer_size: usize) -> anyhow::Result<()> {
     let connection = conn.await?;
     info!("accepted connection from {}", connection.remote_address());
 
@@ -178,7 +184,7 @@ async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
             };
             trace!("opened stream");
             let _j = tokio::spawn(async move {
-                if let Err(e) = handle_stream(stream).await {
+                if let Err(e) = handle_stream(stream, file_buffer_size).await {
                     error!("stream failed: {e}",);
                 }
             });
@@ -188,12 +194,12 @@ async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
+async fn handle_stream(mut sp: StreamPair, file_buffer_size: usize) -> anyhow::Result<()> {
     trace!("reading command");
     let cmd = Command::read(&mut sp.recv).await?;
     match cmd {
         Command::Get(get) => {
-            handle_get(sp, get.filename.clone())
+            handle_get(sp, get.filename.clone(), file_buffer_size)
                 .instrument(trace_span!("SERVER:GET", filename = get.filename))
                 .await
         }
@@ -205,7 +211,11 @@ async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
     }
 }
 
-async fn handle_get(mut stream: StreamPair, filename: String) -> anyhow::Result<()> {
+async fn handle_get(
+    mut stream: StreamPair,
+    filename: String,
+    file_buffer_size: usize,
+) -> anyhow::Result<()> {
     trace!("begin");
 
     let path = PathBuf::from(&filename);
@@ -218,7 +228,7 @@ async fn handle_get(mut stream: StreamPair, filename: String) -> anyhow::Result<
     if meta.is_dir() {
         return send_response(&mut stream.send, Status::ItIsADirectory, None).await;
     }
-    let mut file = BufReader::with_capacity(crate::transport::SEND_BUFFER_SIZE * 2, file);
+    let mut file = BufReader::with_capacity(file_buffer_size, file);
 
     // We believe we can fulfil this request.
     trace!("responding OK");

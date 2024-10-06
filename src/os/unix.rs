@@ -70,7 +70,7 @@ impl Unix {
     }
 
     /// Outputs helpful information for the sysadmin
-    pub(crate) fn print_udp_buffer_size_help_message(rmem: usize, wmem: usize) {
+    pub(crate) fn print_udp_buffer_size_help_message(rmem: u64, wmem: u64) {
         println!(
             r#"For best performance, it is necessary to set the kernel UDP buffer size limits.
 This program attempts to automatically set buffer sizes for itself,

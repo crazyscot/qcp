@@ -7,7 +7,7 @@ use crate::client::control::ControlChannel;
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
-use crate::transport;
+use crate::transport::{BandwidthParams, BufferConfig, ThroughputMode};
 use crate::util::time::Stopwatch;
 use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
 
@@ -33,6 +33,11 @@ const SHOW_TIME: &str = "file transfer";
 pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> anyhow::Result<bool> {
     let guard = trace_span!("CLIENT").entered();
     let processed_args = UnpackedArgs::try_from(args)?;
+    let mode = if processed_args.source.host.is_some() {
+        ThroughputMode::Rx
+    } else {
+        ThroughputMode::Tx
+    };
     let spinner = progress.add(ProgressBar::new_spinner());
     spinner.set_message("Setting up");
     spinner.enable_steady_tick(Duration::from_millis(150));
@@ -66,6 +71,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
         server_message.cert.into(),
         &server_address_port,
         args,
+        mode,
     )?;
     debug!(
         "Remote endpoint network config: {}",
@@ -84,7 +90,15 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     // Show time! ---------------------
     spinner.set_message("Transferring data");
     timers.next(SHOW_TIME);
-    let result = manage_request(connection, processed_args, progress.clone()).await;
+    let file_buffer_size =
+        usize::try_from(2 * BufferConfig::from(BandwidthParams::from(args)).send_buffer)?;
+    let result = manage_request(
+        connection,
+        processed_args,
+        progress.clone(),
+        file_buffer_size,
+    )
+    .await;
     let total_bytes = match result {
         Err(b) | Ok(b) => b,
     };
@@ -133,6 +147,7 @@ async fn manage_request(
     connection: Connection,
     processed: UnpackedArgs,
     mp: MultiProgress,
+    file_buffer_size: usize,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
     let _jh = tasks.spawn(async move {
@@ -159,6 +174,7 @@ async fn manage_request(
                 &processed.destination.filename,
                 &processed,
                 mp,
+                file_buffer_size,
             )
             .instrument(trace_span!("PUT", filename = processed.source.filename))
             .await
@@ -234,6 +250,7 @@ pub(crate) fn create_endpoint(
     server_cert: CertificateDer<'_>,
     server_addr: &SocketAddr,
     args: &CliArgs,
+    mode: ThroughputMode,
 ) -> Result<quinn::Endpoint> {
     let _ = span!(Level::TRACE, "create_endpoint").entered();
     let mut root_store = RootCertStore::empty();
@@ -241,7 +258,6 @@ pub(crate) fn create_endpoint(
         error!("{e}");
         e
     })?;
-    let bandwidth_bytes: u64 = args.bandwidth.size();
 
     let tls_config = Arc::new(
         rustls::ClientConfig::builder()
@@ -250,23 +266,31 @@ pub(crate) fn create_endpoint(
     );
 
     let mut config = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
-    let _ = config.transport_config(crate::transport::create_config(
-        bandwidth_bytes,
-        args.rtt,
-        args.initial_congestion_window,
-    )?);
+    let bw = BandwidthParams::from(args);
+    let _ = config.transport_config(crate::transport::create_config(bw, mode)?);
 
-    trace!("bind socket");
+    trace!("bind & configure socket");
     let socket = util::socket::bind_unspecified_for(server_addr)?;
+    let buffer_config = BufferConfig::from(bw);
     #[allow(clippy::cast_possible_truncation)]
+    let wanted_send = match mode {
+        ThroughputMode::Both | ThroughputMode::Tx => Some(buffer_config.send_buffer as usize),
+        ThroughputMode::Rx => None,
+    };
+    #[allow(clippy::cast_possible_truncation)]
+    let wanted_recv = match mode {
+        ThroughputMode::Both | ThroughputMode::Rx => Some(buffer_config.recv_buffer as usize),
+        ThroughputMode::Tx => None,
+    };
+
     let _ = util::socket::set_udp_buffer_sizes(
         &socket,
-        transport::SEND_BUFFER_SIZE,
-        transport::receive_window_for(bandwidth_bytes, args.rtt) as usize,
-        bandwidth_bytes,
+        wanted_send,
+        wanted_recv,
+        args.bandwidth.size(),
+        args.bandwidth_outbound.map(|b| b.size()),
         args.rtt,
-    )?
-    .inspect(|msg| warn!("{msg}"));
+    )?;
 
     trace!("create endpoint");
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
@@ -340,6 +364,7 @@ async fn do_put(
     dest_filename: &str,
     cli_args: &UnpackedArgs,
     multi_progress: MultiProgress,
+    file_buffer_size: usize,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
 
@@ -364,7 +389,7 @@ async fn do_put(
     let mut outbound = progress_bar.wrap_async_write(stream.send);
 
     trace!("sending command");
-    let mut file = BufReader::with_capacity(crate::transport::SEND_BUFFER_SIZE * 2, file);
+    let mut file = BufReader::with_capacity(file_buffer_size, file);
 
     outbound
         .write_all(&crate::protocol::session::Command::new_put(dest_filename).serialize())

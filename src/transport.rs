@@ -2,18 +2,18 @@
 // (c) 2024 Ross Younger
 
 use std::{
+    fmt::Display,
     net::{Ipv4Addr, SocketAddr},
     sync::Arc,
     time::Duration,
 };
 
 use anyhow::Result;
-use human_repr::{HumanCount as _, HumanDuration as _, HumanThroughput as _};
+use human_repr::{HumanCount, HumanDuration as _};
 use quinn::{congestion::CubicConfig, TransportConfig};
 use tracing::{debug, info};
 
-/// Network buffer size (hard-wired)
-pub const SEND_BUFFER_SIZE: usize = 1_048_576;
+use crate::cli::CliArgs;
 
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
@@ -21,71 +21,166 @@ pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
 const LOCALHOST_UNSPECIFIED: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
 
-/// Computes the theoretical receive window for a given bandwidth/RTT configuration
-#[must_use]
-pub fn receive_window_for(bandwidth_limit: u64, rtt_ms: u16) -> u64 {
-    bandwidth_limit * u64::from(rtt_ms) / 1000
+/// Specifies whether to configure to maximise transmission throughput, receive throughput, or both.
+/// Specifying `Both` for a one-way data transfer will work, but wastes kernel memory.
+#[derive(Copy, Clone, Debug)]
+pub enum ThroughputMode {
+    /// We expect to send a lot but not receive
+    Tx,
+    /// We expect to receive a lot but not send much
+    Rx,
+    /// We expect to send and receive, or we don't know
+    Both,
 }
 
-/// In some cases the theoretical receive window is less than the system default.
-/// In such a case, don't suggest setting it smaller, that would be silly.
-pub fn practical_receive_window_for(bandwidth_limit: u64, rtt_ms: u16) -> Result<u64> {
-    use std::net::UdpSocket;
-    let theoretical = receive_window_for(bandwidth_limit, rtt_ms);
-    let sock = UdpSocket::bind(LOCALHOST_UNSPECIFIED)?;
-    let current = crate::os::os::get_recvbuf(&sock)? as u64;
-    Ok(std::cmp::max(theoretical, current))
+/// Parameters needed to set up transport configuration
+#[derive(Copy, Clone, Debug)]
+pub struct BandwidthParams {
+    /// Max transmit bandwidth in bytes
+    tx: u64,
+    /// Max receive bandwidth in bytes
+    rx: u64,
+    /// Expected round trip time to the remote
+    rtt: Duration,
+    /// Initial congestion window (network wizards only!)
+    initial_window: u64,
+}
+
+impl Display for BandwidthParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "tx {tx}, rx {rx}, rtt {rtt}, initial window {iwind}",
+            tx = self.tx.human_count_bytes(),
+            rx = self.rx.human_count_bytes(),
+            rtt = self.rtt.human_duration(),
+            iwind = self.initial_window.human_count_bytes()
+        )
+    }
+}
+
+impl From<&CliArgs> for BandwidthParams {
+    fn from(args: &CliArgs) -> Self {
+        Self {
+            rx: args.bandwidth.size(),
+            tx: args.bandwidth_outbound.unwrap_or(args.bandwidth).size(),
+            rtt: Duration::from_millis(u64::from(args.rtt)),
+            initial_window: args.initial_congestion_window,
+        }
+    }
+}
+
+impl BandwidthParams {
+    /// Computes the theoretical bandwidth-delay product for outbound data
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn bandwidth_delay_product_tx(&self) -> u64 {
+        self.tx * self.rtt.as_millis() as u64 / 1000
+    }
+    /// Computes the theoretical bandwidth-delay product for inbound data
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn bandwidth_delay_product_rx(&self) -> u64 {
+        self.rx * self.rtt.as_millis() as u64 / 1000
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+/// Computed buffer configuration
+pub(crate) struct BufferConfig {
+    pub(crate) send_window: u64,
+    pub(crate) send_buffer: u64,
+    pub(crate) recv_window: u64,
+    pub(crate) recv_buffer: u64,
+}
+
+impl Display for BufferConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "send window {sw}, buffer {sb}; recv window {rw}, buffer {rb}",
+            sw = self.send_window.human_count_bytes(),
+            sb = self.send_buffer.human_count_bytes(),
+            rw = self.recv_window.human_count_bytes(),
+            rb = self.recv_buffer.human_count_bytes()
+        )
+    }
+}
+
+impl From<BandwidthParams> for BufferConfig {
+    fn from(params: BandwidthParams) -> Self {
+        Self::from(&params)
+    }
+}
+
+impl From<&BandwidthParams> for BufferConfig {
+    fn from(params: &BandwidthParams) -> Self {
+        // Start with the BDP, which is the theoretical in flight limit
+        let bdp_rx = params.bandwidth_delay_product_rx();
+        let bdp_tx = params.bandwidth_delay_product_tx();
+        // Don't go smaller than the system defaults
+        let (def_tx, def_rx) = system_default_udp_windows().unwrap_or((262_144, 262_144));
+        // However there might be random added latency en route, so provide for a larger send window than theoretical.
+        let practical_send = std::cmp::max(4 * bdp_tx, def_tx);
+        let practical_recv = std::cmp::max(2 * bdp_rx, def_rx);
+
+        Self {
+            send_window: practical_send,
+            send_buffer: practical_send,
+            recv_window: practical_recv,
+            recv_buffer: practical_recv,
+        }
+    }
+}
+
+/// Determines the system default send and receive windows
+pub fn system_default_udp_windows() -> Result<(u64, u64)> {
+    let sock = std::net::UdpSocket::bind(LOCALHOST_UNSPECIFIED)?;
+    let rcv = crate::os::os::get_recvbuf(&sock).map(|r| r as u64)?;
+    let snd = crate::os::os::get_sendbuf(&sock).map(|r| r as u64)?;
+    Ok((snd, rcv))
 }
 
 /// Creates a `quinn::TransportConfig` for the endpoint setup
 pub fn create_config(
-    bandwidth_limit: u64,
-    rtt_ms: u16,
-    initial_window: u64,
+    params: BandwidthParams,
+    mode: ThroughputMode,
 ) -> Result<Arc<TransportConfig>> {
-    let rtt = Duration::from_millis(u64::from(rtt_ms));
-    #[allow(clippy::cast_possible_truncation)]
-    let receive_window =
-        practical_receive_window_for(bandwidth_limit, rtt_ms)?.clamp(0, u64::from(u32::MAX)) as u32;
-    let send_window = receive_window * 8;
+    let bcfg: BufferConfig = params.into();
 
+    // Common setup
     let mut config = TransportConfig::default();
     let _ = config
         .max_concurrent_bidi_streams(1u8.into())
         .max_concurrent_uni_streams(0u8.into())
-        .initial_rtt(rtt)
-        .stream_receive_window(receive_window.into())
-        .send_window(send_window.into())
-        .datagram_receive_buffer_size(Some(receive_window as usize))
-        .datagram_send_buffer_size(SEND_BUFFER_SIZE)
         .keep_alive_interval(Some(PROTOCOL_KEEPALIVE))
-        .allow_spin(true)
-        .crypto_buffer_size(receive_window as usize / 2);
+        .allow_spin(true);
+
+    match mode {
+        ThroughputMode::Tx | ThroughputMode::Both => {
+            let _ = config
+                .send_window(bcfg.send_window)
+                .datagram_send_buffer_size(bcfg.send_buffer.try_into()?);
+        }
+        ThroughputMode::Rx => (),
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    match mode {
+        // TODO: If we later support multiple streams at once, will need to consider receive_window and stream_receive_window.
+        ThroughputMode::Rx | ThroughputMode::Both => {
+            let _ = config
+                .stream_receive_window(bcfg.recv_window.try_into()?)
+                .datagram_receive_buffer_size(Some(bcfg.recv_buffer as usize));
+        }
+        ThroughputMode::Tx => (),
+    }
 
     let mut cubic = CubicConfig::default();
-    let _ = cubic.initial_window(initial_window);
+    let _ = cubic.initial_window(params.initial_window);
     let _ = config.congestion_controller_factory(Arc::new(cubic));
 
-    info!(
-        "Network configuration: {}",
-        network_config_info(bandwidth_limit, rtt_ms)
-    );
-    debug!(
-        "Buffer configuration: requesting receive buffer {rbuf}, window {rwind}; send buffer {sbuf}, window {swind}; initial window {iwind}",
-        iwind = initial_window.human_count_bytes(),
-        rwind = receive_window.human_count_bytes(),
-        rbuf = receive_window.human_count_bytes(),
-        sbuf = SEND_BUFFER_SIZE.human_count_bytes(),
-        swind = send_window.human_count_bytes(),
-    );
+    info!("Network configuration: {params}");
+    debug!("Buffer configuration: {bcfg}",);
 
     Ok(config.into())
-}
-
-pub(crate) fn network_config_info(bandwidth_limit: u64, rtt_ms: u16) -> String {
-    format!(
-        "bandwidth {bw}, RTT {rtt}",
-        bw = bandwidth_limit.human_throughput_bytes(),
-        rtt = Duration::from_millis(rtt_ms.into()).human_duration(),
-    )
 }

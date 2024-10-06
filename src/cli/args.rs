@@ -87,7 +87,7 @@ pub(crate) struct CliArgs {
     pub log_file: Option<String>,
 
     // TUNING OPTIONS ======================================================================
-    /// The maximum network bandwidth we expect to/from the target system.
+    /// The maximum network bandwidth we expect receiving data FROM the remote system.
     /// Along with the initial RTT, this directly affects the buffer sizes used.
     /// This may be specified directly as a number of bytes, or as an SI quantity
     /// e.g. "10M" or "256k". Note that this is described in bytes, not bits;
@@ -96,6 +96,17 @@ pub(crate) struct CliArgs {
     #[arg(short('b'), long, help_heading("Network tuning"), display_order(50), default_value("12M"), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
     pub bandwidth: Bytes<u64>,
 
+    /// The maximum network bandwidth we expect sending data TO the remote system,
+    /// if it is different from the bandwidth FROM the system.
+    /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
+    /// If not given, it is assumed
+    /// This may be specified directly as a number of bytes, or as an SI quantity
+    /// e.g. "10M" or "256k". Note that this is described in bytes, not bits;
+    /// if (for example) you expect to fill a 1Gbit ethernet connection,
+    /// 125M might be a suitable upper limit.
+    // see also: `bandwidth_outbound_active()`
+    #[arg(short('B'), long, help_heading("Network tuning"), display_order(50), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
+    pub bandwidth_outbound: Option<Bytes<u64>>,
     /// The expected network Round Trip time to the target system, in milliseconds.
     /// Along with the bandwidth limit, this directly affects the buffer sizes used.
     /// (Buffer size = bandwidth * RTT)
@@ -162,6 +173,11 @@ impl CliArgs {
             .host
             .as_ref()
             .unwrap_or_else(|| dest.host.as_ref().unwrap()))
+    }
+
+    /// Convenience wrapper that returns the active value to use for outbound bandwidth
+    pub(crate) fn bandwidth_outbound_active(&self) -> u64 {
+        self.bandwidth_outbound.unwrap_or(self.bandwidth).size()
     }
 }
 

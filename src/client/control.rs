@@ -4,7 +4,7 @@
 use std::{net::IpAddr, process::Stdio, time::Duration};
 
 use anyhow::{Context as _, Result};
-use human_repr::HumanCount as _;
+use human_repr::HumanCount;
 use tokio::{io::AsyncReadExt as _, time::timeout};
 use tracing::{debug, trace};
 
@@ -19,7 +19,8 @@ use crate::{
 pub struct Parameters {
     remote_host: String,
     remote_debug: bool,
-    bandwidth_bytes: u64,
+    remote_tx_bw_bytes: u64,
+    remote_rx_bw_bytes: u64,
     rtt_ms: u16,
     timeout: Duration,
 }
@@ -31,7 +32,9 @@ impl TryFrom<&CliArgs> for Parameters {
         Ok(Self {
             remote_host: args.remote_host()?.to_string(),
             remote_debug: args.remote_debug,
-            bandwidth_bytes: args.bandwidth.size(),
+            // Note that we flip inbound and outbound here as we're computing parameters to give to the remote
+            remote_rx_bw_bytes: args.bandwidth_outbound_active(),
+            remote_tx_bw_bytes: args.bandwidth.size(),
             rtt_ms: args.rtt,
             timeout: args.timeout,
         })
@@ -93,7 +96,9 @@ impl ControlChannel {
             "qcp",
             "--server",
             "-b",
-            &args.bandwidth_bytes.human_count_bare().to_string(),
+            &args.remote_rx_bw_bytes.human_count_bare().to_string(),
+            "-B",
+            &args.remote_tx_bw_bytes.human_count_bare().to_string(),
             "--rtt",
             &args.rtt_ms.to_string(),
         ]);
