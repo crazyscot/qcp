@@ -5,14 +5,15 @@
 # Server must respond with a Response before anything else can happen on this connection.
 struct Command {
     args : union {
+        get@0: GetCmdArgs;
         # Retrieves a file. This may fail if the file does not exist or the user doesn't have read permission.
         # Client -> Server: Command (Get)
         # S->C: Response, FileHeader, file data, FileTrailer.
         # Client closes the stream after transfer.
         # If the client needs to abort transfer, it closes the stream.
         # If the server needs to abort transfer, it closes the stream.
-        get@0: GetCmdArgs;
 
+        put@1: PutCmdArgs;
         # Sends a file. This may fail for permissions or if the containing directory doesn't exist.
         # Client -> Server: Command (Put)
         # S->C: Response (to the command)
@@ -22,16 +23,15 @@ struct Command {
         # Then close the stream.
         # If the server needs to abort the transfer:
         # S->C: Status (explaining why), then close the stream.
-        put@1: PutCmdArgs;
     }
 
     struct GetCmdArgs {
-        # Filename is a file name only, without any directory components
         filename @0 : Text;
+        # Filename is a file name only, without any directory components
     }
     struct PutCmdArgs {
-        # Filename is a file name only, without any directory components
         filename @0 : Text;
+        # Filename is a file name only, without any directory components
     }
 }
 
