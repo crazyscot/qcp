@@ -37,11 +37,12 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
         .await?;
     stdout.flush().await?;
 
-    let client_message = ClientMessage::read(&mut stdin).await.unwrap_or_else(|e| {
+    let client_message = ClientMessage::read(&mut stdin).await.map_err(|_| {
         // try to be helpful if there's a human reading
-        eprintln!("ERROR: This program expects a binary data packet on stdin.\n{e}");
-        std::process::exit(1);
-    });
+        anyhow::anyhow!(
+            "In server mode, this program expects to receive a binary data packet on stdin"
+        )
+    })?;
     trace!(
         "got client message length {}, using {}",
         client_message.cert.len(),
@@ -177,8 +178,7 @@ async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<()> {
             };
             trace!("opened stream");
             let _j = tokio::spawn(async move {
-                let fut = handle_stream(stream);
-                if let Err(e) = fut.await {
+                if let Err(e) = handle_stream(stream).await {
                     error!("stream failed: {e}",);
                 }
             });
@@ -305,9 +305,10 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
 
     // So far as we can tell, we believe we can fulfil this request.
     trace!("responding OK");
-    send_response(&mut stream.send, Status::Ok, None).await?;
-
-    let header = FileHeader::read(&mut stream.recv).await?;
+    let ((), header) = tokio::try_join!(
+        send_response(&mut stream.send, Status::Ok, None),
+        FileHeader::read(&mut stream.recv)
+    )?;
 
     debug!("PUT {} -> destination", &header.filename);
     if append_filename {
@@ -345,9 +346,9 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
     let _trailer = FileTrailer::read(&mut stream.recv).await?;
     // TODO: Hash checks
 
-    file.flush().await?;
+    let f = file.flush();
     send_response(&mut stream.send, Status::Ok, None).await?;
-    stream.send.flush().await?;
+    tokio::try_join!(f, stream.send.flush())?;
     trace!("complete");
     Ok(())
 }

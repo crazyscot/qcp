@@ -288,11 +288,10 @@ async fn do_get(
     let mut stream: StreamPair = sp.into();
     let real_start = Instant::now();
     trace!("send command");
-    {
-        let cmd = crate::protocol::session::Command::new_get(filename);
-        let buf = cmd.serialize();
-        stream.send.write_all(&buf).await?;
-    }
+    stream
+        .send
+        .write_all(&crate::protocol::session::Command::new_get(filename).serialize())
+        .await?;
     stream.send.flush().await?;
 
     // TODO protocol timeout?
@@ -367,11 +366,9 @@ async fn do_put(
     trace!("sending command");
     let mut file = BufReader::with_capacity(crate::transport::SEND_BUFFER_SIZE * 2, file);
 
-    {
-        let cmd = crate::protocol::session::Command::new_put(dest_filename);
-        let buf = cmd.serialize();
-        outbound.write_all(&buf).await?;
-    }
+    outbound
+        .write_all(&crate::protocol::session::Command::new_put(dest_filename).serialize())
+        .await?;
     outbound.flush().await?;
 
     // TODO protocol timeout?
@@ -406,10 +403,11 @@ async fn do_put(
                     Err(_) => anyhow::bail!("connection closed unexpectedly"),
                     Ok(r) => r,
                 };
-                if let Some(msg) = response.message {
-                    anyhow::bail!("remote closed connection: {:?}: {}", response.status, msg);
-                }
-                anyhow::bail!("remote closed connection: {:?}", response.status);
+                anyhow::bail!(
+                    "remote closed connection: {:?}: {}",
+                    response.status,
+                    response.message.unwrap_or("(no message)".into())
+                );
             }
             anyhow::bail!(
                 "Unknown I/O error during PUT: {e}/{:?}/{:?}",
