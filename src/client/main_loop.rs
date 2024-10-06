@@ -147,7 +147,7 @@ async fn manage_request(
                 &processed.source.filename,
                 &processed.destination.filename,
                 &processed,
-                mp.clone(),
+                mp,
             )
             .instrument(trace_span!("GET", filename = processed.source.filename))
             .await
@@ -158,7 +158,7 @@ async fn manage_request(
                 &processed.source.filename,
                 &processed.destination.filename,
                 &processed,
-                mp.clone(),
+                mp,
             )
             .instrument(trace_span!("PUT", filename = processed.source.filename))
             .await
