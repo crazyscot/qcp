@@ -12,9 +12,6 @@ pub fn set_udp_buffer_sizes(
     socket: &UdpSocket,
     wanted_send: Option<usize>,
     wanted_recv: Option<usize>,
-    bandwidth_limit: u64,
-    bandwidth_outbound: Option<u64>,
-    rtt_ms: u16,
 ) -> anyhow::Result<Option<String>> {
     let mut send = os::get_sendbuf(socket)?;
     let mut recv = os::get_recvbuf(socket)?;
@@ -59,10 +56,10 @@ pub fn set_udp_buffer_sizes(
             warn!("While attempting to set kernel buffer size, this happened: {e}");
         }
         info!(
-            "For more information, run: `{ego} --help-buffers --bandwidth {bw1}{bw2} --rtt {rtt_ms}`",
-            ego = std::env::args().next().unwrap_or("<this program>".to_string()),
-            bw1 = bandwidth_limit.human_count_bare(),
-            bw2 = bandwidth_outbound.map_or_else(String::new, |b| { format!(" --bandwidth-outbound {}", b.human_count_bare()) })
+            "For more information, run: `{ego} --help-buffers`",
+            ego = std::env::args()
+                .next()
+                .unwrap_or("<this program>".to_string()),
         );
         // SOMEDAY: We might offer to set sysctl, write sysctl files, etc. if run as root.
     } else {
@@ -96,14 +93,7 @@ mod test {
     fn set_socket_bufsize() -> anyhow::Result<()> {
         setup_tracing_for_tests();
         let sock = UdpSocket::bind("0.0.0.0:0")?;
-        let _ = super::set_udp_buffer_sizes(
-            &sock,
-            Some(1_048_576),
-            Some(10_485_760),
-            12_000_000,
-            None,
-            300,
-        )?;
+        let _ = super::set_udp_buffer_sizes(&sock, Some(1_048_576), Some(10_485_760))?;
         Ok(())
     }
 }

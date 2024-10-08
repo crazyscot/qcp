@@ -1,12 +1,7 @@
 // QUIC transport configuration
 // (c) 2024 Ross Younger
 
-use std::{
-    fmt::Display,
-    net::{Ipv4Addr, SocketAddr},
-    sync::Arc,
-    time::Duration,
-};
+use std::{fmt::Display, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use human_repr::{HumanCount, HumanDuration as _};
@@ -17,9 +12,6 @@ use crate::cli::CliArgs;
 
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
-
-const LOCALHOST_UNSPECIFIED: SocketAddr =
-    SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
 
 /// Specifies whether to configure to maximise transmission throughput, receive throughput, or both.
 /// Specifying `Both` for a one-way data transfer will work, but wastes kernel memory.
@@ -87,14 +79,14 @@ impl BandwidthParams {
 
 #[derive(Debug, Clone, Copy)]
 /// Computed buffer configuration
-pub(crate) struct BufferConfig {
+pub(crate) struct BandwidthConfig {
     pub(crate) send_window: u64,
     pub(crate) send_buffer: u64,
     pub(crate) recv_window: u64,
     pub(crate) recv_buffer: u64,
 }
 
-impl Display for BufferConfig {
+impl Display for BandwidthConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -107,38 +99,27 @@ impl Display for BufferConfig {
     }
 }
 
-impl From<BandwidthParams> for BufferConfig {
+impl From<BandwidthParams> for BandwidthConfig {
     fn from(params: BandwidthParams) -> Self {
         Self::from(&params)
     }
 }
 
-impl From<&BandwidthParams> for BufferConfig {
+impl From<&BandwidthParams> for BandwidthConfig {
     fn from(params: &BandwidthParams) -> Self {
         // Start with the BDP, which is the theoretical in flight limit
         let bdp_rx = params.bandwidth_delay_product_rx();
         let bdp_tx = params.bandwidth_delay_product_tx();
-        // Don't go smaller than the system defaults
-        let (def_tx, def_rx) = system_default_udp_windows().unwrap_or((262_144, 262_144));
-        // However there might be random added latency en route, so provide for a larger send window than theoretical.
-        let practical_send = std::cmp::max(4 * bdp_tx, def_tx);
-        let practical_recv = std::cmp::max(2 * bdp_rx, def_rx);
 
+        // However there might be random added latency en route, so provide for a larger send window than theoretical.
         Self {
-            send_window: practical_send,
-            send_buffer: practical_send,
-            recv_window: practical_recv,
-            recv_buffer: practical_recv,
+            send_window: 2 * bdp_tx,
+            recv_window: bdp_rx,
+            // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
+            send_buffer: 2_097_152,
+            recv_buffer: 2_097_152,
         }
     }
-}
-
-/// Determines the system default send and receive windows
-pub fn system_default_udp_windows() -> Result<(u64, u64)> {
-    let sock = std::net::UdpSocket::bind(LOCALHOST_UNSPECIFIED)?;
-    let rcv = crate::os::os::get_recvbuf(&sock).map(|r| r as u64)?;
-    let snd = crate::os::os::get_sendbuf(&sock).map(|r| r as u64)?;
-    Ok((snd, rcv))
 }
 
 /// Creates a `quinn::TransportConfig` for the endpoint setup
@@ -146,7 +127,7 @@ pub fn create_config(
     params: BandwidthParams,
     mode: ThroughputMode,
 ) -> Result<Arc<TransportConfig>> {
-    let bcfg: BufferConfig = params.into();
+    let bcfg: BandwidthConfig = params.into();
 
     // Common setup
     let mut config = TransportConfig::default();

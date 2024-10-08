@@ -7,7 +7,7 @@ use crate::client::control::ControlChannel;
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
-use crate::transport::{BandwidthParams, BufferConfig, ThroughputMode};
+use crate::transport::{BandwidthConfig, BandwidthParams, ThroughputMode};
 use crate::util::time::Stopwatch;
 use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
 
@@ -91,7 +91,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     spinner.set_message("Transferring data");
     timers.next(SHOW_TIME);
     let file_buffer_size =
-        usize::try_from(2 * BufferConfig::from(BandwidthParams::from(args)).send_buffer)?;
+        usize::try_from(BandwidthConfig::from(BandwidthParams::from(args)).send_buffer)?;
     let result = manage_request(
         connection,
         processed_args,
@@ -271,7 +271,7 @@ pub(crate) fn create_endpoint(
 
     trace!("bind & configure socket");
     let socket = util::socket::bind_unspecified_for(server_addr)?;
-    let buffer_config = BufferConfig::from(bw);
+    let buffer_config = BandwidthConfig::from(bw);
     #[allow(clippy::cast_possible_truncation)]
     let wanted_send = match mode {
         ThroughputMode::Both | ThroughputMode::Tx => Some(buffer_config.send_buffer as usize),
@@ -283,14 +283,7 @@ pub(crate) fn create_endpoint(
         ThroughputMode::Tx => None,
     };
 
-    let _ = util::socket::set_udp_buffer_sizes(
-        &socket,
-        wanted_send,
-        wanted_recv,
-        args.bandwidth.size(),
-        args.bandwidth_outbound.map(|b| b.size()),
-        args.rtt,
-    )?;
+    let _ = util::socket::set_udp_buffer_sizes(&socket, wanted_send, wanted_recv)?;
 
     trace!("create endpoint");
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames

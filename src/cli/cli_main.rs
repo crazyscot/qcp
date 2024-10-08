@@ -9,7 +9,7 @@ use crate::{
     client::client_main,
     os::os,
     server::server_main,
-    transport::{BandwidthParams, BufferConfig},
+    transport::{BandwidthParams, BandwidthConfig},
     util::setup_tracing,
 };
 use clap::Parser;
@@ -21,7 +21,7 @@ pub fn cli() -> anyhow::Result<ExitCode> {
     let args = CliArgs::parse();
     if args.help_buffers {
         // One day we might make this a function of the remote host.
-        let buffer_config = BufferConfig::from(BandwidthParams::from(&args));
+        let buffer_config = BandwidthConfig::from(BandwidthParams::from(&args));
         os::print_udp_buffer_size_help_message(
             buffer_config.recv_buffer,
             buffer_config.send_buffer,

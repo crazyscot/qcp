@@ -10,7 +10,7 @@ use crate::cli::CliArgs;
 use crate::protocol::control::{ClientMessage, ServerMessage};
 use crate::protocol::session::{session_capnp::Status, Command, FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
-use crate::transport::{BandwidthParams, BufferConfig};
+use crate::transport::{BandwidthConfig, BandwidthParams};
 use crate::{transport, util};
 
 use anyhow::Context as _;
@@ -50,7 +50,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
 
     let bandwidth = BandwidthParams::from(args);
     let bandwidth_info = format!("{bandwidth:?}");
-    let file_buffer_size = usize::try_from(BufferConfig::from(bandwidth).send_buffer * 2)?;
+    let file_buffer_size = usize::try_from(BandwidthConfig::from(bandwidth).send_buffer)?;
 
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
@@ -135,20 +135,13 @@ fn create_endpoint(
     };
     let socket = std::net::UdpSocket::bind(addr)?;
     // We don't know whether client will send or receive, so configure for both.
-    let buffer_config = BufferConfig::from(&bandwidth);
+    let buffer_config = BandwidthConfig::from(&bandwidth);
     #[allow(clippy::cast_possible_truncation)]
     let wanted_send = Some(buffer_config.send_buffer as usize);
     #[allow(clippy::cast_possible_truncation)]
     let wanted_recv = Some(buffer_config.recv_buffer as usize);
-    let warning = util::socket::set_udp_buffer_sizes(
-        &socket,
-        wanted_send,
-        wanted_recv,
-        args.bandwidth.size(),
-        args.bandwidth_outbound.map(|b| b.size()),
-        args.rtt,
-    )?
-    .inspect(|s| warn!("{s}"));
+    let warning = util::socket::set_udp_buffer_sizes(&socket, wanted_send, wanted_recv)?
+        .inspect(|s| warn!("{s}"));
 
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
     let runtime =

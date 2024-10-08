@@ -74,10 +74,11 @@ impl Unix {
         println!(
             r#"For best performance, it is necessary to set the kernel UDP buffer size limits.
 This program attempts to automatically set buffer sizes for itself,
-but this normally requires system administrator (root) privileges."#
+but this requires elevated privileges."#
         );
 
         if bsdish() {
+            // Received wisdom about BSD kernels leads me to recommend 115% of the max. I'm not sure this is necessary.
             let size = std::cmp::max(rmem, wmem) * 115 / 100;
             println!(
                 r#"
