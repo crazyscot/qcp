@@ -161,31 +161,14 @@ async fn manage_request(
         // This async block reports on errors.
         if processed.source.host.is_some() {
             // This is a Get
-            do_get(
-                sp,
-                &processed.source.filename,
-                &processed.destination.filename,
-                &processed,
-                mp,
-                spinner,
-                bandwidth,
-            )
-            .instrument(trace_span!("GET", filename = processed.source.filename))
-            .await
+            do_get(sp, &processed, mp, spinner, bandwidth)
+                .instrument(trace_span!("GET", filename = processed.source.filename))
+                .await
         } else {
             // This is a Put
-            do_put(
-                sp,
-                &processed.source.filename,
-                &processed.destination.filename,
-                &processed,
-                mp,
-                spinner,
-                file_buffer_size,
-                bandwidth,
-            )
-            .instrument(trace_span!("PUT", filename = processed.source.filename))
-            .await
+            do_put(sp, &processed, mp, spinner, file_buffer_size, bandwidth)
+                .instrument(trace_span!("PUT", filename = processed.source.filename))
+                .await
         }
     });
 
@@ -305,13 +288,14 @@ pub(crate) fn create_endpoint(
 
 async fn do_get(
     sp: RawStreamPair,
-    filename: &str,
-    dest: &str,
     cli_args: &UnpackedArgs,
     multi_progress: MultiProgress,
     spinner: ProgressBar,
     bandwidth: BandwidthParams,
 ) -> Result<u64> {
+    let filename = &cli_args.source.filename;
+    let dest = &cli_args.destination.filename;
+
     let mut stream: StreamPair = sp.into();
     let real_start = Instant::now();
     trace!("send command");
@@ -368,8 +352,6 @@ async fn do_get(
 
 async fn do_put(
     sp: RawStreamPair,
-    src_filename: &str,
-    dest_filename: &str,
     cli_args: &UnpackedArgs,
     multi_progress: MultiProgress,
     spinner: ProgressBar,
@@ -377,6 +359,8 @@ async fn do_put(
     bandwidth: BandwidthParams,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
+    let src_filename = &cli_args.source.filename;
+    let dest_filename = &cli_args.destination.filename;
 
     let path = PathBuf::from(src_filename);
     let (file, meta) = match crate::util::io::open_file(src_filename).await {
