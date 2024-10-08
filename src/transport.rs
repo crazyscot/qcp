@@ -75,6 +75,16 @@ impl BandwidthParams {
     pub fn bandwidth_delay_product_rx(&self) -> u64 {
         self.rx * self.rtt.as_millis() as u64 / 1000
     }
+    #[must_use]
+    /// Receive bandwidth (accessor)
+    pub fn rx(&self) -> u64 {
+        self.rx
+    }
+    #[must_use]
+    /// Transmit bandwidth (accessor)
+    pub fn tx(&self) -> u64 {
+        self.tx
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

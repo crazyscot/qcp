@@ -13,7 +13,7 @@ use crate::{
     util::setup_tracing,
 };
 use clap::Parser;
-use indicatif::MultiProgress;
+use indicatif::{MultiProgress, ProgressDrawTarget};
 use tracing::error_span;
 
 /// Main CLI entrypoint
@@ -36,7 +36,10 @@ pub fn cli() -> anyhow::Result<ExitCode> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn run_client(args: &CliArgs) -> anyhow::Result<ExitCode> {
-    let progress = MultiProgress::new(); // This writes to stderr
+    let progress = MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(
+        crate::console::MAX_UPDATE_FPS,
+    ));
+
     let trace_level = if args.debug {
         "trace"
     } else if args.quiet {

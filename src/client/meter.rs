@@ -26,9 +26,13 @@ pub(crate) struct InstaMeterRunner {
 }
 
 impl InstaMeterRunner {
-    pub(crate) fn new(source: &ProgressBar, destination: ProgressBar) -> Self {
+    pub(crate) fn new(source: &ProgressBar, destination: ProgressBar, max_throughput: u64) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(InstaMeterInner::new(source, destination))),
+            inner: Arc::new(Mutex::new(InstaMeterInner::new(
+                source,
+                destination,
+                max_throughput,
+            ))),
             task: None,
             stopper: None,
         }
@@ -92,14 +96,17 @@ pub(crate) struct InstaMeterInner {
     previous_position: u64,
     source: ProgressBar,
     destination: ProgressBar,
+    tick_calc: TickRateCalculator,
 }
 
 impl InstaMeterInner {
-    pub(crate) fn new(source: &ProgressBar, destination: ProgressBar) -> Self {
+    pub(crate) fn new(source: &ProgressBar, destination: ProgressBar, max_throughput: u64) -> Self {
+        #[allow(clippy::cast_precision_loss)]
         Self {
             previous_position: 0u64,
             source: source.clone(),
             destination,
+            tick_calc: TickRateCalculator::new(max_throughput as f64),
         }
     }
 
@@ -116,6 +123,73 @@ impl InstaMeterInner {
             rate.human_throughput_bytes()
         );
         self.destination.set_message(msg.clone());
+        self.destination
+            .enable_steady_tick(self.tick_calc.tick_time(progress));
         msg
+    }
+}
+
+/// This is a Rust implementation of the calibration algorithm from
+/// `https://github.com/rsalmei/alive-progress/blob/main/alive_progress/core/calibration.py`
+#[derive(Clone, Copy, Debug)]
+struct TickRateCalculator {
+    calibration: f64,
+    adjust: f64,
+    factor: f64,
+}
+
+const MIN_FPS: f64 = 0.2;
+const MAX_FPS: f64 = crate::console::MAX_UPDATE_FPS as f64;
+
+impl TickRateCalculator {
+    fn new(max_throughput: f64) -> Self {
+        let calibration = f64::max(max_throughput, 0.000_001);
+        let adjust = 100. / f64::min(calibration, 100.);
+        #[allow(clippy::cast_lossless)]
+        let factor = (MAX_FPS - MIN_FPS) / ((calibration * adjust) + 1.).log10();
+
+        Self {
+            calibration,
+            adjust,
+            factor,
+        }
+    }
+    fn tick_rate(&self, rate: f64) -> f64 {
+        if rate <= 0. {
+            10. // Initial rate
+        } else if rate <= self.calibration {
+            ((rate * self.adjust) + 1.).log10() * self.factor + MIN_FPS
+        } else {
+            MAX_FPS
+        }
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn tick_time(&self, rate: f64) -> Duration {
+        Duration::from_millis((1000. / self.tick_rate(rate)) as u64)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::TickRateCalculator;
+
+    fn rate(tput: f64) {
+        let trc = TickRateCalculator::new(5. * 37_500_000.0);
+        let hz = trc.tick_rate(tput);
+        let dura = trc.tick_time(tput);
+        println!("tput {tput} -> rate {hz} -> {dura:?}");
+    }
+
+    #[test]
+    fn rates() {
+        rate(1.);
+        rate(10.);
+        rate(100.);
+        rate(1_000.);
+        rate(10_000.);
+        rate(100_000.);
+        rate(1_000_000.);
+        rate(10_000_000.);
+        rate(37_500_000.);
     }
 }

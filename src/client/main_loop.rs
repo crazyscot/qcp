@@ -90,14 +90,15 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     // Show time! ---------------------
     spinner.set_message("Transferring data");
     timers.next(SHOW_TIME);
-    let file_buffer_size =
-        usize::try_from(BandwidthConfig::from(BandwidthParams::from(args)).send_buffer)?;
+    let bandwidth = BandwidthParams::from(args);
+    let file_buffer_size = usize::try_from(BandwidthConfig::from(bandwidth).send_buffer)?;
     let result = manage_request(
         connection,
         processed_args,
         progress.clone(),
         spinner.clone(),
         file_buffer_size,
+        bandwidth,
     )
     .await;
     let total_bytes = match result {
@@ -150,6 +151,7 @@ async fn manage_request(
     mp: MultiProgress,
     spinner: ProgressBar,
     file_buffer_size: usize,
+    bandwidth: BandwidthParams,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
     let _jh = tasks.spawn(async move {
@@ -166,6 +168,7 @@ async fn manage_request(
                 &processed,
                 mp,
                 spinner,
+                bandwidth,
             )
             .instrument(trace_span!("GET", filename = processed.source.filename))
             .await
@@ -179,6 +182,7 @@ async fn manage_request(
                 mp,
                 spinner,
                 file_buffer_size,
+                bandwidth,
             )
             .instrument(trace_span!("PUT", filename = processed.source.filename))
             .await
@@ -306,6 +310,7 @@ async fn do_get(
     cli_args: &UnpackedArgs,
     multi_progress: MultiProgress,
     spinner: ProgressBar,
+    bandwidth: BandwidthParams,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
     let real_start = Instant::now();
@@ -337,7 +342,8 @@ async fn do_get(
     let progress_bar = progress_bar_for(&multi_progress, cli_args, header.size + 16)?
         .with_elapsed(Instant::now().duration_since(real_start));
 
-    let mut meter = crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner);
+    let mut meter =
+        crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, bandwidth.rx());
     meter.start().await;
 
     let inbound = progress_bar.wrap_async_read(stream.recv);
@@ -368,6 +374,7 @@ async fn do_put(
     multi_progress: MultiProgress,
     spinner: ProgressBar,
     file_buffer_size: usize,
+    bandwidth: BandwidthParams,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
 
@@ -390,7 +397,8 @@ async fn do_put(
     let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
     let progress_bar = progress_bar_for(&multi_progress, cli_args, steps)?;
     let mut outbound = progress_bar.wrap_async_write(stream.send);
-    let mut meter = crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner);
+    let mut meter =
+        crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, bandwidth.tx());
     meter.start().await;
 
     trace!("sending command");

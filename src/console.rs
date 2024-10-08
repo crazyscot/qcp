@@ -1,6 +1,8 @@
 // Console related functions and styling
 // (c) 2024 Ross Younger
 
+pub(crate) const MAX_UPDATE_FPS: u8 = 20;
+
 use console::Term;
 
 const PROGRESS_STYLE_COMPACT: &str =
