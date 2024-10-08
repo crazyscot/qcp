@@ -96,6 +96,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
         connection,
         processed_args,
         progress.clone(),
+        spinner.clone(),
         file_buffer_size,
     )
     .await;
@@ -147,6 +148,7 @@ async fn manage_request(
     connection: Connection,
     processed: UnpackedArgs,
     mp: MultiProgress,
+    spinner: ProgressBar,
     file_buffer_size: usize,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
@@ -163,6 +165,7 @@ async fn manage_request(
                 &processed.destination.filename,
                 &processed,
                 mp,
+                spinner,
             )
             .instrument(trace_span!("GET", filename = processed.source.filename))
             .await
@@ -174,6 +177,7 @@ async fn manage_request(
                 &processed.destination.filename,
                 &processed,
                 mp,
+                spinner,
                 file_buffer_size,
             )
             .instrument(trace_span!("PUT", filename = processed.source.filename))
@@ -301,6 +305,7 @@ async fn do_get(
     dest: &str,
     cli_args: &UnpackedArgs,
     multi_progress: MultiProgress,
+    spinner: ProgressBar,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
     let real_start = Instant::now();
@@ -332,6 +337,9 @@ async fn do_get(
     let progress_bar = progress_bar_for(&multi_progress, cli_args, header.size + 16)?
         .with_elapsed(Instant::now().duration_since(real_start));
 
+    let mut meter = crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner);
+    meter.start().await;
+
     let inbound = progress_bar.wrap_async_read(stream.recv);
 
     let mut inbound = inbound.take(header.size);
@@ -345,6 +353,7 @@ async fn do_get(
     // Trailer is empty for now, but its existence means the server believes the file was sent correctly
 
     // Note that the Quinn send stream automatically calls finish on drop.
+    meter.stop().await;
     file.flush().await?;
     trace!("complete");
     progress_bar.finish_and_clear();
@@ -357,6 +366,7 @@ async fn do_put(
     dest_filename: &str,
     cli_args: &UnpackedArgs,
     multi_progress: MultiProgress,
+    spinner: ProgressBar,
     file_buffer_size: usize,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
@@ -380,6 +390,8 @@ async fn do_put(
     let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
     let progress_bar = progress_bar_for(&multi_progress, cli_args, steps)?;
     let mut outbound = progress_bar.wrap_async_write(stream.send);
+    let mut meter = crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner);
+    meter.start().await;
 
     trace!("sending command");
     let mut file = BufReader::with_capacity(file_buffer_size, file);
@@ -439,6 +451,7 @@ async fn do_put(
     let trailer = FileTrailer::serialize_direct();
     outbound.write_all(&trailer).await?;
     outbound.flush().await?;
+    meter.stop().await;
 
     let response = Response::read(&mut stream.recv).await?;
     if response.status != Status::Ok {
