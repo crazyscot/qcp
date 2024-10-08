@@ -9,7 +9,7 @@ use crate::{
     client::client_main,
     os::os,
     server::server_main,
-    transport::{BandwidthParams, BandwidthConfig},
+    transport::{BandwidthConfig, BandwidthParams},
     util::setup_tracing,
 };
 use clap::Parser;
@@ -34,7 +34,7 @@ pub fn cli() -> anyhow::Result<ExitCode> {
     run_client(&args)
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn run_client(args: &CliArgs) -> anyhow::Result<ExitCode> {
     let progress = MultiProgress::new(); // This writes to stderr
     let trace_level = if args.debug {
@@ -60,7 +60,7 @@ async fn run_client(args: &CliArgs) -> anyhow::Result<ExitCode> {
         })
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn run_server(args: &CliArgs) -> anyhow::Result<ExitCode> {
     let trace_level = if args.debug { "trace" } else { "error" };
     setup_tracing(trace_level, None, &args.log_file).inspect_err(|e| eprintln!("{e:?}"))?;
