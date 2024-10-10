@@ -11,6 +11,7 @@ use crate::{
     cert::Credentials,
     cli::CliArgs,
     protocol::control::{ClientMessage, ClosedownReport, ServerMessage, BANNER},
+    util::AddressFamily,
 };
 
 /// The parameter set needed to set up the control channel
@@ -24,6 +25,7 @@ pub struct Parameters {
     timeout: Duration,
     bbr: bool,
     iwind: Option<u64>,
+    family: AddressFamily,
 }
 
 impl TryFrom<&CliArgs> for Parameters {
@@ -40,6 +42,7 @@ impl TryFrom<&CliArgs> for Parameters {
             timeout: args.timeout,
             bbr: args.bbr,
             iwind: args.initial_congestion_window,
+            family: args.address_family(),
         })
     }
 }
@@ -92,7 +95,11 @@ impl ControlChannel {
     fn launch(args: &Parameters) -> Result<Self> {
         let mut server = tokio::process::Command::new("ssh");
         let _ = server.kill_on_drop(true);
-        // TODO extra ssh options
+        let _ = match args.family {
+            AddressFamily::Any => &mut server,
+            AddressFamily::IPv4 => server.arg("-4"),
+            AddressFamily::IPv6 => server.arg("-6"),
+        };
         let _ = server.args([
             &args.remote_host,
             "qcp",
