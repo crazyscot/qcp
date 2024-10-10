@@ -2,6 +2,7 @@
 // (c) 2024 Ross Younger
 
 use human_repr::{HumanCount, HumanDuration, HumanThroughput};
+use num_format::ToFormattedString as _;
 use quinn::ConnectionStats;
 use std::{cmp, fmt::Display, time::Duration};
 use tracing::{info, warn};
@@ -56,6 +57,7 @@ pub(crate) fn output_statistics(
     transport_time: Option<Duration>,
     remote_stats: ClosedownReport,
 ) {
+    let locale = &num_format::Locale::en;
     if payload_bytes != 0 {
         let size = payload_bytes.human_count_bytes();
         let rate = crate::util::stats::DataRate::new(payload_bytes, transport_time);
@@ -65,8 +67,9 @@ pub(crate) fn output_statistics(
     }
     if args.statistics {
         info!(
-            "Total packets sent: {} by us, {} by remote",
-            stats.path.sent_packets, remote_stats.sent_packets
+            "Total packets sent: {} by us; {} by remote",
+            stats.path.sent_packets.to_formatted_string(locale),
+            remote_stats.sent_packets.to_formatted_string(locale),
         );
     }
     let congestion = stats.path.congestion_events + remote_stats.congestion_events;
@@ -82,7 +85,7 @@ pub(crate) fn output_statistics(
         warn!(
             "Lost packets: {count}/{total} ({pct:.2}%, for {bytes})",
             count = stats.path.lost_packets.human_count_bare(),
-            total = stats.path.sent_packets,
+            total = stats.path.sent_packets.human_count_bare(),
             bytes = stats.path.lost_bytes.human_count_bytes(),
         );
     }
@@ -92,7 +95,7 @@ pub(crate) fn output_statistics(
         warn!(
             "Remote lost packets: {count}/{total} ({pct:.2}%, for {bytes})",
             count = remote_stats.lost_packets.human_count_bare(),
-            total = remote_stats.sent_packets,
+            total = remote_stats.sent_packets.human_count_bare(),
             bytes = remote_stats.lost_bytes.human_count_bytes(),
         );
     }
@@ -104,12 +107,14 @@ pub(crate) fn output_statistics(
             "Path MTU {pmtu}, round-trip time {rtt}, final congestion window {cwnd}",
             pmtu = stats.path.current_mtu,
             rtt = stats.path.rtt.human_duration(),
+            cwnd = cwnd.to_formatted_string(locale),
         );
         let black_holes = stats.path.black_holes_detected + remote_stats.black_holes_detected;
         info!(
             "{tx} datagrams sent, {rx} received, {black_holes} black holes detected",
             tx = stats.udp_tx.datagrams.human_count_bare(),
             rx = stats.udp_rx.datagrams.human_count_bare(),
+            black_holes = black_holes.to_formatted_string(locale),
         );
         if payload_bytes != 0 {
             #[allow(clippy::cast_precision_loss)]
@@ -117,7 +122,9 @@ pub(crate) fn output_statistics(
                 100. * (sender_sent_bytes - payload_bytes) as f64 / payload_bytes as f64;
             info!(
                 "{} total bytes sent for {} bytes payload  ({:.2}% overhead/loss)",
-                sender_sent_bytes, payload_bytes, overhead_pct
+                sender_sent_bytes.to_formatted_string(locale),
+                payload_bytes.to_formatted_string(locale),
+                overhead_pct
             );
         }
     }
