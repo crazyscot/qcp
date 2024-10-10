@@ -119,18 +119,19 @@ pub(crate) struct CliArgs {
     )]
     pub rtt: u16,
 
+    /// Selects use of the experimental Bbr congestion control algorithm.
+    /// (default: use Cubic, which is the algorithm TCP uses).
+    /// Use with caution!
+    #[arg(long, action, help_heading("Network tuning"), display_order(50))]
+    pub bbr: bool,
+
     /// (Network wizards only! Setting this too high will cause a reduction in throughput.)
     /// The initial value for the sending congestion control window.
-    /// qcp uses the CUBIC congestion control algorithm. The window grows by the number of bytes acknowledged each time,
+    /// The default is specified by the selected congestion control algorithm.
+    /// The window grows as the remote endpoint acknowledges receipt of packets,
     /// until encountering saturation or congestion.
-    #[arg(
-        hide(true),
-        long,
-        help_heading("Network tuning"),
-        default_value("14720"),
-        value_name = "bytes"
-    )]
-    pub initial_congestion_window: u64,
+    #[arg(hide(true), long, help_heading("Network tuning"), value_name = "bytes")]
+    pub initial_congestion_window: Option<u64>,
 
     // POSITIONAL ARGUMENTS ================================================================
     /// The source file. This may be a local filename, or remote specified as HOST:FILE.

@@ -5,7 +5,10 @@ use std::{fmt::Display, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use human_repr::{HumanCount, HumanDuration as _};
-use quinn::{congestion::CubicConfig, TransportConfig};
+use quinn::{
+    congestion::{BbrConfig, CubicConfig},
+    TransportConfig,
+};
 use tracing::{debug, info};
 
 use crate::cli::CliArgs;
@@ -25,6 +28,15 @@ pub enum ThroughputMode {
     Both,
 }
 
+/// Selects the congestion control algorithm to use
+#[derive(Copy, Clone, Debug)]
+pub enum CongestionControllerType {
+    /// The CUBIC algorithm (this is the congestion algorithm TCP uses)
+    Cubic,
+    /// The BBR algorithm (experimental!)
+    Bbr,
+}
+
 /// Parameters needed to set up transport configuration
 #[derive(Copy, Clone, Debug)]
 pub struct BandwidthParams {
@@ -35,20 +47,26 @@ pub struct BandwidthParams {
     /// Expected round trip time to the remote
     rtt: Duration,
     /// Initial congestion window (network wizards only!)
-    initial_window: u64,
+    initial_window: Option<u64>,
+    /// Congestion controller selection
+    congestion: CongestionControllerType,
 }
 
 impl Display for BandwidthParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let iwind = match self.initial_window {
+            None => "<default>".to_string(),
+            Some(s) => s.human_count_bytes().to_string(),
+        };
         write!(
             f,
-            "tx {tx} ({txbits}), rx {rx} ({rxbits}), rtt {rtt}, initial window {iwind}",
+            "tx {tx} ({txbits}), rx {rx} ({rxbits}), rtt {rtt}, congestion algorithm {congestion:?} with initial window {iwind}",
             tx = self.tx.human_count_bytes(),
             txbits = (self.tx * 8).human_count("bit"),
             rx = self.rx.human_count_bytes(),
             rxbits = (self.rx * 8).human_count("bit"),
             rtt = self.rtt.human_duration(),
-            iwind = self.initial_window.human_count_bytes()
+            congestion = self.congestion,
         )
     }
 }
@@ -60,6 +78,11 @@ impl From<&CliArgs> for BandwidthParams {
             tx: args.bandwidth_outbound.unwrap_or(args.bandwidth).size(),
             rtt: Duration::from_millis(u64::from(args.rtt)),
             initial_window: args.initial_congestion_window,
+            congestion: if args.bbr {
+                CongestionControllerType::Bbr
+            } else {
+                CongestionControllerType::Cubic
+            },
         }
     }
 }
@@ -168,9 +191,22 @@ pub fn create_config(
         ThroughputMode::Tx => (),
     }
 
-    let mut cubic = CubicConfig::default();
-    let _ = cubic.initial_window(params.initial_window);
-    let _ = config.congestion_controller_factory(Arc::new(cubic));
+    match params.congestion {
+        CongestionControllerType::Cubic => {
+            let mut cubic = CubicConfig::default();
+            if let Some(w) = params.initial_window {
+                let _ = cubic.initial_window(w);
+            }
+            let _ = config.congestion_controller_factory(Arc::new(cubic));
+        }
+        CongestionControllerType::Bbr => {
+            let mut bbr = BbrConfig::default();
+            if let Some(w) = params.initial_window {
+                let _ = bbr.initial_window(w);
+            }
+            let _ = config.congestion_controller_factory(Arc::new(bbr));
+        }
+    }
 
     info!("Network configuration: {params}");
     debug!("Buffer configuration: {bcfg}",);

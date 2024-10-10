@@ -22,6 +22,8 @@ pub struct Parameters {
     remote_rx_bw_bytes: u64,
     rtt_ms: u16,
     timeout: Duration,
+    bbr: bool,
+    iwind: Option<u64>,
 }
 
 impl TryFrom<&CliArgs> for Parameters {
@@ -36,6 +38,8 @@ impl TryFrom<&CliArgs> for Parameters {
             remote_tx_bw_bytes: args.bandwidth.size(),
             rtt_ms: args.rtt,
             timeout: args.timeout,
+            bbr: args.bbr,
+            iwind: args.initial_congestion_window,
         })
     }
 }
@@ -102,6 +106,12 @@ impl ControlChannel {
         ]);
         if args.remote_debug {
             let _ = server.arg("--debug");
+        }
+        if args.bbr {
+            let _ = server.arg("--bbr");
+        }
+        if let Some(w) = args.iwind {
+            let _ = server.args(["--initial-congestion-window", &w.to_string()]);
         }
         let _ = server
             .stdin(Stdio::piped())
