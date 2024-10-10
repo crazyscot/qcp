@@ -17,7 +17,7 @@ use crate::{
 /// The parameter set needed to set up the control channel
 #[derive(Debug)]
 pub struct Parameters {
-    remote_host: String,
+    remote_user_host: String,
     remote_debug: bool,
     remote_tx_bw_bytes: u64,
     remote_rx_bw_bytes: u64,
@@ -33,7 +33,7 @@ impl TryFrom<&CliArgs> for Parameters {
 
     fn try_from(args: &CliArgs) -> std::result::Result<Self, Self::Error> {
         Ok(Self {
-            remote_host: args.remote_host()?.to_string(),
+            remote_user_host: args.remote_user_host()?.to_string(),
             remote_debug: args.remote_debug,
             // Note that we flip inbound and outbound here as we're computing parameters to give to the remote
             remote_rx_bw_bytes: args.bandwidth_outbound_active(),
@@ -101,7 +101,7 @@ impl ControlChannel {
             AddressFamily::IPv6 => server.arg("-6"),
         };
         let _ = server.args([
-            &args.remote_host,
+            &args.remote_user_host,
             "qcp",
             "--server",
             "-b",

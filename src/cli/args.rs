@@ -134,7 +134,7 @@ pub(crate) struct CliArgs {
     pub initial_congestion_window: Option<u64>,
 
     // POSITIONAL ARGUMENTS ================================================================
-    /// The source file. This may be a local filename, or remote specified as HOST:FILE.
+    /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
     #[arg(
         conflicts_with_all(MODE_OPTIONS),
         required = true,
@@ -143,7 +143,7 @@ pub(crate) struct CliArgs {
     pub source: Option<FileSpec>,
 
     /// Destination. This may be a file or directory. It may be local or remote
-    /// (specified as HOST:DESTINATION, or simply HOST: to copy to your home directory there).
+    /// (specified as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there).
     #[arg(
         conflicts_with_all(MODE_OPTIONS),
         required = true,
@@ -163,7 +163,7 @@ impl CliArgs {
         }
     }
 
-    pub(crate) fn remote_host(&self) -> anyhow::Result<&str> {
+    pub(crate) fn remote_user_host(&self) -> anyhow::Result<&str> {
         let src = self.source.as_ref().ok_or(anyhow::anyhow!(
             "both source and destination must be specified"
         ))?;
@@ -174,6 +174,13 @@ impl CliArgs {
             .host
             .as_ref()
             .unwrap_or_else(|| dest.host.as_ref().unwrap()))
+    }
+
+    pub(crate) fn remote_host(&self) -> anyhow::Result<&str> {
+        let user_host = self.remote_user_host()?;
+        // It might be user@host, or it might be just the hostname or IP.
+        let (_, host) = user_host.split_once('@').unwrap_or(("", user_host));
+        Ok(host)
     }
 
     /// Convenience wrapper that returns the active value to use for outbound bandwidth
