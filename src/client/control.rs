@@ -26,6 +26,8 @@ pub struct Parameters {
     bbr: bool,
     iwind: Option<u64>,
     family: AddressFamily,
+    ssh_client: String,
+    ssh_opts: Vec<String>,
 }
 
 impl TryFrom<&CliArgs> for Parameters {
@@ -43,6 +45,8 @@ impl TryFrom<&CliArgs> for Parameters {
             bbr: args.bbr,
             iwind: args.initial_congestion_window,
             family: args.address_family(),
+            ssh_client: args.ssh.clone(),
+            ssh_opts: args.ssh_opt.clone(),
         })
     }
 }
@@ -93,13 +97,14 @@ impl ControlChannel {
 
     /// This is effectively a constructor. At present, it launches a subprocess.
     fn launch(args: &Parameters) -> Result<Self> {
-        let mut server = tokio::process::Command::new("ssh");
+        let mut server = tokio::process::Command::new(&args.ssh_client);
         let _ = server.kill_on_drop(true);
         let _ = match args.family {
             AddressFamily::Any => &mut server,
             AddressFamily::IPv4 => server.arg("-4"),
             AddressFamily::IPv6 => server.arg("-6"),
         };
+        let _ = server.args(&args.ssh_opts);
         let _ = server.args([
             &args.remote_user_host,
             "qcp",

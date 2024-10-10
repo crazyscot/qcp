@@ -41,7 +41,7 @@ pub(crate) struct CliArgs {
     /// intended for interactive use.
     #[arg(
         long, help_heading("Modes"), hide = true,
-        conflicts_with_all(["help_buffers", "quiet", "statistics", "timeout", "ipv4", "ipv6", "remote_debug", "profile"])
+        conflicts_with_all(["help_buffers", "quiet", "statistics", "timeout", "ipv4", "ipv6", "remote_debug", "profile", "source", "destination", "ssh", "ssh_opt"])
     )]
     pub server: bool,
 
@@ -70,6 +70,21 @@ pub(crate) struct CliArgs {
     /// Forces IPv6 connection (default: autodetect)
     #[arg(short = '6', long, action, conflicts_with("ipv4"))]
     pub ipv6: bool,
+
+    /// Specifies the ssh client program to use
+    #[arg(long, default_value("ssh"))]
+    pub ssh: String,
+
+    /// Specifies an additional option or argument to pass to the ssh client.
+    /// Note: you must repeat `-S` for each.
+    /// For example, to pass `-i /dev/null` to ssh, specify `-S -i -S /dev/null`
+    #[arg(
+        short = 'S',
+        action,
+        value_name("ssh-option"),
+        allow_hyphen_values(true)
+    )]
+    pub ssh_opt: Vec<String>,
 
     // CLIENT DEBUG ----------------------------
     /// Enable detailed debug output
