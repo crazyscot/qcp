@@ -42,9 +42,11 @@ impl Display for BandwidthParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "tx {tx}, rx {rx}, rtt {rtt}, initial window {iwind}",
+            "tx {tx} ({txbits}), rx {rx} ({rxbits}), rtt {rtt}, initial window {iwind}",
             tx = self.tx.human_count_bytes(),
+            txbits = (self.tx * 8).human_count("bit"),
             rx = self.rx.human_count_bytes(),
+            rxbits = (self.rx * 8).human_count("bit"),
             rtt = self.rtt.human_duration(),
             iwind = self.initial_window.human_count_bytes()
         )

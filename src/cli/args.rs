@@ -93,7 +93,7 @@ pub(crate) struct CliArgs {
     /// e.g. "10M" or "256k". Note that this is described in bytes, not bits;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable upper limit.
-    #[arg(short('b'), long, help_heading("Network tuning"), display_order(50), default_value("12M"), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
+    #[arg(short('b'), long, help_heading("Network tuning"), display_order(50), default_value("12500k"), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
     pub bandwidth: Bytes<u64>,
 
     /// The maximum network bandwidth we expect sending data TO the remote system,

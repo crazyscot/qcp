@@ -55,6 +55,13 @@ pub(crate) fn output_statistics(
     payload_bytes: u64,
     transport_time: Option<Duration>,
 ) {
+    if payload_bytes != 0 {
+        let size = payload_bytes.human_count_bytes();
+        let rate = crate::util::stats::DataRate::new(payload_bytes, transport_time);
+        let transport_time_str =
+            transport_time.map_or("unknown".to_string(), |d| d.human_duration().to_string());
+        info!("Transferred {size} in {transport_time_str}; average {rate}");
+    }
     if stats.path.congestion_events > 0 {
         warn!(
             "Congestion events: {}",
@@ -65,24 +72,28 @@ pub(crate) fn output_statistics(
         info!("Sent packets: {}", stats.path.sent_packets);
     }
     if stats.path.lost_packets > 0 {
+        #[allow(clippy::cast_precision_loss)]
+        let pct = 100. * stats.path.lost_packets as f64 / stats.path.sent_packets as f64;
         warn!(
-            "Lost packets: {} ({})",
-            stats.path.lost_packets.human_count_bare(),
-            stats.path.lost_bytes.human_count_bytes()
+            "Lost packets: {count}/{total} ({pct:.2}%, for {bytes})",
+            count = stats.path.lost_packets.human_count_bare(),
+            total = stats.path.sent_packets,
+            bytes = stats.path.lost_bytes.human_count_bytes(),
         );
     }
 
     let total_bytes = stats.udp_tx.bytes + stats.udp_rx.bytes;
     if args.statistics {
         info!(
-            "Path MTU {}, round-trip time {}",
-            stats.path.current_mtu,
-            stats.path.rtt.human_duration()
+            "Path MTU {pmtu}, round-trip time {rtt}",
+            pmtu = stats.path.current_mtu,
+            rtt = stats.path.rtt.human_duration(),
         );
         info!(
-            "{} frames sent, {} received",
-            stats.udp_tx.datagrams.human_count_bare(),
-            stats.udp_rx.datagrams.human_count_bare()
+            "{tx} datagrams sent, {rx} received, {bhd} black holes detected",
+            tx = stats.udp_tx.datagrams.human_count_bare(),
+            rx = stats.udp_rx.datagrams.human_count_bare(),
+            bhd = stats.path.black_holes_detected,
         );
         if payload_bytes != 0 {
             #[allow(clippy::cast_precision_loss)]
@@ -93,12 +104,12 @@ pub(crate) fn output_statistics(
             );
         }
     }
-    if payload_bytes != 0 {
-        let size = payload_bytes.human_count("B");
-        let rate = crate::util::stats::DataRate::new(payload_bytes, transport_time);
-        let transport_time_str =
-            transport_time.map_or("unknown".to_string(), |d| d.human_duration().to_string());
-        info!("Transferred {size} in {transport_time_str}; average {rate}");
+    if stats.path.rtt.as_millis() > args.rtt.into() {
+        warn!(
+            "Measured path RTT {rtt_measured:?} was greater than configuration; for better performance, next time try --rtt {rtt_param}",
+            rtt_measured = stats.path.rtt,
+            rtt_param = stats.path.rtt.as_millis()+1, // round up
+        );
     }
 }
 

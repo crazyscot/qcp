@@ -4,7 +4,6 @@
 use std::{net::IpAddr, process::Stdio, time::Duration};
 
 use anyhow::{Context as _, Result};
-use human_repr::HumanCount;
 use tokio::{io::AsyncReadExt as _, time::timeout};
 use tracing::{debug, trace};
 
@@ -96,9 +95,9 @@ impl ControlChannel {
             "qcp",
             "--server",
             "-b",
-            &args.remote_rx_bw_bytes.human_count_bare().to_string(),
+            &args.remote_rx_bw_bytes.to_string(),
             "-B",
-            &args.remote_tx_bw_bytes.human_count_bare().to_string(),
+            &args.remote_tx_bw_bytes.to_string(),
             "--rtt",
             &args.rtt_ms.to_string(),
         ]);
