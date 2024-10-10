@@ -82,7 +82,9 @@ impl ControlChannel {
             .stdin
             .as_mut()
             .ok_or(anyhow!("could not access process stdin (can't happen?)"))?;
-        ClientMessage::write(&mut pipe, &credentials.certificate, server_address.into()).await?;
+        ClientMessage::write(&mut pipe, &credentials.certificate, server_address.into())
+            .await
+            .with_context(|| "writing client message")?;
 
         let mut server_output = new1
             .process
@@ -91,7 +93,9 @@ impl ControlChannel {
             .ok_or(anyhow!("could not access process stdout (can't happen?)"))?;
 
         trace!("waiting for server message");
-        let message = ServerMessage::read(&mut server_output).await?;
+        let message = ServerMessage::read(&mut server_output)
+            .await
+            .with_context(|| "reading server message")?;
         Ok((new1, message))
     }
 
@@ -145,7 +149,10 @@ impl ControlChannel {
 
         let n = timeout(limit, n_fut)
             .await
-            .with_context(|| "timed out reading server banner")??;
+            // failure here means we timed out:
+            .with_context(|| "timed out reading server banner")?
+            // failure here means the child process couldn't be launched
+            .with_context(|| "failed to connect control channel (check error output above)")?;
 
         let read_banner = std::str::from_utf8(&buf).with_context(|| "bad server banner")?;
         anyhow::ensure!(n != 0, "failed to connect"); // the process closed its stdout
