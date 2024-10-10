@@ -110,6 +110,9 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     spinner.set_message("Shutting down");
     // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
     endpoint.close(1u8.into(), "finished".as_bytes());
+    let remote_stats = control.read_closedown_report().await?;
+    debug!("remote reported stats: {:?}", remote_stats);
+
     let control_fut = control.close();
     let _ = timeout(args.timeout, endpoint.wait_idle())
         .await
@@ -132,6 +135,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
             &connection2.stats(),
             total_bytes,
             transport_time,
+            remote_stats,
         );
     }
 

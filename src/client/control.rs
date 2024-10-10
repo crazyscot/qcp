@@ -3,14 +3,14 @@
 
 use std::{net::IpAddr, process::Stdio, time::Duration};
 
-use anyhow::{Context as _, Result};
+use anyhow::{anyhow, Context as _, Result};
 use tokio::{io::AsyncReadExt as _, time::timeout};
 use tracing::{debug, trace};
 
 use crate::{
     cert::Credentials,
     cli::CliArgs,
-    protocol::control::{ClientMessage, ServerMessage, BANNER},
+    protocol::control::{ClientMessage, ClosedownReport, ServerMessage, BANNER},
 };
 
 /// The parameter set needed to set up the control channel
@@ -62,7 +62,6 @@ impl ControlChannel {
         credentials: &Credentials,
         server_address: IpAddr,
     ) -> Result<(ControlChannel, ServerMessage)> {
-        use anyhow::anyhow;
         debug!("opening control channel");
         let mut new1 = Self::launch(parameters)?;
         new1.wait_for_banner(parameters.timeout).await?;
@@ -130,5 +129,14 @@ impl ControlChannel {
         anyhow::ensure!(n != 0, "failed to connect"); // the process closed its stdout
         anyhow::ensure!(BANNER == read_banner, "server banner not as expected");
         Ok(())
+    }
+
+    pub(crate) async fn read_closedown_report(&mut self) -> Result<ClosedownReport> {
+        let pipe = self
+            .process
+            .stdout
+            .as_mut()
+            .ok_or(anyhow!("could not access process stdout (can't happen?)"))?;
+        ClosedownReport::read(pipe).await
     }
 }

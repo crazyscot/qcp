@@ -18,3 +18,13 @@ struct ServerMessage {
     warning @3: Text; # If present, a warning message to be relayed to a human
     bandwidthInfo @4: Text; # Reports the server's active bandwidth configuration
 }
+
+struct ClosedownReport {
+    finalCongestionWindow @0: UInt64;
+    sentPackets @1: UInt64;
+    lostPackets @2: UInt64;
+    lostBytes @3: UInt64;
+    congestionEvents @4: UInt64;
+    blackHoles @5: UInt64;
+    sentBytes @6: UInt64;
+}

@@ -3,10 +3,10 @@
 
 use human_repr::{HumanCount, HumanDuration, HumanThroughput};
 use quinn::ConnectionStats;
-use std::{fmt::Display, time::Duration};
+use std::{cmp, fmt::Display, time::Duration};
 use tracing::{info, warn};
 
-use crate::cli::CliArgs;
+use crate::{cli::CliArgs, protocol::control::ClosedownReport};
 
 /// Human friendly output helper
 #[derive(Debug, Clone, Copy)]
@@ -54,6 +54,7 @@ pub(crate) fn output_statistics(
     stats: &ConnectionStats,
     payload_bytes: u64,
     transport_time: Option<Duration>,
+    remote_stats: ClosedownReport,
 ) {
     if payload_bytes != 0 {
         let size = payload_bytes.human_count_bytes();
@@ -62,14 +63,18 @@ pub(crate) fn output_statistics(
             transport_time.map_or("unknown".to_string(), |d| d.human_duration().to_string());
         info!("Transferred {size} in {transport_time_str}; average {rate}");
     }
-    if stats.path.congestion_events > 0 {
-        warn!(
-            "Congestion events: {}",
-            stats.path.congestion_events.human_count_bare()
+    if args.statistics {
+        info!(
+            "Total packets sent: {} by us, {} by remote",
+            stats.path.sent_packets, remote_stats.sent_packets
         );
     }
-    if args.statistics {
-        info!("Sent packets: {}", stats.path.sent_packets);
+    let congestion = stats.path.congestion_events + remote_stats.congestion_events;
+    if congestion > 0 {
+        warn!(
+            "Congestion events detected: {}",
+            congestion.human_count_bare()
+        );
     }
     if stats.path.lost_packets > 0 {
         #[allow(clippy::cast_precision_loss)]
@@ -81,33 +86,46 @@ pub(crate) fn output_statistics(
             bytes = stats.path.lost_bytes.human_count_bytes(),
         );
     }
+    if remote_stats.lost_packets > 0 {
+        #[allow(clippy::cast_precision_loss)]
+        let pct = 100. * remote_stats.lost_packets as f64 / remote_stats.sent_packets as f64;
+        warn!(
+            "Remote lost packets: {count}/{total} ({pct:.2}%, for {bytes})",
+            count = remote_stats.lost_packets.human_count_bare(),
+            total = remote_stats.sent_packets,
+            bytes = remote_stats.lost_bytes.human_count_bytes(),
+        );
+    }
 
-    let total_bytes = stats.udp_tx.bytes + stats.udp_rx.bytes;
+    let sender_sent_bytes = cmp::max(stats.udp_tx.bytes, remote_stats.sent_bytes);
     if args.statistics {
+        let cwnd = cmp::max(stats.path.cwnd, remote_stats.cwnd);
         info!(
-            "Path MTU {pmtu}, round-trip time {rtt}",
+            "Path MTU {pmtu}, round-trip time {rtt}, final congestion window {cwnd}",
             pmtu = stats.path.current_mtu,
             rtt = stats.path.rtt.human_duration(),
         );
+        let black_holes = stats.path.black_holes_detected + remote_stats.black_holes_detected;
         info!(
-            "{tx} datagrams sent, {rx} received, {bhd} black holes detected",
+            "{tx} datagrams sent, {rx} received, {black_holes} black holes detected",
             tx = stats.udp_tx.datagrams.human_count_bare(),
             rx = stats.udp_rx.datagrams.human_count_bare(),
-            bhd = stats.path.black_holes_detected,
         );
         if payload_bytes != 0 {
             #[allow(clippy::cast_precision_loss)]
-            let overhead_pct = 100. * (total_bytes - payload_bytes) as f64 / payload_bytes as f64;
+            let overhead_pct =
+                100. * (sender_sent_bytes - payload_bytes) as f64 / payload_bytes as f64;
             info!(
-                "{} total bytes transferred for {} bytes payload  ({:.2}% overhead)",
-                total_bytes, payload_bytes, overhead_pct
+                "{} total bytes sent for {} bytes payload  ({:.2}% overhead/loss)",
+                sender_sent_bytes, payload_bytes, overhead_pct
             );
         }
     }
     if stats.path.rtt.as_millis() > args.rtt.into() {
         warn!(
-            "Measured path RTT {rtt_measured:?} was greater than configuration; for better performance, next time try --rtt {rtt_param}",
+            "Measured path RTT {rtt_measured:?} was greater than configuration {rtt_arg}; for better performance, next time try --rtt {rtt_param}",
             rtt_measured = stats.path.rtt,
+            rtt_arg = args.rtt,
             rtt_param = stats.path.rtt.as_millis()+1, // round up
         );
     }

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::cert::Credentials;
 use crate::cli::CliArgs;
-use crate::protocol::control::{ClientMessage, ServerMessage};
+use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{session_capnp::Status, Command, FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 use crate::transport::{BandwidthConfig, BandwidthParams};
@@ -17,9 +17,10 @@ use anyhow::Context as _;
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
-use quinn::EndpointConfig;
+use quinn::{ConnectionStats, EndpointConfig};
 use rustls_pki_types::CertificateDer;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader};
+use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
@@ -75,13 +76,20 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     // We have tight control over what we expect (TLS peer certificate/name) so only need to handle one successful connection,
     // but a timeout is useful to give the user a cue that UDP isn't getting there.
     trace!("waiting for QUIC");
+    let (stats_tx, mut stats_rx) = oneshot::channel();
     if let Some(conn) = timeout(args.timeout, endpoint.accept())
         .await
         .with_context(|| "Timed out waiting for QUIC connection")?
     {
         let _ = tasks.spawn(async move {
-            if let Err(e) = handle_connection(conn, file_buffer_size).await {
-                error!("inward stream failed: {reason}", reason = e.to_string());
+            let result = handle_connection(conn, file_buffer_size).await;
+            match result {
+                Err(e) => error!("inward stream failed: {reason}", reason = e.to_string()),
+                Ok(conn_stats) => {
+                    let _ = stats_tx.send(conn_stats).inspect_err(|_| {
+                        warn!("unable to pass connection stats; possible logic error");
+                    });
+                }
             }
             trace!("connection completed");
         });
@@ -94,6 +102,8 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     let _ = tasks.join_all().await;
     endpoint.close(1u8.into(), "finished".as_bytes());
     endpoint.wait_idle().await;
+    let stats = stats_rx.try_recv().unwrap_or_default();
+    ClosedownReport::write(&mut stdout, &stats).await?;
     trace!("finished");
     Ok(())
 }
@@ -152,7 +162,10 @@ fn create_endpoint(
     ))
 }
 
-async fn handle_connection(conn: quinn::Incoming, file_buffer_size: usize) -> anyhow::Result<()> {
+async fn handle_connection(
+    conn: quinn::Incoming,
+    file_buffer_size: usize,
+) -> anyhow::Result<ConnectionStats> {
     let connection = conn.await?;
     info!("accepted connection from {}", connection.remote_address());
 
@@ -184,7 +197,7 @@ async fn handle_connection(conn: quinn::Incoming, file_buffer_size: usize) -> an
         }
     }
     .await?;
-    Ok(())
+    Ok(connection.stats())
 }
 
 async fn handle_stream(mut sp: StreamPair, file_buffer_size: usize) -> anyhow::Result<()> {
