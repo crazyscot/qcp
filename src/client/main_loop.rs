@@ -31,6 +31,8 @@ const SHOW_TIME: &str = "file transfer";
 /// Main CLI entrypoint
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> anyhow::Result<bool> {
+    // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
+    // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
     let guard = trace_span!("CLIENT").entered();
     let processed_args = UnpackedArgs::try_from(args)?;
     let mode = if processed_args.source.host.is_some() {
@@ -38,9 +40,6 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     } else {
         ThroughputMode::Tx
     };
-    let spinner = progress.add(ProgressBar::new_spinner());
-    spinner.set_message("Setting up");
-    spinner.enable_steady_tick(Duration::from_millis(150));
     let mut timers = StopwatchChain::new_running("setup");
 
     // Prep --------------------------
@@ -49,7 +48,6 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
     let server_address = lookup_host_by_family(host, args.address_family())?;
 
     // Control channel ---------------
-    spinner.set_message("Connecting control channel...");
     timers.next("control channel");
     let (mut control, server_message) =
         ControlChannel::transact(&args.try_into()?, &credentials, server_address).await?;
@@ -64,6 +62,8 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
+    let spinner = progress.add(ProgressBar::new_spinner());
+    spinner.enable_steady_tick(Duration::from_millis(150));
     spinner.set_message("Establishing data channel");
     timers.next("data channel setup");
     let endpoint = create_endpoint(

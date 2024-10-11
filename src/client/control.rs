@@ -22,7 +22,6 @@ pub struct Parameters {
     remote_tx_bw_bytes: u64,
     remote_rx_bw_bytes: u64,
     rtt_ms: u16,
-    timeout: Duration,
     bbr: bool,
     iwind: Option<u64>,
     family: AddressFamily,
@@ -41,7 +40,6 @@ impl TryFrom<&CliArgs> for Parameters {
             remote_rx_bw_bytes: args.bandwidth_outbound_active(),
             remote_tx_bw_bytes: args.bandwidth.size(),
             rtt_ms: args.rtt,
-            timeout: args.timeout,
             bbr: args.bbr,
             iwind: args.initial_congestion_window,
             family: args.address_family(),
@@ -75,7 +73,7 @@ impl ControlChannel {
     ) -> Result<(ControlChannel, ServerMessage)> {
         debug!("opening control channel");
         let mut new1 = Self::launch(parameters)?;
-        new1.wait_for_banner(parameters.timeout).await?;
+        new1.wait_for_banner().await?;
 
         let mut pipe = new1
             .process
@@ -132,7 +130,7 @@ impl ControlChannel {
         let _ = server
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit()) // TODO: pipe this more nicely, output on error?
+            .stderr(Stdio::inherit())
             .kill_on_drop(true);
         trace!("spawning command: {:?}", server);
         let process = server
@@ -141,22 +139,36 @@ impl ControlChannel {
         Ok(Self { process })
     }
 
-    async fn wait_for_banner(&mut self, limit: Duration) -> Result<()> {
-        let channel = self.process.stdout.as_mut().expect("missing server stdout");
+    async fn wait_for_banner(&mut self) -> Result<()> {
+        let channel = self
+            .process
+            .stdout
+            .as_mut()
+            .expect("logic error: missing server stdout");
         let mut buf = [0u8; BANNER.len()];
         let mut reader = channel.take(buf.len() as u64);
-        let n_fut = reader.read_exact(&mut buf);
 
-        let n = timeout(limit, n_fut)
+        // On entry, we cannot tell whether ssh might be attempting to interact with the user's tty.
+        // Therefore we cannot apply a timeout until we have at least one byte through.
+        // (Edge case: We cannot currently detect the case where the remote process starts but sends no banner.)
+
+        let n = reader
+            .read_exact(&mut buf[0..1])
             .await
-            // failure here means we timed out:
-            .with_context(|| "timed out reading server banner")?
-            // failure here means the child process couldn't be launched
-            .with_context(|| "failed to connect control channel (check error output above)")?;
+            .with_context(|| "failed to connect control channel")?;
+        anyhow::ensure!(n == 1, "control channel closed unexpectedly");
 
-        let read_banner = std::str::from_utf8(&buf).with_context(|| "bad server banner")?;
-        anyhow::ensure!(n != 0, "failed to connect"); // the process closed its stdout
-        anyhow::ensure!(BANNER == read_banner, "server banner not as expected");
+        // Now we have a character, apply a timeout to read the rest.
+        // It's hard to imagine a process not sending all of the banner in a single packet, so we'll keep this short.
+        let _ = timeout(Duration::from_secs(1), reader.read_exact(&mut buf[1..]))
+            .await
+            // outer failure means we timed out:
+            .with_context(|| "timed out reading server banner")?
+            // inner failure is some sort of I/O error or unexpected eof
+            .with_context(|| "error reading control channel")?;
+
+        let read_banner = std::str::from_utf8(&buf).with_context(|| "garbage server banner")?;
+        anyhow::ensure!(BANNER == read_banner, "incompatible server banner");
         Ok(())
     }
 
