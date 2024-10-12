@@ -30,7 +30,7 @@ const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
-pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyhow::Result<bool> {
+pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyhow::Result<bool> {
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
     let guard = trace_span!("CLIENT").entered();
@@ -48,7 +48,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyh
         &args.try_into()?,
         &credentials,
         server_address,
-        &progress,
+        &display,
         args.quiet,
     )
     .await?;
@@ -66,7 +66,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyh
     let spinner = if args.quiet {
         ProgressBar::hidden()
     } else {
-        progress.add(ProgressBar::new_spinner())
+        display.add(ProgressBar::new_spinner())
     };
     spinner.enable_steady_tick(Duration::from_millis(150));
     spinner.set_message("Establishing data channel");
@@ -100,7 +100,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyh
     let result = manage_request(
         connection,
         processed_args,
-        progress.clone(),
+        display.clone(),
         spinner.clone(),
         file_buffer_size,
         bandwidth,
@@ -148,7 +148,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyh
     if args.profile {
         info!("Elapsed time by phase:\n{timers}");
     }
-    progress.clear()?;
+    display.clear()?;
     Ok(result.is_ok())
 }
 
@@ -158,7 +158,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyh
 async fn manage_request(
     connection: Connection,
     processed: UnpackedArgs,
-    mp: MultiProgress,
+    display: MultiProgress,
     spinner: ProgressBar,
     file_buffer_size: usize,
     bandwidth: BandwidthParams,
@@ -172,7 +172,7 @@ async fn manage_request(
         // This async block reports on errors.
         if processed.source.host.is_some() {
             // This is a Get
-            do_get(sp, &processed, mp, spinner, bandwidth, quiet)
+            do_get(sp, &processed, display, spinner, bandwidth, quiet)
                 .instrument(trace_span!("GET", filename = processed.source.filename))
                 .await
         } else {
@@ -180,7 +180,7 @@ async fn manage_request(
             do_put(
                 sp,
                 &processed,
-                mp,
+                display,
                 spinner,
                 file_buffer_size,
                 bandwidth,
@@ -230,7 +230,7 @@ async fn manage_request(
 }
 
 fn progress_bar_for(
-    mp: &MultiProgress,
+    display: &MultiProgress,
     args: &UnpackedArgs,
     steps: u64,
     quiet: bool,
@@ -246,7 +246,7 @@ fn progress_bar_for(
             .to_string_lossy()
             .to_string()
     };
-    Ok(mp.add(
+    Ok(display.add(
         ProgressBar::new(steps)
             .with_style(indicatif::ProgressStyle::with_template(
                 crate::console::progress_style_for(
@@ -313,7 +313,7 @@ pub(crate) fn create_endpoint(
 async fn do_get(
     sp: RawStreamPair,
     cli_args: &UnpackedArgs,
-    multi_progress: MultiProgress,
+    display: MultiProgress,
     spinner: ProgressBar,
     bandwidth: BandwidthParams,
     quiet: bool,
@@ -348,7 +348,7 @@ async fn do_get(
     // Unfortunately, the file data is already well in flight at this point, leading to a flood of packets
     // that causes the estimated rate to spike unhelpfully at the beginning of the transfer.
     // Therefore we incorporate time in flight so far to get the estimate closer to reality.
-    let progress_bar = progress_bar_for(&multi_progress, cli_args, header.size + 16, quiet)?
+    let progress_bar = progress_bar_for(&display, cli_args, header.size + 16, quiet)?
         .with_elapsed(Instant::now().duration_since(real_start));
 
     let mut meter =
@@ -378,7 +378,7 @@ async fn do_get(
 async fn do_put(
     sp: RawStreamPair,
     cli_args: &UnpackedArgs,
-    multi_progress: MultiProgress,
+    display: MultiProgress,
     spinner: ProgressBar,
     file_buffer_size: usize,
     bandwidth: BandwidthParams,
@@ -405,7 +405,7 @@ async fn do_put(
     // Marshalled commands are currently 48 bytes + filename length
     // File headers are currently 36 + filename length; Trailers are 16 bytes.
     let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
-    let progress_bar = progress_bar_for(&multi_progress, cli_args, steps, quiet)?;
+    let progress_bar = progress_bar_for(&display, cli_args, steps, quiet)?;
     let mut outbound = progress_bar.wrap_async_write(stream.send);
     let mut meter =
         crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, bandwidth.tx());

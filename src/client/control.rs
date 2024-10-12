@@ -77,11 +77,11 @@ impl ControlChannel {
         parameters: &Parameters,
         credentials: &Credentials,
         server_address: IpAddr,
-        progress: &MultiProgress,
+        display: &MultiProgress,
         quiet: bool,
     ) -> Result<(ControlChannel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(parameters, progress, quiet)?;
+        let mut new1 = Self::launch(parameters, display, quiet)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -107,7 +107,7 @@ impl ControlChannel {
     }
 
     /// This is effectively a constructor. At present, it launches a subprocess.
-    fn launch(args: &Parameters, progress: &MultiProgress, quiet: bool) -> Result<Self> {
+    fn launch(args: &Parameters, display: &MultiProgress, quiet: bool) -> Result<Self> {
         let mut server = tokio::process::Command::new(&args.ssh_client);
         let _ = server.kill_on_drop(true);
         let _ = match args.family {
@@ -156,7 +156,7 @@ impl ControlChannel {
             let Some(stderr) = stderr else {
                 anyhow::bail!("could not get stderr of remote process");
             };
-            let cloned = progress.clone();
+            let cloned = display.clone();
             let _reader = tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr).lines();
                 while let Ok(Some(line)) = reader.next_line().await {
