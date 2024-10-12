@@ -41,7 +41,7 @@ async fn run_client(args: &CliArgs) -> anyhow::Result<ExitCode> {
     ));
 
     let trace_level = if args.debug {
-        "trace"
+        "debug"
     } else if args.quiet {
         "error"
     } else {
@@ -65,7 +65,7 @@ async fn run_client(args: &CliArgs) -> anyhow::Result<ExitCode> {
 
 #[tokio::main(flavor = "current_thread")]
 async fn run_server(args: &CliArgs) -> anyhow::Result<ExitCode> {
-    let trace_level = if args.debug { "trace" } else { "error" };
+    let trace_level = if args.debug { "debug" } else { "error" };
     setup_tracing(trace_level, None, &args.log_file).inspect_err(|e| eprintln!("{e:?}"))?;
     let _span = error_span!("SERVER").entered();
 

@@ -29,11 +29,19 @@ pub enum ThroughputMode {
 }
 
 /// Selects the congestion control algorithm to use
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, strum_macros::Display, clap::ValueEnum)]
+#[strum(serialize_all = "kebab_case")]
 pub enum CongestionControllerType {
-    /// The CUBIC algorithm (this is the congestion algorithm TCP uses)
+    /// The congestion algorithm TCP uses. This is good for most cases.
     Cubic,
-    /// The BBR algorithm (experimental!)
+    /// (Use with caution!) An experimental algorithm created by Google,
+    /// which increases goodput in some situations
+    /// (particularly long and fat connections where the intervening
+    /// buffers are shallow). However this comes at the cost of having
+    /// more data in-flight, and much greater packet retransmission.
+    /// See
+    /// `https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/`
+    /// for more discussion.
     Bbr,
 }
 
@@ -74,15 +82,11 @@ impl Display for BandwidthParams {
 impl From<&CliArgs> for BandwidthParams {
     fn from(args: &CliArgs) -> Self {
         Self {
-            rx: args.bandwidth.size(),
-            tx: args.bandwidth_outbound.unwrap_or(args.bandwidth).size(),
+            rx: args.rx_bw.size(),
+            tx: args.tx_bw.unwrap_or(args.rx_bw).size(),
             rtt: Duration::from_millis(u64::from(args.rtt)),
             initial_window: args.initial_congestion_window,
-            congestion: if args.bbr {
-                CongestionControllerType::Bbr
-            } else {
-                CongestionControllerType::Cubic
-            },
+            congestion: args.congestion,
         }
     }
 }
@@ -112,7 +116,7 @@ impl BandwidthParams {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Copy, Clone)]
 /// Computed buffer configuration
 pub(crate) struct BandwidthConfig {
     pub(crate) send_window: u64,
@@ -162,6 +166,7 @@ pub fn create_config(
     params: BandwidthParams,
     mode: ThroughputMode,
 ) -> Result<Arc<TransportConfig>> {
+    let congestion = params.congestion;
     let bcfg: BandwidthConfig = params.into();
 
     // Common setup
@@ -191,7 +196,7 @@ pub fn create_config(
         ThroughputMode::Tx => (),
     }
 
-    match params.congestion {
+    match congestion {
         CongestionControllerType::Cubic => {
             let mut cubic = CubicConfig::default();
             if let Some(w) = params.initial_window {

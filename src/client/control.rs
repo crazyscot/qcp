@@ -11,6 +11,7 @@ use crate::{
     cert::Credentials,
     cli::CliArgs,
     protocol::control::{ClientMessage, ClosedownReport, ServerMessage, BANNER},
+    transport::CongestionControllerType,
     util::{AddressFamily, PortRange},
 };
 
@@ -22,7 +23,7 @@ pub struct Parameters {
     remote_tx_bw_bytes: u64,
     remote_rx_bw_bytes: u64,
     rtt_ms: u16,
-    bbr: bool,
+    congestion: CongestionControllerType,
     iwind: Option<u64>,
     family: AddressFamily,
     ssh_client: String,
@@ -39,9 +40,9 @@ impl TryFrom<&CliArgs> for Parameters {
             remote_debug: args.remote_debug,
             // Note that we flip inbound and outbound here as we're computing parameters to give to the remote
             remote_rx_bw_bytes: args.bandwidth_outbound_active(),
-            remote_tx_bw_bytes: args.bandwidth.size(),
+            remote_tx_bw_bytes: args.rx_bw.size(),
             rtt_ms: args.rtt,
-            bbr: args.bbr,
+            congestion: args.congestion,
             iwind: args.initial_congestion_window,
             family: args.address_family(),
             ssh_client: args.ssh.clone(),
@@ -119,12 +120,11 @@ impl ControlChannel {
             &args.remote_tx_bw_bytes.to_string(),
             "--rtt",
             &args.rtt_ms.to_string(),
+            "--congestion",
+            &args.congestion.to_string(),
         ]);
         if args.remote_debug {
             let _ = server.arg("--debug");
-        }
-        if args.bbr {
-            let _ = server.arg("--bbr");
         }
         if let Some(w) = args.iwind {
             let _ = server.args(["--initial-congestion-window", &w.to_string()]);

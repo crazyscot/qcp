@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use crate::{
     build_info,
+    transport::CongestionControllerType,
     util::{AddressFamily, PortRange},
 };
 use clap::Parser;
@@ -24,13 +25,13 @@ fn parse_duration(arg: &str) -> Result<std::time::Duration, std::num::ParseIntEr
     author,
     version(build_info::GIT_VERSION),
     about,
-    before_help = "Example:   qcp some/file my-server:some-directory/",
+    before_help = "e.g.   qcp some/file my-server:some-directory/",
     infer_long_args(true)
 )]
 #[command(help_template(
     "\
 {name} version {version}
-(c) {author-with-newline}{about-with-newline}
+{about-with-newline}
 {usage-heading} {usage}
 {before-help}
 {all-args}{after-help}
@@ -40,7 +41,9 @@ fn parse_duration(arg: &str) -> Result<std::time::Duration, std::num::ParseIntEr
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct CliArgs {
     // MODE SELECTION ======================================================================
-    /// Operates in server mode. This is what we run on the remote machine; it is not
+    /// Operates in server mode.
+    ///
+    /// This is what we run on the remote machine; it is not
     /// intended for interactive use.
     #[arg(
         long, help_heading("Modes"), hide = true,
@@ -48,12 +51,10 @@ pub(crate) struct CliArgs {
     )]
     pub server: bool,
 
-    /// Outputs additional information about kernel UDP buffer sizes and platform-specific tips
-    #[arg(long, action, help_heading("Network tuning"))]
-    pub help_buffers: bool,
-
     // CLIENT-ONLY OPTIONS =================================================================
-    /// Quiet mode (no statistics or progress, report only errors)
+    /// Quiet mode
+    ///
+    /// Switches off progress display and statistics; reports only errors
     #[arg(short, long, action)]
     pub quiet: bool,
 
@@ -62,119 +63,135 @@ pub(crate) struct CliArgs {
     pub statistics: bool,
 
     /// Connection timeout for the QUIC endpoint.
+    ///
     /// This needs to be long enough for your network connection, but short enough to provide
     /// a timely indication that UDP may be blocked.
-    #[arg(short, long, default_value("5"), value_name("seconds"), value_parser=parse_duration)]
+    #[arg(short, long, default_value("5"), value_name("sec"), value_parser=parse_duration)]
     pub timeout: Duration,
 
-    /// Forces IPv4 connection (default: autodetect)
-    #[arg(short = '4', long, action)]
+    /// Forces IPv4 connection [default: autodetect]
+    #[arg(short = '4', long, action, help_heading("Connection"))]
     pub ipv4: bool,
-    /// Forces IPv6 connection (default: autodetect)
-    #[arg(short = '6', long, action, conflicts_with("ipv4"))]
+    /// Forces IPv6 connection [default: autodetect]
+    #[arg(
+        short = '6',
+        long,
+        action,
+        conflicts_with("ipv4"),
+        help_heading("Connection")
+    )]
     pub ipv6: bool,
 
     /// Specifies the ssh client program to use
-    #[arg(long, default_value("ssh"))]
+    #[arg(long, default_value("ssh"), help_heading("Connection"))]
     pub ssh: String,
 
-    /// Specifies an additional option or argument to pass to the ssh client.
-    /// Note: you must repeat `-S` for each.
-    /// For example, to pass `-i /dev/null` to ssh, specify `-S -i -S /dev/null`
+    /// Provides an additional option or argument to pass to the ssh client.
+    ///
+    /// Note that you must repeat `-S` for each.
+    /// For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`
     #[arg(
         short = 'S',
         action,
         value_name("ssh-option"),
-        allow_hyphen_values(true)
+        allow_hyphen_values(true),
+        help_heading("Connection")
     )]
     pub ssh_opt: Vec<String>,
 
+    /// Outputs additional information about kernel UDP buffer sizes and platform-specific tips
+    #[arg(long, action, help_heading("Network tuning"), display_order(50))]
+    pub help_buffers: bool,
+
     // CLIENT OR SERVER
-    /// Instructs the local endpoint to use a given UDP port or port range.
+    /// Uses the given UDP port or range on the local endpoint.
+    ///
     /// This can be useful when there is a firewall between the endpoints.
-    #[arg(
-        short = 'p',
-        long,
-        value_name("PORT1-PORT2"),
-        help_heading("Connection")
-    )]
+    #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
     pub port: Option<PortRange>,
 
     // CLIENT ONLY
-    /// Instructs the remote endpoint to use a given UDP port or port range.
+    /// Uses the given UDP port or range on the remote endpoint.
+    ///
     /// This can be useful when there is a firewall between the endpoints.
-    #[arg(
-        short = 'P',
-        long,
-        value_name("PORT1-PORT2"),
-        help_heading("Connection")
-    )]
+    #[arg(short = 'P', long, value_name("M-N"), help_heading("Connection"))]
     pub remote_port: Option<PortRange>,
 
     // CLIENT DEBUG ----------------------------
     /// Enable detailed debug output
-    #[arg(short, long, action, help_heading("Debug options"), display_order(100))]
+    ///
+    /// This has the same effect as setting `RUST_LOG=qcp=debug` in the environment.
+    /// If present, `RUST_LOG` overrides this option.
+    #[arg(short, long, action, help_heading("Debug"))]
     pub debug: bool,
-    /// Enables detailed server (remote) debug output
-    #[arg(long, action, help_heading("Debug options"))]
+    /// Enables detailed debug output from the remote endpoint
+    #[arg(long, action, help_heading("Debug"))]
     pub remote_debug: bool,
     /// Prints timing profile data after completion
-    #[arg(long, action, help_heading("Debug options"))]
+    #[arg(long, action, help_heading("Debug"))]
     pub profile: bool,
-    /// Log to a file. By default the log receives everything printed to stderr.
-    /// This can be overridden by setting the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
-    #[arg(short('l'), long, action, help_heading("Debug options"))]
+    /// Log to a file
+    ///
+    /// By default the log receives everything printed to stderr.
+    /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
+    #[arg(short('l'), long, action, help_heading("Debug"), value_name("FILE"))]
     pub log_file: Option<String>,
 
     // TUNING OPTIONS ======================================================================
     /// The maximum network bandwidth we expect receiving data FROM the remote system.
+    ///
     /// Along with the initial RTT, this directly affects the buffer sizes used.
     /// This may be specified directly as a number of bytes, or as an SI quantity
-    /// e.g. "10M" or "256k". Note that this is described in bytes, not bits;
+    /// e.g. "10M" or "256k". Note that this is described in BYTES, not bits;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
-    /// 125M might be a suitable upper limit.
-    #[arg(short('b'), long, help_heading("Network tuning"), display_order(50), default_value("12500k"), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
-    pub bandwidth: Bytes<u64>,
+    /// 125M might be a suitable setting.
+    #[arg(short('b'), long, help_heading("Network tuning"), display_order(10), default_value("12500k"), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
+    pub rx_bw: Bytes<u64>,
 
     /// The maximum network bandwidth we expect sending data TO the remote system,
+    ///
     /// if it is different from the bandwidth FROM the system.
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
-    /// If not given, it is assumed
-    /// This may be specified directly as a number of bytes, or as an SI quantity
-    /// e.g. "10M" or "256k". Note that this is described in bytes, not bits;
-    /// if (for example) you expect to fill a 1Gbit ethernet connection,
-    /// 125M might be a suitable upper limit.
+    /// [default: use --rx-bw]
     // see also: `bandwidth_outbound_active()`
-    #[arg(short('B'), long, help_heading("Network tuning"), display_order(50), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
-    pub bandwidth_outbound: Option<Bytes<u64>>,
+    #[arg(short('B'), long, help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
+    pub tx_bw: Option<Bytes<u64>>,
+
     /// The expected network Round Trip time to the target system, in milliseconds.
-    /// Along with the bandwidth limit, this directly affects the buffer sizes used.
-    /// (Buffer size = bandwidth * RTT)
     #[arg(
         short('r'),
         long,
         help_heading("Network tuning"),
+        display_order(1),
         default_value("300"),
         value_name("ms")
     )]
     pub rtt: u16,
 
-    /// Selects use of the experimental Bbr congestion control algorithm.
-    /// (default: use Cubic, which is the algorithm TCP uses).
-    /// Use with caution!
-    #[arg(long, action, help_heading("Network tuning"), display_order(50))]
-    pub bbr: bool,
+    /// Specifies the congestion control algorithm to use.
+    #[arg(
+        long,
+        action,
+        value_name = "alg",
+        help_heading("Advanced network tuning")
+    )]
+    #[clap(value_enum, default_value_t=CongestionControllerType::Cubic)]
+    pub congestion: CongestionControllerType,
 
-    /// (Network wizards only! Setting this too high will cause a reduction in throughput.)
+    /// (Network wizards only!)
     /// The initial value for the sending congestion control window.
-    /// The default is specified by the selected congestion control algorithm.
-    /// The window grows as the remote endpoint acknowledges receipt of packets,
-    /// until encountering saturation or congestion.
-    #[arg(hide(true), long, help_heading("Network tuning"), value_name = "bytes")]
+    ///
+    /// Setting this value too high reduces performance!
+    ///
+    /// If not specified, this setting is determined by the selected
+    /// congestion control algorithm.
+    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
     pub initial_congestion_window: Option<u64>,
 
     // POSITIONAL ARGUMENTS ================================================================
     /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
+    ///
+    /// Exactly one of source and destination must be remote.
     #[arg(
         conflicts_with_all(MODE_OPTIONS),
         required = true,
@@ -182,8 +199,11 @@ pub(crate) struct CliArgs {
     )]
     pub source: Option<FileSpec>,
 
-    /// Destination. This may be a file or directory. It may be local or remote
-    /// (specified as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there).
+    /// Destination. This may be a file or directory. It may be local or remote.
+    ///
+    /// If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there.
+    ///
+    /// Exactly one of source and destination must be remote.
     #[arg(
         conflicts_with_all(MODE_OPTIONS),
         required = true,
@@ -225,7 +245,7 @@ impl CliArgs {
 
     /// Convenience wrapper that returns the active value to use for outbound bandwidth
     pub(crate) fn bandwidth_outbound_active(&self) -> u64 {
-        self.bandwidth_outbound.unwrap_or(self.bandwidth).size()
+        self.tx_bw.unwrap_or(self.rx_bw).size()
     }
 }
 

@@ -264,7 +264,7 @@ pub(crate) fn create_endpoint(
     let bw = BandwidthParams::from(args);
     let _ = config.transport_config(crate::transport::create_config(bw, mode)?);
 
-    trace!("bind & configure socket, port={port:?}", port=args.port);
+    trace!("bind & configure socket, port={port:?}", port = args.port);
     let socket = util::socket::bind_range_for_peer(server_addr, args.port)?;
     let buffer_config = BandwidthConfig::from(bw);
     #[allow(clippy::cast_possible_truncation)]
