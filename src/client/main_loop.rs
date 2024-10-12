@@ -125,12 +125,13 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     // Post-transfer chatter -----------
     if !args.quiet {
         let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
-        crate::util::stats::output_statistics(
-            args,
+        crate::util::stats::process_statistics(
             &connection.stats(),
             total_bytes,
             transport_time,
             remote_stats,
+            args.bandwidth,
+            args.statistics,
         );
     }
 

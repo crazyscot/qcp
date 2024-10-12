@@ -7,7 +7,7 @@ use quinn::ConnectionStats;
 use std::{cmp, fmt::Display, time::Duration};
 use tracing::{info, warn};
 
-use crate::{cli::CliArgs, protocol::control::ClosedownReport};
+use crate::{protocol::control::ClosedownReport, transport::BandwidthParams};
 
 /// Human friendly output helper
 #[derive(Debug, Clone, Copy)]
@@ -50,12 +50,14 @@ impl Display for DataRate {
     }
 }
 
-pub(crate) fn output_statistics(
-    args: &CliArgs,
+/// Output the end-of-game statistics
+pub(crate) fn process_statistics(
     stats: &ConnectionStats,
     payload_bytes: u64,
     transport_time: Option<Duration>,
     remote_stats: ClosedownReport,
+    bandwidth: BandwidthParams,
+    show_statistics: bool,
 ) {
     let locale = &num_format::Locale::en;
     if payload_bytes != 0 {
@@ -65,7 +67,7 @@ pub(crate) fn output_statistics(
             transport_time.map_or("unknown".to_string(), |d| d.human_duration().to_string());
         info!("Transferred {size} in {transport_time_str}; average {rate}");
     }
-    if args.statistics {
+    if show_statistics {
         info!(
             "Total packets sent: {} by us; {} by remote",
             stats.path.sent_packets.to_formatted_string(locale),
@@ -101,7 +103,7 @@ pub(crate) fn output_statistics(
     }
 
     let sender_sent_bytes = cmp::max(stats.udp_tx.bytes, remote_stats.sent_bytes);
-    if args.statistics {
+    if show_statistics {
         let cwnd = cmp::max(stats.path.cwnd, remote_stats.cwnd);
         info!(
             "Path MTU {pmtu}, round-trip time {rtt}, final congestion window {cwnd}",
@@ -128,11 +130,11 @@ pub(crate) fn output_statistics(
             );
         }
     }
-    if stats.path.rtt.as_millis() > args.bandwidth.rtt.into() {
+    if stats.path.rtt.as_millis() > bandwidth.rtt.into() {
         warn!(
             "Measured path RTT {rtt_measured:?} was greater than configuration {rtt_arg}; for better performance, next time try --rtt {rtt_param}",
             rtt_measured = stats.path.rtt,
-            rtt_arg = args.bandwidth.rtt,
+            rtt_arg = bandwidth.rtt,
             rtt_param = stats.path.rtt.as_millis()+1, // round up
         );
     }
