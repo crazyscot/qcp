@@ -43,7 +43,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
             "In server mode, this program expects to receive a binary data packet on stdin"
         )
     })?;
-    trace!(
+    debug!(
         "got client message length {}, using {}",
         client_message.cert.len(),
         client_message.connection_type,
@@ -98,7 +98,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     }
 
     // Graceful closedown. Wait for all connections and streams to finish.
-    info!("waiting for completion");
+    trace!("waiting for completion");
     let _ = tasks.join_all().await;
     endpoint.close(1u8.into(), "finished".as_bytes());
     endpoint.wait_idle().await;
@@ -155,7 +155,7 @@ async fn handle_connection(
     file_buffer_size: usize,
 ) -> anyhow::Result<ConnectionStats> {
     let connection = conn.await?;
-    info!("accepted connection from {}", connection.remote_address());
+    debug!("accepted connection from {}", connection.remote_address());
 
     async {
         loop {

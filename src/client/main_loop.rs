@@ -249,10 +249,7 @@ pub(crate) fn create_endpoint(
 ) -> Result<quinn::Endpoint> {
     let _ = span!(Level::TRACE, "create_endpoint").entered();
     let mut root_store = RootCertStore::empty();
-    root_store.add(server_cert).map_err(|e| {
-        error!("{e}");
-        e
-    })?;
+    root_store.add(server_cert)?;
 
     let tls_config = Arc::new(
         rustls::ClientConfig::builder()

@@ -9,7 +9,7 @@ use quinn::{
     congestion::{BbrConfig, CubicConfig},
     TransportConfig,
 };
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::cli::CliArgs;
 
@@ -213,7 +213,7 @@ pub fn create_config(
         }
     }
 
-    info!("Network configuration: {params}");
+    debug!("Network configuration: {params}");
     debug!("Buffer configuration: {bcfg}",);
 
     Ok(config.into())

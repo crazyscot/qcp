@@ -74,7 +74,7 @@ impl ControlChannel {
         credentials: &Credentials,
         server_address: IpAddr,
     ) -> Result<(ControlChannel, ServerMessage)> {
-        debug!("opening control channel");
+        trace!("opening control channel");
         let mut new1 = Self::launch(parameters)?;
         new1.wait_for_banner().await?;
 
@@ -137,7 +137,7 @@ impl ControlChannel {
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .kill_on_drop(true);
-        trace!("spawning command: {:?}", server);
+        debug!("spawning command: {:?}", server);
         let process = server
             .spawn()
             .context("Could not launch control connection to remote server")?;
