@@ -3,7 +3,10 @@
 
 use std::str::FromStr;
 
-use crate::{build_info, util::AddressFamily};
+use crate::{
+    build_info,
+    util::{AddressFamily, PortRange},
+};
 use clap::Parser;
 use humanize_rs::bytes::Bytes;
 use tokio::time::Duration;
@@ -41,7 +44,7 @@ pub(crate) struct CliArgs {
     /// intended for interactive use.
     #[arg(
         long, help_heading("Modes"), hide = true,
-        conflicts_with_all(["help_buffers", "quiet", "statistics", "timeout", "ipv4", "ipv6", "remote_debug", "profile", "source", "destination", "ssh", "ssh_opt"])
+        conflicts_with_all(["help_buffers", "quiet", "statistics", "timeout", "ipv4", "ipv6", "remote_debug", "profile", "source", "destination", "ssh", "ssh_opt", "remote_port"])
     )]
     pub server: bool,
 
@@ -85,6 +88,28 @@ pub(crate) struct CliArgs {
         allow_hyphen_values(true)
     )]
     pub ssh_opt: Vec<String>,
+
+    // CLIENT OR SERVER
+    /// Instructs the local endpoint to use a given UDP port or port range.
+    /// This can be useful when there is a firewall between the endpoints.
+    #[arg(
+        short = 'p',
+        long,
+        value_name("PORT1-PORT2"),
+        help_heading("Connection")
+    )]
+    pub port: Option<PortRange>,
+
+    // CLIENT ONLY
+    /// Instructs the remote endpoint to use a given UDP port or port range.
+    /// This can be useful when there is a firewall between the endpoints.
+    #[arg(
+        short = 'P',
+        long,
+        value_name("PORT1-PORT2"),
+        help_heading("Connection")
+    )]
+    pub remote_port: Option<PortRange>,
 
     // CLIENT DEBUG ----------------------------
     /// Enable detailed debug output

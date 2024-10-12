@@ -11,7 +11,7 @@ use crate::{
     cert::Credentials,
     cli::CliArgs,
     protocol::control::{ClientMessage, ClosedownReport, ServerMessage, BANNER},
-    util::AddressFamily,
+    util::{AddressFamily, PortRange},
 };
 
 /// The parameter set needed to set up the control channel
@@ -27,6 +27,7 @@ pub struct Parameters {
     family: AddressFamily,
     ssh_client: String,
     ssh_opts: Vec<String>,
+    remote_port: Option<PortRange>,
 }
 
 impl TryFrom<&CliArgs> for Parameters {
@@ -45,6 +46,7 @@ impl TryFrom<&CliArgs> for Parameters {
             family: args.address_family(),
             ssh_client: args.ssh.clone(),
             ssh_opts: args.ssh_opt.clone(),
+            remote_port: args.remote_port,
         })
     }
 }
@@ -126,6 +128,9 @@ impl ControlChannel {
         }
         if let Some(w) = args.iwind {
             let _ = server.args(["--initial-congestion-window", &w.to_string()]);
+        }
+        if let Some(pr) = args.remote_port {
+            let _ = server.args(["--port", &pr.to_string()]);
         }
         let _ = server
             .stdin(Stdio::piped())

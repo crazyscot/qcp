@@ -1,7 +1,6 @@
 // qcp server event loop
 // (c) 2024 Ross Younger
 
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -11,6 +10,7 @@ use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{session_capnp::Status, Command, FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 use crate::transport::{BandwidthConfig, BandwidthParams};
+use crate::util::socket::bind_range_for_family;
 use crate::{transport, util};
 
 use anyhow::Context as _;
@@ -131,19 +131,7 @@ fn create_endpoint(
         transport::ThroughputMode::Both,
     )?);
 
-    // TODO let caller specify port
-    let addr = match client_message.connection_type {
-        crate::util::AddressFamily::Any => {
-            anyhow::bail!("address family Any not supported here (can't happen)")
-        }
-        crate::util::AddressFamily::IPv4 => {
-            SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0)
-        }
-        crate::util::AddressFamily::IPv6 => {
-            SocketAddr::new(std::net::IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0)
-        }
-    };
-    let socket = std::net::UdpSocket::bind(addr)?;
+    let socket = bind_range_for_family(client_message.connection_type, args.port)?;
     // We don't know whether client will send or receive, so configure for both.
     let buffer_config = BandwidthConfig::from(&bandwidth);
     #[allow(clippy::cast_possible_truncation)]

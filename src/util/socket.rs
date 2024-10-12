@@ -3,8 +3,10 @@
 
 use crate::os::os;
 use human_repr::HumanCount as _;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket};
 use tracing::{debug, info, warn};
+
+use super::{AddressFamily, PortRange};
 
 /// Set the buffer size options on a UDP socket.
 /// May return a warning message, if we weren't able to do so.
@@ -79,6 +81,54 @@ pub fn bind_unspecified_for(peer: &SocketAddr) -> anyhow::Result<std::net::UdpSo
         SocketAddr::V6(_) => SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0).into(),
     };
     Ok(UdpSocket::bind(addr)?)
+}
+
+/// Creates and binds a UDP socket from a restricted range of local ports, using the address family necessary to reach the given peer address
+pub fn bind_range_for_peer(
+    peer: &SocketAddr,
+    range: Option<PortRange>,
+) -> anyhow::Result<std::net::UdpSocket> {
+    let addr: IpAddr = match peer {
+        SocketAddr::V4(_) => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        SocketAddr::V6(_) => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+    };
+    bind_range_for_address(addr, range)
+}
+
+/// Creates and binds a UDP socket from a restricted range of local ports, for a given local address
+pub fn bind_range_for_address(
+    addr: IpAddr,
+    range: Option<PortRange>,
+) -> anyhow::Result<std::net::UdpSocket> {
+    let range = match range {
+        None => PortRange { begin: 0, end: 0 },
+        Some(r) => r,
+    };
+    if range.begin == range.end {
+        return Ok(UdpSocket::bind(SocketAddr::new(addr, range.begin))?);
+    }
+    for port in range.begin..range.end {
+        let result = UdpSocket::bind(SocketAddr::new(addr, port));
+        if let Ok(sock) = result {
+            return Ok(sock);
+        }
+    }
+    anyhow::bail!("failed to bind a port in the given range");
+}
+
+/// Creates and binds a UDP socket from a restricted range of local ports, for the unspecified address of the given address family
+pub fn bind_range_for_family(
+    family: AddressFamily,
+    range: Option<PortRange>,
+) -> anyhow::Result<std::net::UdpSocket> {
+    let addr = match family {
+        AddressFamily::Any => {
+            anyhow::bail!("address family Any not supported here (can't happen)")
+        }
+        AddressFamily::IPv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        AddressFamily::IPv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+    };
+    bind_range_for_address(addr, range)
 }
 
 #[cfg(test)]
