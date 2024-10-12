@@ -7,7 +7,7 @@ use super::args::CliArgs;
 
 use crate::{
     client::client_main,
-    os::os,
+    os,
     server::server_main,
     transport::{BandwidthConfig, BandwidthParams},
     util::setup_tracing,
