@@ -12,11 +12,10 @@ use tokio::{
 use tracing::{debug, trace, warn};
 
 use crate::{
-    cert::Credentials,
     cli::CliArgs,
     protocol::control::{ClientMessage, ClosedownReport, ServerMessage, BANNER},
     transport::BandwidthParams,
-    util::{AddressFamily, PortRange},
+    util::{cert::Credentials, AddressFamily, PortRange},
 };
 
 /// The parameter set needed to set up the control channel

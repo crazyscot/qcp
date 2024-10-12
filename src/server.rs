@@ -4,11 +4,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::cert::Credentials;
 use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{session_capnp::Status, Command, FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 use crate::transport::{BandwidthConfig, BandwidthParams};
+use crate::util::cert::Credentials;
 use crate::util::socket::bind_range_for_family;
 use crate::util::PortRange;
 use crate::{transport, util};
@@ -56,7 +56,7 @@ pub async fn server_main(
     let bandwidth_info = format!("{bandwidth:?}");
     let file_buffer_size = usize::try_from(BandwidthConfig::from(&bandwidth).send_buffer)?;
 
-    let credentials = crate::cert::Credentials::generate()?;
+    let credentials = Credentials::generate()?;
     let (endpoint, warning) = create_endpoint(&credentials, client_message, bandwidth, quic.port)?;
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");

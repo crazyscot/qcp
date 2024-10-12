@@ -1,13 +1,13 @@
 // qcp client event loop
 // (c) 2024 Ross Younger
 
-use crate::cert::Credentials;
 use crate::cli::CliArgs;
 use crate::client::control::ControlChannel;
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
 use crate::transport::{BandwidthConfig, BandwidthParams, ThroughputMode};
+use crate::util::cert::Credentials;
 use crate::util::time::Stopwatch;
 use crate::util::PortRange;
 use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
@@ -41,7 +41,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     let mut timers = StopwatchChain::new_running("setup");
 
     // Prep --------------------------
-    let credentials = crate::cert::Credentials::generate()?;
+    let credentials = Credentials::generate()?;
     let server_address = lookup_host_by_family(args.remote_host()?, args.address_family())?;
 
     // Control channel ---------------

@@ -4,7 +4,6 @@
 mod cli;
 pub use cli::cli; // needs to be re-exported for the binary crate
 
-pub mod cert;
 pub mod client;
 pub mod protocol;
 pub mod server;
