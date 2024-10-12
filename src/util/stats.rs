@@ -1,4 +1,4 @@
-// Statistics processing and output
+//! Statistics processing and output
 // (c) 2024 Ross Younger
 
 use human_repr::{HumanCount, HumanDuration, HumanThroughput};

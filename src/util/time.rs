@@ -1,4 +1,4 @@
-// Time utilities
+//! Time utilities
 // (c) 2024 Ross Younger
 
 use std::{

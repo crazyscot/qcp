@@ -1,4 +1,4 @@
-// X509 certificate management
+//! X509 certificate management helper
 // (c) 2024 Ross Younger
 
 use anyhow::Result;

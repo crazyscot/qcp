@@ -1,24 +1,20 @@
 //! QCP client & server library
 // (c) 2024 Ross Younger
 
-/// X509 certificate helpers
-pub mod cert;
 mod cli;
-/// Command Line Interface
-pub use cli::cli;
-/// qcp client
+pub use cli::cli; // needs to be re-exported for the binary crate
+
+pub mod cert;
 pub mod client;
-mod console;
-mod os;
-/// qcp's protocol structures
 pub mod protocol;
-/// qcp server
 pub mod server;
-mod styles;
-/// QUIC transport configuration
 pub mod transport;
-/// Utilities
 pub mod util;
+
+mod console;
+mod styles;
+
+mod os;
 
 /// Build-time info (from `built`)
 pub mod build_info {

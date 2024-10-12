@@ -1,4 +1,4 @@
-// QCP control protocol
+//! QCP control protocol definitions and helper types
 // (c) 2024 Ross Younger
 
 /*

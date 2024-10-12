@@ -1,4 +1,4 @@
-// qcp server event loop
+//! qcp server event loop
 // (c) 2024 Ross Younger
 
 use std::path::PathBuf;

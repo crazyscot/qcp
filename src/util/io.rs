@@ -1,4 +1,4 @@
-// IO helpers
+//! File I/O helpers
 // (c) 2024 Ross Younger
 
 use crate::protocol::session::session_capnp::Status;

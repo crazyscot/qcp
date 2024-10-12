@@ -1,4 +1,4 @@
-// qcp socket wrangling
+//! Socket wrangling
 // (c) 2024 Ross Younger
 
 use crate::os::SocketOptions as _;

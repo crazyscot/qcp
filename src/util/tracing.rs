@@ -1,4 +1,4 @@
-// Tracing helpers
+//! Tracing helpers
 // (c) 2024 Ross Younger
 
 use std::{

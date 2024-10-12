@@ -1,4 +1,4 @@
-// qcp::client
+//! qcp client main loop
 
 pub mod control;
 pub mod job;

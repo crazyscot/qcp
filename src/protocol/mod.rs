@@ -1,8 +1,6 @@
-// qcp::protocol
+//! Protocol defininitions owned by qcp
 
-/// Control protocol definitions and helper types
 pub mod control;
-/// Session protocol definitions and helper types
 pub mod session;
 
 /// Helper type definition (syntactic sugar)

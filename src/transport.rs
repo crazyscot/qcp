@@ -1,4 +1,4 @@
-// QUIC transport configuration
+//! QUIC transport configuration
 // (c) 2024 Ross Younger
 
 use std::{fmt::Display, sync::Arc, time::Duration};

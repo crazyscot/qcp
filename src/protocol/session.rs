@@ -1,4 +1,4 @@
-// QCP session wire protocol
+//! QCP session protocol definitions and helper types
 // (c) 2024 Ross Younger
 
 /*

@@ -1,4 +1,4 @@
-// Main CLI entrypoint
+//! Main CLI entrypoint for qcp
 // (c) 2024 Ross Younger
 
 use std::process::ExitCode;
@@ -13,6 +13,8 @@ use indicatif::{MultiProgress, ProgressDrawTarget};
 use tracing::error_span;
 
 /// Main CLI entrypoint
+///
+/// Call this from `main`. It reads argv.
 #[tokio::main(flavor = "current_thread")]
 #[allow(clippy::missing_panics_doc)]
 pub async fn cli() -> anyhow::Result<ExitCode> {
