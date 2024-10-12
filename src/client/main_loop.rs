@@ -9,6 +9,7 @@ use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
 use crate::transport::{BandwidthConfig, BandwidthParams, ThroughputMode};
 use crate::util::time::Stopwatch;
+use crate::util::PortRange;
 use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
 
 use anyhow::{Context, Result};
@@ -70,7 +71,8 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
         &credentials,
         server_message.cert.into(),
         &server_address_port,
-        args,
+        args.port,
+        args.bandwidth,
         processed_args.throughput_mode(),
     )?;
 
@@ -86,15 +88,12 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     // Show time! ---------------------
     spinner.set_message("Transferring data");
     timers.next(SHOW_TIME);
-    let bandwidth = BandwidthParams::from(args);
-    let file_buffer_size = usize::try_from(BandwidthConfig::from(bandwidth).send_buffer)?;
     let result = manage_request(
         &connection,
         processed_args,
         display.clone(),
         spinner.clone(),
-        file_buffer_size,
-        bandwidth,
+        args.bandwidth,
         args.quiet,
     )
     .await;
@@ -148,7 +147,6 @@ async fn manage_request(
     processed: UnpackedArgs,
     display: MultiProgress,
     spinner: ProgressBar,
-    file_buffer_size: usize,
     bandwidth: BandwidthParams,
     quiet: bool,
 ) -> Result<u64, u64> {
@@ -166,6 +164,7 @@ async fn manage_request(
                 .await
         } else {
             // This is a Put
+            let file_buffer_size = BandwidthConfig::from(bandwidth).send_buffer.try_into()?;
             do_put(
                 sp,
                 &processed,
@@ -256,7 +255,8 @@ pub(crate) fn create_endpoint(
     credentials: &Credentials,
     server_cert: CertificateDer<'_>,
     server_addr: &SocketAddr,
-    args: &CliArgs,
+    port: Option<PortRange>,
+    bandwidth: BandwidthParams,
     mode: ThroughputMode,
 ) -> Result<quinn::Endpoint> {
     let _ = span!(Level::TRACE, "create_endpoint").entered();
@@ -270,12 +270,11 @@ pub(crate) fn create_endpoint(
     );
 
     let mut config = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
-    let bw = BandwidthParams::from(args);
-    let _ = config.transport_config(crate::transport::create_config(bw, mode)?);
+    let _ = config.transport_config(crate::transport::create_config(bandwidth, mode)?);
 
-    trace!("bind & configure socket, port={port:?}", port = args.port);
-    let mut socket = util::socket::bind_range_for_peer(server_addr, args.port)?;
-    let buffer_config = BandwidthConfig::from(bw);
+    trace!("bind & configure socket, port={port:?}", port = port);
+    let mut socket = util::socket::bind_range_for_peer(server_addr, port)?;
+    let buffer_config = BandwidthConfig::from(bandwidth);
     #[allow(clippy::cast_possible_truncation)]
     let wanted_send = match mode {
         ThroughputMode::Both | ThroughputMode::Tx => Some(buffer_config.send_buffer as usize),

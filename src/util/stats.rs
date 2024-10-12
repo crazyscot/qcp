@@ -128,11 +128,11 @@ pub(crate) fn output_statistics(
             );
         }
     }
-    if stats.path.rtt.as_millis() > args.rtt.into() {
+    if stats.path.rtt.as_millis() > args.bandwidth.rtt.into() {
         warn!(
             "Measured path RTT {rtt_measured:?} was greater than configuration {rtt_arg}; for better performance, next time try --rtt {rtt_param}",
             rtt_measured = stats.path.rtt,
-            rtt_arg = args.rtt,
+            rtt_arg = args.bandwidth.rtt,
             rtt_param = stats.path.rtt.as_millis()+1, // round up
         );
     }

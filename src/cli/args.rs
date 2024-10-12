@@ -5,11 +5,10 @@ use std::str::FromStr;
 
 use crate::{
     build_info,
-    transport::{CongestionControllerType, ThroughputMode},
+    transport::ThroughputMode,
     util::{AddressFamily, PortRange},
 };
 use clap::Parser;
-use humanize_rs::bytes::Bytes;
 use tokio::time::Duration;
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
@@ -137,56 +136,9 @@ pub(crate) struct CliArgs {
     #[arg(short('l'), long, action, help_heading("Debug"), value_name("FILE"))]
     pub log_file: Option<String>,
 
-    // TUNING OPTIONS ======================================================================
-    /// The maximum network bandwidth we expect receiving data FROM the remote system.
-    ///
-    /// Along with the initial RTT, this directly affects the buffer sizes used.
-    /// This may be specified directly as a number of bytes, or as an SI quantity
-    /// e.g. "10M" or "256k". Note that this is described in BYTES, not bits;
-    /// if (for example) you expect to fill a 1Gbit ethernet connection,
-    /// 125M might be a suitable setting.
-    #[arg(short('b'), long, help_heading("Network tuning"), display_order(10), default_value("12500k"), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
-    pub rx_bw: Bytes<u64>,
-
-    /// The maximum network bandwidth we expect sending data TO the remote system,
-    ///
-    /// if it is different from the bandwidth FROM the system.
-    /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
-    /// [default: use --rx-bw]
-    // see also: `bandwidth_outbound_active()`
-    #[arg(short('B'), long, help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
-    pub tx_bw: Option<Bytes<u64>>,
-
-    /// The expected network Round Trip time to the target system, in milliseconds.
-    #[arg(
-        short('r'),
-        long,
-        help_heading("Network tuning"),
-        display_order(1),
-        default_value("300"),
-        value_name("ms")
-    )]
-    pub rtt: u16,
-
-    /// Specifies the congestion control algorithm to use.
-    #[arg(
-        long,
-        action,
-        value_name = "alg",
-        help_heading("Advanced network tuning")
-    )]
-    #[clap(value_enum, default_value_t=CongestionControllerType::Cubic)]
-    pub congestion: CongestionControllerType,
-
-    /// (Network wizards only!)
-    /// The initial value for the sending congestion control window.
-    ///
-    /// Setting this value too high reduces performance!
-    ///
-    /// If not specified, this setting is determined by the selected
-    /// congestion control algorithm.
-    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
-    pub initial_congestion_window: Option<u64>,
+    // NETWORK OPTIONS =====================================================================
+    #[command(flatten)]
+    pub bandwidth: crate::transport::BandwidthParams,
 
     // POSITIONAL ARGUMENTS ================================================================
     /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
@@ -241,11 +193,6 @@ impl CliArgs {
         // It might be user@host, or it might be just the hostname or IP.
         let (_, host) = user_host.split_once('@').unwrap_or(("", user_host));
         Ok(host)
-    }
-
-    /// Convenience wrapper that returns the active value to use for outbound bandwidth
-    pub(crate) fn bandwidth_outbound_active(&self) -> u64 {
-        self.tx_bw.unwrap_or(self.rx_bw).size()
     }
 }
 

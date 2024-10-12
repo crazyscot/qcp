@@ -15,43 +15,45 @@ use crate::{
     cert::Credentials,
     cli::CliArgs,
     protocol::control::{ClientMessage, ClosedownReport, ServerMessage, BANNER},
-    transport::CongestionControllerType,
+    transport::BandwidthParams,
     util::{AddressFamily, PortRange},
 };
 
 /// The parameter set needed to set up the control channel
 #[derive(Debug)]
-pub struct Parameters {
+pub struct ChannelParameters {
     remote_user_host: String,
     remote_debug: bool,
-    remote_tx_bw_bytes: u64,
-    remote_rx_bw_bytes: u64,
-    rtt_ms: u16,
-    congestion: CongestionControllerType,
-    iwind: Option<u64>,
     family: AddressFamily,
     ssh_client: String,
     ssh_opts: Vec<String>,
     remote_port: Option<PortRange>,
+    bandwidth: BandwidthParams,
 }
 
-impl TryFrom<&CliArgs> for Parameters {
+impl ChannelParameters {
+    // Remote receive bandwidth (== our transmit bandwidth)
+    fn remote_rx_bw_bytes(&self) -> u64 {
+        self.bandwidth.tx()
+    }
+    /// Remote transmit bandwidth (== our receive bandwidth)
+    fn remote_tx_bw_bytes(&self) -> u64 {
+        self.bandwidth.rx()
+    }
+}
+
+impl TryFrom<&CliArgs> for ChannelParameters {
     type Error = anyhow::Error;
 
     fn try_from(args: &CliArgs) -> std::result::Result<Self, Self::Error> {
         Ok(Self {
             remote_user_host: args.remote_user_host()?.to_string(),
             remote_debug: args.remote_debug,
-            // Note that we flip inbound and outbound here as we're computing parameters to give to the remote
-            remote_rx_bw_bytes: args.bandwidth_outbound_active(),
-            remote_tx_bw_bytes: args.rx_bw.size(),
-            rtt_ms: args.rtt,
-            congestion: args.congestion,
-            iwind: args.initial_congestion_window,
             family: args.address_family(),
             ssh_client: args.ssh.clone(),
             ssh_opts: args.ssh_opt.clone(),
             remote_port: args.remote_port,
+            bandwidth: args.bandwidth,
         })
     }
 }
@@ -74,7 +76,7 @@ impl ControlChannel {
 
     /// Opens the control channel, checks the banner, sends the Client Message, reads the Server Message.
     pub async fn transact(
-        parameters: &Parameters,
+        parameters: &ChannelParameters,
         credentials: &Credentials,
         server_address: IpAddr,
         display: &MultiProgress,
@@ -113,7 +115,7 @@ impl ControlChannel {
     }
 
     /// This is effectively a constructor. At present, it launches a subprocess.
-    fn launch(args: &Parameters, display: &MultiProgress, quiet: bool) -> Result<Self> {
+    fn launch(args: &ChannelParameters, display: &MultiProgress, quiet: bool) -> Result<Self> {
         let mut server = tokio::process::Command::new(&args.ssh_client);
         let _ = server.kill_on_drop(true);
         let _ = match args.family {
@@ -127,18 +129,18 @@ impl ControlChannel {
             "qcp",
             "--server",
             "-b",
-            &args.remote_rx_bw_bytes.to_string(),
+            &args.remote_rx_bw_bytes().to_string(),
             "-B",
-            &args.remote_tx_bw_bytes.to_string(),
+            &args.remote_tx_bw_bytes().to_string(),
             "--rtt",
-            &args.rtt_ms.to_string(),
+            &args.bandwidth.rtt.to_string(),
             "--congestion",
-            &args.congestion.to_string(),
+            &args.bandwidth.congestion.to_string(),
         ]);
         if args.remote_debug {
             let _ = server.arg("--debug");
         }
-        if let Some(w) = args.iwind {
+        if let Some(w) = args.bandwidth.initial_congestion_window {
             let _ = server.args(["--initial-congestion-window", &w.to_string()]);
         }
         if let Some(pr) = args.remote_port {

@@ -6,11 +6,7 @@ use std::process::ExitCode;
 use super::args::CliArgs;
 
 use crate::{
-    client::client_main,
-    os,
-    server::server_main,
-    transport::{BandwidthConfig, BandwidthParams},
-    util::setup_tracing,
+    client::client_main, os, server::server_main, transport::BandwidthConfig, util::setup_tracing,
 };
 use clap::Parser;
 use indicatif::{MultiProgress, ProgressDrawTarget};
@@ -22,7 +18,7 @@ use tracing::error_span;
 pub async fn cli() -> anyhow::Result<ExitCode> {
     let args = CliArgs::parse();
     if args.help_buffers {
-        let buffer_config = BandwidthConfig::from(BandwidthParams::from(&args));
+        let buffer_config = BandwidthConfig::from(&args.bandwidth);
         os::print_udp_buffer_size_help_message(
             buffer_config.recv_buffer,
             buffer_config.send_buffer,

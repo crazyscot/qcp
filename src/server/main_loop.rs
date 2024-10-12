@@ -11,6 +11,7 @@ use crate::protocol::session::{session_capnp::Status, Command, FileHeader, FileT
 use crate::protocol::{self, StreamPair};
 use crate::transport::{BandwidthConfig, BandwidthParams};
 use crate::util::socket::bind_range_for_family;
+use crate::util::PortRange;
 use crate::{transport, util};
 
 use anyhow::Context as _;
@@ -49,13 +50,13 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
         client_message.connection_type,
     );
 
-    let bandwidth = BandwidthParams::from(args);
-    let bandwidth_info = format!("{bandwidth:?}");
-    let file_buffer_size = usize::try_from(BandwidthConfig::from(bandwidth).send_buffer)?;
+    let bandwidth_info = format!("{:?}", args.bandwidth);
+    let file_buffer_size = usize::try_from(BandwidthConfig::from(&args.bandwidth).send_buffer)?;
 
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
-    let (endpoint, warning) = create_endpoint(&credentials, client_message, args)?;
+    let (endpoint, warning) =
+        create_endpoint(&credentials, client_message, args.bandwidth, args.port)?;
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");
     ServerMessage::write(
@@ -111,7 +112,8 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
 fn create_endpoint(
     credentials: &Credentials,
     client_message: ClientMessage,
-    args: &CliArgs,
+    bandwidth: BandwidthParams,
+    ports: Option<PortRange>,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
 
@@ -125,13 +127,12 @@ fn create_endpoint(
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
     let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
-    let bandwidth = BandwidthParams::from(args);
     let _ = config.transport_config(crate::transport::create_config(
         bandwidth,
         transport::ThroughputMode::Both,
     )?);
 
-    let mut socket = bind_range_for_family(client_message.connection_type, args.port)?;
+    let mut socket = bind_range_for_family(client_message.connection_type, ports)?;
     // We don't know whether client will send or receive, so configure for both.
     let buffer_config = BandwidthConfig::from(&bandwidth);
     #[allow(clippy::cast_possible_truncation)]
