@@ -12,7 +12,6 @@ pub mod transport;
 pub mod util;
 
 mod console;
-mod styles;
 
 mod os;
 
