@@ -49,8 +49,13 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
 
     // Control channel ---------------
     timers.next("control channel");
-    let (mut control, server_message) =
-        ControlChannel::transact(&args.try_into()?, &credentials, server_address).await?;
+    let (mut control, server_message) = ControlChannel::transact(
+        &args.try_into()?,
+        &credentials,
+        server_address,
+        progress.clone(),
+    )
+    .await?;
     debug!("Got server message {server_message:?}");
     if let Some(w) = server_message.warning {
         warn!("Remote endpoint warning: {w}");

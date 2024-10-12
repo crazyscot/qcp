@@ -4,7 +4,11 @@
 use std::{net::IpAddr, process::Stdio, time::Duration};
 
 use anyhow::{anyhow, Context as _, Result};
-use tokio::{io::AsyncReadExt as _, time::timeout};
+use indicatif::MultiProgress;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt as _, BufReader},
+    time::timeout,
+};
 use tracing::{debug, trace};
 
 use crate::{
@@ -73,9 +77,10 @@ impl ControlChannel {
         parameters: &Parameters,
         credentials: &Credentials,
         server_address: IpAddr,
+        progress: MultiProgress,
     ) -> Result<(ControlChannel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(parameters)?;
+        let mut new1 = Self::launch(parameters, progress)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -101,7 +106,7 @@ impl ControlChannel {
     }
 
     /// This is effectively a constructor. At present, it launches a subprocess.
-    fn launch(args: &Parameters) -> Result<Self> {
+    fn launch(args: &Parameters, progress: MultiProgress) -> Result<Self> {
         let mut server = tokio::process::Command::new(&args.ssh_client);
         let _ = server.kill_on_drop(true);
         let _ = match args.family {
@@ -135,12 +140,24 @@ impl ControlChannel {
         let _ = server
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .kill_on_drop(true);
         debug!("spawning command: {:?}", server);
-        let process = server
+        let mut process = server
             .spawn()
             .context("Could not launch control connection to remote server")?;
+
+        // Whatever the remote outputs, send it to our output in a way that doesn't mess things up.
+        let stderr = process.stderr.take();
+        let Some(stderr) = stderr else {
+            anyhow::bail!("could not get stderr of remote process");
+        };
+        let _reader = tokio::spawn(async move {
+            let mut reader = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                let _ = progress.println(line);
+            }
+        });
         Ok(Self { process })
     }
 
