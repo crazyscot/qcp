@@ -63,7 +63,11 @@ pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyh
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
-    let spinner = progress.add(ProgressBar::new_spinner());
+    let spinner = if args.quiet {
+        ProgressBar::hidden()
+    } else {
+        progress.add(ProgressBar::new_spinner())
+    };
     spinner.enable_steady_tick(Duration::from_millis(150));
     spinner.set_message("Establishing data channel");
     timers.next("data channel setup");
@@ -100,6 +104,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyh
         spinner.clone(),
         file_buffer_size,
         bandwidth,
+        args.quiet,
     )
     .await;
     let total_bytes = match result {
@@ -157,6 +162,7 @@ async fn manage_request(
     spinner: ProgressBar,
     file_buffer_size: usize,
     bandwidth: BandwidthParams,
+    quiet: bool,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
     let _jh = tasks.spawn(async move {
@@ -166,14 +172,22 @@ async fn manage_request(
         // This async block reports on errors.
         if processed.source.host.is_some() {
             // This is a Get
-            do_get(sp, &processed, mp, spinner, bandwidth)
+            do_get(sp, &processed, mp, spinner, bandwidth, quiet)
                 .instrument(trace_span!("GET", filename = processed.source.filename))
                 .await
         } else {
             // This is a Put
-            do_put(sp, &processed, mp, spinner, file_buffer_size, bandwidth)
-                .instrument(trace_span!("PUT", filename = processed.source.filename))
-                .await
+            do_put(
+                sp,
+                &processed,
+                mp,
+                spinner,
+                file_buffer_size,
+                bandwidth,
+                quiet,
+            )
+            .instrument(trace_span!("PUT", filename = processed.source.filename))
+            .await
         }
     });
 
@@ -215,7 +229,15 @@ async fn manage_request(
     }
 }
 
-fn progress_bar_for(mp: &MultiProgress, args: &UnpackedArgs, steps: u64) -> Result<ProgressBar> {
+fn progress_bar_for(
+    mp: &MultiProgress,
+    args: &UnpackedArgs,
+    steps: u64,
+    quiet: bool,
+) -> Result<ProgressBar> {
+    if quiet {
+        return Ok(ProgressBar::hidden());
+    }
     let display_filename = {
         let component = PathBuf::from(&args.source.filename);
         component
@@ -294,6 +316,7 @@ async fn do_get(
     multi_progress: MultiProgress,
     spinner: ProgressBar,
     bandwidth: BandwidthParams,
+    quiet: bool,
 ) -> Result<u64> {
     let filename = &cli_args.source.filename;
     let dest = &cli_args.destination.filename;
@@ -325,7 +348,7 @@ async fn do_get(
     // Unfortunately, the file data is already well in flight at this point, leading to a flood of packets
     // that causes the estimated rate to spike unhelpfully at the beginning of the transfer.
     // Therefore we incorporate time in flight so far to get the estimate closer to reality.
-    let progress_bar = progress_bar_for(&multi_progress, cli_args, header.size + 16)?
+    let progress_bar = progress_bar_for(&multi_progress, cli_args, header.size + 16, quiet)?
         .with_elapsed(Instant::now().duration_since(real_start));
 
     let mut meter =
@@ -359,6 +382,7 @@ async fn do_put(
     spinner: ProgressBar,
     file_buffer_size: usize,
     bandwidth: BandwidthParams,
+    quiet: bool,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
     let src_filename = &cli_args.source.filename;
@@ -381,7 +405,7 @@ async fn do_put(
     // Marshalled commands are currently 48 bytes + filename length
     // File headers are currently 36 + filename length; Trailers are 16 bytes.
     let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
-    let progress_bar = progress_bar_for(&multi_progress, cli_args, steps)?;
+    let progress_bar = progress_bar_for(&multi_progress, cli_args, steps, quiet)?;
     let mut outbound = progress_bar.wrap_async_write(stream.send);
     let mut meter =
         crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, bandwidth.tx());
