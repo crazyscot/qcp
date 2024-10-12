@@ -77,10 +77,11 @@ impl ControlChannel {
         parameters: &Parameters,
         credentials: &Credentials,
         server_address: IpAddr,
-        progress: MultiProgress,
+        progress: &MultiProgress,
+        quiet: bool,
     ) -> Result<(ControlChannel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(parameters, progress)?;
+        let mut new1 = Self::launch(parameters, progress, quiet)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -106,7 +107,7 @@ impl ControlChannel {
     }
 
     /// This is effectively a constructor. At present, it launches a subprocess.
-    fn launch(args: &Parameters, progress: MultiProgress) -> Result<Self> {
+    fn launch(args: &Parameters, progress: &MultiProgress, quiet: bool) -> Result<Self> {
         let mut server = tokio::process::Command::new(&args.ssh_client);
         let _ = server.kill_on_drop(true);
         let _ = match args.family {
@@ -140,24 +141,31 @@ impl ControlChannel {
         let _ = server
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
             .kill_on_drop(true);
+        if !quiet {
+            let _ = server.stderr(Stdio::piped());
+        } // else inherit
         debug!("spawning command: {:?}", server);
         let mut process = server
             .spawn()
             .context("Could not launch control connection to remote server")?;
 
         // Whatever the remote outputs, send it to our output in a way that doesn't mess things up.
-        let stderr = process.stderr.take();
-        let Some(stderr) = stderr else {
-            anyhow::bail!("could not get stderr of remote process");
-        };
-        let _reader = tokio::spawn(async move {
-            let mut reader = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                let _ = progress.println(line);
-            }
-        });
+        if !quiet {
+            let stderr = process.stderr.take();
+            let Some(stderr) = stderr else {
+                anyhow::bail!("could not get stderr of remote process");
+            };
+            let cloned = progress.clone();
+            let _reader = tokio::spawn(async move {
+                let mut reader = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    // Calling cloned.println() sometimes messes up; there seems to be a concurrency issue.
+                    // But we don't need to worry too much about that. Just write it out.
+                    cloned.suspend(|| eprintln!("{line}"));
+                }
+            });
+        }
         Ok(Self { process })
     }
 

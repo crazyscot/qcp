@@ -53,7 +53,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
             .map(|()| ExitCode::SUCCESS)
             .inspect_err(|e| tracing::error!("{e}"))
     } else {
-        client_main(&args, &progress.unwrap())
+        client_main(&args, progress.unwrap())
             .await
             .inspect_err(|e| tracing::error!("{e}"))
             .or_else(|_| Ok(false))

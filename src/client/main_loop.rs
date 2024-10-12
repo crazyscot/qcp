@@ -30,7 +30,7 @@ const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
-pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> anyhow::Result<bool> {
+pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyhow::Result<bool> {
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
     let guard = trace_span!("CLIENT").entered();
@@ -53,7 +53,8 @@ pub(crate) async fn client_main(args: &CliArgs, progress: &MultiProgress) -> any
         &args.try_into()?,
         &credentials,
         server_address,
-        progress.clone(),
+        &progress,
+        args.quiet,
     )
     .await?;
     debug!("Got server message {server_message:?}");
