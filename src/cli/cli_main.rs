@@ -44,7 +44,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
 
     if args.server {
         let _span = error_span!("REMOTE").entered();
-        server_main(&args)
+        server_main(args.bandwidth, args.quic)
             .await
             .map(|()| ExitCode::SUCCESS)
             .inspect_err(|e| tracing::error!("{e}"))

@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::cert::Credentials;
-use crate::cli::CliArgs;
 use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{session_capnp::Status, Command, FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
@@ -26,8 +25,11 @@ use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
-/// Main entrypoint
-pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
+/// Server main loop
+pub(crate) async fn server_main(
+    bandwidth: crate::transport::BandwidthParams,
+    quic: crate::transport::QuicParams,
+) -> anyhow::Result<()> {
     let mut stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     // There are tricks you can use to get an unbuffered handle to stdout, but at a typing cost.
@@ -50,13 +52,11 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
         client_message.connection_type,
     );
 
-    let bandwidth_info = format!("{:?}", args.bandwidth);
-    let file_buffer_size = usize::try_from(BandwidthConfig::from(&args.bandwidth).send_buffer)?;
+    let bandwidth_info = format!("{bandwidth:?}");
+    let file_buffer_size = usize::try_from(BandwidthConfig::from(&bandwidth).send_buffer)?;
 
-    // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
-    let (endpoint, warning) =
-        create_endpoint(&credentials, client_message, args.bandwidth, args.quic.port)?;
+    let (endpoint, warning) = create_endpoint(&credentials, client_message, bandwidth, quic.port)?;
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");
     ServerMessage::write(
@@ -78,7 +78,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     // but a timeout is useful to give the user a cue that UDP isn't getting there.
     trace!("waiting for QUIC");
     let (stats_tx, mut stats_rx) = oneshot::channel();
-    if let Some(conn) = timeout(args.quic.timeout, endpoint.accept())
+    if let Some(conn) = timeout(quic.timeout, endpoint.accept())
         .await
         .with_context(|| "Timed out waiting for QUIC connection")?
     {
@@ -349,7 +349,6 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
 
     trace!("receiving trailer");
     let _trailer = FileTrailer::read(&mut stream.recv).await?;
-    // TODO: Hash checks
 
     let f = file.flush();
     send_response(&mut stream.send, Status::Ok, None).await?;
