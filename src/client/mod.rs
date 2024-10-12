@@ -1,6 +1,7 @@
 // qcp::client
 
 pub mod control;
+pub mod job;
 mod main_loop;
 mod meter;
 

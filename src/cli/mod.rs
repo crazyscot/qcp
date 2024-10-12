@@ -1,4 +1,4 @@
 mod args;
-pub(crate) use args::{CliArgs, UnpackedArgs};
 mod cli_main;
+pub(crate) use args::CliArgs;
 pub use cli_main::cli;

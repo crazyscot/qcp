@@ -2,7 +2,7 @@
 // (c) 2024 Ross Younger
 
 use crate::cert::Credentials;
-use crate::cli::{CliArgs, UnpackedArgs};
+use crate::cli::CliArgs;
 use crate::client::control::ControlChannel;
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
@@ -27,6 +27,8 @@ use tokio::time::Instant;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _, Level};
 
+use super::job::CopyJobSpec;
+
 const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
@@ -35,7 +37,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
     let _guard = trace_span!("CLIENT").entered();
-    let processed_args = UnpackedArgs::try_from(args)?;
+    let processed_args = CopyJobSpec::try_from(args)?;
     let mut timers = StopwatchChain::new_running("setup");
 
     // Prep --------------------------
@@ -144,7 +146,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
 /// On error: returns the number of bytes that were transferred, as far as we know.
 async fn manage_request(
     connection: &Connection,
-    processed: UnpackedArgs,
+    copy_spec: CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
     bandwidth: BandwidthParams,
@@ -157,24 +159,24 @@ async fn manage_request(
         let sp = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
         // Called function returns its payload size.
         // This async block reports on errors.
-        if processed.source.host.is_some() {
+        if copy_spec.source.host.is_some() {
             // This is a Get
-            do_get(sp, &processed, display, spinner, bandwidth, quiet)
-                .instrument(trace_span!("GET", filename = processed.source.filename))
+            do_get(sp, &copy_spec, display, spinner, bandwidth, quiet)
+                .instrument(trace_span!("GET", filename = copy_spec.source.filename))
                 .await
         } else {
             // This is a Put
             let file_buffer_size = BandwidthConfig::from(bandwidth).send_buffer.try_into()?;
             do_put(
                 sp,
-                &processed,
+                &copy_spec,
                 display,
                 spinner,
                 file_buffer_size,
                 bandwidth,
                 quiet,
             )
-            .instrument(trace_span!("PUT", filename = processed.source.filename))
+            .instrument(trace_span!("PUT", filename = copy_spec.source.filename))
             .await
         }
     });
@@ -219,7 +221,7 @@ async fn manage_request(
 
 fn progress_bar_for(
     display: &MultiProgress,
-    args: &UnpackedArgs,
+    job: &CopyJobSpec,
     steps: u64,
     quiet: bool,
 ) -> Result<ProgressBar> {
@@ -227,7 +229,7 @@ fn progress_bar_for(
         return Ok(ProgressBar::hidden());
     }
     let display_filename = {
-        let component = PathBuf::from(&args.source.filename);
+        let component = PathBuf::from(&job.source.filename);
         component
             .file_name()
             .unwrap_or_default()
@@ -300,14 +302,14 @@ pub(crate) fn create_endpoint(
 
 async fn do_get(
     sp: RawStreamPair,
-    cli_args: &UnpackedArgs,
+    job: &CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
     bandwidth: BandwidthParams,
     quiet: bool,
 ) -> Result<u64> {
-    let filename = &cli_args.source.filename;
-    let dest = &cli_args.destination.filename;
+    let filename = &job.source.filename;
+    let dest = &job.destination.filename;
 
     let mut stream: StreamPair = sp.into();
     let real_start = Instant::now();
@@ -336,7 +338,7 @@ async fn do_get(
     // Unfortunately, the file data is already well in flight at this point, leading to a flood of packets
     // that causes the estimated rate to spike unhelpfully at the beginning of the transfer.
     // Therefore we incorporate time in flight so far to get the estimate closer to reality.
-    let progress_bar = progress_bar_for(&display, cli_args, header.size + 16, quiet)?
+    let progress_bar = progress_bar_for(&display, job, header.size + 16, quiet)?
         .with_elapsed(Instant::now().duration_since(real_start));
 
     let mut meter =
@@ -365,7 +367,7 @@ async fn do_get(
 
 async fn do_put(
     sp: RawStreamPair,
-    cli_args: &UnpackedArgs,
+    job: &CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
     file_buffer_size: usize,
@@ -373,8 +375,8 @@ async fn do_put(
     quiet: bool,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
-    let src_filename = &cli_args.source.filename;
-    let dest_filename = &cli_args.destination.filename;
+    let src_filename = &job.source.filename;
+    let dest_filename = &job.destination.filename;
 
     let path = PathBuf::from(src_filename);
     let (file, meta) = match crate::util::io::open_file(src_filename).await {
@@ -393,7 +395,7 @@ async fn do_put(
     // Marshalled commands are currently 48 bytes + filename length
     // File headers are currently 36 + filename length; Trailers are 16 bytes.
     let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
-    let progress_bar = progress_bar_for(&display, cli_args, steps, quiet)?;
+    let progress_bar = progress_bar_for(&display, job, steps, quiet)?;
     let mut outbound = progress_bar.wrap_async_write(stream.send);
     let mut meter =
         crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, bandwidth.tx());
