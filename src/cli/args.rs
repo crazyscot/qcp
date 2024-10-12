@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use crate::{
     build_info,
-    transport::CongestionControllerType,
+    transport::{CongestionControllerType, ThroughputMode},
     util::{AddressFamily, PortRange},
 };
 use clap::Parser;
@@ -293,6 +293,17 @@ impl FromStr for FileSpec {
 pub(crate) struct UnpackedArgs {
     pub(crate) source: FileSpec,
     pub(crate) destination: FileSpec,
+}
+
+impl UnpackedArgs {
+    /// What direction of data flow should we optimise for?
+    pub(crate) fn throughput_mode(&self) -> ThroughputMode {
+        if self.source.host.is_some() {
+            ThroughputMode::Rx
+        } else {
+            ThroughputMode::Tx
+        }
+    }
 }
 
 impl TryFrom<&CliArgs> for UnpackedArgs {

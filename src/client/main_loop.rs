@@ -35,11 +35,6 @@ pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyh
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
     let guard = trace_span!("CLIENT").entered();
     let processed_args = UnpackedArgs::try_from(args)?;
-    let mode = if processed_args.source.host.is_some() {
-        ThroughputMode::Rx
-    } else {
-        ThroughputMode::Tx
-    };
     let mut timers = StopwatchChain::new_running("setup");
 
     // Prep --------------------------
@@ -77,7 +72,7 @@ pub(crate) async fn client_main(args: &CliArgs, progress: MultiProgress) -> anyh
         server_message.cert.into(),
         &server_address_port,
         args,
-        mode,
+        processed_args.throughput_mode(),
     )?;
     debug!(
         "Remote endpoint network config: {}",
