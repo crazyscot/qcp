@@ -26,7 +26,8 @@ use tokio::time::timeout;
 use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
 /// Server main loop
-pub(crate) async fn server_main(
+#[allow(clippy::module_name_repetitions)]
+pub async fn server_main(
     bandwidth: crate::transport::BandwidthParams,
     quic: crate::transport::QuicParams,
 ) -> anyhow::Result<()> {
