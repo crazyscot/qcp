@@ -55,7 +55,7 @@ pub(crate) struct CliArgs {
     /// Quiet mode
     ///
     /// Switches off progress display and statistics; reports only errors
-    #[arg(short, long, action)]
+    #[arg(short, long, action, conflicts_with("debug"))]
     pub quiet: bool,
 
     /// Outputs additional transfer statistics
