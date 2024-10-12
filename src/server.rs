@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{session_capnp::Status, Command, FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
-use crate::transport::{BandwidthConfig, BandwidthParams};
+use crate::transport::BandwidthParams;
 use crate::util::cert::Credentials;
 use crate::util::socket::bind_range_for_family;
 use crate::util::PortRange;
@@ -54,7 +54,7 @@ pub async fn server_main(
     );
 
     let bandwidth_info = format!("{bandwidth:?}");
-    let file_buffer_size = usize::try_from(BandwidthConfig::from(&bandwidth).send_buffer)?;
+    let file_buffer_size = usize::try_from(bandwidth.send_buffer())?;
 
     let credentials = Credentials::generate()?;
     let (endpoint, warning) = create_endpoint(&credentials, client_message, bandwidth, quic.port)?;
@@ -135,11 +135,8 @@ fn create_endpoint(
 
     let mut socket = bind_range_for_family(client_message.connection_type, ports)?;
     // We don't know whether client will send or receive, so configure for both.
-    let buffer_config = BandwidthConfig::from(&bandwidth);
-    #[allow(clippy::cast_possible_truncation)]
-    let wanted_send = Some(buffer_config.send_buffer as usize);
-    #[allow(clippy::cast_possible_truncation)]
-    let wanted_recv = Some(buffer_config.recv_buffer as usize);
+    let wanted_send = Some(usize::try_from(bandwidth.send_buffer())?);
+    let wanted_recv = Some(usize::try_from(bandwidth.recv_buffer())?);
     let warning = util::socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)?
         .inspect(|s| warn!("{s}"));
 

@@ -169,50 +169,32 @@ impl BandwidthParams {
     pub fn rtt_duration(&self) -> Duration {
         Duration::from_millis(u64::from(self.rtt))
     }
-}
 
-#[derive(Debug, Copy, Clone)]
-/// Computed buffer configuration
-pub(crate) struct BandwidthConfig {
-    pub(crate) send_window: u64,
-    pub(crate) send_buffer: u64,
-    pub(crate) recv_window: u64,
-    pub(crate) recv_buffer: u64,
-}
-
-impl Display for BandwidthConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "send window {sw}, buffer {sb}; recv window {rw}, buffer {rb}",
-            sw = self.send_window.human_count_bytes(),
-            sb = self.send_buffer.human_count_bytes(),
-            rw = self.recv_window.human_count_bytes(),
-            rb = self.recv_buffer.human_count_bytes()
-        )
+    /// UDP kernel sending buffer size to use
+    #[must_use]
+    pub fn send_buffer(&self) -> u64 {
+        // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
+        2_097_152
     }
-}
-
-impl From<BandwidthParams> for BandwidthConfig {
-    fn from(params: BandwidthParams) -> Self {
-        Self::from(&params)
+    /// UDP kernel receive buffer size to use
+    #[must_use]
+    pub fn recv_buffer(&self) -> u64 {
+        // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
+        2_097_152
     }
-}
 
-impl From<&BandwidthParams> for BandwidthConfig {
-    fn from(params: &BandwidthParams) -> Self {
-        // Start with the BDP, which is the theoretical in flight limit
-        let bdp_rx = params.bandwidth_delay_product_rx();
-        let bdp_tx = params.bandwidth_delay_product_tx();
+    /// QUIC receive window
+    #[must_use]
+    pub fn recv_window(&self) -> u64 {
+        // The theoretical in-flight limit appears to be sufficient
+        self.bandwidth_delay_product_rx()
+    }
 
-        // However there might be random added latency en route, so provide for a larger send window than theoretical.
-        Self {
-            send_window: 2 * bdp_tx,
-            recv_window: bdp_rx,
-            // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
-            send_buffer: 2_097_152,
-            recv_buffer: 2_097_152,
-        }
+    /// QUIC send window
+    #[must_use]
+    pub fn send_window(&self) -> u64 {
+        // There might be random added latency en route, so provide for a larger send window than theoretical.
+        2 * self.bandwidth_delay_product_tx()
     }
 }
 
@@ -221,10 +203,6 @@ pub fn create_config(
     params: BandwidthParams,
     mode: ThroughputMode,
 ) -> Result<Arc<TransportConfig>> {
-    let congestion = params.congestion;
-    let bcfg: BandwidthConfig = params.into();
-
-    // Common setup
     let mut config = TransportConfig::default();
     let _ = config
         .max_concurrent_bidi_streams(1u8.into())
@@ -235,8 +213,8 @@ pub fn create_config(
     match mode {
         ThroughputMode::Tx | ThroughputMode::Both => {
             let _ = config
-                .send_window(bcfg.send_window)
-                .datagram_send_buffer_size(bcfg.send_buffer.try_into()?);
+                .send_window(params.send_window())
+                .datagram_send_buffer_size(params.send_buffer().try_into()?);
         }
         ThroughputMode::Rx => (),
     }
@@ -245,13 +223,13 @@ pub fn create_config(
         // TODO: If we later support multiple streams at once, will need to consider receive_window and stream_receive_window.
         ThroughputMode::Rx | ThroughputMode::Both => {
             let _ = config
-                .stream_receive_window(bcfg.recv_window.try_into()?)
-                .datagram_receive_buffer_size(Some(bcfg.recv_buffer as usize));
+                .stream_receive_window(params.recv_window().try_into()?)
+                .datagram_receive_buffer_size(Some(params.recv_buffer() as usize));
         }
         ThroughputMode::Tx => (),
     }
 
-    match congestion {
+    match params.congestion {
         CongestionControllerType::Cubic => {
             let mut cubic = CubicConfig::default();
             if let Some(w) = params.initial_congestion_window {
@@ -269,7 +247,13 @@ pub fn create_config(
     }
 
     debug!("Network configuration: {params}");
-    debug!("Buffer configuration: {bcfg}",);
+    debug!(
+        "Buffer configuration: send window {sw}, buffer {sb}; recv window {rw}, buffer {rb}",
+        sw = params.send_window().human_count_bytes(),
+        sb = params.send_buffer().human_count_bytes(),
+        rw = params.recv_window().human_count_bytes(),
+        rb = params.recv_buffer().human_count_bytes()
+    );
 
     Ok(config.into())
 }

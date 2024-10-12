@@ -6,7 +6,7 @@ use crate::client::control::ControlChannel;
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
-use crate::transport::{BandwidthConfig, BandwidthParams, ThroughputMode};
+use crate::transport::{BandwidthParams, ThroughputMode};
 use crate::util::cert::Credentials;
 use crate::util::time::Stopwatch;
 use crate::util::PortRange;
@@ -167,18 +167,9 @@ async fn manage_request(
                 .await
         } else {
             // This is a Put
-            let file_buffer_size = BandwidthConfig::from(bandwidth).send_buffer.try_into()?;
-            do_put(
-                sp,
-                &copy_spec,
-                display,
-                spinner,
-                file_buffer_size,
-                bandwidth,
-                quiet,
-            )
-            .instrument(trace_span!("PUT", filename = copy_spec.source.filename))
-            .await
+            do_put(sp, &copy_spec, display, spinner, bandwidth, quiet)
+                .instrument(trace_span!("PUT", filename = copy_spec.source.filename))
+                .await
         }
     });
 
@@ -277,15 +268,12 @@ pub(crate) fn create_endpoint(
 
     trace!("bind & configure socket, port={port:?}", port = port);
     let mut socket = util::socket::bind_range_for_peer(server_addr, port)?;
-    let buffer_config = BandwidthConfig::from(bandwidth);
-    #[allow(clippy::cast_possible_truncation)]
     let wanted_send = match mode {
-        ThroughputMode::Both | ThroughputMode::Tx => Some(buffer_config.send_buffer as usize),
+        ThroughputMode::Both | ThroughputMode::Tx => Some(bandwidth.send_buffer().try_into()?),
         ThroughputMode::Rx => None,
     };
-    #[allow(clippy::cast_possible_truncation)]
     let wanted_recv = match mode {
-        ThroughputMode::Both | ThroughputMode::Rx => Some(buffer_config.recv_buffer as usize),
+        ThroughputMode::Both | ThroughputMode::Rx => Some(bandwidth.recv_buffer().try_into()?),
         ThroughputMode::Tx => None,
     };
 
@@ -371,7 +359,6 @@ async fn do_put(
     job: &CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
-    file_buffer_size: usize,
     bandwidth: BandwidthParams,
     quiet: bool,
 ) -> Result<u64> {
@@ -403,7 +390,7 @@ async fn do_put(
     meter.start().await;
 
     trace!("sending command");
-    let mut file = BufReader::with_capacity(file_buffer_size, file);
+    let mut file = BufReader::with_capacity(bandwidth.send_buffer().try_into()?, file);
 
     outbound
         .write_all(&crate::protocol::session::Command::new_put(dest_filename).serialize())
