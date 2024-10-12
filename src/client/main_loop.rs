@@ -265,7 +265,7 @@ pub(crate) fn create_endpoint(
     let _ = config.transport_config(crate::transport::create_config(bw, mode)?);
 
     trace!("bind & configure socket, port={port:?}", port = args.port);
-    let socket = util::socket::bind_range_for_peer(server_addr, args.port)?;
+    let mut socket = util::socket::bind_range_for_peer(server_addr, args.port)?;
     let buffer_config = BandwidthConfig::from(bw);
     #[allow(clippy::cast_possible_truncation)]
     let wanted_send = match mode {
@@ -278,7 +278,7 @@ pub(crate) fn create_endpoint(
         ThroughputMode::Tx => None,
     };
 
-    let _ = util::socket::set_udp_buffer_sizes(&socket, wanted_send, wanted_recv)?;
+    let _ = util::socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)?;
 
     trace!("create endpoint");
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames

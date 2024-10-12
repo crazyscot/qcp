@@ -131,14 +131,14 @@ fn create_endpoint(
         transport::ThroughputMode::Both,
     )?);
 
-    let socket = bind_range_for_family(client_message.connection_type, args.port)?;
+    let mut socket = bind_range_for_family(client_message.connection_type, args.port)?;
     // We don't know whether client will send or receive, so configure for both.
     let buffer_config = BandwidthConfig::from(&bandwidth);
     #[allow(clippy::cast_possible_truncation)]
     let wanted_send = Some(buffer_config.send_buffer as usize);
     #[allow(clippy::cast_possible_truncation)]
     let wanted_recv = Some(buffer_config.recv_buffer as usize);
-    let warning = util::socket::set_udp_buffer_sizes(&socket, wanted_send, wanted_recv)?
+    let warning = util::socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)?
         .inspect(|s| warn!("{s}"));
 
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames

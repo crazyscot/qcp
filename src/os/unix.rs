@@ -1,6 +1,7 @@
 // OS abstraction layer for qcp - Unix implementation
 // (c) 2024 Ross Younger
 
+use super::SocketOptions;
 use anyhow::Result;
 use nix::sys::socket::{self, sockopt};
 use std::net::UdpSocket;
@@ -14,61 +15,49 @@ fn bsdish() -> bool {
     ))
 }
 
+impl SocketOptions for UdpSocket {
+    fn get_sendbuf(&self) -> Result<usize> {
+        #[cfg(target_os = "linux")]
+        let divisor = 2;
+        #[cfg(not(target_os = "linux"))]
+        let divisor = 1;
+        Ok(socket::getsockopt(self, sockopt::SndBuf)? / divisor)
+    }
+
+    fn set_sendbuf(&mut self, size: usize) -> Result<()> {
+        socket::setsockopt(self, sockopt::SndBuf, &size)?;
+        Ok(())
+    }
+
+    fn force_sendbuf(&mut self, size: usize) -> Result<()> {
+        socket::setsockopt(self, sockopt::SndBufForce, &size)?;
+        Ok(())
+    }
+
+    fn get_recvbuf(&self) -> Result<usize> {
+        #[cfg(target_os = "linux")]
+        let divisor = 2;
+        #[cfg(not(target_os = "linux"))]
+        let divisor = 1;
+        Ok(socket::getsockopt(self, sockopt::RcvBuf)? / divisor)
+    }
+
+    fn set_recvbuf(&mut self, size: usize) -> Result<()> {
+        socket::setsockopt(self, sockopt::RcvBuf, &size)?;
+        Ok(())
+    }
+
+    fn force_recvbuf(&mut self, size: usize) -> Result<()> {
+        socket::setsockopt(self, sockopt::RcvBufForce, &size)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 /// OS abstraction layer for Unix-like platforms
 pub(crate) struct Unix {}
 
 impl Unix {
-    /// Wrapper for getsockopt `SO_SNDBUF`.
-    /// On Linux, this call halves the number returned from the kernel.
-    /// This takes account of kernel behaviour: the internal buffer
-    /// allocation is _double_ the size you set with setsockopt,
-    /// and getsockopt returns the doubled value.
-    pub(crate) fn get_sendbuf(socket: &UdpSocket) -> Result<usize> {
-        #[cfg(target_os = "linux")]
-        let divisor = 2;
-        #[cfg(not(target_os = "linux"))]
-        let divisor = 1;
-        Ok(socket::getsockopt(socket, sockopt::SndBuf)? / divisor)
-    }
-
-    /// Wrapper for setsockopt `SO_SNDBUF`
-    pub(crate) fn set_sendbuf(socket: &UdpSocket, size: usize) -> Result<()> {
-        socket::setsockopt(socket, sockopt::SndBuf, &size)?;
-        Ok(())
-    }
-
-    /// Wrapper for setsockopt `SO_SNDBUFFORCE`
-    pub(crate) fn force_sendbuf(socket: &UdpSocket, size: usize) -> Result<()> {
-        socket::setsockopt(socket, sockopt::SndBufForce, &size)?;
-        Ok(())
-    }
-
-    /// Wrapper for getsockopt `SO_RCVBUF`.
-    /// On Linux, this call halves the number returned from the kernel.
-    /// This takes account of kernel behaviour: the internal buffer
-    /// allocation is _double_ the size you set with setsockopt,
-    /// and getsockopt returns the doubled value.
-    pub(crate) fn get_recvbuf(socket: &UdpSocket) -> Result<usize> {
-        #[cfg(target_os = "linux")]
-        let divisor = 2;
-        #[cfg(not(target_os = "linux"))]
-        let divisor = 1;
-        Ok(socket::getsockopt(socket, sockopt::RcvBuf)? / divisor)
-    }
-
-    /// Wrapper for setsockopt `SO_RCVBUF`
-    pub(crate) fn set_recvbuf(socket: &UdpSocket, size: usize) -> Result<()> {
-        socket::setsockopt(socket, sockopt::RcvBuf, &size)?;
-        Ok(())
-    }
-
-    /// Wrapper for setsockopt `SO_RCVBUFFORCE`
-    pub(crate) fn force_recvbuf(socket: &UdpSocket, size: usize) -> Result<()> {
-        socket::setsockopt(socket, sockopt::RcvBufForce, &size)?;
-        Ok(())
-    }
-
     /// Outputs helpful information for the sysadmin
     pub(crate) fn print_udp_buffer_size_help_message(rmem: u64, wmem: u64) {
         println!(

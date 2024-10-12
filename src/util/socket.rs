@@ -1,7 +1,7 @@
 // qcp socket wrangling
 // (c) 2024 Ross Younger
 
-use crate::os::os;
+use crate::os::SocketOptions as _;
 use human_repr::HumanCount as _;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket};
 use tracing::{debug, info, warn};
@@ -11,12 +11,12 @@ use super::{AddressFamily, PortRange};
 /// Set the buffer size options on a UDP socket.
 /// May return a warning message, if we weren't able to do so.
 pub fn set_udp_buffer_sizes(
-    socket: &UdpSocket,
+    socket: &mut UdpSocket,
     wanted_send: Option<usize>,
     wanted_recv: Option<usize>,
 ) -> anyhow::Result<Option<String>> {
-    let mut send = os::get_sendbuf(socket)?;
-    let mut recv = os::get_recvbuf(socket)?;
+    let mut send = socket.get_sendbuf()?;
+    let mut recv = socket.get_recvbuf()?;
     debug!(
         "system default socket buffer sizes are {} send, {} receive",
         send.human_count_bare(),
@@ -27,22 +27,22 @@ pub fn set_udp_buffer_sizes(
     let wanted_recv = wanted_recv.unwrap_or(recv);
 
     if send < wanted_send {
-        let _ = os::set_sendbuf(socket, wanted_send);
-        send = os::get_sendbuf(socket)?;
+        let _ = socket.set_sendbuf(wanted_send);
+        send = socket.get_sendbuf()?;
     }
     if send < wanted_send {
-        force_err = os::force_sendbuf(socket, wanted_send).err();
+        force_err = socket.force_sendbuf(wanted_send).err();
     }
     if recv < wanted_recv {
-        let _ = os::set_recvbuf(socket, wanted_recv);
-        recv = os::get_recvbuf(socket)?;
+        let _ = socket.set_recvbuf(wanted_recv);
+        recv = socket.get_recvbuf()?;
     }
     if recv < wanted_recv {
-        force_err = os::force_recvbuf(socket, wanted_recv).err().or(force_err);
+        force_err = socket.force_recvbuf(wanted_recv).err().or(force_err);
     }
 
-    send = os::get_sendbuf(socket)?;
-    recv = os::get_recvbuf(socket)?;
+    send = socket.get_sendbuf()?;
+    recv = socket.get_recvbuf()?;
     let mut message: Option<String> = None;
     if send < wanted_send || recv < wanted_recv {
         let msg = format!(
@@ -142,8 +142,8 @@ mod test {
     #[test]
     fn set_socket_bufsize() -> anyhow::Result<()> {
         setup_tracing_for_tests();
-        let sock = UdpSocket::bind("0.0.0.0:0")?;
-        let _ = super::set_udp_buffer_sizes(&sock, Some(1_048_576), Some(10_485_760))?;
+        let mut sock = UdpSocket::bind("0.0.0.0:0")?;
+        let _ = super::set_udp_buffer_sizes(&mut sock, Some(1_048_576), Some(10_485_760))?;
         Ok(())
     }
 }
