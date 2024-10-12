@@ -9,7 +9,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt as _, BufReader},
     time::timeout,
 };
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::{
     cert::Credentials,
@@ -103,6 +103,12 @@ impl ControlChannel {
         let message = ServerMessage::read(&mut server_output)
             .await
             .with_context(|| "reading server message")?;
+
+        trace!("Got server message {message:?}");
+        if let Some(w) = message.warning.as_ref() {
+            warn!("Remote endpoint warning: {w}");
+        }
+        debug!("Remote endpoint network config: {}", message.bandwidth_info);
         Ok((new1, message))
     }
 
@@ -208,6 +214,8 @@ impl ControlChannel {
             .stdout
             .as_mut()
             .ok_or(anyhow!("could not access process stdout (can't happen?)"))?;
-        ClosedownReport::read(pipe).await
+        let stats = ClosedownReport::read(pipe).await?;
+        debug!("remote reported stats: {:?}", stats);
+        Ok(stats)
     }
 }

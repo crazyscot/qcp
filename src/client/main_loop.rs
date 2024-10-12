@@ -33,14 +33,13 @@ const SHOW_TIME: &str = "file transfer";
 pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyhow::Result<bool> {
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
-    let guard = trace_span!("CLIENT").entered();
+    let _guard = trace_span!("CLIENT").entered();
     let processed_args = UnpackedArgs::try_from(args)?;
     let mut timers = StopwatchChain::new_running("setup");
 
     // Prep --------------------------
     let credentials = crate::cert::Credentials::generate()?;
-    let host = args.remote_host()?;
-    let server_address = lookup_host_by_family(host, args.address_family())?;
+    let server_address = lookup_host_by_family(args.remote_host()?, args.address_family())?;
 
     // Control channel ---------------
     timers.next("control channel");
@@ -52,10 +51,6 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
         args.quiet,
     )
     .await?;
-    debug!("Got server message {server_message:?}");
-    if let Some(w) = server_message.warning {
-        warn!("Remote endpoint warning: {w}");
-    }
 
     // Data channel ------------------
     let server_address_port = match server_address {
@@ -78,10 +73,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
         args,
         processed_args.throughput_mode(),
     )?;
-    debug!(
-        "Remote endpoint network config: {}",
-        server_message.bandwidth_info
-    );
+
     debug!("Opening QUIC connection to {server_address_port:?}");
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
     let connection = timeout(
@@ -90,7 +82,6 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     )
     .await
     .with_context(|| "UDP connection to QUIC endpoint timed out")??;
-    let connection2 = connection.clone();
 
     // Show time! ---------------------
     spinner.set_message("Transferring data");
@@ -98,7 +89,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     let bandwidth = BandwidthParams::from(args);
     let file_buffer_size = usize::try_from(BandwidthConfig::from(bandwidth).send_buffer)?;
     let result = manage_request(
-        connection,
+        &connection,
         processed_args,
         display.clone(),
         spinner.clone(),
@@ -117,7 +108,6 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
     endpoint.close(1u8.into(), "finished".as_bytes());
     let remote_stats = control.read_closedown_report().await?;
-    debug!("remote reported stats: {:?}", remote_stats);
 
     let control_fut = control.close();
     let _ = timeout(args.timeout, endpoint.wait_idle())
@@ -129,16 +119,14 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
         .inspect_err(|_| warn!("control channel timed out"));
     // Ignore errors. If the control channel closedown times out, we expect its drop handler will do the Right Thing.
 
-    trace!("finished");
     timers.stop();
-    drop(guard);
 
     // Post-transfer chatter -----------
     if !args.quiet {
         let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
         crate::util::stats::output_statistics(
             args,
-            &connection2.stats(),
+            &connection.stats(),
             total_bytes,
             transport_time,
             remote_stats,
@@ -156,7 +144,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
 /// On success: returns the number of bytes transferred.
 /// On error: returns the number of bytes that were transferred, as far as we know.
 async fn manage_request(
-    connection: Connection,
+    connection: &Connection,
     processed: UnpackedArgs,
     display: MultiProgress,
     spinner: ProgressBar,
@@ -165,6 +153,7 @@ async fn manage_request(
     quiet: bool,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
+    let connection = connection.clone();
     let _jh = tasks.spawn(async move {
         // This async block returns a Result<u64>
         let sp = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
