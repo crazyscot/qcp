@@ -139,7 +139,7 @@ struct TickRateCalculator {
 }
 
 const MIN_FPS: f64 = 0.2;
-const MAX_FPS: f64 = crate::console::MAX_UPDATE_FPS as f64;
+const MAX_FPS: f64 = super::progress::MAX_UPDATE_FPS as f64;
 
 impl TickRateCalculator {
     fn new(max_throughput: f64) -> Self {

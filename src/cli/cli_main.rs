@@ -6,7 +6,11 @@ use std::process::ExitCode;
 use super::args::CliArgs;
 
 use crate::{
-    client::client_main, os, server::server_main, transport::BandwidthConfig, util::setup_tracing,
+    client::{client_main, MAX_UPDATE_FPS},
+    os,
+    server::server_main,
+    transport::BandwidthConfig,
+    util::setup_tracing,
 };
 use clap::Parser;
 use indicatif::{MultiProgress, ProgressDrawTarget};
@@ -38,7 +42,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
         None
     } else {
         Some(MultiProgress::with_draw_target(
-            ProgressDrawTarget::stderr_with_hz(crate::console::MAX_UPDATE_FPS),
+            ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS),
         ))
     };
     setup_tracing(trace_level, progress.as_ref(), &args.log_file)

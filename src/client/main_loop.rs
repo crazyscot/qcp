@@ -239,7 +239,7 @@ fn progress_bar_for(
     Ok(display.add(
         ProgressBar::new(steps)
             .with_style(indicatif::ProgressStyle::with_template(
-                crate::console::progress_style_for(
+                super::progress::progress_style_for(
                     &console::Term::stderr(),
                     display_filename.len(),
                 ),

@@ -1,4 +1,4 @@
-// Console related functions and styling
+//! Progress bar styling
 // (c) 2024 Ross Younger
 
 pub(crate) const MAX_UPDATE_FPS: u8 = 20;

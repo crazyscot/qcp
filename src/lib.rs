@@ -11,8 +11,6 @@ pub mod server;
 pub mod transport;
 pub mod util;
 
-mod console;
-
 mod os;
 
 /// Build-time info (from `built`)
