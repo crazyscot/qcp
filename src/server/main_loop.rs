@@ -56,7 +56,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     // TODO: Allow port to be specified
     let credentials = crate::cert::Credentials::generate()?;
     let (endpoint, warning) =
-        create_endpoint(&credentials, client_message, args.bandwidth, args.port)?;
+        create_endpoint(&credentials, client_message, args.bandwidth, args.quic.port)?;
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");
     ServerMessage::write(
@@ -78,7 +78,7 @@ pub(crate) async fn server_main(args: &CliArgs) -> anyhow::Result<()> {
     // but a timeout is useful to give the user a cue that UDP isn't getting there.
     trace!("waiting for QUIC");
     let (stats_tx, mut stats_rx) = oneshot::channel();
-    if let Some(conn) = timeout(args.timeout, endpoint.accept())
+    if let Some(conn) = timeout(args.quic.timeout, endpoint.accept())
         .await
         .with_context(|| "Timed out waiting for QUIC connection")?
     {

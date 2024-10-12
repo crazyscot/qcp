@@ -50,6 +50,12 @@ impl FromStr for PortRange {
     }
 }
 
+/// Parse helper for Duration fields specified in seconds
+pub fn parse_duration(arg: &str) -> Result<std::time::Duration, std::num::ParseIntError> {
+    let seconds = arg.parse()?;
+    Ok(std::time::Duration::from_secs(seconds))
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

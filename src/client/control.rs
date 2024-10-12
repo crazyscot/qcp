@@ -55,7 +55,7 @@ impl TryFrom<&CliArgs> for ChannelParameters {
             ssh_opts: args.ssh_opt.clone(),
             remote_port: args.remote_port,
             bandwidth: args.bandwidth,
-            timeout: args.timeout,
+            timeout: args.quic.timeout,
         })
     }
 }

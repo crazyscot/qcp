@@ -7,15 +7,9 @@ use crate::{
     util::{AddressFamily, PortRange},
 };
 use clap::Parser;
-use tokio::time::Duration;
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
 const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
-
-fn parse_duration(arg: &str) -> Result<std::time::Duration, std::num::ParseIntError> {
-    let seconds = arg.parse()?;
-    Ok(std::time::Duration::from_secs(seconds))
-}
 
 #[derive(Debug, Parser, Clone)]
 #[command(
@@ -93,21 +87,6 @@ pub(crate) struct CliArgs {
     #[arg(long, action, help_heading("Network tuning"), display_order(50))]
     pub help_buffers: bool,
 
-    // CLIENT OR SERVER
-    /// Uses the given UDP port or range on the local endpoint.
-    ///
-    /// This can be useful when there is a firewall between the endpoints.
-    #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
-    pub port: Option<PortRange>,
-
-    /// Connection timeout for the QUIC endpoints.
-    ///
-    /// This needs to be long enough for your network connection, but short enough to provide
-    /// a timely indication that UDP may be blocked.
-    #[arg(short, long, default_value("5"), value_name("sec"), value_parser=parse_duration, help_heading("Connection"))]
-    pub timeout: Duration,
-
-    // CLIENT ONLY
     /// Uses the given UDP port or range on the remote endpoint.
     ///
     /// This can be useful when there is a firewall between the endpoints.
@@ -137,6 +116,9 @@ pub(crate) struct CliArgs {
     // NETWORK OPTIONS =====================================================================
     #[command(flatten)]
     pub bandwidth: crate::transport::BandwidthParams,
+
+    #[command(flatten)]
+    pub quic: crate::transport::QuicParams,
 
     // POSITIONAL ARGUMENTS ================================================================
     /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.

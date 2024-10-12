@@ -13,8 +13,27 @@ use quinn::{
 };
 use tracing::debug;
 
+use crate::util::{parse_duration, PortRange};
+
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
+
+/// Shared parameters used to set up the QUIC UDP connection
+#[derive(Copy, Clone, Debug, Parser)]
+pub struct QuicParams {
+    /// Uses the given UDP port or range on the local endpoint.
+    ///
+    /// This can be useful when there is a firewall between the endpoints.
+    #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
+    pub port: Option<PortRange>,
+
+    /// Connection timeout for the QUIC endpoints.
+    ///
+    /// This needs to be long enough for your network connection, but short enough to provide
+    /// a timely indication that UDP may be blocked.
+    #[arg(short, long, default_value("5"), value_name("sec"), value_parser=parse_duration, help_heading("Connection"))]
+    pub timeout: Duration,
+}
 
 /// Specifies whether to configure to maximise transmission throughput, receive throughput, or both.
 /// Specifying `Both` for a one-way data transfer will work, but wastes kernel memory.
