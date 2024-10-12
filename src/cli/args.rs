@@ -44,7 +44,7 @@ pub(crate) struct CliArgs {
     /// intended for interactive use.
     #[arg(
         long, help_heading("Modes"), hide = true,
-        conflicts_with_all(["help_buffers", "quiet", "statistics", "timeout", "ipv4", "ipv6", "remote_debug", "profile", "source", "destination", "ssh", "ssh_opt", "remote_port"])
+        conflicts_with_all(["help_buffers", "quiet", "statistics", "ipv4", "ipv6", "remote_debug", "profile", "source", "destination", "ssh", "ssh_opt", "remote_port"])
     )]
     pub server: bool,
 
@@ -58,13 +58,6 @@ pub(crate) struct CliArgs {
     /// Outputs additional transfer statistics
     #[arg(short = 's', long, alias("stats"), action, conflicts_with("quiet"))]
     pub statistics: bool,
-
-    /// Connection timeout for the QUIC endpoint.
-    ///
-    /// This needs to be long enough for your network connection, but short enough to provide
-    /// a timely indication that UDP may be blocked.
-    #[arg(short, long, default_value("5"), value_name("sec"), value_parser=parse_duration)]
-    pub timeout: Duration,
 
     /// Forces IPv4 connection [default: autodetect]
     #[arg(short = '4', long, action, help_heading("Connection"))]
@@ -106,6 +99,13 @@ pub(crate) struct CliArgs {
     /// This can be useful when there is a firewall between the endpoints.
     #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
     pub port: Option<PortRange>,
+
+    /// Connection timeout for the QUIC endpoints.
+    ///
+    /// This needs to be long enough for your network connection, but short enough to provide
+    /// a timely indication that UDP may be blocked.
+    #[arg(short, long, default_value("5"), value_name("sec"), value_parser=parse_duration, help_heading("Connection"))]
+    pub timeout: Duration,
 
     // CLIENT ONLY
     /// Uses the given UDP port or range on the remote endpoint.

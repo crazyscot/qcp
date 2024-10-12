@@ -29,6 +29,7 @@ pub struct ChannelParameters {
     ssh_opts: Vec<String>,
     remote_port: Option<PortRange>,
     bandwidth: BandwidthParams,
+    timeout: Duration,
 }
 
 impl ChannelParameters {
@@ -54,6 +55,7 @@ impl TryFrom<&CliArgs> for ChannelParameters {
             ssh_opts: args.ssh_opt.clone(),
             remote_port: args.remote_port,
             bandwidth: args.bandwidth,
+            timeout: args.timeout,
         })
     }
 }
@@ -136,6 +138,8 @@ impl ControlChannel {
             &args.bandwidth.rtt.to_string(),
             "--congestion",
             &args.bandwidth.congestion.to_string(),
+            "--timeout",
+            &args.timeout.as_secs().to_string(),
         ]);
         if args.remote_debug {
             let _ = server.arg("--debug");
