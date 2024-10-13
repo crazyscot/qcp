@@ -1,12 +1,12 @@
 //! Socket wrangling
 // (c) 2024 Ross Younger
 
-use crate::os::SocketOptions as _;
+use crate::{os::SocketOptions as _, protocol::control::ConnectionType};
 use human_repr::HumanCount as _;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket};
 use tracing::{debug, info, warn};
 
-use super::{AddressFamily, PortRange};
+use super::PortRange;
 
 /// Set the buffer size options on a UDP socket.
 /// May return a warning message, if we weren't able to do so.
@@ -118,15 +118,12 @@ pub fn bind_range_for_address(
 
 /// Creates and binds a UDP socket from a restricted range of local ports, for the unspecified address of the given address family
 pub fn bind_range_for_family(
-    family: AddressFamily,
+    family: ConnectionType,
     range: Option<PortRange>,
 ) -> anyhow::Result<std::net::UdpSocket> {
     let addr = match family {
-        AddressFamily::Any => {
-            anyhow::bail!("address family Any not supported here (can't happen)")
-        }
-        AddressFamily::IPv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-        AddressFamily::IPv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+        ConnectionType::Ipv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        ConnectionType::Ipv6 => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
     };
     bind_range_for_address(addr, range)
 }

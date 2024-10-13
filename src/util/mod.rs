@@ -2,7 +2,7 @@
 // (c) 2024 Ross Younger
 
 mod dns;
-pub use dns::{lookup_host_by_family, AddressFamily};
+pub use dns::lookup_host_by_family;
 
 pub mod cert;
 pub mod io;

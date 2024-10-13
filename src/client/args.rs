@@ -3,7 +3,7 @@
 
 use clap::Parser;
 
-use crate::util::{AddressFamily, PortRange};
+use crate::{protocol::control::ConnectionType, util::PortRange};
 
 use super::job::FileSpec;
 
@@ -90,13 +90,13 @@ pub struct ClientOptions {
 }
 
 impl ClientOptions {
-    pub(crate) fn address_family(&self) -> AddressFamily {
+    pub(crate) fn address_family(&self) -> Option<ConnectionType> {
         if self.ipv4 {
-            AddressFamily::IPv4
+            Some(ConnectionType::Ipv4)
         } else if self.ipv6 {
-            AddressFamily::IPv6
+            Some(ConnectionType::Ipv6)
         } else {
-            AddressFamily::Any
+            None
         }
     }
 

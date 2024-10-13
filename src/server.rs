@@ -48,7 +48,7 @@ pub async fn server_main(
         )
     })?;
     debug!(
-        "got client message length {}, using {}",
+        "got client message length {}, using {:?}",
         client_message.cert.len(),
         client_message.connection_type,
     );

@@ -12,9 +12,9 @@ use tokio::{
 use tracing::{debug, trace, warn};
 
 use crate::{
-    protocol::control::{ClientMessage, ClosedownReport, ServerMessage, BANNER},
+    protocol::control::{ClientMessage, ClosedownReport, ConnectionType, ServerMessage, BANNER},
     transport::{BandwidthParams, QuicParams},
-    util::{cert::Credentials, AddressFamily},
+    util::cert::Credentials,
 };
 
 use super::args::ClientOptions;
@@ -86,9 +86,9 @@ impl ControlChannel {
         let mut server = tokio::process::Command::new(&client.ssh);
         let _ = server.kill_on_drop(true);
         let _ = match client.address_family() {
-            AddressFamily::Any => &mut server,
-            AddressFamily::IPv4 => server.arg("-4"),
-            AddressFamily::IPv6 => server.arg("-6"),
+            None => &mut server,
+            Some(ConnectionType::Ipv4) => server.arg("-4"),
+            Some(ConnectionType::Ipv6) => server.arg("-6"),
         };
         let _ = server.args(&client.ssh_opt);
         let _ = server.args([

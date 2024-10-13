@@ -22,10 +22,9 @@
  * On the wire these messages are sent using standard capnproto framing.
  */
 
-use crate::util::AddressFamily;
-
 use anyhow::Result;
 use capnp::message::ReaderOptions;
+pub use control_capnp::client_message::ConnectionType;
 use quinn::ConnectionStats;
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
@@ -45,7 +44,19 @@ use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt 
     clippy::used_underscore_binding
 )]
 pub mod control_capnp {
+    use client_message::ConnectionType;
+    use std::net::IpAddr;
+
     include!(concat!(env!("OUT_DIR"), "/control_capnp.rs"));
+
+    impl From<IpAddr> for ConnectionType {
+        fn from(value: std::net::IpAddr) -> Self {
+            match value {
+                IpAddr::V4(_) => ConnectionType::Ipv4,
+                IpAddr::V6(_) => ConnectionType::Ipv6,
+            }
+        }
+    }
 }
 
 /// Server banner message, sent on stdout and checked by the client
@@ -56,20 +67,20 @@ pub const BANNER: &str = "qcp-server-1\n";
 #[allow(missing_docs)]
 pub struct ClientMessage {
     pub cert: Vec<u8>,
-    pub connection_type: AddressFamily,
+    pub connection_type: ConnectionType,
 }
 
 impl ClientMessage {
     // This is weirdly asymmetric to avoid needless allocs.
     /// One-stop serializer
-    pub async fn write<W>(write: &mut W, cert: &[u8], conn_type: AddressFamily) -> Result<()>
+    pub async fn write<W>(write: &mut W, cert: &[u8], conn_type: ConnectionType) -> Result<()>
     where
         W: tokio::io::AsyncWrite + Unpin,
     {
         let mut msg = ::capnp::message::Builder::new_default();
         let mut builder = msg.init_root::<control_capnp::client_message::Builder<'_>>();
         builder.set_cert(cert);
-        builder.set_connection_type(conn_type.try_into()?);
+        builder.set_connection_type(conn_type);
         capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
         Ok(())
     }
@@ -79,18 +90,16 @@ impl ClientMessage {
     where
         R: tokio::io::AsyncRead + Unpin,
     {
-        use control_capnp::client_message::ConnectionType as wire_af;
-
         let reader =
             capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
         let msg_reader: control_capnp::client_message::Reader<'_> = reader.get_root()?;
         let cert = msg_reader.get_cert()?.to_vec();
-        let conn_type: wire_af = msg_reader
+        let connection_type: ConnectionType = msg_reader
             .get_connection_type()
             .map_err(|_| anyhow::anyhow!("incompatible ClientMessage"))?;
         Ok(Self {
             cert,
-            connection_type: conn_type.into(),
+            connection_type,
         })
     }
 }
@@ -274,8 +283,6 @@ mod tests {
 
     // These tests are really only exercising capnp, proving that we know how to drive it correctly.
 
-    use crate::util::AddressFamily;
-
     use super::{control_capnp, ClientMessage, ServerMessage};
     use anyhow::Result;
     use capnp::{message::ReaderOptions, serialize};
@@ -291,11 +298,9 @@ mod tests {
         use control_capnp::client_message::{self};
         let reader = serialize::read_message(wire, ReaderOptions::new())?;
         let cert_reader: client_message::Reader<'_> = reader.get_root()?;
-        let cert = Vec::<u8>::from(cert_reader.get_cert()?);
-        let family: AddressFamily = cert_reader.get_connection_type()?.into();
         Ok(ClientMessage {
-            cert,
-            connection_type: family,
+            cert: Vec::<u8>::from(cert_reader.get_cert()?),
+            connection_type: cert_reader.get_connection_type()?,
         })
     }
     fn encode_server(port: u16, cert: &[u8]) -> Vec<u8> {
