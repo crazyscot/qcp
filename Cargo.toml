@@ -16,7 +16,7 @@ capnp-futures = "0.20.0"
 clap = { version = "4.5.19", features = ["wrap_help", "derive", "cargo", "help"] }
 console = "0.15.8"
 dns-lookup = "2.0.4"
-futures-util = { version = "0.3.30", default-features = false }
+futures-util = { version = "0.3.31", default-features = false }
 gethostname = "0.5.0"
 human-repr = "1.1.0"
 humanize-rs = "0.1.5"
