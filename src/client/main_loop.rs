@@ -33,16 +33,18 @@ const SHOW_TIME: &str = "file transfer";
 
 /// Main CLI entrypoint
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
+#[allow(clippy::module_name_repetitions)]
 pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyhow::Result<bool> {
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
     let _guard = trace_span!("CLIENT").entered();
-    let processed_args = CopyJobSpec::try_from(args)?;
+    let job_spec = CopyJobSpec::try_from(&args.client)?;
     let mut timers = StopwatchChain::new_running("setup");
 
     // Prep --------------------------
     let credentials = Credentials::generate()?;
-    let server_address = lookup_host_by_family(args.remote_host()?, args.address_family())?;
+    let server_address =
+        lookup_host_by_family(args.client.remote_host()?, args.client.address_family())?;
 
     // Control channel ---------------
     timers.next("control channel");
@@ -55,7 +57,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
-    let spinner = if args.quiet {
+    let spinner = if args.client.quiet {
         ProgressBar::hidden()
     } else {
         display.add(ProgressBar::new_spinner())
@@ -69,7 +71,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
         &server_address_port,
         args.quic.port,
         args.bandwidth,
-        processed_args.throughput_mode(),
+        job_spec.throughput_mode(),
     )?;
 
     debug!("Opening QUIC connection to {server_address_port:?}");
@@ -86,11 +88,11 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     timers.next(SHOW_TIME);
     let result = manage_request(
         &connection,
-        processed_args,
+        job_spec,
         display.clone(),
         spinner.clone(),
         args.bandwidth,
-        args.quiet,
+        args.client.quiet,
     )
     .await;
     let total_bytes = match result {
@@ -117,7 +119,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     timers.stop();
 
     // Post-transfer chatter -----------
-    if !args.quiet {
+    if !args.client.quiet {
         let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
         crate::util::stats::process_statistics(
             &connection.stats(),
@@ -125,11 +127,11 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
             transport_time,
             remote_stats,
             args.bandwidth,
-            args.statistics,
+            args.client.statistics,
         );
     }
 
-    if args.profile {
+    if args.client.profile {
         info!("Elapsed time by phase:\n{timers}");
     }
     display.clear()?;

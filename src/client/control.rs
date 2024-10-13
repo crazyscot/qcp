@@ -41,7 +41,7 @@ impl ControlChannel {
         args: &CliArgs,
     ) -> Result<(ControlChannel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(args, display, args.quiet)?;
+        let mut new1 = Self::launch(args, display, args.client.quiet)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -74,16 +74,16 @@ impl ControlChannel {
 
     /// This is effectively a constructor. At present, it launches a subprocess.
     fn launch(args: &CliArgs, display: &MultiProgress, quiet: bool) -> Result<Self> {
-        let mut server = tokio::process::Command::new(&args.ssh);
+        let mut server = tokio::process::Command::new(&args.client.ssh);
         let _ = server.kill_on_drop(true);
-        let _ = match args.address_family() {
+        let _ = match args.client.address_family() {
             AddressFamily::Any => &mut server,
             AddressFamily::IPv4 => server.arg("-4"),
             AddressFamily::IPv6 => server.arg("-6"),
         };
-        let _ = server.args(&args.ssh_opt);
+        let _ = server.args(&args.client.ssh_opt);
         let _ = server.args([
-            args.remote_user_host()?,
+            args.client.remote_user_host()?,
             "qcp",
             "--server",
             // Remote receive bandwidth = our transmit bandwidth
@@ -99,13 +99,13 @@ impl ControlChannel {
             "--timeout",
             &args.quic.timeout.as_secs().to_string(),
         ]);
-        if args.remote_debug {
+        if args.client.remote_debug {
             let _ = server.arg("--debug");
         }
         if let Some(w) = args.bandwidth.initial_congestion_window {
             let _ = server.args(["--initial-congestion-window", &w.to_string()]);
         }
-        if let Some(pr) = args.remote_port {
+        if let Some(pr) = args.client.remote_port {
             let _ = server.args(["--port", &pr.to_string()]);
         }
         let _ = server

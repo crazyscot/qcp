@@ -31,7 +31,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     }
     let trace_level = if args.debug {
         "debug"
-    } else if args.quiet {
+    } else if args.client.quiet {
         "error"
     } else {
         "info"
