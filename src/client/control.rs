@@ -14,50 +14,8 @@ use tracing::{debug, trace, warn};
 use crate::{
     cli::CliArgs,
     protocol::control::{ClientMessage, ClosedownReport, ServerMessage, BANNER},
-    transport::BandwidthParams,
-    util::{cert::Credentials, AddressFamily, PortRange},
+    util::{cert::Credentials, AddressFamily},
 };
-
-/// The parameter set needed to set up the control channel
-#[derive(Debug)]
-pub struct ChannelParameters {
-    remote_user_host: String,
-    remote_debug: bool,
-    family: AddressFamily,
-    ssh_client: String,
-    ssh_opts: Vec<String>,
-    remote_port: Option<PortRange>,
-    bandwidth: BandwidthParams,
-    timeout: Duration,
-}
-
-impl ChannelParameters {
-    // Remote receive bandwidth (== our transmit bandwidth)
-    fn remote_rx_bw_bytes(&self) -> u64 {
-        self.bandwidth.tx()
-    }
-    /// Remote transmit bandwidth (== our receive bandwidth)
-    fn remote_tx_bw_bytes(&self) -> u64 {
-        self.bandwidth.rx()
-    }
-}
-
-impl TryFrom<&CliArgs> for ChannelParameters {
-    type Error = anyhow::Error;
-
-    fn try_from(args: &CliArgs) -> std::result::Result<Self, Self::Error> {
-        Ok(Self {
-            remote_user_host: args.remote_user_host()?.to_string(),
-            remote_debug: args.remote_debug,
-            family: args.address_family(),
-            ssh_client: args.ssh.clone(),
-            ssh_opts: args.ssh_opt.clone(),
-            remote_port: args.remote_port,
-            bandwidth: args.bandwidth,
-            timeout: args.quic.timeout,
-        })
-    }
-}
 
 /// Control channel abstraction
 #[derive(Debug)]
@@ -76,15 +34,14 @@ impl ControlChannel {
     }
 
     /// Opens the control channel, checks the banner, sends the Client Message, reads the Server Message.
-    pub async fn transact(
-        parameters: &ChannelParameters,
+    pub(crate) async fn transact(
         credentials: &Credentials,
         server_address: IpAddr,
         display: &MultiProgress,
-        quiet: bool,
+        args: &CliArgs,
     ) -> Result<(ControlChannel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(parameters, display, quiet)?;
+        let mut new1 = Self::launch(args, display, args.quiet)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -116,29 +73,31 @@ impl ControlChannel {
     }
 
     /// This is effectively a constructor. At present, it launches a subprocess.
-    fn launch(args: &ChannelParameters, display: &MultiProgress, quiet: bool) -> Result<Self> {
-        let mut server = tokio::process::Command::new(&args.ssh_client);
+    fn launch(args: &CliArgs, display: &MultiProgress, quiet: bool) -> Result<Self> {
+        let mut server = tokio::process::Command::new(&args.ssh);
         let _ = server.kill_on_drop(true);
-        let _ = match args.family {
+        let _ = match args.address_family() {
             AddressFamily::Any => &mut server,
             AddressFamily::IPv4 => server.arg("-4"),
             AddressFamily::IPv6 => server.arg("-6"),
         };
-        let _ = server.args(&args.ssh_opts);
+        let _ = server.args(&args.ssh_opt);
         let _ = server.args([
-            &args.remote_user_host,
+            args.remote_user_host()?,
             "qcp",
             "--server",
+            // Remote receive bandwidth = our transmit bandwidth
             "-b",
-            &args.remote_rx_bw_bytes().to_string(),
+            &args.bandwidth.tx().to_string(),
+            // Remote transmit bandwidth = our receive bandwidth
             "-B",
-            &args.remote_tx_bw_bytes().to_string(),
+            &args.bandwidth.rx().to_string(),
             "--rtt",
             &args.bandwidth.rtt.to_string(),
             "--congestion",
             &args.bandwidth.congestion.to_string(),
             "--timeout",
-            &args.timeout.as_secs().to_string(),
+            &args.quic.timeout.as_secs().to_string(),
         ]);
         if args.remote_debug {
             let _ = server.arg("--debug");

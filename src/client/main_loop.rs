@@ -46,14 +46,8 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
 
     // Control channel ---------------
     timers.next("control channel");
-    let (mut control, server_message) = ControlChannel::transact(
-        &args.try_into()?,
-        &credentials,
-        server_address,
-        &display,
-        args.quiet,
-    )
-    .await?;
+    let (mut control, server_message) =
+        ControlChannel::transact(&credentials, server_address, &display, args).await?;
 
     // Data channel ------------------
     let server_address_port = match server_address {
