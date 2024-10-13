@@ -1,12 +1,11 @@
 // qcp client event loop
 // (c) 2024 Ross Younger
 
-use crate::cli::CliArgs;
 use crate::client::control::ControlChannel;
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
-use crate::transport::{BandwidthParams, ThroughputMode};
+use crate::transport::{BandwidthParams, QuicParams, ThroughputMode};
 use crate::util::cert::Credentials;
 use crate::util::time::Stopwatch;
 use crate::util::PortRange;
@@ -27,6 +26,7 @@ use tokio::time::Instant;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _, Level};
 
+use super::args::ClientOptions;
 use super::job::CopyJobSpec;
 
 const SHOW_TIME: &str = "file transfer";
@@ -34,22 +34,33 @@ const SHOW_TIME: &str = "file transfer";
 /// Main CLI entrypoint
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 #[allow(clippy::module_name_repetitions)]
-pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyhow::Result<bool> {
+pub async fn client_main(
+    options: ClientOptions,
+    bandwidth: BandwidthParams,
+    quic: QuicParams,
+    display: MultiProgress,
+) -> anyhow::Result<bool> {
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
     let _guard = trace_span!("CLIENT").entered();
-    let job_spec = CopyJobSpec::try_from(&args.client)?;
+    let job_spec = CopyJobSpec::try_from(&options)?;
     let mut timers = StopwatchChain::new_running("setup");
 
     // Prep --------------------------
     let credentials = Credentials::generate()?;
-    let server_address =
-        lookup_host_by_family(args.client.remote_host()?, args.client.address_family())?;
+    let server_address = lookup_host_by_family(options.remote_host()?, options.address_family())?;
 
     // Control channel ---------------
     timers.next("control channel");
-    let (mut control, server_message) =
-        ControlChannel::transact(&credentials, server_address, &display, args).await?;
+    let (mut control, server_message) = ControlChannel::transact(
+        &credentials,
+        server_address,
+        &display,
+        &options,
+        bandwidth,
+        quic,
+    )
+    .await?;
 
     // Data channel ------------------
     let server_address_port = match server_address {
@@ -57,7 +68,7 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
-    let spinner = if args.client.quiet {
+    let spinner = if options.quiet {
         ProgressBar::hidden()
     } else {
         display.add(ProgressBar::new_spinner())
@@ -69,15 +80,15 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
         &credentials,
         server_message.cert.into(),
         &server_address_port,
-        args.quic.port,
-        args.bandwidth,
+        quic.port,
+        bandwidth,
         job_spec.throughput_mode(),
     )?;
 
     debug!("Opening QUIC connection to {server_address_port:?}");
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
     let connection = timeout(
-        args.quic.timeout,
+        quic.timeout,
         endpoint.connect(server_address_port, &server_message.name)?,
     )
     .await
@@ -91,8 +102,8 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
         job_spec,
         display.clone(),
         spinner.clone(),
-        args.bandwidth,
-        args.client.quiet,
+        bandwidth,
+        options.quiet,
     )
     .await;
     let total_bytes = match result {
@@ -107,11 +118,11 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     let remote_stats = control.read_closedown_report().await?;
 
     let control_fut = control.close();
-    let _ = timeout(args.quic.timeout, endpoint.wait_idle())
+    let _ = timeout(quic.timeout, endpoint.wait_idle())
         .await
         .inspect_err(|_| warn!("QUIC shutdown timed out")); // otherwise ignore errors
     trace!("QUIC closed; waiting for control channel");
-    let _ = timeout(args.quic.timeout, control_fut)
+    let _ = timeout(quic.timeout, control_fut)
         .await
         .inspect_err(|_| warn!("control channel timed out"));
     // Ignore errors. If the control channel closedown times out, we expect its drop handler will do the Right Thing.
@@ -119,19 +130,19 @@ pub(crate) async fn client_main(args: &CliArgs, display: MultiProgress) -> anyho
     timers.stop();
 
     // Post-transfer chatter -----------
-    if !args.client.quiet {
+    if !options.quiet {
         let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
         crate::util::stats::process_statistics(
             &connection.stats(),
             total_bytes,
             transport_time,
             remote_stats,
-            args.bandwidth,
-            args.client.statistics,
+            bandwidth,
+            options.statistics,
         );
     }
 
-    if args.client.profile {
+    if options.profile {
         info!("Elapsed time by phase:\n{timers}");
     }
     display.clear()?;

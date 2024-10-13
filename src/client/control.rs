@@ -12,10 +12,12 @@ use tokio::{
 use tracing::{debug, trace, warn};
 
 use crate::{
-    cli::CliArgs,
     protocol::control::{ClientMessage, ClosedownReport, ServerMessage, BANNER},
+    transport::{BandwidthParams, QuicParams},
     util::{cert::Credentials, AddressFamily},
 };
+
+use super::args::ClientOptions;
 
 /// Control channel abstraction
 #[derive(Debug)]
@@ -38,10 +40,12 @@ impl ControlChannel {
         credentials: &Credentials,
         server_address: IpAddr,
         display: &MultiProgress,
-        args: &CliArgs,
+        client: &ClientOptions,
+        bandwidth: BandwidthParams,
+        quic: QuicParams,
     ) -> Result<(ControlChannel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(args, display, args.client.quiet)?;
+        let mut new1 = Self::launch(display, client, bandwidth, quic)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -73,46 +77,51 @@ impl ControlChannel {
     }
 
     /// This is effectively a constructor. At present, it launches a subprocess.
-    fn launch(args: &CliArgs, display: &MultiProgress, quiet: bool) -> Result<Self> {
-        let mut server = tokio::process::Command::new(&args.client.ssh);
+    fn launch(
+        display: &MultiProgress,
+        client: &ClientOptions,
+        bandwidth: BandwidthParams,
+        quic: QuicParams,
+    ) -> Result<Self> {
+        let mut server = tokio::process::Command::new(&client.ssh);
         let _ = server.kill_on_drop(true);
-        let _ = match args.client.address_family() {
+        let _ = match client.address_family() {
             AddressFamily::Any => &mut server,
             AddressFamily::IPv4 => server.arg("-4"),
             AddressFamily::IPv6 => server.arg("-6"),
         };
-        let _ = server.args(&args.client.ssh_opt);
+        let _ = server.args(&client.ssh_opt);
         let _ = server.args([
-            args.client.remote_user_host()?,
+            client.remote_user_host()?,
             "qcp",
             "--server",
             // Remote receive bandwidth = our transmit bandwidth
             "-b",
-            &args.bandwidth.tx().to_string(),
+            &bandwidth.tx().to_string(),
             // Remote transmit bandwidth = our receive bandwidth
             "-B",
-            &args.bandwidth.rx().to_string(),
+            &bandwidth.rx().to_string(),
             "--rtt",
-            &args.bandwidth.rtt.to_string(),
+            &bandwidth.rtt.to_string(),
             "--congestion",
-            &args.bandwidth.congestion.to_string(),
+            &bandwidth.congestion.to_string(),
             "--timeout",
-            &args.quic.timeout.as_secs().to_string(),
+            &quic.timeout.as_secs().to_string(),
         ]);
-        if args.client.remote_debug {
+        if client.remote_debug {
             let _ = server.arg("--debug");
         }
-        if let Some(w) = args.bandwidth.initial_congestion_window {
+        if let Some(w) = bandwidth.initial_congestion_window {
             let _ = server.args(["--initial-congestion-window", &w.to_string()]);
         }
-        if let Some(pr) = args.client.remote_port {
+        if let Some(pr) = client.remote_port {
             let _ = server.args(["--port", &pr.to_string()]);
         }
         let _ = server
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true);
-        if !quiet {
+        if !client.quiet {
             let _ = server.stderr(Stdio::piped());
         } // else inherit
         debug!("spawning command: {:?}", server);
@@ -121,7 +130,7 @@ impl ControlChannel {
             .context("Could not launch control connection to remote server")?;
 
         // Whatever the remote outputs, send it to our output in a way that doesn't mess things up.
-        if !quiet {
+        if !client.quiet {
             let stderr = process.stderr.take();
             let Some(stderr) = stderr else {
                 anyhow::bail!("could not get stderr of remote process");
