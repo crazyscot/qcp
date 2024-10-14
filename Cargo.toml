@@ -1,6 +1,6 @@
 [package]
 name = "qcp"
-description = "A remote file copy utility like scp, which uses the QUIC protocol over UDP"
+description = "Secure remote file copy utility which uses the QUIC protocol over UDP"
 rust-version = "1.81.0"
 resolver = "2"
 version = "0.1.0"

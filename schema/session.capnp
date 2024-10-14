@@ -21,8 +21,7 @@ struct Command {
         # C->S: FileHeader, file data, FileTrailer
         # S->C: Response (showing transfer status)
         # Then close the stream.
-        # If the server needs to abort the transfer:
-        # S->C: Status (explaining why), then close the stream.
+        # If the server needs to abort the transfer, it may send a Response explaining why, then close the stream.
     }
 
     struct GetCmdArgs {

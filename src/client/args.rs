@@ -1,4 +1,4 @@
-//! qcp Client parameters
+//! Parameters specific to qcp client-mode
 // (c) 2024 Ross Younger
 
 use clap::Parser;

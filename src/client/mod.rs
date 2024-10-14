@@ -1,4 +1,4 @@
-//! qcp client main loop
+//! client-side (_initiator_) main loop and supporting structures
 
 pub mod args;
 pub mod control;
