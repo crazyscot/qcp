@@ -52,3 +52,4 @@ jobs:
       # We care that the benchmarks build and run, not about their numeric output.
       # To keep the CI a bit leaner, do this in the dev profile.
       - run: cargo build --locked --all-targets
+      - run: cargo doc --document-private-items
