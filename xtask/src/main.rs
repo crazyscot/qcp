@@ -68,3 +68,12 @@ fn ensure_top_level() -> Result<()> {
     std::env::set_current_dir(path.trim()).context("Changing to toplevel")?;
     Ok(())
 }
+
+pub(crate) fn ensure_all_args_used(args: Arguments) -> Result<()> {
+    let unused = args.finish();
+    anyhow::ensure!(
+        unused.is_empty(),
+        format!("Unhandled arguments: {unused:?}"),
+    );
+    Ok(())
+}
