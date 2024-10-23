@@ -14,11 +14,7 @@ pub(crate) fn manpage(mut args: Arguments) -> Result<()> {
     let res = Args {
         output: args.opt_value_from_str(["-o", "--output"])?,
     };
-    let unused = args.finish();
-    anyhow::ensure!(
-        unused.is_empty(),
-        format!("Unhandled arguments: {unused:?}"),
-    );
+    crate::ensure_all_args_used(args)?;
 
     let output = match res.output {
         Some(p) => PathBuf::from(p),
