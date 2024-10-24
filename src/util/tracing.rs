@@ -42,10 +42,13 @@ fn filter_for(trace_level: &str, key: &str) -> anyhow::Result<FilterResult> {
 }
 
 /// Set up rust tracing, to console (via an optional `MultiProgress`) and optionally to file.
+///
 /// By default we log only our events (qcp), at a given trace level.
 /// This can be overridden by setting `RUST_LOG`.
+///
 /// For examples, see <https://docs.rs/tracing-subscriber/0.3.18/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables>
-/// CAUTION: If this function fails, tracing won't be set up; callers must take extra care to report the error.
+///
+/// **CAUTION:** If this function fails, tracing won't be set up; callers must take extra care to report the error.
 pub fn setup(
     trace_level: &str,
     display: Option<&MultiProgress>,

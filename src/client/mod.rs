@@ -1,8 +1,15 @@
 //! client-side (_initiator_) main loop and supporting structures
 
-pub mod args;
-pub mod control;
-pub mod job;
+mod args;
+pub use args::Options;
+
+mod control;
+pub use control::Channel;
+
+mod job;
+pub use job::CopyJobSpec;
+pub use job::FileSpec;
+
 mod main_loop;
 mod meter;
 mod progress;

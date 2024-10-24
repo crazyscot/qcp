@@ -51,7 +51,7 @@ impl Display for DataRate {
 }
 
 /// Output the end-of-game statistics
-pub(crate) fn process_statistics(
+pub fn process_statistics(
     stats: &ConnectionStats,
     payload_bytes: u64,
     transport_time: Option<Duration>,

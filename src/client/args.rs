@@ -1,4 +1,4 @@
-//! Parameters specific to qcp client-mode
+//! Options specific to qcp client-mode
 // (c) 2024 Ross Younger
 
 use clap::Parser;
@@ -7,10 +7,10 @@ use crate::{protocol::control::ConnectionType, util::PortRange};
 
 use super::job::FileSpec;
 
-/// Options for client mode
+/// Options specific to qcp client mode
 #[derive(Debug, Parser, Clone)]
 #[allow(clippy::struct_excessive_bools)]
-pub struct ClientOptions {
+pub struct Options {
     /// Quiet mode
     ///
     /// Switches off progress display and statistics; reports only errors
@@ -89,7 +89,7 @@ pub struct ClientOptions {
     pub destination: Option<FileSpec>,
 }
 
-impl ClientOptions {
+impl Options {
     pub(crate) fn address_family(&self) -> Option<ConnectionType> {
         if self.ipv4 {
             Some(ConnectionType::Ipv4)

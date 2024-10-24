@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use crate::transport::ThroughputMode;
 
-use super::args::ClientOptions;
+use super::args::Options;
 
 /// A file source or destination specified by the user
 #[derive(Debug, Clone, Default)]
@@ -72,10 +72,10 @@ impl CopyJobSpec {
     }
 }
 
-impl TryFrom<&ClientOptions> for CopyJobSpec {
+impl TryFrom<&Options> for CopyJobSpec {
     type Error = anyhow::Error;
 
-    fn try_from(args: &ClientOptions) -> Result<Self, Self::Error> {
+    fn try_from(args: &Options) -> Result<Self, Self::Error> {
         let source = args
             .source
             .as_ref()

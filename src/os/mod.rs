@@ -1,10 +1,10 @@
-// OS abstraction layer for qcp
+//! OS abstraction layer
 // (c) 2024 Ross Younger
 
 use anyhow::Result;
 
 /// OS abstraction trait providing access to socket options
-pub(crate) trait SocketOptions {
+pub trait SocketOptions {
     /// Wrapper for getsockopt `SO_SNDBUF`.
     /// On Linux, this call halves the number returned from the kernel.
     /// This takes account of kernel behaviour: the internal buffer
@@ -28,10 +28,10 @@ pub(crate) trait SocketOptions {
     fn force_recvbuf(&mut self, size: usize) -> Result<()>;
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, doc))]
 mod unix;
 
-#[cfg(unix)]
+#[cfg(any(unix, doc))]
 pub(crate) use unix::*;
 
 static_assertions::assert_cfg!(unix, "This OS is not yet supported");

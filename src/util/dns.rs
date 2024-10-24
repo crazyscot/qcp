@@ -7,6 +7,7 @@ use crate::protocol::control::ConnectionType;
 use anyhow::Context as _;
 
 /// DNS lookup helper
+///
 /// Results can be restricted to a given address family.
 /// Only the first matching result is returned.
 /// If there are no matching records of the required type, returns an error.

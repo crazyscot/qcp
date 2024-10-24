@@ -1,4 +1,4 @@
-//! qcp server event loop
+//! server-side _(remote)_ event loop
 // (c) 2024 Ross Younger
 
 use std::path::PathBuf;
@@ -8,8 +8,8 @@ use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{session_capnp::Status, Command, FileHeader, FileTrailer, Response};
 use crate::protocol::{self, StreamPair};
 use crate::transport::BandwidthParams;
-use crate::util::cert::Credentials;
 use crate::util::socket::bind_range_for_family;
+use crate::util::Credentials;
 use crate::util::PortRange;
 use crate::{transport, util};
 
@@ -25,7 +25,7 @@ use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
-/// Server main loop
+/// Server event loop
 #[allow(clippy::module_name_repetitions)]
 pub async fn server_main(
     bandwidth: crate::transport::BandwidthParams,

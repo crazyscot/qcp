@@ -4,7 +4,7 @@
 use anyhow::Result;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
-/// In-memory represenatation of X509 credentials (for TLS)
+/// In-memory representation of X509 credentials (for TLS)
 #[derive(Debug)]
 pub struct Credentials {
     /// X509 certificate

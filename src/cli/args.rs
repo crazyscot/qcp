@@ -44,7 +44,7 @@ pub(crate) struct CliArgs {
 
     // CLIENT-ONLY OPTIONS =================================================================
     #[command(flatten)]
-    pub client: crate::client::args::ClientOptions,
+    pub client: crate::client::Options,
 
     // NETWORK OPTIONS =====================================================================
     #[command(flatten)]

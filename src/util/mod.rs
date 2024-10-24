@@ -4,7 +4,9 @@
 mod dns;
 pub use dns::lookup_host_by_family;
 
-pub mod cert;
+mod cert;
+pub use cert::Credentials;
+
 pub mod io;
 pub mod socket;
 pub mod stats;

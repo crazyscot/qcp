@@ -1,15 +1,14 @@
 // qcp client event loop
 // (c) 2024 Ross Younger
 
-use crate::client::control::ControlChannel;
+use crate::client::control::Channel;
 use crate::protocol::session::session_capnp::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
 use crate::transport::{BandwidthParams, QuicParams, ThroughputMode};
-use crate::util::cert::Credentials;
-use crate::util::time::Stopwatch;
-use crate::util::PortRange;
-use crate::util::{self, lookup_host_by_family, time::StopwatchChain};
+use crate::util::{
+    self, lookup_host_by_family, time::Stopwatch, time::StopwatchChain, Credentials, PortRange,
+};
 
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
@@ -26,16 +25,16 @@ use tokio::time::Instant;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _, Level};
 
-use super::args::ClientOptions;
+use super::args::Options;
 use super::job::CopyJobSpec;
 
 const SHOW_TIME: &str = "file transfer";
 
-/// Main CLI entrypoint
+/// Main client mode event loop
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 #[allow(clippy::module_name_repetitions)]
 pub async fn client_main(
-    options: ClientOptions,
+    options: Options,
     bandwidth: BandwidthParams,
     quic: QuicParams,
     display: MultiProgress,
@@ -52,7 +51,7 @@ pub async fn client_main(
 
     // Control channel ---------------
     timers.next("control channel");
-    let (mut control, server_message) = ControlChannel::transact(
+    let (mut control, server_message) = Channel::transact(
         &credentials,
         server_address,
         &display,

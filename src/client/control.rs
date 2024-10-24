@@ -14,19 +14,18 @@ use tracing::{debug, trace, warn};
 use crate::{
     protocol::control::{ClientMessage, ClosedownReport, ConnectionType, ServerMessage, BANNER},
     transport::{BandwidthParams, QuicParams},
-    util::cert::Credentials,
+    util::Credentials,
 };
 
-use super::args::ClientOptions;
+use super::args::Options;
 
 /// Control channel abstraction
 #[derive(Debug)]
-#[allow(clippy::module_name_repetitions)]
-pub struct ControlChannel {
+pub struct Channel {
     process: tokio::process::Child,
 }
 
-impl ControlChannel {
+impl Channel {
     /// A reasonably controlled shutdown.
     /// (If you want to be rough, simply drop the `ControlChannel`.)
     pub async fn close(&mut self) -> Result<()> {
@@ -36,14 +35,14 @@ impl ControlChannel {
     }
 
     /// Opens the control channel, checks the banner, sends the Client Message, reads the Server Message.
-    pub(crate) async fn transact(
+    pub async fn transact(
         credentials: &Credentials,
         server_address: IpAddr,
         display: &MultiProgress,
-        client: &ClientOptions,
+        client: &Options,
         bandwidth: BandwidthParams,
         quic: QuicParams,
-    ) -> Result<(ControlChannel, ServerMessage)> {
+    ) -> Result<(Channel, ServerMessage)> {
         trace!("opening control channel");
         let mut new1 = Self::launch(display, client, bandwidth, quic)?;
         new1.wait_for_banner().await?;
@@ -79,7 +78,7 @@ impl ControlChannel {
     /// This is effectively a constructor. At present, it launches a subprocess.
     fn launch(
         display: &MultiProgress,
-        client: &ClientOptions,
+        client: &Options,
         bandwidth: BandwidthParams,
         quic: QuicParams,
     ) -> Result<Self> {
@@ -181,7 +180,8 @@ impl ControlChannel {
         Ok(())
     }
 
-    pub(crate) async fn read_closedown_report(&mut self) -> Result<ClosedownReport> {
+    /// Retrieves the closedown report
+    pub async fn read_closedown_report(&mut self) -> Result<ClosedownReport> {
         let pipe = self
             .process
             .stdout

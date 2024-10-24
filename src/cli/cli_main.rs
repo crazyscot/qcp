@@ -18,6 +18,8 @@ use tracing::error_span;
 /// Main CLI entrypoint
 ///
 /// Call this from `main`. It reads argv.
+/// # Exit status
+/// 0 indicates success; non-zero indicates failure.
 #[tokio::main(flavor = "current_thread")]
 #[allow(clippy::missing_panics_doc)]
 pub async fn cli() -> anyhow::Result<ExitCode> {
