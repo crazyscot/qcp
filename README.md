@@ -15,8 +15,8 @@ high-performance remote file copy utility for long-distance internet connections
 
 #### Platform support status
 
-- Well tested: Debian and Ubuntu using OpenSSH
-- Tested: Ubuntu on WSL
+- Well tested: Debian and Ubuntu on x86_64, using OpenSSH
+- Tested: Ubuntu on WSL; aarch64 (Raspbian)
 - Untested: OSX/BSD family
 - Not currently supported: Windows
 
@@ -25,6 +25,17 @@ high-performance remote file copy utility for long-distance internet connections
 * You must have ssh access to the target machine.
 * Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine.
 * Run `qcp --help-buffers` and follow its instructions.
+
+### Installing pre-built binaries
+
+These can be found on the [latest release](https://github.com/crazyscot/qcp/releases/latest).
+
+* Linux x86_64: x86_64-unknown-linux-musl
+* Linux aarch64: aarch64-unknown-linux-musl
+
+The binaries are statically linked. Linux builds should work on all recent distributions, as long as you have selected the correct CPU architecture.
+
+### Installation from source
 
 Install it from crates.io using `cargo`:
 

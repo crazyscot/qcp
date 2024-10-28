@@ -3,10 +3,13 @@ name: release
 on:
   release:
     types: [published]
-  # useful for testing
+  # running on push is sometimes useful for testing; also enable WORKFLOW_TEST
   #push:
   #  branches:
-  #    - misc/ci-auto-release
+  #    - misc/build-aarch64
+
+env:
+  WORKFLOW_TEST: false
 
 permissions:
   contents: write
@@ -20,6 +23,10 @@ jobs:
           host: ubuntu-latest
           target: x86_64-unknown-linux-musl
           rust: stable
+        - build: aarch64-musl
+          host: ubuntu-latest
+          target: aarch64-unknown-linux-musl
+          rust: stable
     runs-on: ${{ matrix.host }}
     steps:
     - uses: actions/checkout@v4
@@ -27,6 +34,10 @@ jobs:
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
+        targets: ${{ matrix.target }}
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: cross
     - uses: Swatinem/rust-cache@v2
       with:
         key: "${{matrix.build}}"
@@ -43,9 +54,9 @@ jobs:
         leading-dir: true
         tar: unix
         zip: windows
-        # dry_run: true # when testing the workflow
+        dry_run: ${{ env.WORKFLOW_TEST }}
     # Uploading the artifact is useful when testing the workflow in dry-run mode
     - uses: actions/upload-artifact@v4
       with:
-        name: binary-${{ matrix.target }}
+        name: qcp-tarball-${{ matrix.target }}
         path: ${{ steps.build.outputs.archive }}.tar.gz
