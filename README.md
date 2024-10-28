@@ -30,8 +30,9 @@ high-performance remote file copy utility for long-distance internet connections
 
 These can be found on the [latest release](https://github.com/crazyscot/qcp/releases/latest).
 
-* Linux x86_64: x86_64-unknown-linux-musl
-* Linux aarch64: aarch64-unknown-linux-musl
+* Debian/Ubuntu packages are provided.
+* For other Linux x86_64: Use x86_64-unknown-linux-musl.tar.gz
+* For other Linux aarch64: Use aarch64-unknown-linux-musl.tar.gz
 
 The binaries are statically linked. Linux builds should work on all recent distributions, as long as you have selected the correct CPU architecture.
 
@@ -40,14 +41,12 @@ The binaries are statically linked. Linux builds should work on all recent distr
 Install it from crates.io using `cargo`:
 
 ```bash
-cargo install qcp
+cargo install --locked qcp
 ```
 
-Or, clone the repo and build it manually:
+Or clone the repository and build it manually:
 
 ```bash
-git clone https://github.com/crazyscot/qcp
-cd qcp
 cargo build --release --locked
 ```
 

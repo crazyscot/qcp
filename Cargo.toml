@@ -5,7 +5,7 @@ rust-version = "1.81.0"
 resolver = "2"
 version = "0.1.0"
 edition = "2021"
-authors = ["Ross Younger <crazyscot@gmail.com>"]
+authors = ["Ross Younger <qcp@crazyscot.com>"]
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/crazyscot/qcp/"
 homepage = "https://github.com/crazyscot/qcp/"
@@ -90,3 +90,23 @@ unescaped_backticks = "deny"
 pre-build = [ "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install capnproto" ]
 [package.metadata.cross.target.aarch64-unknown-linux-musl]
 pre-build = [ "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install capnproto" ]
+
+[package.metadata.deb]
+extended-description = """\
+The QUIC Copier (`qcp`) is an experimental high-performance remote file
+copy utility for long-distance internet connections.
+
+It is intended as a drop-in replacement for scp, offering similar
+security properties but better throughput on congested networks.
+"""
+section = "contrib/net"
+assets = [
+    # sneaky; this seems to automagically pick up the correct binary when cross building:
+    [ "target/release/qcp", "usr/bin/", "755" ],
+
+    [ "README.md", "usr/share/doc/qcp/", "644" ],
+    [ "LICENSE", "usr/share/doc/qcp/", "644" ],
+    # gzip -9n < CHANGELOG.md > misc/changelog.gz
+    [ "misc/changelog.gz", "usr/share/doc/qcp/", "644" ],
+    [ "misc/20-qcp.conf", "etc/sysctl.d/", "644" ],
+]

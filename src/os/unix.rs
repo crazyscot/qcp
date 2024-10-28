@@ -79,7 +79,7 @@ To set the kernel limits immediately, run the following command as root:
     sysctl -w net.core.rmem_max={rmem} -w net.core.wmem_max={wmem}
 
 To have this setting apply at boot, on most Linux distributions you
-can create a file /etc/sysctl.d/60-qcp.conf containing:
+can create a file /etc/sysctl.d/20-qcp.conf containing:
     net.core.rmem_max={rmem}
     net.core.wmem_max={wmem}
 "#

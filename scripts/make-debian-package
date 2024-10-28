@@ -1,0 +1,15 @@
+#!/bin/sh -e
+# args: <rust-target>
+
+TARGET=$1
+if [ -z "$TARGET" ]; then
+  echo NOTE: no target specified, assuming native build
+  TARGETOPT=
+else
+  TARGETOPT="--target ${TARGET}"
+fi
+
+set -x
+
+gzip -9n < CHANGELOG.md > misc/changelog.gz
+cargo deb --no-build --locked ${TARGETOPT} --deb-revision ""
