@@ -1,0 +1,51 @@
+name: release
+
+on:
+  release:
+    types: [published]
+  # useful for testing
+  #push:
+  #  branches:
+  #    - misc/ci-auto-release
+
+permissions:
+  contents: write
+
+jobs:
+  binary:
+    strategy:
+      matrix:
+        include:
+        - build: x86_64-musl
+          host: ubuntu-latest
+          target: x86_64-unknown-linux-musl
+          rust: stable
+    runs-on: ${{ matrix.host }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: "${{matrix.build}}"
+    #- name: install packages (ubuntu)
+    #  if: startsWith(matrix.host, 'ubuntu')
+    #  run: scripts/install-ubuntu-packages
+    - uses: taiki-e/upload-rust-binary-action@v1
+      id: build
+      with:
+        bin: qcp
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target: ${{ matrix.target }}
+        include: README.md,LICENSE,CHANGELOG.md
+        leading-dir: true
+        tar: unix
+        zip: windows
+        # dry_run: true # when testing the workflow
+    # Uploading the artifact is useful when testing the workflow in dry-run mode
+    - uses: actions/upload-artifact@v4
+      with:
+        name: binary-${{ matrix.target }}
+        path: ${{ steps.build.outputs.archive }}.tar.gz

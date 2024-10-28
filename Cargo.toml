@@ -12,6 +12,10 @@ homepage = "https://github.com/crazyscot/qcp/"
 keywords = [ "networking", "file-transfer", "quic" ]
 categories = [ "command-line-utilities" ]
 
+[profile.release]
+lto = "thin"
+strip = "symbols"
+
 [dependencies]
 anstyle = "1.0.8"
 anyhow = "1.0.89"
@@ -81,3 +85,6 @@ invalid_rust_codeblocks = "deny"
 missing_crate_level_docs = "deny"
 private_intra_doc_links = "deny"
 unescaped_backticks = "deny"
+
+[package.metadata.cross.target.x86_64-unknown-linux-musl]
+pre-build = [ "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install capnproto" ]

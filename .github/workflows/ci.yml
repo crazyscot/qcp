@@ -19,32 +19,40 @@ jobs:
   build:
     strategy:
       matrix:
-        platform: [ubuntu-22.04]
-    runs-on: ${{ matrix.platform }}
+        include:
+        - build: x86_64-musl
+          host: ubuntu-latest
+          target: x86_64-unknown-linux-musl
+          rust: stable
+    runs-on: ${{ matrix.host }}
     steps:
     - uses: actions/checkout@v4
-    - name: Set minimal profile (Windows only)
-      if: matrix.platform == 'windows-latest'
-      run: rustup set profile minimal
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+    #- name: Set minimal profile (Windows only)
+    #  if: matrix.host == 'windows-latest'
+    #  run: rustup set profile minimal
     - uses: Swatinem/rust-cache@v2
       with:
-        key: "${{matrix.platform}}"
+        key: "${{matrix.build}}"
     - name: install packages (ubuntu)
-      if: matrix.platform == 'ubuntu-22.04'
-      run: sudo apt-get update && sudo apt-get -y --no-install-recommends install mold capnproto
+      if: startsWith(matrix.host, 'ubuntu')
+      run: scripts/install-ubuntu-packages
     - name: Build
       run: cargo build --locked
 
   # We only need to run the checks on a single platform
   checks:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ubuntu-22.04
+          key: ubuntu-latest
       - name: install packages
-        run: sudo apt-get update && sudo apt-get -y --no-install-recommends install mold capnproto
+        run: scripts/install-ubuntu-packages
       # Checks begin here!
       - run: cargo fmt --all -- --check
       - run: cargo test --locked
@@ -52,4 +60,4 @@ jobs:
       # We care that the benchmarks build and run, not about their numeric output.
       # To keep the CI a bit leaner, do this in the dev profile.
       - run: cargo build --locked --all-targets
-      - run: cargo doc --document-private-items
+      - run: cargo doc --no-deps --locked
