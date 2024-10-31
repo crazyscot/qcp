@@ -15,11 +15,10 @@
 //!
 //! ### Use case
 //!
-//! I was inspired to write this when I needed to copy a load of multi-GB files from a server on the other side of the planet.
+//! This utility and protocol can be useful when copying **large** files (tens of MB or more),
+//! from _point to point_ over a _long, fat, congested pipe_.
 //!
-//! If you want to copy **large** files (tens of MB or more),
-//! from _point to point_ over a _long, fat, congested pipe_,
-//! then you may find it useful too.
+//! I was inspired to write this when I needed to copy a load of multi-GB files from a server on the other side of the planet.
 //!
 //! #### Limitations
 //! - You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection-tracking NAT, things work just fine. This is the case for the vast majority of home and business network connections.)

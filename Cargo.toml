@@ -109,4 +109,5 @@ assets = [
     # gzip -9n < CHANGELOG.md > misc/changelog.gz
     [ "misc/changelog.gz", "usr/share/doc/qcp/", "644" ],
     [ "misc/20-qcp.conf", "etc/sysctl.d/", "644" ],
+    [ "misc/qcp.1", "usr/share/man/man1/", "644" ],
 ]

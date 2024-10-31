@@ -69,7 +69,6 @@ pub enum CongestionControllerType {
 pub struct BandwidthParams {
     /// The maximum network bandwidth we expect receiving data FROM the remote system.
     ///
-    /// Along with the initial RTT, this directly affects the buffer sizes used.
     /// This may be specified directly as a number of bytes, or as an SI quantity
     /// e.g. "10M" or "256k". Note that this is described in BYTES, not bits;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
@@ -78,10 +77,9 @@ pub struct BandwidthParams {
     pub rx_bw: Bytes<u64>,
 
     /// The maximum network bandwidth we expect sending data TO the remote system,
-    ///
     /// if it is different from the bandwidth FROM the system.
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
-    /// [default: use --rx-bw]
+    /// [default: use the value of --rx-bw]
     #[arg(short('B'), long, help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
     pub tx_bw: Option<Bytes<u64>>,
 
