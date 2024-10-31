@@ -3,13 +3,11 @@ name: release
 on:
   release:
     types: [published]
-  # running on push is sometimes useful for testing; also enable WORKFLOW_TEST
-  #push:
-  #  branches:
-  #    - misc/build-aarch64
+  workflow_dispatch: # for testing
 
 env:
-  WORKFLOW_TEST: false
+  CARGO_TERM_COLOR: always
+  WORKFLOW_TEST: GITHUB_EVENT_NAME == 'workflow_dispatch'
 
 permissions:
   contents: write
@@ -23,10 +21,12 @@ jobs:
           host: ubuntu-latest
           target: x86_64-unknown-linux-musl
           rust: stable
+          build_deb: true
         - build: aarch64-musl
           host: ubuntu-latest
           target: aarch64-unknown-linux-musl
           rust: stable
+          build_deb: true
     runs-on: ${{ matrix.host }}
     steps:
     - uses: actions/checkout@v4
@@ -35,16 +35,20 @@ jobs:
       with:
         toolchain: ${{ matrix.rust }}
         targets: ${{ matrix.target }}
-    - uses: taiki-e/install-action@v2
+    - uses: taiki-e/install-action@v2.44.58
       with:
-        tool: cross
+        tool: cross,cargo-deb
     - uses: Swatinem/rust-cache@v2
       with:
         key: "${{matrix.build}}"
-    #- name: install packages (ubuntu)
-    #  if: startsWith(matrix.host, 'ubuntu')
-    #  run: scripts/install-ubuntu-packages
-    - uses: taiki-e/upload-rust-binary-action@v1
+    - name: install packages (ubuntu builds only)
+      if: startsWith(matrix.host, 'ubuntu')
+      run: scripts/install-ubuntu-packages
+      # native builds need all of these; cross builds only need binutils-multiarch
+
+    #- name: Build
+    #  run: cross build --release --locked --target ${{ matrix.target }}
+    - uses: taiki-e/upload-rust-binary-action@v1.22.1
       id: build
       with:
         bin: qcp
@@ -54,9 +58,23 @@ jobs:
         leading-dir: true
         tar: unix
         zip: windows
-        dry_run: ${{ env.WORKFLOW_TEST }}
-    # Uploading the artifact is useful when testing the workflow in dry-run mode
-    - uses: actions/upload-artifact@v4
+        dry_run: ! ${{ env.WORKFLOW_TEST }}
+    - name: Make deb package
+      if: ${{ matrix.build_deb }}
+      run: scripts/make-debian-package --release ${{ matrix.target }}
+    - name: Upload binary artifact
+      uses: actions/upload-artifact@v4
       with:
         name: qcp-tarball-${{ matrix.target }}
         path: ${{ steps.build.outputs.archive }}.tar.gz
+    - name: Upload deb artifact
+      if: ${{ matrix.build_deb }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: qcp-deb-${{ matrix.target }}
+        path: target/**/debian/qcp*.deb
+    - name: Publish deb package to release
+      if: ! ${{ env.WORKFLOW_TEST }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: gh release upload ${{ github.ref }} ${{ env.BUILT_DEB_FILE }}

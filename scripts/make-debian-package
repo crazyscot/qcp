@@ -1,7 +1,7 @@
 #!/bin/sh -e
-# args: <rust-target>
+# args: [--release|--no-release] [<rust-target>]
 
-TARGET=$1
+TARGET=$2
 if [ -z "$TARGET" ]; then
   echo NOTE: no target specified, assuming native build
   TARGETOPT=
@@ -9,7 +9,28 @@ else
   TARGETOPT="--target ${TARGET}"
 fi
 
+RELEASE_TYPE=$1
+case "$RELEASE_TYPE" in
+  --release)
+      REVISION= ;;
+  *)
+      GITHASH=$(git rev-parse --short=8 HEAD)
+      REVISION="g${GITHASH}" ;;
+esac
+
 set -x
 
 gzip -9n < CHANGELOG.md > misc/changelog.gz
-cargo deb --no-build --locked ${TARGETOPT} --deb-revision ""
+output=$(cargo deb --no-build --locked ${TARGETOPT} --deb-revision "${REVISION}")
+: $output
+
+set +x
+
+# Strip warnings; the deb is the last "word" printed
+DEB=$(echo ${output} | sed 's/.* //g')
+
+if [ -z "$GITHUB_ENV" ]; then
+  echo "Would write to GITHUB_ENV: BUILT_DEB_FILE=${DEB}"
+else
+  echo "BUILT_DEB_FILE=${DEB}" >> "$GITHUB_ENV"
+fi
