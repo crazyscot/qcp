@@ -7,7 +7,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  WORKFLOW_TEST: ${{ github.event_name == 'workflow_dispatch' }}
 
 permissions:
   contents: write
@@ -58,7 +57,7 @@ jobs:
         leading-dir: true
         tar: unix
         zip: windows
-        dry_run: ${{ env.WORKFLOW_TEST }}
+        dry_run: ${{ github.event_name != 'release' }}
     - name: Make deb package
       if: ${{ matrix.build_deb }}
       run: scripts/make-debian-package --release ${{ matrix.target }}
@@ -74,7 +73,7 @@ jobs:
         name: qcp-deb-${{ matrix.target }}
         path: target/**/debian/qcp*.deb
     - name: Publish deb package to release
-      if: ${{ ! env.WORKFLOW_TEST }}
+      if: ${{ github.event_name == 'release' }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: gh release upload ${{ github.ref }} ${{ env.BUILT_DEB_FILE }}
