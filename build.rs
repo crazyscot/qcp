@@ -13,7 +13,8 @@ fn main() {
 }
 
 fn process_version_string() {
-    let hash = git_short_hash().unwrap();
+    // trap: docs.rs builds don't get a git short hash
+    let hash = git_short_hash().unwrap_or("unknown".into());
     println!("cargo:rustc-env=QCP_BUILD_GIT_HASH={hash}");
     let cargo_version = env!("CARGO_PKG_VERSION");
 
@@ -42,10 +43,14 @@ fn github_tag() -> Option<String> {
 fn git_short_hash() -> Option<String> {
     use std::process::Command;
     let args = &["rev-parse", "--short=8", "HEAD"];
-    let output = Command::new("git").args(args).output().unwrap();
-    let rev = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if rev.is_empty() {
-        return None;
+    if let Ok(output) = Command::new("git").args(args).output() {
+        let rev = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if rev.is_empty() {
+            None
+        } else {
+            Some(rev)
+        }
+    } else {
+        None
     }
-    Some(rev)
 }
