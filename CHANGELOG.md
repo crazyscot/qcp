@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/crazyscot/qcp/compare/v0.1.1...v0.1.2)
+
+### 📚 Documentation
+
+- Add build group to cliff config - ([603b6b6](https://github.com/crazyscot/qcp/commit/603b6b6726a86e69b584d936dc96175e471c3734))
+
+### 🏗️ Build & CI
+
+- Fix release workflow syntax - ([294bac3](https://github.com/crazyscot/qcp/commit/294bac32071f936e677bc4224b71ae5257975c99))
+- Make build script less panicky - ([0d3ab56](https://github.com/crazyscot/qcp/commit/0d3ab56ffdf21acc49df39b715cada9fde9b14b3))
+
+
 ## [0.1.1](https://github.com/crazyscot/qcp/compare/v0.1.0...v0.1.1)
 
 ### ⛰️ Features
