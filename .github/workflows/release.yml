@@ -6,7 +6,9 @@ on:
   workflow_dispatch: # for testing
 
 env:
+  BUILT_DEB_FILE: "invalid.deb" # updated by make-debian-package script
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 permissions:
   contents: write
@@ -71,9 +73,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: qcp-deb-${{ matrix.target }}
-        path: target/**/debian/qcp*.deb
+        path: ${{ env.BUILT_DEB_FILE }}
     - name: Publish deb package to release
-      if: ${{ github.event_name == 'release' }}
+      if: ${{ matrix.build_deb }} && ${{ github.event_name == 'release' }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: gh release upload ${{ github.ref }} ${{ env.BUILT_DEB_FILE }}

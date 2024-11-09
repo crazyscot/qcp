@@ -12,7 +12,9 @@ on:
   workflow_dispatch:
 
 env:
+  BUILT_DEB_FILE: "invalid.deb" # updated by make-debian-package script
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
   # Build the app on all supported platforms, at least for the time being
