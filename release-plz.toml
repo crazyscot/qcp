@@ -50,7 +50,8 @@ body = """
 """
 
 commit_parsers = [
-  { message = "^feat", group = "<!-- 0 -->⛰️ Features" },
+  { body = ".*security", group = "<!-- 00 -->🛡️ Security" },
+  { message = "^feat", group = "<!-- 01 -->⛰️ Features" },
   { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
   { message = "^doc", group = "<!-- 3 -->📚 Documentation" },
   { message = "^perf", group = "<!-- 4 -->⚡ Performance" },
@@ -63,11 +64,10 @@ commit_parsers = [
   { message = "^chore\\(deps.*\\)", skip = true },
   { message = "^chore\\(pr\\)", skip = true },
   { message = "^chore\\(pull\\)", skip = true },
-  { message = "^chore\\(npm\\).*yarn\\.lock", skip = true },
-  { message = "^build", group = "<!-- 7 -->🏗️ Build & CI" },
-  { message = "^chore|^ci|^misc|^tidyup", group = "<!-- 8 -->⚙️ Miscellaneous Tasks" },
-  { body = ".*security", group = "<!-- 9 -->🛡️ Security" },
-  { message = "^revert", group = "<!-- A -->◀️ Revert" },
+  { message = "^chore\\(skip", skip = true },
+  { message = "^build|^ci", group = "<!-- 7 -->🏗️ Build & CI" },
+  { message = "^chore|^misc|^tidyup", group = "<!-- 8 -->⚙️ Miscellaneous Tasks" },
+  { message = "^revert", group = "<!-- 9 -->◀️ Revert" },
 ]
 
 link_parsers = [
