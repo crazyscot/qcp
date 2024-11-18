@@ -67,3 +67,8 @@ pub mod doc;
 pub mod os;
 
 mod version;
+
+#[doc(hidden)]
+pub use derive_deftly;
+// Use the current version of derive_deftly here:
+derive_deftly::template_export_semver_check!("0.14.0");

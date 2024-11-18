@@ -17,3 +17,6 @@ pub use tracing::setup as setup_tracing;
 
 mod cli;
 pub use cli::{parse_duration, PortRange};
+
+mod optionalify;
+pub use optionalify::{derive_deftly_template_Optionalify, insert_if_some};
