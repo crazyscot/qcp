@@ -8,6 +8,7 @@ mod cert;
 pub use cert::Credentials;
 
 pub mod io;
+pub mod serde;
 pub mod socket;
 pub mod stats;
 pub mod time;
