@@ -57,6 +57,7 @@ mod cli;
 pub use cli::cli; // needs to be re-exported for the binary crate
 
 pub mod client;
+pub mod config;
 pub mod protocol;
 pub mod server;
 pub mod transport;

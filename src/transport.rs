@@ -11,6 +11,7 @@ use quinn::{
     congestion::{BbrConfig, CubicConfig},
     TransportConfig,
 };
+use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::util::{parse_duration, PortRange};
@@ -48,7 +49,17 @@ pub enum ThroughputMode {
 }
 
 /// Selects the congestion control algorithm to use
-#[derive(Copy, Clone, Debug, strum_macros::Display, clap::ValueEnum)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    strum_macros::Display,
+    clap::ValueEnum,
+    Serialize,
+    Deserialize,
+)]
 #[strum(serialize_all = "kebab_case")]
 pub enum CongestionControllerType {
     /// The congestion algorithm TCP uses. This is good for most cases.
