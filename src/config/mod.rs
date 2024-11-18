@@ -3,3 +3,6 @@
 
 mod structure;
 pub use structure::Configuration;
+
+mod manager;
+pub use manager::Manager;
