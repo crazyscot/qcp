@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'qcpt'",
+            "name": "Debug executable 'qcp'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=qcpt",
-                    "--package=qcpt"
+                    "--bin=qcp",
+                    "--package=qcp"
                 ],
                 "filter": {
-                    "name": "qcpt",
+                    "name": "qcp",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'qcpt'",
+            "name": "Debug unit tests in executable 'qcp'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=qcpt",
-                    "--package=qcpt"
+                    "--bin=qcp",
+                    "--package=qcp"
                 ],
                 "filter": {
-                    "name": "qcpt",
+                    "name": "qcp",
                     "kind": "bin"
                 }
             },

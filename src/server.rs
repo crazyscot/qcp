@@ -4,14 +4,12 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::config::Configuration;
 use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, Status};
 use crate::protocol::{self, StreamPair};
-use crate::transport::BandwidthParams;
-use crate::util::socket::bind_range_for_family;
-use crate::util::Credentials;
-use crate::util::PortRange;
-use crate::{transport, util};
+use crate::transport::ThroughputMode;
+use crate::util::{io, socket, Credentials};
 
 use anyhow::Context as _;
 use quinn::crypto::rustls::QuicServerConfig;
@@ -27,10 +25,7 @@ use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
 /// Server event loop
 #[allow(clippy::module_name_repetitions)]
-pub async fn server_main(
-    bandwidth: crate::transport::BandwidthParams,
-    quic: crate::transport::QuicParams,
-) -> anyhow::Result<()> {
+pub async fn server_main(config: &Configuration) -> anyhow::Result<()> {
     let mut stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     // There are tricks you can use to get an unbuffered handle to stdout, but at a typing cost.
@@ -53,11 +48,11 @@ pub async fn server_main(
         client_message.connection_type,
     );
 
-    let bandwidth_info = format!("{bandwidth:?}");
-    let file_buffer_size = usize::try_from(bandwidth.send_buffer())?;
+    let bandwidth_info = format!("{config:?}");
+    let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
 
     let credentials = Credentials::generate()?;
-    let (endpoint, warning) = create_endpoint(&credentials, client_message, bandwidth, quic.port)?;
+    let (endpoint, warning) = create_endpoint(&credentials, client_message, config)?;
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");
     ServerMessage::write(
@@ -79,7 +74,7 @@ pub async fn server_main(
     // but a timeout is useful to give the user a cue that UDP isn't getting there.
     trace!("waiting for QUIC");
     let (stats_tx, mut stats_rx) = oneshot::channel();
-    if let Some(conn) = timeout(quic.timeout, endpoint.accept())
+    if let Some(conn) = timeout(config.timeout_duration(), endpoint.accept())
         .await
         .with_context(|| "Timed out waiting for QUIC connection")?
     {
@@ -113,8 +108,7 @@ pub async fn server_main(
 fn create_endpoint(
     credentials: &Credentials,
     client_message: ClientMessage,
-    bandwidth: BandwidthParams,
-    ports: Option<PortRange>,
+    transport: &Configuration,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
 
@@ -127,24 +121,24 @@ fn create_endpoint(
     tls_config.max_early_data_size = u32::MAX;
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
-    let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
-    let _ = config.transport_config(crate::transport::create_config(
-        bandwidth,
-        transport::ThroughputMode::Both,
+    let mut server = quinn::ServerConfig::with_crypto(Arc::new(qsc));
+    let _ = server.transport_config(crate::transport::create_config(
+        transport,
+        ThroughputMode::Both,
     )?);
 
-    let mut socket = bind_range_for_family(client_message.connection_type, ports)?;
+    let mut socket = socket::bind_range_for_family(client_message.connection_type, transport.port)?;
     // We don't know whether client will send or receive, so configure for both.
-    let wanted_send = Some(usize::try_from(bandwidth.send_buffer())?);
-    let wanted_recv = Some(usize::try_from(bandwidth.recv_buffer())?);
-    let warning = util::socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)?
+    let wanted_send = Some(usize::try_from(Configuration::send_buffer())?);
+    let wanted_recv = Some(usize::try_from(Configuration::recv_buffer())?);
+    let warning = socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)?
         .inspect(|s| warn!("{s}"));
 
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
     let runtime =
         quinn::default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
     Ok((
-        quinn::Endpoint::new(EndpointConfig::default(), Some(config), socket, runtime)?,
+        quinn::Endpoint::new(EndpointConfig::default(), Some(server), socket, runtime)?,
         warning,
     ))
 }
@@ -212,7 +206,7 @@ async fn handle_get(
     trace!("begin");
 
     let path = PathBuf::from(&filename);
-    let (file, meta) = match crate::util::io::open_file(&filename).await {
+    let (file, meta) = match io::open_file(&filename).await {
         Ok(res) => res,
         Err((status, message, _)) => {
             return send_response(&mut stream.send, status, message.as_deref()).await;
@@ -271,7 +265,7 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
     }
     let append_filename = if path.is_dir() || path.is_file() {
         // Destination exists
-        if !crate::util::io::dest_is_writeable(&path).await {
+        if !io::dest_is_writeable(&path).await {
             return send_response(
                 &mut stream.send,
                 Status::IncorrectPermissions,
@@ -290,7 +284,7 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
             path_test.push(".");
         }
         if path_test.is_dir() {
-            if !crate::util::io::dest_is_writeable(&path_test).await {
+            if !io::dest_is_writeable(&path_test).await {
                 return send_response(
                     &mut stream.send,
                     Status::IncorrectPermissions,

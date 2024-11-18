@@ -7,7 +7,7 @@ use quinn::ConnectionStats;
 use std::{cmp, fmt::Display, time::Duration};
 use tracing::{info, warn};
 
-use crate::{protocol::control::ClosedownReport, transport::BandwidthParams};
+use crate::{config::Configuration, protocol::control::ClosedownReport};
 
 /// Human friendly output helper
 #[derive(Debug, Clone, Copy)]
@@ -56,7 +56,7 @@ pub fn process_statistics(
     payload_bytes: u64,
     transport_time: Option<Duration>,
     remote_stats: ClosedownReport,
-    bandwidth: BandwidthParams,
+    bandwidth: &Configuration,
     show_statistics: bool,
 ) {
     let locale = &num_format::Locale::en;

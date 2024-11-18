@@ -5,10 +5,8 @@ use std::str::FromStr;
 
 use crate::transport::ThroughputMode;
 
-use super::args::Options;
-
 /// A file source or destination specified by the user
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileSpec {
     /// The remote host for the file.
     ///
@@ -54,7 +52,6 @@ impl FromStr for FileSpec {
 }
 
 /// Details of a file copy job.
-/// (This is a helper struct for the contents of `CliArgs` .)
 #[derive(Debug, Clone)]
 pub struct CopyJobSpec {
     pub(crate) source: FileSpec,
@@ -70,31 +67,34 @@ impl CopyJobSpec {
             ThroughputMode::Tx
         }
     }
-}
 
-impl TryFrom<&Options> for CopyJobSpec {
-    type Error = anyhow::Error;
-
-    fn try_from(args: &Options) -> Result<Self, Self::Error> {
-        let source = args
-            .source
+    /*
+    pub(crate) fn remote_user_host(&self) -> anyhow::Result<&str> {
+        let src = self.source.as_ref().ok_or(anyhow::anyhow!(
+            "both source and destination must be specified"
+        ))?;
+        let dest = self.destination.as_ref().ok_or(anyhow::anyhow!(
+            "both source and destination must be specified"
+        ))?;
+        Ok(src
+            .host
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
-            .clone();
-        let destination = args
-            .destination
+            .unwrap_or_else(|| dest.host.as_ref().unwrap()))
+    }
+    */
+
+    pub(crate) fn remote_user_host(&self) -> &str {
+        self.source
+            .host
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
-            .clone();
+            .unwrap_or_else(|| self.destination.host.as_ref().unwrap())
+    }
 
-        if !(source.host.is_none() ^ destination.host.is_none()) {
-            anyhow::bail!("One file argument must be remote");
-        }
-
-        Ok(Self {
-            source,
-            destination,
-        })
+    pub(crate) fn remote_host(&self) -> &str {
+        let user_host = self.remote_user_host();
+        // It might be user@host, or it might be just the hostname or IP.
+        let (_, host) = user_host.split_once('@').unwrap_or(("", user_host));
+        host
     }
 }
 

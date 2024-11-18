@@ -1,10 +1,12 @@
 // QCP top-level command-line arguments
 // (c) 2024 Ross Younger
 
-use clap::{Args as _, FromArgMatches as _, Parser};
+use clap::{ArgAction::SetTrue, Args as _, FromArgMatches as _, Parser};
+
+use crate::{client::CopyJobSpec, config::Manager, util::AddressFamily};
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
-pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
+pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers", "show_config", "config_files"];
 
 #[derive(Debug, Parser, Clone)]
 #[command(
@@ -24,6 +26,7 @@ pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
 "
 ))]
 #[command(styles=super::styles::get())]
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct CliArgs {
     // MODE SELECTION ======================================================================
     /// Operates in server mode.
@@ -32,48 +35,86 @@ pub(crate) struct CliArgs {
     /// intended for interactive use.
     #[arg(
         long, help_heading("Modes"), hide = true,
-        conflicts_with_all(["help_buffers", "quiet", "statistics", "ipv4", "ipv6", "remote_debug", "profile", "source", "destination", "ssh", "ssh_opt", "remote_port"])
+        conflicts_with_all([
+            "help_buffers", "show_config", "config_files",
+            "quiet", "statistics", "remote_debug", "profile",
+            "ssh", "ssh_opt", "remote_port",
+            "source", "destination",
+        ])
     )]
     pub server: bool,
+
+    /// Outputs the configuration, then exits
+    #[arg(long, help_heading("Configuration"))]
+    pub show_config: bool,
+    /// Outputs the paths to configuration file(s), then exits
+    #[arg(long, help_heading("Configuration"))]
+    pub config_files: bool,
 
     /// Outputs additional information about kernel UDP buffer sizes and platform-specific tips
     #[arg(long, action, help_heading("Network tuning"), display_order(50))]
     pub help_buffers: bool,
 
-    // CLIENT-ONLY OPTIONS =================================================================
+    // CONFIGURABLE OPTIONS ================================================================
     #[command(flatten)]
-    pub client: crate::client::Options,
+    pub config: crate::config::Configuration_Optional,
 
-    // NETWORK OPTIONS =====================================================================
+    // CLIENT-SIDE NON-CONFIGURABLE OPTIONS ================================================
+    // (including positional arguments!)
     #[command(flatten)]
-    pub bandwidth: crate::transport::BandwidthParams,
+    pub client_params: crate::client::Parameters,
 
-    #[command(flatten)]
-    pub quic: crate::transport::QuicParams,
-    // DEBUG OPTIONS =======================================================================
-    /// Enable detailed debug output
-    ///
-    /// This has the same effect as setting `RUST_LOG=qcp=debug` in the environment.
-    /// If present, `RUST_LOG` overrides this option.
-    #[arg(short, long, action, help_heading("Debug"))]
-    pub debug: bool,
-    /// Log to a file
-    ///
-    /// By default the log receives everything printed to stderr.
-    /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
-    #[arg(short('l'), long, action, help_heading("Debug"), value_name("FILE"))]
-    pub log_file: Option<String>,
-    //
-    // ======================================================================================
-    //
-    // N.B. ClientOptions has positional arguments!
+    /// Convenience alias for `--address-family 4`
+    // this is actioned by our custom parser
+    #[arg(
+        short = '4',
+        help_heading("Connection"),
+        group("ip address"),
+        action(SetTrue)
+    )]
+    pub ipv4_alias__: bool,
+    /// Convenience alias for `--address-family 6`
+    // this is actioned by our custom parser
+    #[arg(
+        short = '6',
+        help_heading("Connection"),
+        group("ip address"),
+        action(SetTrue)
+    )]
+    pub ipv6_alias__: bool,
 }
 
 impl CliArgs {
-    /// Sets up and executes ou
+    /// Sets up and executes our parser
     pub(crate) fn custom_parse() -> Self {
         let cli = clap::Command::new(clap::crate_name!());
         let cli = CliArgs::augment_args(cli).version(crate::version::short());
-        CliArgs::from_arg_matches(&cli.get_matches_from(std::env::args_os())).unwrap()
+        let mut args =
+            CliArgs::from_arg_matches(&cli.get_matches_from(std::env::args_os())).unwrap();
+        // Custom logic: '-4' and '-6' convenience aliases
+        if args.ipv4_alias__ {
+            args.config.address_family = Some(Some(AddressFamily::V4));
+        } else if args.ipv6_alias__ {
+            args.config.address_family = Some(Some(AddressFamily::V6));
+        }
+        args
+    }
+}
+
+impl From<&CliArgs> for Manager {
+    /// Merge options from the CLI into the structure.
+    /// Any new option packs (_Optional structs) need to be added here.
+    fn from(value: &CliArgs) -> Self {
+        let mut mgr = Manager::new();
+        mgr.merge_provider(&value.config);
+        mgr
+    }
+}
+
+impl TryFrom<&CliArgs> for CopyJobSpec {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
+        CopyJobSpec::try_from(&args.client_params)
     }
 }

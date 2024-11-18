@@ -1,4 +1,4 @@
-// Default styling for qcp's help output
+// Default styling for CLI output
 
 #[must_use]
 /// Styling factory
@@ -36,4 +36,14 @@ pub(crate) fn get() -> clap::builder::Styles {
         .placeholder(
             anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Cyan))),
         )
+}
+
+pub(crate) fn error() -> console::Style {
+    console::Style::new().red()
+}
+pub(crate) fn warning() -> console::Style {
+    console::Style::new().yellow()
+}
+pub(crate) fn info() -> console::Style {
+    console::Style::new().cyan()
 }

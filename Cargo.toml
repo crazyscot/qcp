@@ -23,9 +23,13 @@ capnp = "0.20.1"
 capnp-futures = "0.20.0"
 clap = { version = "4.5.19", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 console = "0.15.8"
+derive-deftly = "0.14.2"
 dns-lookup = "2.0.4"
+etcetera = "0.8.0"
+figment = { version = "0.10.19", features = ["toml"] }
 futures-util = { version = "0.3.31", default-features = false }
 gethostname = "0.5.0"
+heck = "0.5.0"
 human-repr = "1.1.0"
 humanize-rs = "0.1.5"
 indicatif = { version = "0.17.8", features = ["tokio"] }
@@ -33,8 +37,11 @@ num-format = { version = "0.4.4" }
 quinn = { version = "0.11.5", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
 rcgen = { version = "0.13.1" }
 rustls-pki-types = "1.9.0"
+serde = { version = "1.0.215", features = ["derive"] }
 static_assertions = "1.1.0"
+struct-field-names-as-array = "0.3.0"
 strum_macros = "0.26.4"
+tabled = "0.17.0"
 tokio = { version = "1.40.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
 tokio-util = { version = "0.7.12", features = ["compat"] }
 tracing = "0.1.40"
@@ -51,7 +58,12 @@ capnpc = "0.20.0"
 
 [dev-dependencies]
 fastrand = "2.1.1"
-
+json = "0.12.4"
+rand = "0.8.5"
+serde_json = "1.0.132"
+serde_test = "1.0.177"
+tempfile = "3.14.0"
+toml = "0.8.19"
 
 [lints.rust]
 dead_code = "warn"

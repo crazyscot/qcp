@@ -42,6 +42,12 @@
 //!
 //! The [protocol] documentation contains more detail and a discussion of its security properties.
 //!
+//! ## Configuration
+//!
+//! On the command line, qcp has a comprehensive `--help` message.
+//!
+//! Most options can also be specified in a config file. See [config] for detalis.
+//!
 //! ## 📈 Getting the best out of qcp
 //!
 //! See [performance](doc::performance) and [troubleshooting](doc::troubleshooting).
@@ -57,6 +63,7 @@ mod cli;
 pub use cli::cli; // needs to be re-exported for the binary crate
 
 pub mod client;
+pub mod config;
 pub mod protocol;
 pub mod server;
 pub mod transport;
@@ -67,3 +74,8 @@ pub mod doc;
 pub mod os;
 
 mod version;
+
+#[doc(hidden)]
+pub use derive_deftly;
+// Use the current version of derive_deftly here:
+derive_deftly::template_export_semver_check!("0.14.0");

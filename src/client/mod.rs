@@ -1,7 +1,7 @@
 //! client-side (_initiator_) main loop and supporting structures
 
-mod args;
-pub use args::Options;
+mod options;
+pub use options::Parameters;
 
 mod control;
 pub use control::Channel;
