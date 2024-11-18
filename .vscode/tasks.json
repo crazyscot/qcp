@@ -4,7 +4,7 @@
 		{
 			"type": "cargo",
 			"command": "doc",
-			"args": ["--no-deps"],
+			"args": ["--no-deps", "--locked"],
 			"problemMatcher": [
 				"$rustc"
 			],
