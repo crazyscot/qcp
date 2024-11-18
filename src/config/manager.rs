@@ -119,11 +119,11 @@ mod test {
     fn config_merge() {
         // simulate a CLI
         let cli = Configuration_Optional {
-            rx: Some(12345),
+            rx: Some(12345.into()),
             ..Default::default()
         };
         let expected = Configuration {
-            rx: 12345,
+            rx: 12345.into(),
             ..Default::default()
         };
 
