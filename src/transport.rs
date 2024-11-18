@@ -14,7 +14,7 @@ use quinn::{
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::util::{parse_duration, PortRange};
+use crate::util::{parse_duration, serde::HumanU64, PortRange};
 
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
@@ -76,7 +76,7 @@ pub enum CongestionControllerType {
 }
 
 /// Parameters needed to set up transport configuration
-#[derive(Copy, Clone, Debug, Parser)]
+#[derive(Copy, Clone, Debug, Parser, Serialize, Deserialize)]
 pub struct BandwidthParams {
     /// The maximum network bandwidth we expect receiving data FROM the remote system.
     ///
@@ -85,14 +85,14 @@ pub struct BandwidthParams {
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable setting.
     #[arg(short('b'), long, help_heading("Network tuning"), display_order(10), default_value("12500k"), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
-    pub rx_bw: Bytes<u64>,
+    pub rx_bw: HumanU64,
 
     /// The maximum network bandwidth we expect sending data TO the remote system,
     /// if it is different from the bandwidth FROM the system.
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
     /// [default: use the value of --rx-bw]
     #[arg(short('B'), long, help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
-    pub tx_bw: Option<Bytes<u64>>,
+    pub tx_bw: Option<HumanU64>,
 
     /// The expected network Round Trip time to the target system, in milliseconds.
     #[arg(
@@ -162,13 +162,13 @@ impl BandwidthParams {
     #[must_use]
     /// Receive bandwidth (accessor)
     pub fn rx(&self) -> u64 {
-        self.rx_bw.size()
+        *self.rx_bw
     }
     #[must_use]
     /// Transmit bandwidth (accessor)
     pub fn tx(&self) -> u64 {
         if let Some(tx) = self.tx_bw {
-            tx.size()
+            *tx
         } else {
             self.rx()
         }
