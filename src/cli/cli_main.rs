@@ -10,6 +10,7 @@ use crate::{
     config::{Configuration, Manager},
     os,
     server::server_main,
+    transport::BandwidthParams,
     util::setup_tracing,
 };
 use indicatif::{MultiProgress, ProgressDrawTarget};
@@ -29,8 +30,8 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
 
     if args.help_buffers {
         os::print_udp_buffer_size_help_message(
-            cfg.bandwidth.recv_buffer(),
-            cfg.bandwidth.send_buffer(),
+            BandwidthParams::recv_buffer(),
+            BandwidthParams::send_buffer(),
         );
         return Ok(ExitCode::SUCCESS);
     }

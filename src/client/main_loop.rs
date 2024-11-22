@@ -276,11 +276,15 @@ pub(crate) fn create_endpoint(
     trace!("bind & configure socket, port={port:?}", port = port);
     let mut socket = util::socket::bind_range_for_peer(server_addr, port)?;
     let wanted_send = match mode {
-        ThroughputMode::Both | ThroughputMode::Tx => Some(bandwidth.send_buffer().try_into()?),
+        ThroughputMode::Both | ThroughputMode::Tx => {
+            Some(BandwidthParams::send_buffer().try_into()?)
+        }
         ThroughputMode::Rx => None,
     };
     let wanted_recv = match mode {
-        ThroughputMode::Both | ThroughputMode::Rx => Some(bandwidth.recv_buffer().try_into()?),
+        ThroughputMode::Both | ThroughputMode::Rx => {
+            Some(BandwidthParams::recv_buffer().try_into()?)
+        }
         ThroughputMode::Tx => None,
     };
 
@@ -397,7 +401,7 @@ async fn do_put(
     meter.start().await;
 
     trace!("sending command");
-    let mut file = BufReader::with_capacity(bandwidth.send_buffer().try_into()?, file);
+    let mut file = BufReader::with_capacity(BandwidthParams::send_buffer().try_into()?, file);
 
     outbound
         .write_all(&crate::protocol::session::Command::new_put(dest_filename).serialize())

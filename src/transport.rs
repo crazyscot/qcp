@@ -196,13 +196,13 @@ impl BandwidthParams {
 
     /// UDP kernel sending buffer size to use
     #[must_use]
-    pub fn send_buffer(&self) -> u64 {
+    pub fn send_buffer() -> u64 {
         // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
         2_097_152
     }
     /// UDP kernel receive buffer size to use
     #[must_use]
-    pub fn recv_buffer(&self) -> u64 {
+    pub fn recv_buffer() -> u64 {
         // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
         2_097_152
     }
@@ -238,7 +238,7 @@ pub fn create_config(
         ThroughputMode::Tx | ThroughputMode::Both => {
             let _ = config
                 .send_window(params.send_window())
-                .datagram_send_buffer_size(params.send_buffer().try_into()?);
+                .datagram_send_buffer_size(BandwidthParams::send_buffer().try_into()?);
         }
         ThroughputMode::Rx => (),
     }
@@ -248,7 +248,7 @@ pub fn create_config(
         ThroughputMode::Rx | ThroughputMode::Both => {
             let _ = config
                 .stream_receive_window(params.recv_window().try_into()?)
-                .datagram_receive_buffer_size(Some(params.recv_buffer() as usize));
+                .datagram_receive_buffer_size(Some(BandwidthParams::recv_buffer() as usize));
         }
         ThroughputMode::Tx => (),
     }
@@ -274,9 +274,9 @@ pub fn create_config(
     debug!(
         "Buffer configuration: send window {sw}, buffer {sb}; recv window {rw}, buffer {rb}",
         sw = params.send_window().human_count_bytes(),
-        sb = params.send_buffer().human_count_bytes(),
+        sb = BandwidthParams::send_buffer().human_count_bytes(),
         rw = params.recv_window().human_count_bytes(),
-        rb = params.recv_buffer().human_count_bytes()
+        rb = BandwidthParams::recv_buffer().human_count_bytes()
     );
 
     Ok(config.into())
