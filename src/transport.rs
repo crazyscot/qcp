@@ -5,8 +5,8 @@ use std::{fmt::Display, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use clap::Parser;
+use derive_deftly::Deftly;
 use human_repr::{HumanCount, HumanDuration as _};
-use humanize_rs::bytes::Bytes;
 use quinn::{
     congestion::{BbrConfig, CubicConfig},
     TransportConfig,
@@ -14,7 +14,7 @@ use quinn::{
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::util::{parse_duration, serde::HumanU64, PortRange};
+use crate::util::{derive_deftly_template_Optionalify, parse_duration, serde::HumanU64, PortRange};
 
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
@@ -76,54 +76,69 @@ pub enum CongestionControllerType {
 }
 
 /// Parameters needed to set up transport configuration
-#[derive(Copy, Clone, Debug, Parser, Serialize, Deserialize)]
+#[derive(Deftly)]
+#[derive_deftly(Optionalify)]
+#[deftly(visibility = "pub(crate)")]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Parser, Serialize, Deserialize)]
 pub struct BandwidthParams {
     /// The maximum network bandwidth we expect receiving data FROM the remote system.
+    /// [default: 12500k]
     ///
     /// This may be specified directly as a number of bytes, or as an SI quantity
     /// e.g. "10M" or "256k". Note that this is described in BYTES, not bits;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable setting.
-    #[arg(short('b'), long, help_heading("Network tuning"), display_order(10), default_value("12500k"), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
+    #[arg(short('b'), long, help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
     pub rx_bw: HumanU64,
-
     /// The maximum network bandwidth we expect sending data TO the remote system,
     /// if it is different from the bandwidth FROM the system.
-    /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
     /// [default: use the value of --rx-bw]
-    #[arg(short('B'), long, help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(Bytes<u64>))]
+    ///
+    /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
+    #[arg(short('B'), long, help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
     pub tx_bw: Option<HumanU64>,
 
     /// The expected network Round Trip time to the target system, in milliseconds.
+    /// [default: 300]
     #[arg(
         short('r'),
         long,
         help_heading("Network tuning"),
         display_order(1),
-        default_value("300"),
         value_name("ms")
     )]
     pub rtt: u16,
 
     /// Specifies the congestion control algorithm to use.
+    /// [default: cubic]
     #[arg(
         long,
         action,
         value_name = "alg",
         help_heading("Advanced network tuning")
     )]
-    #[clap(value_enum, default_value_t=CongestionControllerType::Cubic)]
+    #[clap(value_enum)]
     pub congestion: CongestionControllerType,
 
     /// (Network wizards only!)
     /// The initial value for the sending congestion control window.
+    /// [default: use the default for the selected congestion control algorithm]
     ///
     /// Setting this value too high reduces performance!
-    ///
-    /// If not specified, this setting is determined by the selected
-    /// congestion control algorithm.
     #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
     pub initial_congestion_window: Option<u64>,
+}
+
+impl Default for BandwidthParams {
+    fn default() -> Self {
+        Self {
+            rx_bw: 12_500_000.into(),
+            tx_bw: None,
+            rtt: 300,
+            congestion: CongestionControllerType::Cubic,
+            initial_congestion_window: None,
+        }
+    }
 }
 
 impl Display for BandwidthParams {

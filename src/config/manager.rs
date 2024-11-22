@@ -1,13 +1,14 @@
 //! Configuration file wrangling
 // (c) 2024 Ross Younger
 
-use super::{structure::Configuration_Optional, Configuration};
+use super::Configuration;
 
 use anyhow::Result;
 use figment::{
     providers::{Format, Serialized, Toml},
     Figment, Provider,
 };
+use serde::Deserialize;
 use std::path::PathBuf;
 
 use tracing::{trace, warn};
@@ -72,33 +73,31 @@ impl Default for Manager {
 impl Manager {
     /// Initialises this structure with the standard set of OS-specific file paths
     #[must_use]
-    pub(crate) fn new(cli: Option<Configuration_Optional>) -> Self {
+    pub fn new() -> Self {
         let mut data = Figment::new().merge(Serialized::defaults(Configuration::default()));
         // TODO: systemwide config file ?
         data = add_user_config(data);
-        if let Some(o) = cli {
-            data = data.merge(o);
-        }
         Self {
             data,
             //..Self::default()
         }
     }
 
-    /// Testing constructor, does not read files from system
+    /// Testing/internal constructor, does not read files from system
     #[must_use]
-    pub(crate) fn without_files(cli: Option<Configuration_Optional>) -> Self {
-        let mut data = Figment::new().merge(Serialized::defaults(Configuration::default()));
-        if let Some(o) = cli {
-            data = data.merge(o);
-        }
+    #[allow(unused)]
+    pub(crate) fn without_files() -> Self {
+        let data = Figment::new().merge(Serialized::defaults(Configuration::default()));
         Self {
             data,
             //..Self::default()
         }
     }
 
-    pub(crate) fn merge<T>(&mut self, provider: T)
+    /// Merges in a data set.
+    ///
+    /// `T` is expected to be a type created by [crate::util::derive_deftly_template_Optionalify].
+    pub fn merge_provider<T>(&mut self, provider: T)
     where
         T: Provider,
     {
@@ -106,29 +105,54 @@ impl Manager {
         self.data = f.merge(provider);
     }
 
-    pub(crate) fn get(&self) -> anyhow::Result<Configuration> {
+    /// Attempts to extract a particular struct from the data.
+    ///
+    /// Type `T` may be `Configuration` or one of its sub-elements.
+    pub fn get<'de, T>(&self) -> anyhow::Result<T>
+    where
+        T: Deserialize<'de>,
+    {
         Ok(self.data.extract()?)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{Configuration, Configuration_Optional, Manager};
+    use crate::transport::{BandwidthParams, BandwidthParams_Optional};
+
+    use super::{Configuration, Manager};
+
+    #[test]
+    fn defaults() {
+        let mgr = Manager::without_files();
+        let result = mgr.get().unwrap();
+        let expected = Configuration::default();
+        assert_eq!(expected, result);
+    }
 
     #[test]
     fn config_merge() {
         // simulate a CLI
-        let cli = Configuration_Optional {
-            rx: Some(12345.into()),
+        let entered = BandwidthParams_Optional {
+            rx_bw: Some(12345.into()),
             ..Default::default()
         };
         let expected = Configuration {
-            rx: 12345.into(),
-            ..Default::default()
+            bandwidth: BandwidthParams {
+                rx_bw: 12345.into(),
+                ..Default::default()
+            },
         };
 
-        let mgr = Manager::without_files(Some(cli));
+        let mut mgr = Manager::without_files();
+        mgr.merge_provider(entered);
         let result = mgr.get().unwrap();
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn extract_substruct() {
+        let cfg: BandwidthParams = Manager::without_files().get().unwrap();
+        assert_eq!(cfg, BandwidthParams::default());
     }
 }

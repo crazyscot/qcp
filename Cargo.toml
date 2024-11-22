@@ -55,6 +55,7 @@ capnpc = "0.20.0"
 
 [dev-dependencies]
 fastrand = "2.1.1"
+json = "0.12.4"
 rand = "0.8.5"
 serde_json = "1.0.132"
 serde_test = "1.0.177"
