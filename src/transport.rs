@@ -88,15 +88,15 @@ pub struct BandwidthParams {
     /// e.g. "10M" or "256k". Note that this is described in BYTES, not bits;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable setting.
-    #[arg(short('b'), long, help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
-    pub rx_bw: HumanU64,
+    #[arg(short('b'), long, alias("rx-bw"), help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
+    pub rx: HumanU64,
     /// The maximum network bandwidth we expect sending data TO the remote system,
     /// if it is different from the bandwidth FROM the system.
-    /// [default: use the value of --rx-bw]
+    /// [default: use the value of --rx]
     ///
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
-    #[arg(short('B'), long, help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
-    pub tx_bw: Option<HumanU64>,
+    #[arg(short('B'), long, alias("tx-bw"), help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
+    pub tx: Option<HumanU64>,
 
     /// The expected network Round Trip time to the target system, in milliseconds.
     /// [default: 300]
@@ -132,8 +132,8 @@ pub struct BandwidthParams {
 impl Default for BandwidthParams {
     fn default() -> Self {
         Self {
-            rx_bw: 12_500_000.into(),
-            tx_bw: None,
+            rx: 12_500_000.into(),
+            tx: None,
             rtt: 300,
             congestion: CongestionControllerType::Cubic,
             initial_congestion_window: None,
@@ -177,12 +177,12 @@ impl BandwidthParams {
     #[must_use]
     /// Receive bandwidth (accessor)
     pub fn rx(&self) -> u64 {
-        *self.rx_bw
+        *self.rx
     }
     #[must_use]
     /// Transmit bandwidth (accessor)
     pub fn tx(&self) -> u64 {
-        if let Some(tx) = self.tx_bw {
+        if let Some(tx) = self.tx {
             *tx
         } else {
             self.rx()

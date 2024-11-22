@@ -145,12 +145,12 @@ mod test {
     fn config_merge() {
         // simulate a CLI
         let entered = BandwidthParams_Optional {
-            rx_bw: Some(12345.into()),
+            rx: Some(12345.into()),
             ..Default::default()
         };
         let expected = Configuration {
             bandwidth: BandwidthParams {
-                rx_bw: 12345.into(),
+                rx: 12345.into(),
                 ..Default::default()
             },
         };
