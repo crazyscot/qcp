@@ -3,6 +3,8 @@
 
 use clap::{Args as _, FromArgMatches as _, Parser};
 
+use crate::config::Manager;
+
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
 pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
 
@@ -70,10 +72,19 @@ pub(crate) struct CliArgs {
 }
 
 impl CliArgs {
-    /// Sets up and executes ou
+    /// Sets up and executes our parser
     pub(crate) fn custom_parse() -> Self {
         let cli = clap::Command::new(clap::crate_name!());
         let cli = CliArgs::augment_args(cli).version(crate::version::short());
         CliArgs::from_arg_matches(&cli.get_matches_from(std::env::args_os())).unwrap()
+    }
+}
+
+impl From<CliArgs> for Manager {
+    fn from(value: CliArgs) -> Self {
+        let mut mgr = Manager::new();
+        mgr.merge_provider(value.bandwidth);
+        // TODO add other structs here once optionalified
+        mgr
     }
 }

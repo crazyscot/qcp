@@ -7,6 +7,7 @@ use super::args::CliArgs;
 
 use crate::{
     client::{client_main, MAX_UPDATE_FPS},
+    config::{Configuration, Manager},
     os,
     server::server_main,
     util::setup_tracing,
@@ -23,10 +24,13 @@ use tracing::error_span;
 #[allow(clippy::missing_panics_doc)]
 pub async fn cli() -> anyhow::Result<ExitCode> {
     let args = CliArgs::custom_parse();
+    let mgr = Manager::from(args.clone()); // TODO declone?
+    let cfg = mgr.get::<Configuration>().unwrap(); // TODO depanic
+
     if args.help_buffers {
         os::print_udp_buffer_size_help_message(
-            args.bandwidth.recv_buffer(),
-            args.bandwidth.send_buffer(),
+            cfg.bandwidth.recv_buffer(),
+            cfg.bandwidth.send_buffer(),
         );
         return Ok(ExitCode::SUCCESS);
     }
@@ -49,12 +53,12 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
 
     if args.server {
         let _span = error_span!("REMOTE").entered();
-        server_main(args.bandwidth, args.quic)
+        server_main(cfg.bandwidth, args.quic)
             .await
             .map(|()| ExitCode::SUCCESS)
             .inspect_err(|e| tracing::error!("{e}"))
     } else {
-        client_main(args.client, args.bandwidth, args.quic, progress.unwrap())
+        client_main(args.client, cfg.bandwidth, args.quic, progress.unwrap())
             .await
             .inspect_err(|e| tracing::error!("{e}"))
             .or_else(|_| Ok(false))
