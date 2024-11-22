@@ -13,12 +13,13 @@ use std::path::PathBuf;
 
 use tracing::{trace, warn};
 
-const CONFIG_FILENAME: &str = "qcp.toml";
+const BASE_CONFIG_FILENAME: &str = "qcp.toml";
 
 #[cfg(unix)]
 fn user_config_dir() -> Result<PathBuf> {
+    // home directory for now
     use etcetera::BaseStrategy as _;
-    Ok(etcetera::choose_base_strategy()?.config_dir())
+    Ok(etcetera::choose_base_strategy()?.home_dir().into())
 }
 
 #[cfg(windows)]
@@ -33,9 +34,11 @@ fn user_config_dir() -> Result<PathBuf> {
     .config_dir())
 }
 
+#[cfg(unix)]
 fn user_config_path() -> Result<PathBuf> {
-    let mut d = user_config_dir()?;
-    d.set_file_name(CONFIG_FILENAME);
+    // ~/.<filename> for now
+    let mut d: PathBuf = user_config_dir()?;
+    d.push(format!(".{BASE_CONFIG_FILENAME}"));
     Ok(d)
 }
 
@@ -118,9 +121,17 @@ impl Manager {
 
 #[cfg(test)]
 mod test {
-    use crate::transport::{BandwidthParams, BandwidthParams_Optional};
+    use crate::{
+        config::manager::user_config_path,
+        transport::{BandwidthParams, BandwidthParams_Optional},
+    };
 
     use super::{Configuration, Manager};
+
+    #[test]
+    fn show_user_config_path() {
+        println!("{:?}", user_config_path().unwrap());
+    }
 
     #[test]
     fn defaults() {
