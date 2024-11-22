@@ -111,11 +111,11 @@ impl Manager {
     /// Attempts to extract a particular struct from the data.
     ///
     /// Type `T` may be `Configuration` or one of its sub-elements.
-    pub fn get<'de, T>(&self) -> anyhow::Result<T>
+    pub fn get<'de, T>(&self) -> anyhow::Result<T, figment::Error>
     where
         T: Deserialize<'de>,
     {
-        Ok(self.data.extract()?)
+        self.data.extract()
     }
 }
 

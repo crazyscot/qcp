@@ -3,7 +3,7 @@
 
 use std::process::ExitCode;
 
-use super::args::CliArgs;
+use super::{args::CliArgs, styles};
 
 use crate::{
     client::{client_main, MAX_UPDATE_FPS},
@@ -16,6 +16,16 @@ use crate::{
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use tracing::error_span;
 
+fn trace_level(args: &CliArgs) -> &str {
+    if args.debug {
+        "debug"
+    } else if args.client.quiet {
+        "error"
+    } else {
+        "info"
+    }
+}
+
 /// Main CLI entrypoint
 ///
 /// Call this from `main`. It reads argv.
@@ -25,9 +35,6 @@ use tracing::error_span;
 #[allow(clippy::missing_panics_doc)]
 pub async fn cli() -> anyhow::Result<ExitCode> {
     let args = CliArgs::custom_parse();
-    let mgr = Manager::from(args.clone()); // TODO declone?
-    let cfg = mgr.get::<Configuration>().unwrap(); // TODO depanic
-
     if args.help_buffers {
         os::print_udp_buffer_size_help_message(
             BandwidthParams::recv_buffer(),
@@ -35,22 +42,30 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
         );
         return Ok(ExitCode::SUCCESS);
     }
-    let trace_level = if args.debug {
-        "debug"
-    } else if args.client.quiet {
-        "error"
-    } else {
-        "info"
-    };
-    let progress = if args.server {
-        None
-    } else {
-        Some(MultiProgress::with_draw_target(
-            ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS),
-        ))
-    };
-    setup_tracing(trace_level, progress.as_ref(), &args.log_file)
+
+    let progress = (!args.server).then(|| {
+        MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS))
+    });
+    setup_tracing(trace_level(&args), progress.as_ref(), &args.log_file)
         .inspect_err(|e| eprintln!("{e:?}"))?;
+
+    // Now fold the arguments in with the CLI config (which may fail)
+    let mgr = Manager::from(args.clone()); // TODO declone
+
+    let cfg = match mgr.get::<Configuration>() {
+        Ok(c) => c,
+        Err(err) => {
+            println!(
+                "{}: Failed to parse configuration",
+                styles::error().apply_to("ERROR")
+            );
+            let inf = styles::info();
+            for (i, e) in err.into_iter().enumerate() {
+                println!("{}: {e}", inf.apply_to(i + 1));
+            }
+            return Ok(ExitCode::FAILURE);
+        }
+    };
 
     if args.server {
         let _span = error_span!("REMOTE").entered();
