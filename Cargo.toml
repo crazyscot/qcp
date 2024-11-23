@@ -29,6 +29,7 @@ etcetera = "0.8.0"
 figment = { version = "0.10.19", features = ["toml"] }
 futures-util = { version = "0.3.31", default-features = false }
 gethostname = "0.5.0"
+heck = "0.5.0"
 human-repr = "1.1.0"
 humanize-rs = "0.1.5"
 indicatif = { version = "0.17.8", features = ["tokio"] }
@@ -59,6 +60,7 @@ json = "0.12.4"
 rand = "0.8.5"
 serde_json = "1.0.132"
 serde_test = "1.0.177"
+tempfile = "3.14.0"
 toml = "0.8.19"
 
 [lints.rust]

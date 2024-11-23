@@ -4,12 +4,17 @@
 use super::Configuration;
 
 use anyhow::Result;
+use core::fmt;
 use figment::{
     providers::{Format, Serialized, Toml},
-    Figment, Provider,
+    value::Value,
+    Figment, Metadata, Provider,
 };
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::{
+    fmt::{Debug, Display, Write},
+    path::{Path, PathBuf},
+};
 
 use tracing::{trace, warn};
 
@@ -40,6 +45,30 @@ fn user_config_path() -> Result<PathBuf> {
     let mut d: PathBuf = user_config_dir()?;
     d.push(format!(".{BASE_CONFIG_FILENAME}"));
     Ok(d)
+}
+
+/// A `[https://docs.rs/figment/latest/figment/trait.Provider.html](figment::Provider)` that holds
+/// our set of fixed system default options
+#[derive(Default)]
+struct SystemDefault {}
+
+impl SystemDefault {
+    const META_NAME: &str = "default";
+}
+
+impl Provider for SystemDefault {
+    fn metadata(&self) -> Metadata {
+        figment::Metadata::named(Self::META_NAME)
+    }
+
+    fn data(
+        &self,
+    ) -> std::result::Result<
+        figment::value::Map<figment::Profile, figment::value::Dict>,
+        figment::Error,
+    > {
+        Serialized::defaults(Configuration::default()).data()
+    }
 }
 
 /// Processes and merges all possible configuration sources
@@ -77,8 +106,10 @@ impl Manager {
     /// Initialises this structure with the standard set of OS-specific file paths
     #[must_use]
     pub fn new() -> Self {
-        let mut data = Figment::new().merge(Serialized::defaults(Configuration::default()));
+        let mut data = Figment::new().merge(SystemDefault::default());
         // TODO: systemwide config file ?
+
+        // N.B. This may leave data in a fused-error state, if a data file isn't parseable.
         data = add_user_config(data);
         Self {
             data,
@@ -90,7 +121,7 @@ impl Manager {
     #[must_use]
     #[allow(unused)]
     pub(crate) fn without_files() -> Self {
-        let data = Figment::new().merge(Serialized::defaults(Configuration::default()));
+        let data = Figment::new().merge(SystemDefault::default());
         Self {
             data,
             //..Self::default()
@@ -105,7 +136,17 @@ impl Manager {
         T: Provider,
     {
         let f = std::mem::take(&mut self.data);
-        self.data = f.merge(provider);
+        self.data = f.merge(provider); // in the error case, this leaves the provider in a fused state
+    }
+
+    /// Merges in a data set from a TOML file
+    pub fn merge_toml_file<T>(&mut self, toml: T)
+    where
+        T: AsRef<Path>,
+    {
+        let path = toml.as_ref();
+        let provider = Toml::file_exact(path);
+        self.merge_provider(provider);
     }
 
     /// Attempts to extract a particular struct from the data.
@@ -115,12 +156,110 @@ impl Manager {
     where
         T: Deserialize<'de>,
     {
-        self.data.extract()
+        self.data.extract::<T>()
+    }
+
+    fn format_field_name(f: &mut fmt::Formatter<'_>, max: usize, name: &str) -> fmt::Result {
+        write!(f, "  {name:max$}: ")
+    }
+
+    fn format_data(
+        f: &mut fmt::Formatter<'_>,
+        _name: &str,
+        value: &Value,
+        meta: Option<&Metadata>,
+    ) -> fmt::Result {
+        match value {
+            Value::String(_tag, s) => f.write_str(s),
+            Value::Char(_tag, c) => f.write_char(*c),
+            Value::Bool(_tag, b) => write!(f, "{b}"),
+            Value::Num(_tag, num) => {
+                if let Some(i) = num.to_i128() {
+                    write!(f, "{i}")
+                } else if let Some(u) = num.to_u128() {
+                    write!(f, "{u}")
+                } else if let Some(ff) = num.to_f64() {
+                    write!(f, "{ff}")
+                } else {
+                    todo!("unhandled Num case");
+                }
+            }
+            Value::Empty(_tag, _) => f.write_str("<empty>"),
+            // we don't currently support dict or array types
+            Value::Dict(_tag, _btree_map) => todo!(),
+            Value::Array(_tag, _vec) => todo!(),
+        }?;
+        // TODO pretty print this column too !
+
+        if let Some(meta) = meta {
+            // we might interpolate here someday if it was useful to output the field name
+            write!(f, " from {}", meta.name)?;
+            if let Some(s) = meta.source.as_ref() {
+                write!(f, " {s}")?;
+            }
+        }
+
+        writeln!(f)
+    }
+
+    fn format_field(
+        f: &mut fmt::Formatter<'_>,
+        max_field_size: usize,
+        name: &str,
+        value: &Value,
+        meta: Option<&Metadata>,
+    ) -> fmt::Result {
+        Self::format_field_name(f, max_field_size, name)?;
+        Self::format_data(f, name, value, meta)
+    }
+
+    fn format_field_error(
+        f: &mut fmt::Formatter<'_>,
+        max_field_size: usize,
+        name: &str,
+        err: &figment::Error,
+    ) -> fmt::Result {
+        Self::format_field_name(f, max_field_size, name)?;
+        std::fmt::Display::fmt(&err, f)
+        // TODO: can we contrive to provoke this to test it out?
+    }
+}
+
+impl Display for Manager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let data = match self.data.data() {
+            Ok(d) => d,
+            Err(e) => {
+                // This isn't terribly helpful as it doesn't have metadata attached; BUT attempting to get() a struct does.
+                return write!(f, "error: {e}");
+            }
+        };
+        let data = data.get(&figment::Profile::Default).unwrap();
+        let max_field_size = data.keys().map(String::len).max().unwrap_or(0) + 1;
+
+        for field in data.keys() {
+            let value = self.data.find_value(field);
+            let value = match value {
+                Ok(v) => v,
+                Err(e) => {
+                    Self::format_field_error(f, max_field_size, field, &e)?;
+                    continue;
+                }
+            };
+            let meta = self.data.find_metadata(field);
+            Self::format_field(f, max_field_size, field, &value, meta)?;
+        }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::path::PathBuf;
+
+    use serde::Deserialize;
+    use tempfile::TempDir;
+
     use crate::{
         config::manager::user_config_path,
         transport::{BandwidthParams, BandwidthParams_Optional},
@@ -165,5 +304,84 @@ mod test {
     fn extract_substruct() {
         let cfg: BandwidthParams = Manager::without_files().get().unwrap();
         assert_eq!(cfg, BandwidthParams::default());
+    }
+
+    fn make_tempfile(data: &str, filename: &str) -> (PathBuf, TempDir) {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path = tempdir.path().join(filename);
+        std::fs::write(&path, data).expect("Unable to write tempfile");
+        // println!("temp file is {:?}", &path);
+        (path, tempdir)
+    }
+
+    #[test]
+    fn dump_config_cli_and_toml() {
+        // Not a unit test as such; this is a human test
+        let (path, _tempdir) = make_tempfile(
+            r#"
+            tx = 42
+            congestion = "Bbr"
+            unused__ = 42
+        "#,
+            "test.toml",
+        );
+        let fake_cli = BandwidthParams_Optional {
+            rtt: Some(999),
+            initial_congestion_window: Some(Some(67890)), // yeah the double-Some is a bit of a wart
+            ..Default::default()
+        };
+        let mut mgr = Manager::without_files();
+        mgr.merge_toml_file(path);
+        mgr.merge_provider(fake_cli);
+        println!("{mgr}");
+    }
+
+    #[test]
+    fn unparseable_toml() {
+        // This is a semi unit test; there is one assert, but the secondary goal is that it outputs something sensible
+        let (path, _tempdir) = make_tempfile(
+            r"
+            a = 1
+            rx 123 # this line is a syntax error
+            b = 2
+        ",
+            "test.toml",
+        );
+        let mut mgr = Manager::without_files();
+        mgr.merge_toml_file(path);
+        let get = mgr.get::<Configuration>();
+        assert!(get.is_err());
+        println!("{}", get.unwrap_err());
+        // println!("{mgr}");
+    }
+
+    #[test]
+    fn type_error() {
+        // This is a semi unit test; this has a secondary goal of outputting something sensible
+
+        #[derive(Deserialize)]
+        struct Test {
+            magic_: i32,
+        }
+
+        let (path, _tempdir) = make_tempfile(
+            r"
+            rx = true # invalid
+            rtt = 3.14159 # also invalid
+            magic_ = 42
+        ",
+            "test.toml",
+        );
+        let mut mgr = Manager::without_files();
+        mgr.merge_toml_file(path);
+        // This TOML successfully merges into the config, but you can't extract the struct.
+        let err = mgr.get::<Configuration>().unwrap_err();
+        println!("Error: {err}");
+        // TODO: Would really like a rich error message here pointing to the failing key and errant file.
+        // We get no metadata in the error :-(
+
+        // But the config as a whole is not broken and other things can be extracted:
+        let other_struct = mgr.get::<Test>().unwrap();
+        assert_eq!(other_struct.magic_, 42);
     }
 }

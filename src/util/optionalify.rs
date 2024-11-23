@@ -1,4 +1,4 @@
-//! Configuration meta typing
+//! Macro to clone a structure for use with configuration data
 // (c) 2024 Ross Younger
 
 #![allow(meta_variable_misuse)] // false positives in these macro definitions
@@ -83,14 +83,17 @@ define_derive_deftly! {
         $(
             ${fattrs}
             ${fvis} $fname: Option<$ftype>,
-
             // Yes, if $ftype is Option<T>, the derived struct ends up with Option<Option<T>>. That's OK.
         )
     }
 
     impl figment::Provider for $OPTIONAL_TYPE {
         fn metadata(&self) -> figment::Metadata {
-            figment::Metadata::named("AppArgs")
+            figment::Metadata::named("command-line").interpolater(|_profile, path| {
+                use heck::ToKebabCase;
+                let key = path.last().map_or("<unknown>".to_string(), |s| s.to_kebab_case());
+                format!("--{key}")
+            })
         }
 
         fn data(&self) -> Result<figment::value::Map<figment::Profile, figment::value::Dict>, figment::Error> {

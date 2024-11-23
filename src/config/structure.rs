@@ -8,7 +8,7 @@ use derive_deftly::Deftly;
 
 /// The top-level configuration/options structure for the QCP client side.
 ///
-/// *This has a default() implementation returning the hard-wired config defaults!*
+/// **Note:** On this struct, `default()` returns qcp's hard-wired configuration defaults.
 #[derive(Default, Deftly)]
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
