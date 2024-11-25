@@ -117,6 +117,19 @@ impl Manager {
         }
     }
 
+    /// Returns a list of configuration files
+    ///
+    /// This is a function of platform and the current user id
+    pub fn config_files() -> Vec<String> {
+        let inputs = vec![user_config_path()];
+
+        inputs
+            .into_iter()
+            .filter_map(std::result::Result::ok)
+            .map(|p| p.into_os_string().to_string_lossy().into())
+            .collect()
+    }
+
     /// Testing/internal constructor, does not read files from system
     #[must_use]
     #[allow(unused)]

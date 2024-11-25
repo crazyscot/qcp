@@ -6,7 +6,7 @@ use clap::{Args as _, FromArgMatches as _, Parser};
 use crate::config::Manager;
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
-pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
+pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers", "show_config", "config_files"];
 
 #[derive(Debug, Parser, Clone)]
 #[command(
@@ -26,6 +26,7 @@ pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers"];
 "
 ))]
 #[command(styles=super::styles::get())]
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct CliArgs {
     // MODE SELECTION ======================================================================
     /// Operates in server mode.
@@ -34,9 +35,22 @@ pub(crate) struct CliArgs {
     /// intended for interactive use.
     #[arg(
         long, help_heading("Modes"), hide = true,
-        conflicts_with_all(["help_buffers", "quiet", "statistics", "ipv4", "ipv6", "remote_debug", "profile", "source", "destination", "ssh", "ssh_opt", "remote_port"])
+        conflicts_with_all([
+            "help_buffers", "show_config", "config_files",
+            "ipv4", "ipv6",
+            "quiet", "statistics", "remote_debug", "profile",
+            "ssh", "ssh_opt", "remote_port",
+            "source", "destination",
+        ])
     )]
     pub server: bool,
+
+    /// Outputs the configuration, then exits
+    #[arg(long, help_heading("Configuration"))]
+    pub show_config: bool,
+    /// Outputs the paths to configuration file(s), then exits
+    #[arg(long, help_heading("Configuration"))]
+    pub config_files: bool,
 
     /// Outputs additional information about kernel UDP buffer sizes and platform-specific tips
     #[arg(long, action, help_heading("Network tuning"), display_order(50))]

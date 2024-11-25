@@ -49,10 +49,16 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     setup_tracing(trace_level(&args), progress.as_ref(), &args.log_file)
         .inspect_err(|e| eprintln!("{e:?}"))?;
 
-    // Now fold the arguments in with the CLI config (which may fail)
-    let mgr = Manager::from(args.clone()); // TODO declone
+    if args.config_files {
+        // do this before attempting to read config, in case it fails
+        println!("{:?}", Manager::config_files());
+        return Ok(ExitCode::SUCCESS);
+    }
 
-    let cfg = match mgr.get::<Configuration>() {
+    // Now fold the arguments in with the CLI config (which may fail)
+    let config_manager = Manager::from(args.clone()); // TODO declone
+
+    let config = match config_manager.get::<Configuration>() {
         Ok(c) => c,
         Err(err) => {
             println!(
@@ -67,14 +73,17 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
         }
     };
 
-    if args.server {
+    if args.show_config {
+        println!("{config_manager}");
+        Ok(ExitCode::SUCCESS)
+    } else if args.server {
         let _span = error_span!("REMOTE").entered();
-        server_main(cfg.bandwidth, args.quic)
+        server_main(config.bandwidth, args.quic)
             .await
             .map(|()| ExitCode::SUCCESS)
             .inspect_err(|e| tracing::error!("{e}"))
     } else {
-        client_main(args.client, cfg.bandwidth, args.quic, progress.unwrap())
+        client_main(args.client, config.bandwidth, args.quic, progress.unwrap())
             .await
             .inspect_err(|e| tracing::error!("{e}"))
             .or_else(|_| Ok(false))
