@@ -4,7 +4,6 @@
 use super::Configuration;
 
 use anyhow::Result;
-use core::fmt;
 use figment::{
     providers::{Format, Serialized, Toml},
     value::Value,
@@ -12,11 +11,14 @@ use figment::{
 };
 use serde::Deserialize;
 use std::{
-    fmt::{Debug, Display, Write},
+    fmt::{Debug, Display},
     path::{Path, PathBuf},
 };
+use tabled::{settings::style::Style, Table, Tabled};
 
 use tracing::{trace, warn};
+
+// PATHS /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 const BASE_CONFIG_FILENAME: &str = "qcp.toml";
 
@@ -56,6 +58,8 @@ fn system_config_path() -> PathBuf {
     p
 }
 
+// SYSTEM DEFAULTS //////////////////////////////////////////////////////////////////////////////////////////////
+
 /// A `[https://docs.rs/figment/latest/figment/trait.Provider.html](figment::Provider)` that holds
 /// our set of fixed system default options
 #[derive(Default)]
@@ -79,6 +83,8 @@ impl Provider for SystemDefault {
         Serialized::defaults(Configuration::default()).data()
     }
 }
+
+// CONFIG MANAGER /////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Processes and merges all possible configuration sources
 #[derive(Debug)]
@@ -189,70 +195,53 @@ impl Manager {
     {
         self.data.extract::<T>()
     }
+}
 
-    fn format_field_name(f: &mut fmt::Formatter<'_>, max: usize, name: &str) -> fmt::Result {
-        write!(f, "  {name:max$}: ")
-    }
+// PRETTY PRINT SUPPORT ///////////////////////////////////////////////////////////////////////////////////////
 
-    fn format_data(
-        f: &mut fmt::Formatter<'_>,
-        _name: &str,
-        value: &Value,
-        meta: Option<&Metadata>,
-    ) -> fmt::Result {
-        match value {
-            Value::String(_tag, s) => f.write_str(s),
-            Value::Char(_tag, c) => f.write_char(*c),
-            Value::Bool(_tag, b) => write!(f, "{b}"),
+#[derive(Tabled)]
+struct PrettyConfig {
+    field: String,
+    value: String,
+    source: String,
+}
+
+impl PrettyConfig {
+    fn new(field: &str, value: Value, meta: Option<&Metadata>) -> Self {
+        let value = match value {
+            Value::String(_tag, s) => s,
+            Value::Char(_tag, c) => c.to_string(),
+            Value::Bool(_tag, b) => b.to_string(),
             Value::Num(_tag, num) => {
                 if let Some(i) = num.to_i128() {
-                    write!(f, "{i}")
+                    i.to_string()
                 } else if let Some(u) = num.to_u128() {
-                    write!(f, "{u}")
+                    u.to_string()
                 } else if let Some(ff) = num.to_f64() {
-                    write!(f, "{ff}")
+                    ff.to_string()
                 } else {
                     todo!("unhandled Num case");
                 }
             }
-            Value::Empty(_tag, _) => f.write_str("<empty>"),
+            Value::Empty(_tag, _) => "<empty>".into(),
             // we don't currently support dict or array types
             Value::Dict(_tag, _btree_map) => todo!(),
             Value::Array(_tag, _vec) => todo!(),
-        }?;
-        // TODO pretty print this column too !
+        };
 
-        if let Some(meta) = meta {
-            // we might interpolate here someday if it was useful to output the field name
-            write!(f, " from {}", meta.name)?;
-            if let Some(s) = meta.source.as_ref() {
-                write!(f, " {s}")?;
-            }
+        let source = if let Some(m) = meta {
+            m.source
+                .as_ref()
+                .map_or_else(|| m.name.to_string(), figment::Source::to_string)
+        } else {
+            String::new()
+        };
+
+        Self {
+            field: field.into(),
+            value,
+            source,
         }
-
-        writeln!(f)
-    }
-
-    fn format_field(
-        f: &mut fmt::Formatter<'_>,
-        max_field_size: usize,
-        name: &str,
-        value: &Value,
-        meta: Option<&Metadata>,
-    ) -> fmt::Result {
-        Self::format_field_name(f, max_field_size, name)?;
-        Self::format_data(f, name, value, meta)
-    }
-
-    fn format_field_error(
-        f: &mut fmt::Formatter<'_>,
-        max_field_size: usize,
-        name: &str,
-        err: &figment::Error,
-    ) -> fmt::Result {
-        Self::format_field_name(f, max_field_size, name)?;
-        std::fmt::Display::fmt(&err, f)
-        // TODO: can we contrive to provoke this to test it out?
     }
 }
 
@@ -266,21 +255,22 @@ impl Display for Manager {
             }
         };
         let data = data.get(&figment::Profile::Default).unwrap();
-        let max_field_size = data.keys().map(String::len).max().unwrap_or(0) + 1;
+
+        let mut fields = Vec::<PrettyConfig>::new();
 
         for field in data.keys() {
             let value = self.data.find_value(field);
             let value = match value {
                 Ok(v) => v,
                 Err(e) => {
-                    Self::format_field_error(f, max_field_size, field, &e)?;
+                    writeln!(f, "error on field {field}: {e}")?;
                     continue;
                 }
             };
             let meta = self.data.find_metadata(field);
-            Self::format_field(f, max_field_size, field, &value, meta)?;
+            fields.push(PrettyConfig::new(field, value, meta));
         }
-        Ok(())
+        write!(f, "{}", Table::new(fields).with(Style::sharp()))
     }
 }
 
