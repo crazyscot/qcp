@@ -47,6 +47,15 @@ fn user_config_path() -> Result<PathBuf> {
     Ok(d)
 }
 
+#[cfg(unix)]
+fn system_config_path() -> PathBuf {
+    // /etc/<filename> for now
+    let mut p: PathBuf = PathBuf::new();
+    p.push("/etc");
+    p.push(BASE_CONFIG_FILENAME);
+    p
+}
+
 /// A `[https://docs.rs/figment/latest/figment/trait.Provider.html](figment::Provider)` that holds
 /// our set of fixed system default options
 #[derive(Default)]
@@ -93,6 +102,15 @@ fn add_user_config(f: Figment) -> Figment {
     f.merge(Toml::file(path.as_path()))
 }
 
+fn add_system_config(f: Figment) -> Figment {
+    let path = system_config_path();
+    if !path.exists() {
+        trace!("system configuration file {path:?} not present");
+        return f;
+    }
+    f.merge(Toml::file(path.as_path()))
+}
+
 impl Default for Manager {
     /// Initialises this structure fully-empty (for new(), or testing)
     fn default() -> Self {
@@ -107,7 +125,7 @@ impl Manager {
     #[must_use]
     pub fn new() -> Self {
         let mut data = Figment::new().merge(SystemDefault::default());
-        // TODO: systemwide config file ?
+        data = add_system_config(data);
 
         // N.B. This may leave data in a fused-error state, if a data file isn't parseable.
         data = add_user_config(data);
@@ -121,7 +139,7 @@ impl Manager {
     ///
     /// This is a function of platform and the current user id
     pub fn config_files() -> Vec<String> {
-        let inputs = vec![user_config_path()];
+        let inputs = vec![Ok(system_config_path()), user_config_path()];
 
         inputs
             .into_iter()
@@ -273,17 +291,9 @@ mod test {
     use serde::Deserialize;
     use tempfile::TempDir;
 
-    use crate::{
-        config::manager::user_config_path,
-        transport::{BandwidthParams, BandwidthParams_Optional},
-    };
+    use crate::transport::{BandwidthParams, BandwidthParams_Optional};
 
     use super::{Configuration, Manager};
-
-    #[test]
-    fn show_user_config_path() {
-        println!("{:?}", user_config_path().unwrap());
-    }
 
     #[test]
     fn defaults() {
