@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/crazyscot/qcp/compare/v0.1.2...v0.1.3)
+
+### 🐛 Bug Fixes
+
+- *(deps)* Bump rustls from 0.23.16 to 0.23.18 ([#15](https://github.com/crazyscot/qcp/pull/15)) - ([e333abc](https://github.com/crazyscot/qcp/commit/e333abc230528f2172cc2bf9605c5a5b2357d9fc))
+
+### 📚 Documentation
+
+- Add note about build prerequisite - ([6b176c9](https://github.com/crazyscot/qcp/commit/6b176c990d7b29d2dc5af623e3f430c2ee1bdc85))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(build)* Fix autopublish of Debian packages - ([74b3ea6](https://github.com/crazyscot/qcp/commit/74b3ea6a7be2da3093d4a75a1e92b29946d203ad))
+
+
 ## [0.1.2](https://github.com/crazyscot/qcp/compare/v0.1.1...v0.1.2)
 
 ### 📚 Documentation
