@@ -89,7 +89,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     } else {
         let job_spec = crate::client::CopyJobSpec::try_from(&args)?;
         client_main(
-            args.client,
+            config.client,
             config.bandwidth,
             config.quic,
             progress.unwrap(),

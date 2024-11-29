@@ -58,7 +58,7 @@ pub(crate) struct CliArgs {
 
     // CLIENT-ONLY OPTIONS =================================================================
     #[command(flatten)]
-    pub client: crate::client::Options,
+    pub client: crate::client::Options_Optional,
 
     // NETWORK OPTIONS =====================================================================
     #[command(flatten)]
@@ -105,11 +105,13 @@ impl CliArgs {
 }
 
 impl From<CliArgs> for Manager {
+    /// Merge options from the CLI into the structure.
+    /// Any new option packs (_Optional structs) need to be added here.
     fn from(value: CliArgs) -> Self {
         let mut mgr = Manager::new();
         mgr.merge_provider(value.bandwidth);
         mgr.merge_provider(value.quic);
-        // TODO add other structs here once optionalified
+        mgr.merge_provider(value.client);
         mgr
     }
 }

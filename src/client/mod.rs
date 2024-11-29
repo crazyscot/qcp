@@ -1,6 +1,7 @@
 //! client-side (_initiator_) main loop and supporting structures
 
 mod args;
+pub(crate) use args::Options_Optional;
 pub use args::{Behaviours, Options};
 
 mod control;

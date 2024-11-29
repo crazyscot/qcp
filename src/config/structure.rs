@@ -15,7 +15,7 @@ use derive_deftly::Deftly;
 #[derive(Default, Deftly)]
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
-#[derive(Debug, Copy, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Configuration {
     /// Describes the bandwidth available to the system (or, at least, that we wish qcp to use)
     #[serde(flatten)]
@@ -23,6 +23,9 @@ pub struct Configuration {
     /// Parameters affecting the QUIC endpoint
     #[serde(flatten)]
     pub quic: QuicParams,
+    /// Configurable options specific to client side
+    #[serde(flatten)]
+    pub client: crate::client::Options,
 }
 
 #[cfg(test)]

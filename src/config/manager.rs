@@ -470,6 +470,6 @@ mod test {
         let mut mgr = Manager::without_files();
         mgr.merge_toml_file(path);
         let result = mgr.get::<Test>().unwrap();
-        assert_eq!(result.ii, vec![1,2,3,4,6]);
+        assert_eq!(result.ii, vec![1, 2, 3, 4, 6]);
     }
 }
