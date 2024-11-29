@@ -3,7 +3,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{transport::BandwidthParams, util::derive_deftly_template_Optionalify};
+use crate::{
+    transport::{BandwidthParams, QuicParams},
+    util::derive_deftly_template_Optionalify,
+};
 use derive_deftly::Deftly;
 
 /// The top-level configuration/options structure for the QCP client side.
@@ -17,6 +20,9 @@ pub struct Configuration {
     /// Describes the bandwidth available to the system (or, at least, that we wish qcp to use)
     #[serde(flatten)]
     pub bandwidth: BandwidthParams,
+    /// Parameters affecting the QUIC endpoint
+    #[serde(flatten)]
+    pub quic: QuicParams,
 }
 
 #[cfg(test)]

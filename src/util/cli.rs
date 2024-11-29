@@ -1,10 +1,11 @@
 // CLI argument
 // (c) 2024 Ross Younger
 
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
 /// Represents a number or a contiguous range of positive integers
-#[derive(Debug, Clone, Copy)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PortRange {
     /// First number in the range
     pub begin: u16,
