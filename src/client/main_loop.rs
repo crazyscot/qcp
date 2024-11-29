@@ -39,22 +39,24 @@ pub async fn client_main(
     bandwidth: BandwidthParams,
     quic: QuicParams,
     display: MultiProgress,
+    job_spec: CopyJobSpec,
 ) -> anyhow::Result<bool> {
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
     let _guard = trace_span!("CLIENT").entered();
-    let job_spec = CopyJobSpec::try_from(&options)?;
     let mut timers = StopwatchChain::new_running("setup");
 
     // Prep --------------------------
     let credentials = Credentials::generate()?;
-    let server_address = lookup_host_by_family(options.remote_host()?, options.address_family())?;
+    let remote_host = job_spec.remote_host();
+    let remote_address = lookup_host_by_family(remote_host, options.address_family())?;
 
     // Control channel ---------------
     timers.next("control channel");
     let (mut control, server_message) = Channel::transact(
         &credentials,
-        server_address,
+        remote_host,
+        remote_address.into(),
         &display,
         &options,
         bandwidth,
@@ -63,7 +65,7 @@ pub async fn client_main(
     .await?;
 
     // Data channel ------------------
-    let server_address_port = match server_address {
+    let server_address_port = match remote_address {
         std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, server_message.port).into(),
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };

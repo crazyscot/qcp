@@ -83,11 +83,13 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
             .map(|()| ExitCode::SUCCESS)
             .inspect_err(|e| tracing::error!("{e}"))
     } else {
+        let job_spec = crate::client::CopyJobSpec::try_from(&args)?;
         client_main(
             args.client,
             config.bandwidth,
             config.quic,
             progress.unwrap(),
+            job_spec,
         )
         .await
         .inspect_err(|e| tracing::error!("{e}"))

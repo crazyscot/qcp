@@ -1,7 +1,7 @@
 //! Control channel management for the qcp client
 // (c) 2024 Ross Younger
 
-use std::{net::IpAddr, process::Stdio, time::Duration};
+use std::{process::Stdio, time::Duration};
 
 use anyhow::{anyhow, Context as _, Result};
 use indicatif::MultiProgress;
@@ -37,14 +37,15 @@ impl Channel {
     /// Opens the control channel, checks the banner, sends the Client Message, reads the Server Message.
     pub async fn transact(
         credentials: &Credentials,
-        server_address: IpAddr,
+        remote_host: &str,
+        connection_type: ConnectionType,
         display: &MultiProgress,
         client: &Options,
         bandwidth: BandwidthParams,
         quic: QuicParams,
     ) -> Result<(Channel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(display, client, bandwidth, quic)?;
+        let mut new1 = Self::launch(display, client, bandwidth, quic, remote_host)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -52,7 +53,7 @@ impl Channel {
             .stdin
             .as_mut()
             .ok_or(anyhow!("could not access process stdin (can't happen?)"))?;
-        ClientMessage::write(&mut pipe, &credentials.certificate, server_address.into())
+        ClientMessage::write(&mut pipe, &credentials.certificate, connection_type)
             .await
             .with_context(|| "writing client message")?;
 
@@ -81,6 +82,7 @@ impl Channel {
         client: &Options,
         bandwidth: BandwidthParams,
         quic: QuicParams,
+        remote_host: &str,
     ) -> Result<Self> {
         let mut server = tokio::process::Command::new(&client.ssh);
         let _ = server.kill_on_drop(true);
@@ -91,7 +93,7 @@ impl Channel {
         };
         let _ = server.args(&client.ssh_opt);
         let _ = server.args([
-            client.remote_user_host()?,
+            remote_host,
             "qcp",
             "--server",
             // Remote receive bandwidth = our transmit bandwidth

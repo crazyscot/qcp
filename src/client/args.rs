@@ -5,8 +5,6 @@ use clap::Parser;
 
 use crate::{protocol::control::ConnectionType, util::PortRange};
 
-use super::job::FileSpec;
-
 /// Options specific to qcp client mode
 #[derive(Debug, Parser, Clone)]
 #[allow(clippy::struct_excessive_bools)]
@@ -64,29 +62,6 @@ pub struct Options {
     /// Prints timing profile data after completion
     #[arg(long, action, help_heading("Debug"))]
     pub profile: bool,
-
-    // POSITIONAL ARGUMENTS ================================================================
-    /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
-    ///
-    /// Exactly one of source and destination must be remote.
-    #[arg(
-        conflicts_with_all(crate::cli::MODE_OPTIONS),
-        required = true,
-        value_name = "SOURCE"
-    )]
-    pub source: Option<FileSpec>,
-
-    /// Destination. This may be a file or directory. It may be local or remote.
-    ///
-    /// If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there.
-    ///
-    /// Exactly one of source and destination must be remote.
-    #[arg(
-        conflicts_with_all(crate::cli::MODE_OPTIONS),
-        required = true,
-        value_name = "DESTINATION"
-    )]
-    pub destination: Option<FileSpec>,
 }
 
 impl Options {
@@ -98,25 +73,5 @@ impl Options {
         } else {
             None
         }
-    }
-
-    pub(crate) fn remote_user_host(&self) -> anyhow::Result<&str> {
-        let src = self.source.as_ref().ok_or(anyhow::anyhow!(
-            "both source and destination must be specified"
-        ))?;
-        let dest = self.destination.as_ref().ok_or(anyhow::anyhow!(
-            "both source and destination must be specified"
-        ))?;
-        Ok(src
-            .host
-            .as_ref()
-            .unwrap_or_else(|| dest.host.as_ref().unwrap()))
-    }
-
-    pub(crate) fn remote_host(&self) -> anyhow::Result<&str> {
-        let user_host = self.remote_user_host()?;
-        // It might be user@host, or it might be just the hostname or IP.
-        let (_, host) = user_host.split_once('@').unwrap_or(("", user_host));
-        Ok(host)
     }
 }
