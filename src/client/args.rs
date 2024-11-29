@@ -2,11 +2,20 @@
 // (c) 2024 Ross Younger
 
 use clap::Parser;
+use derive_deftly::Deftly;
+use serde::{Deserialize, Serialize};
 
-use crate::{protocol::control::ConnectionType, util::PortRange};
+use crate::{
+    protocol::control::ConnectionType,
+    util::{derive_deftly_template_Optionalify, PortRange},
+};
 
 /// Configurable options specific to qcp client mode
-#[derive(Debug, Parser, Clone)]
+#[derive(Deftly)]
+#[derive_deftly(Optionalify)]
+#[deftly(visibility = "pub(crate)")]
+#[derive(Clone, Debug, PartialEq, Eq, Parser, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Options {
     /// Forces IPv4 connection [default: autodetect]
     #[arg(short = '4', long, action, help_heading("Connection"))]
@@ -21,8 +30,8 @@ pub struct Options {
     )]
     pub ipv6: bool,
 
-    /// Specifies the ssh client program to use
-    #[arg(long, default_value("ssh"), help_heading("Connection"))]
+    /// Specifies the ssh client program to use [default: ssh]
+    #[arg(long, help_heading("Connection"))]
     pub ssh: String,
 
     /// Provides an additional option or argument to pass to the ssh client.
@@ -43,6 +52,18 @@ pub struct Options {
     /// This can be useful when there is a firewall between the endpoints.
     #[arg(short = 'P', long, value_name("M-N"), help_heading("Connection"))]
     pub remote_port: Option<PortRange>,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            ipv4: false,
+            ipv6: false,
+            ssh: "ssh".into(),
+            ssh_opt: vec![],
+            remote_port: None,
+        }
+    }
 }
 
 impl Options {

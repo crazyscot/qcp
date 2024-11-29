@@ -6,7 +6,7 @@ use std::str::FromStr;
 use crate::transport::ThroughputMode;
 
 /// A file source or destination specified by the user
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileSpec {
     /// The remote host for the file.
     ///
