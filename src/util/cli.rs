@@ -1,11 +1,14 @@
 // CLI argument
 // (c) 2024 Ross Younger
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{fmt::Display, str::FromStr};
 
+use super::serde::IntOrString;
+
 /// Represents a number or a contiguous range of positive integers
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(from = "IntOrString<PortRange>", into = "String")]
 pub struct PortRange {
     /// First number in the range
     pub begin: u16,
@@ -21,6 +24,12 @@ impl Display for PortRange {
         } else {
             f.write_fmt(format_args!("{}-{}", self.begin, self.end))
         }
+    }
+}
+
+impl From<PortRange> for String {
+    fn from(value: PortRange) -> Self {
+        value.to_string()
     }
 }
 
@@ -48,6 +57,23 @@ impl FromStr for PortRange {
         }
         // else failed to parse
         anyhow::bail!("failed to parse range");
+    }
+}
+
+impl From<u64> for PortRange {
+    fn from(value: u64) -> Self {
+        #[allow(clippy::cast_possible_truncation)]
+        let v = value as u16;
+        PortRange { begin: v, end: v }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PortRange {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(IntOrString(std::marker::PhantomData))
     }
 }
 

@@ -56,12 +56,16 @@ impl From<u64> for HumanU64 {
     }
 }
 
-// This is a Visitor that forwards string types to T's `FromStr` impl and
-// forwards int types to T's `From<u64>` impl. The `PhantomData` is to
-// keep the compiler from complaining about T being an unused generic type
-// parameter. We need T in order to know the Value type for the Visitor
-// impl.
-struct IntOrString<T>(PhantomData<fn() -> T>);
+/// Deserialization helper for types which might reasonably be expressed as an
+/// integer or a string.
+///
+/// This is a Visitor that forwards string types to T's `FromStr` impl and
+/// forwards int types to T's `From<u64>` or `From<i64>` impls. The `PhantomData` is to
+/// keep the compiler from complaining about T being an unused generic type
+/// parameter. We need T in order to know the Value type for the Visitor
+/// impl.
+#[allow(missing_debug_implementations)]
+pub struct IntOrString<T>(pub PhantomData<fn() -> T>);
 
 impl<'de, T> Visitor<'de> for IntOrString<T>
 where

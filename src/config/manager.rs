@@ -281,7 +281,10 @@ mod test {
     use serde::Deserialize;
     use tempfile::TempDir;
 
-    use crate::transport::{BandwidthParams, BandwidthParams_Optional};
+    use crate::{
+        transport::{BandwidthParams, BandwidthParams_Optional},
+        util::PortRange,
+    };
 
     use super::{Configuration, Manager};
 
@@ -397,5 +400,47 @@ mod test {
         // But the config as a whole is not broken and other things can be extracted:
         let other_struct = mgr.get::<Test>().unwrap();
         assert_eq!(other_struct.magic_, 42);
+    }
+
+    #[test]
+    fn int_or_string() {
+        #[derive(Deserialize)]
+        struct Test {
+            t1: PortRange,
+            t2: PortRange,
+            t3: PortRange,
+        }
+        let (path, _tempdir) = make_tempfile(
+            r#"
+            t1 = 1234
+            t2 = "2345"
+            t3 = "123-456"
+        "#,
+            "test.toml",
+        );
+        let mut mgr = Manager::without_files();
+        mgr.merge_toml_file(path);
+        let res = mgr.get::<Test>().unwrap();
+        assert_eq!(
+            res.t1,
+            PortRange {
+                begin: 1234,
+                end: 1234
+            }
+        );
+        assert_eq!(
+            res.t2,
+            PortRange {
+                begin: 2345,
+                end: 2345
+            }
+        );
+        assert_eq!(
+            res.t3,
+            PortRange {
+                begin: 123,
+                end: 456
+            }
+        );
     }
 }
