@@ -207,9 +207,9 @@ struct PrettyConfig {
 }
 
 impl PrettyConfig {
-    fn new(field: &str, value: Value, meta: Option<&Metadata>) -> Self {
-        let value = match value {
-            Value::String(_tag, s) => s,
+    fn render_value(value: &Value) -> String {
+        match value {
+            Value::String(_tag, s) => s.to_string(),
             Value::Char(_tag, c) => c.to_string(),
             Value::Bool(_tag, b) => b.to_string(),
             Value::Num(_tag, num) => {
@@ -224,11 +224,21 @@ impl PrettyConfig {
                 }
             }
             Value::Empty(_tag, _) => "<empty>".into(),
-            // we don't currently support dict or array types
-            Value::Dict(_tag, _btree_map) => todo!(),
-            Value::Array(_tag, _vec) => todo!(),
-        };
+            // we don't currently support dict types
+            Value::Dict(_tag, _dict) => todo!(),
+            Value::Array(_tag, vec) => {
+                format!(
+                    "[{}]",
+                    vec.iter()
+                        .map(PrettyConfig::render_value)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )
+            }
+        }
+    }
 
+    fn new(field: &str, value: &Value, meta: Option<&Metadata>) -> Self {
         let source = if let Some(m) = meta {
             m.source
                 .as_ref()
@@ -239,7 +249,7 @@ impl PrettyConfig {
 
         Self {
             field: field.into(),
-            value,
+            value: PrettyConfig::render_value(value),
             source,
         }
     }
@@ -268,7 +278,7 @@ impl Display for Manager {
                 }
             };
             let meta = self.data.find_metadata(field);
-            fields.push(PrettyConfig::new(field, value, meta));
+            fields.push(PrettyConfig::new(field, &value, meta));
         }
         write!(f, "{}", Table::new(fields).with(Style::sharp()))
     }
@@ -442,5 +452,24 @@ mod test {
                 end: 456
             }
         );
+    }
+
+    #[test]
+    fn array_type() {
+        #[derive(Deserialize)]
+        struct Test {
+            ii: Vec<i32>,
+        }
+
+        let (path, _tempdir) = make_tempfile(
+            r"
+            ii = [1,2,3,4,6]
+        ",
+            "test.toml",
+        );
+        let mut mgr = Manager::without_files();
+        mgr.merge_toml_file(path);
+        let result = mgr.get::<Test>().unwrap();
+        assert_eq!(result.ii, vec![1,2,3,4,6]);
     }
 }
