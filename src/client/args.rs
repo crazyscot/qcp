@@ -5,20 +5,9 @@ use clap::Parser;
 
 use crate::{protocol::control::ConnectionType, util::PortRange};
 
-/// Options specific to qcp client mode
+/// Configurable options specific to qcp client mode
 #[derive(Debug, Parser, Clone)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct Options {
-    /// Quiet mode
-    ///
-    /// Switches off progress display and statistics; reports only errors
-    #[arg(short, long, action, conflicts_with("debug"))]
-    pub quiet: bool,
-
-    /// Outputs additional transfer statistics
-    #[arg(short = 's', long, alias("stats"), action, conflicts_with("quiet"))]
-    pub statistics: bool,
-
     /// Forces IPv4 connection [default: autodetect]
     #[arg(short = '4', long, action, help_heading("Connection"))]
     pub ipv4: bool,
@@ -54,14 +43,6 @@ pub struct Options {
     /// This can be useful when there is a firewall between the endpoints.
     #[arg(short = 'P', long, value_name("M-N"), help_heading("Connection"))]
     pub remote_port: Option<PortRange>,
-
-    // CLIENT DEBUG ----------------------------
-    /// Enables detailed debug output from the remote endpoint
-    #[arg(long, action, help_heading("Debug"))]
-    pub remote_debug: bool,
-    /// Prints timing profile data after completion
-    #[arg(long, action, help_heading("Debug"))]
-    pub profile: bool,
 }
 
 impl Options {
@@ -74,4 +55,42 @@ impl Options {
             None
         }
     }
+}
+
+#[derive(Debug, Parser, Clone, Default)]
+#[allow(clippy::struct_excessive_bools)]
+/// Optional behaviours for qcp
+pub struct Behaviours {
+    /// Enable detailed debug output
+    ///
+    /// This has the same effect as setting `RUST_LOG=qcp=debug` in the environment.
+    /// If present, `RUST_LOG` overrides this option.
+    #[arg(short, long, action, help_heading("Debug"))]
+    pub debug: bool,
+
+    /// Log to a file
+    ///
+    /// By default the log receives everything printed to stderr.
+    /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
+    #[arg(short('l'), long, action, help_heading("Debug"), value_name("FILE"))]
+    pub log_file: Option<String>,
+
+    /// Quiet mode
+    ///
+    /// Switches off progress display and statistics; reports only errors
+    #[arg(short, long, action, conflicts_with("debug"))]
+    pub quiet: bool,
+
+    /// Outputs additional transfer statistics
+    #[arg(short = 's', long, alias("stats"), action, conflicts_with("quiet"))]
+    pub statistics: bool,
+
+    /// Enables detailed debug output from the remote endpoint
+    /// (this may interfere with transfer speeds)
+    #[arg(long, action, help_heading("Debug"))]
+    pub remote_debug: bool,
+
+    /// Prints timing profile data after completion
+    #[arg(long, action, help_heading("Debug"))]
+    pub profile: bool,
 }

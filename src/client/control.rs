@@ -17,7 +17,7 @@ use crate::{
     util::Credentials,
 };
 
-use super::args::Options;
+use super::{args::Options, Behaviours};
 
 /// Control channel abstraction
 #[derive(Debug)]
@@ -35,6 +35,7 @@ impl Channel {
     }
 
     /// Opens the control channel, checks the banner, sends the Client Message, reads the Server Message.
+    #[allow(clippy::too_many_arguments)]
     pub async fn transact(
         credentials: &Credentials,
         remote_host: &str,
@@ -43,9 +44,10 @@ impl Channel {
         client: &Options,
         bandwidth: BandwidthParams,
         quic: QuicParams,
+        behaviours: &Behaviours,
     ) -> Result<(Channel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(display, client, bandwidth, quic, remote_host)?;
+        let mut new1 = Self::launch(display, client, bandwidth, quic, remote_host, behaviours)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -83,6 +85,7 @@ impl Channel {
         bandwidth: BandwidthParams,
         quic: QuicParams,
         remote_host: &str,
+        behaviours: &Behaviours,
     ) -> Result<Self> {
         let mut server = tokio::process::Command::new(&client.ssh);
         let _ = server.kill_on_drop(true);
@@ -109,7 +112,7 @@ impl Channel {
             "--timeout",
             &quic.timeout.to_string(),
         ]);
-        if client.remote_debug {
+        if behaviours.remote_debug {
             let _ = server.arg("--debug");
         }
         if let Some(w) = bandwidth.initial_congestion_window {
@@ -122,7 +125,7 @@ impl Channel {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true);
-        if !client.quiet {
+        if !behaviours.quiet {
             let _ = server.stderr(Stdio::piped());
         } // else inherit
         debug!("spawning command: {:?}", server);
@@ -131,7 +134,7 @@ impl Channel {
             .context("Could not launch control connection to remote server")?;
 
         // Whatever the remote outputs, send it to our output in a way that doesn't mess things up.
-        if !client.quiet {
+        if !behaviours.quiet {
             let stderr = process.stderr.take();
             let Some(stderr) = stderr else {
                 anyhow::bail!("could not get stderr of remote process");

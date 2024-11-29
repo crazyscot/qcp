@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use super::{args::CliArgs, styles};
 
 use crate::{
-    client::{client_main, MAX_UPDATE_FPS},
+    client::{client_main, Behaviours, MAX_UPDATE_FPS},
     config::{Configuration, Manager},
     os,
     server::server_main,
@@ -16,10 +16,10 @@ use crate::{
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use tracing::error_span;
 
-fn trace_level(args: &CliArgs) -> &str {
+fn trace_level(args: &Behaviours) -> &str {
     if args.debug {
         "debug"
-    } else if args.client.quiet {
+    } else if args.quiet {
         "error"
     } else {
         "info"
@@ -46,8 +46,12 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     let progress = (!args.server).then(|| {
         MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS))
     });
-    setup_tracing(trace_level(&args), progress.as_ref(), &args.log_file)
-        .inspect_err(|e| eprintln!("{e:?}"))?;
+    setup_tracing(
+        trace_level(&args.behaviours),
+        progress.as_ref(),
+        &args.behaviours.log_file,
+    )
+    .inspect_err(|e| eprintln!("{e:?}"))?;
 
     if args.config_files {
         // do this before attempting to read config, in case it fails
@@ -90,6 +94,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
             config.quic,
             progress.unwrap(),
             job_spec,
+            args.behaviours,
         )
         .await
         .inspect_err(|e| tracing::error!("{e}"))

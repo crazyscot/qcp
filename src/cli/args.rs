@@ -66,20 +66,10 @@ pub(crate) struct CliArgs {
 
     #[command(flatten)]
     pub quic: crate::transport::QuicParams_Optional,
-    // DEBUG OPTIONS =======================================================================
-    /// Enable detailed debug output
-    ///
-    /// This has the same effect as setting `RUST_LOG=qcp=debug` in the environment.
-    /// If present, `RUST_LOG` overrides this option.
-    #[arg(short, long, action, help_heading("Debug"))]
-    pub debug: bool,
-    /// Log to a file
-    ///
-    /// By default the log receives everything printed to stderr.
-    /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
-    #[arg(short('l'), long, action, help_heading("Debug"), value_name("FILE"))]
-    pub log_file: Option<String>,
-    //
+
+    // BEHAVIOURAL OPTIONS =================================================================
+    #[command(flatten)]
+    pub behaviours: crate::client::Behaviours,
 
     // POSITIONAL ARGUMENTS ================================================================
     /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.

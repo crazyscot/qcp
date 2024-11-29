@@ -28,6 +28,7 @@ use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _
 
 use super::args::Options;
 use super::job::CopyJobSpec;
+use super::Behaviours;
 
 const SHOW_TIME: &str = "file transfer";
 
@@ -40,6 +41,7 @@ pub async fn client_main(
     quic: QuicParams,
     display: MultiProgress,
     job_spec: CopyJobSpec,
+    behaviours: Behaviours,
 ) -> anyhow::Result<bool> {
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
@@ -61,6 +63,7 @@ pub async fn client_main(
         &options,
         bandwidth,
         quic,
+        &behaviours,
     )
     .await?;
 
@@ -70,7 +73,7 @@ pub async fn client_main(
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
-    let spinner = if options.quiet {
+    let spinner = if behaviours.quiet {
         ProgressBar::hidden()
     } else {
         display.add(ProgressBar::new_spinner().with_style(spinner_style()?))
@@ -105,7 +108,7 @@ pub async fn client_main(
         display.clone(),
         spinner.clone(),
         bandwidth,
-        options.quiet,
+        behaviours.quiet,
     )
     .await;
     let total_bytes = match result {
@@ -132,7 +135,7 @@ pub async fn client_main(
     timers.stop();
 
     // Post-transfer chatter -----------
-    if !options.quiet {
+    if !behaviours.quiet {
         let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
         crate::util::stats::process_statistics(
             &connection.stats(),
@@ -140,11 +143,11 @@ pub async fn client_main(
             transport_time,
             remote_stats,
             bandwidth,
-            options.statistics,
+            behaviours.statistics,
         );
     }
 
-    if options.profile {
+    if behaviours.profile {
         info!("Elapsed time by phase:\n{timers}");
     }
     display.clear()?;
