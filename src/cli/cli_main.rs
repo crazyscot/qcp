@@ -78,21 +78,26 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
         Ok(ExitCode::SUCCESS)
     } else if args.server {
         let _span = error_span!("REMOTE").entered();
-        server_main(config.bandwidth, args.quic)
+        server_main(config.bandwidth, config.quic)
             .await
             .map(|()| ExitCode::SUCCESS)
             .inspect_err(|e| tracing::error!("{e}"))
     } else {
-        client_main(args.client, config.bandwidth, args.quic, progress.unwrap())
-            .await
-            .inspect_err(|e| tracing::error!("{e}"))
-            .or_else(|_| Ok(false))
-            .map(|success| {
-                if success {
-                    ExitCode::SUCCESS
-                } else {
-                    ExitCode::FAILURE
-                }
-            })
+        client_main(
+            args.client,
+            config.bandwidth,
+            config.quic,
+            progress.unwrap(),
+        )
+        .await
+        .inspect_err(|e| tracing::error!("{e}"))
+        .or_else(|_| Ok(false))
+        .map(|success| {
+            if success {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
+        })
     }
 }

@@ -305,6 +305,7 @@ mod test {
                 rx: 12345.into(),
                 ..Default::default()
             },
+            ..Default::default()
         };
 
         let mut mgr = Manager::without_files();

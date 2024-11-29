@@ -65,7 +65,7 @@ pub(crate) struct CliArgs {
     pub bandwidth: crate::transport::BandwidthParams_Optional,
 
     #[command(flatten)]
-    pub quic: crate::transport::QuicParams,
+    pub quic: crate::transport::QuicParams_Optional,
     // DEBUG OPTIONS =======================================================================
     /// Enable detailed debug output
     ///
@@ -98,6 +98,7 @@ impl From<CliArgs> for Manager {
     fn from(value: CliArgs) -> Self {
         let mut mgr = Manager::new();
         mgr.merge_provider(value.bandwidth);
+        mgr.merge_provider(value.quic);
         // TODO add other structs here once optionalified
         mgr
     }
