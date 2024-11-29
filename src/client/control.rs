@@ -105,7 +105,7 @@ impl Channel {
             "--congestion",
             &bandwidth.congestion.to_string(),
             "--timeout",
-            &quic.timeout.as_secs().to_string(),
+            &quic.timeout.to_string(),
         ]);
         if client.remote_debug {
             let _ = server.arg("--debug");

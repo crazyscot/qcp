@@ -88,7 +88,7 @@ pub async fn client_main(
     debug!("Opening QUIC connection to {server_address_port:?}");
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
     let connection = timeout(
-        quic.timeout,
+        quic.timeout_duration(),
         endpoint.connect(server_address_port, &server_message.name)?,
     )
     .await
@@ -118,11 +118,11 @@ pub async fn client_main(
     let remote_stats = control.read_closedown_report().await?;
 
     let control_fut = control.close();
-    let _ = timeout(quic.timeout, endpoint.wait_idle())
+    let _ = timeout(quic.timeout_duration(), endpoint.wait_idle())
         .await
         .inspect_err(|_| warn!("QUIC shutdown timed out")); // otherwise ignore errors
     trace!("QUIC closed; waiting for control channel");
-    let _ = timeout(quic.timeout, control_fut)
+    let _ = timeout(quic.timeout_duration(), control_fut)
         .await
         .inspect_err(|_| warn!("control channel timed out"));
     // Ignore errors. If the control channel closedown times out, we expect its drop handler will do the Right Thing.

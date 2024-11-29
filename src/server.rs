@@ -79,7 +79,7 @@ pub async fn server_main(
     // but a timeout is useful to give the user a cue that UDP isn't getting there.
     trace!("waiting for QUIC");
     let (stats_tx, mut stats_rx) = oneshot::channel();
-    if let Some(conn) = timeout(quic.timeout, endpoint.accept())
+    if let Some(conn) = timeout(quic.timeout_duration(), endpoint.accept())
         .await
         .with_context(|| "Timed out waiting for QUIC connection")?
     {

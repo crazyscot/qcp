@@ -14,7 +14,7 @@ use quinn::{
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::util::{derive_deftly_template_Optionalify, parse_duration, serde::HumanU64, PortRange};
+use crate::util::{derive_deftly_template_Optionalify, serde::HumanU64, PortRange};
 
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
@@ -35,16 +35,24 @@ pub struct QuicParams {
     ///
     /// This needs to be long enough for your network connection, but short enough to provide
     /// a timely indication that UDP may be blocked.
-    #[arg(short, long, value_name("sec"), value_parser=parse_duration, help_heading("Connection"))]
-    pub timeout: Duration,
+    #[arg(short, long, value_name("sec"), help_heading("Connection"))]
+    pub timeout: u16,
 }
 
 impl Default for QuicParams {
     fn default() -> Self {
         Self {
             port: None,
-            timeout: Duration::from_secs(5),
+            timeout: 5,
         }
+    }
+}
+
+impl QuicParams {
+    /// Converts the `timeout` field into a Duration
+    #[must_use]
+    pub fn timeout_duration(&self) -> Duration {
+        Duration::from_secs(self.timeout.into())
     }
 }
 
