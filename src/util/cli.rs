@@ -4,7 +4,7 @@
 use serde::Serialize;
 use std::{fmt::Display, str::FromStr};
 
-use super::serde::IntOrString;
+use super::humanu64::IntOrString;
 
 /// Represents a number or a contiguous range of positive integers
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]

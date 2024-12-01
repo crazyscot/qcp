@@ -14,7 +14,7 @@ use quinn::{
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::util::{derive_deftly_template_Optionalify, serde::HumanU64, PortRange};
+use crate::util::{derive_deftly_template_Optionalify, humanu64::HumanU64, PortRange};
 
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);

@@ -1,4 +1,4 @@
-//! Serialization helper types
+//! Serialization helper type - u64 parseable by humanize_rs
 // (c) 2024 Ross Younger
 
 use std::{fmt, marker::PhantomData, ops::Deref, str::FromStr};
