@@ -4,8 +4,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    transport::{BandwidthParams, QuicParams},
-    util::derive_deftly_template_Optionalify,
+    transport::{BandwidthParams, BandwidthParams_Optional, QuicParams, QuicParams_Optional},
+    util::{derive_deftly_template_FieldsList, derive_deftly_template_Optionalify, FieldsList},
 };
 use derive_deftly::Deftly;
 
@@ -15,6 +15,7 @@ use derive_deftly::Deftly;
 #[derive(Default, Deftly)]
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
+#[derive_deftly(FieldsList)]
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Configuration {
     /// Describes the bandwidth available to the system (or, at least, that we wish qcp to use)

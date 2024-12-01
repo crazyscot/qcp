@@ -6,6 +6,11 @@
 use derive_deftly::define_derive_deftly;
 use figment::value::{Dict, Value};
 
+/// Introspection trait which provides a list of a struct's fields
+pub(crate) trait FieldsList {
+    fn fields() -> Vec<String>;
+}
+
 /// Helper function for `figment::Provider` implementation
 ///
 /// If the given `arg` is not None, inserts it into `dict` with key `arg_name`.
@@ -111,13 +116,44 @@ define_derive_deftly! {
             Ok(profile_map)
         }
     }
+
+    impl $crate::util::FieldsList for $OPTIONAL_TYPE {
+        fn fields() -> Vec<String> {
+            vec![$(
+                stringify!($fname).into(),
+            )]
+        }
+    }
 }
 
 #[allow(clippy::module_name_repetitions)]
 pub use derive_deftly_template_Optionalify;
 
+define_derive_deftly! {
+    /// A slightly brittle macro that implements FieldsList for Configuration.
+    ///
+    /// Strictly this will apply to any superstruct, provided all that struct's
+    /// members have types named <whatever>_Optional
+    /// and implement FieldsList. (i.e. they derive from Optionalify).
+    export FieldsList for struct, expect items:
+    impl FieldsList for $tdeftype {
+        fn fields() -> Vec<String> {
+            let mut result = Vec::<String>::new();
+            $(
+                result.extend(${paste $ftype _Optional}::fields());
+            )
+            result
+        }
+    }
+}
+
+#[allow(clippy::module_name_repetitions)]
+pub(crate) use derive_deftly_template_FieldsList;
+
 #[cfg(test)]
 mod test {
+    use crate::config::Configuration;
+
     use super::derive_deftly_template_Optionalify;
     use derive_deftly::Deftly;
     use figment::{providers::Serialized, Figment};
@@ -154,5 +190,13 @@ mod test {
             q: Some(123),
         };
         assert_eq!(expected, working);
+    }
+
+    #[test]
+    fn introspect() {
+        use crate::util::FieldsList;
+        let f = Configuration::fields();
+        assert_ne!(f.len(), 0);
+        println!("fields: {f:?}");
     }
 }
