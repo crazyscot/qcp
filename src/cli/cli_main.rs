@@ -82,7 +82,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     };
 
     if args.show_config {
-        println!("{config_manager}");
+        println!("{}", config_manager.displayable_for::<Configuration>(true));
         Ok(ExitCode::SUCCESS)
     } else if args.server {
         let _span = error_span!("REMOTE").entered();

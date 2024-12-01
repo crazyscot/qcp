@@ -41,6 +41,9 @@ pub(crate) fn get() -> clap::builder::Styles {
 pub(crate) fn error() -> console::Style {
     console::Style::new().red()
 }
+pub(crate) fn warning() -> console::Style {
+    console::Style::new().yellow()
+}
 pub(crate) fn info() -> console::Style {
     console::Style::new().cyan()
 }

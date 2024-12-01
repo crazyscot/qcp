@@ -1,6 +1,8 @@
 //! Configuration file wrangling
 // (c) 2024 Ross Younger
 
+use crate::util::FieldsList;
+
 use super::Configuration;
 
 use anyhow::Result;
@@ -11,6 +13,7 @@ use figment::{
 };
 use serde::Deserialize;
 use std::{
+    collections::HashSet,
     fmt::{Debug, Display},
     path::{Path, PathBuf},
 };
@@ -207,6 +210,16 @@ struct PrettyConfig {
 }
 
 impl PrettyConfig {
+    fn render_source(meta: Option<&Metadata>) -> String {
+        if let Some(m) = meta {
+            m.source
+                .as_ref()
+                .map_or_else(|| m.name.to_string(), figment::Source::to_string)
+        } else {
+            String::new()
+        }
+    }
+
     fn render_value(value: &Value) -> String {
         match value {
             Value::String(_tag, s) => s.to_string(),
@@ -239,18 +252,10 @@ impl PrettyConfig {
     }
 
     fn new(field: &str, value: &Value, meta: Option<&Metadata>) -> Self {
-        let source = if let Some(m) = meta {
-            m.source
-                .as_ref()
-                .map_or_else(|| m.name.to_string(), figment::Source::to_string)
-        } else {
-            String::new()
-        };
-
         Self {
             field: field.into(),
             value: PrettyConfig::render_value(value),
-            source,
+            source: PrettyConfig::render_source(meta),
         }
     }
 }
@@ -281,6 +286,79 @@ impl Display for Manager {
             fields.push(PrettyConfig::new(field, &value, meta));
         }
         write!(f, "{}", Table::new(fields).with(Style::sharp()))
+    }
+}
+
+/// Type wrapper to Manager, with options
+pub(crate) struct MetaManager<'a> {
+    /// Data source
+    source: &'a Manager,
+    /// Whether to warn if unused fields are present
+    warn_on_unused: bool,
+    /// The fields we want to output
+    fields: HashSet<String>,
+}
+
+impl Manager {
+    pub(crate) fn displayable_for<'de, T>(&self, warn_on_unused: bool) -> MetaManager<'_>
+    where
+        T: Deserialize<'de> + FieldsList,
+    {
+        let mut fields = HashSet::<String>::new();
+        fields.extend(T::fields());
+        MetaManager {
+            source: self,
+            warn_on_unused,
+            fields,
+        }
+    }
+}
+
+impl Display for MetaManager<'_> {
+    /// Formats the contents of this structure which are relevant to a given output type.
+    ///
+    /// N.B. This function uses CLI styling.
+    #[allow(clippy::missing_panics_doc)]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let warn = crate::cli::styles::warning();
+        let data = match self.source.data.data() {
+            Ok(d) => d,
+            Err(e) => {
+                // This isn't terribly helpful as it doesn't have metadata attached; BUT attempting to get() a struct does.
+                return writeln!(f, "{}", warn.apply_to(format!("error: {e}")));
+            }
+        };
+        // panic is impossible on the Default profile, hence #[allow(clippy::missing_panics_doc)]
+        let data = data.get(&figment::Profile::Default).unwrap();
+
+        let mut output = Vec::<PrettyConfig>::new();
+
+        for field in data.keys() {
+            let meta = self.source.data.find_metadata(field);
+            if self.fields.contains(field) {
+                let value = self.source.data.find_value(field);
+                let value = match value {
+                    Ok(v) => v,
+                    Err(e) => {
+                        writeln!(
+                            f,
+                            "{}",
+                            warn.apply_to(format!("error on field {field}: {e}"))
+                        )?;
+                        continue;
+                    }
+                };
+                output.push(PrettyConfig::new(field, &value, meta));
+            } else if self.warn_on_unused {
+                let source = PrettyConfig::render_source(meta);
+                let _ = writeln!(
+                    f,
+                    "{}",
+                    warn.apply_to(format!("Unrecognised field `{field}` in {source}"))
+                );
+            }
+        }
+        write!(f, "{}", Table::new(output).with(Style::sharp()))
     }
 }
 
