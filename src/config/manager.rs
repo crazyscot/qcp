@@ -472,4 +472,26 @@ mod test {
         let result = mgr.get::<Test>().unwrap();
         assert_eq!(result.ii, vec![1, 2, 3, 4, 6]);
     }
+
+    #[test]
+    fn field_parse_failure() {
+        #[derive(Debug, Deserialize)]
+        struct Test {
+            _p: PortRange,
+        }
+
+        let (path, _tempdir) = make_tempfile(
+            r#"
+            _p = "234-123"
+        "#,
+            "test.toml",
+        );
+        let mut mgr = Manager::without_files();
+        mgr.merge_toml_file(path);
+        let result = mgr.get::<Test>().unwrap_err();
+        println!("{result}");
+        assert!(result
+            .to_string()
+            .contains("invalid port range \"234-123\""));
+    }
 }

@@ -34,7 +34,7 @@ impl From<PortRange> for String {
 }
 
 impl FromStr for PortRange {
-    type Err = anyhow::Error;
+    type Err = figment::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(n) = s.parse::<u16>() {
@@ -49,14 +49,15 @@ impl FromStr for PortRange {
             if aa.is_ok() && bb.is_ok() {
                 let aa = aa.unwrap_or_default();
                 let bb = bb.unwrap_or_default();
-                anyhow::ensure!(aa != 0, "0 is not valid in a port range");
-                anyhow::ensure!(aa <= bb, "invalid range");
-                return Ok(Self { begin: aa, end: bb });
+                if aa != 0 && aa <= bb {
+                    return Ok(Self { begin: aa, end: bb });
+                }
+                // else invalid
             }
             // else failed to parse
         }
         // else failed to parse
-        anyhow::bail!("failed to parse range");
+        Err(figment::error::Kind::Message(format!("invalid port range \"{s}\"")).into())
     }
 }
 
