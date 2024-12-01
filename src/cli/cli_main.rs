@@ -69,9 +69,13 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
                 "{}: Failed to parse configuration",
                 styles::error().apply_to("ERROR")
             );
-            let inf = styles::info();
-            for (i, e) in err.into_iter().enumerate() {
-                println!("{}: {e}", inf.apply_to(i + 1));
+            if err.count() == 1 {
+                println!("{err}");
+            } else {
+                let inf = styles::info();
+                for (i, e) in err.into_iter().enumerate() {
+                    println!("{}: {e}", inf.apply_to(i + 1));
+                }
             }
             return Ok(ExitCode::FAILURE);
         }
