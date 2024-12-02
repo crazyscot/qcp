@@ -47,9 +47,9 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
         MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS))
     });
     setup_tracing(
-        trace_level(&args.parameters),
+        trace_level(&args.client_params),
         progress.as_ref(),
-        &args.parameters.log_file,
+        &args.client_params.log_file,
     )
     .inspect_err(|e| eprintln!("{e:?}"))?;
 
@@ -98,7 +98,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
             config.quic,
             progress.unwrap(),
             job_spec,
-            args.parameters,
+            args.client_params,
         )
         .await
         .inspect_err(|e| tracing::error!("{e}"))

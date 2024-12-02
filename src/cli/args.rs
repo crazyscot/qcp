@@ -58,11 +58,11 @@ pub(crate) struct CliArgs {
 
     // CLIENT-SIDE CONFIGURABLE OPTIONS ====================================================
     #[command(flatten)]
-    pub client: crate::client::ClientConfiguration_Optional,
+    pub client_config: crate::client::ClientConfiguration_Optional,
 
     // NETWORK OPTIONS =====================================================================
     #[command(flatten)]
-    pub bandwidth: crate::transport::BandwidthParams_Optional,
+    pub transport: crate::transport::BandwidthParams_Optional,
 
     #[command(flatten)]
     pub quic: crate::transport::QuicParams_Optional,
@@ -70,7 +70,7 @@ pub(crate) struct CliArgs {
     // CLIENT-SIDE NON-CONFIGURABLE OPTIONS ================================================
     // (including positional arguments!)
     #[command(flatten)]
-    pub parameters: crate::client::Parameters,
+    pub client_params: crate::client::Parameters,
 }
 
 impl CliArgs {
@@ -87,9 +87,9 @@ impl From<&CliArgs> for Manager {
     /// Any new option packs (_Optional structs) need to be added here.
     fn from(value: &CliArgs) -> Self {
         let mut mgr = Manager::new();
-        mgr.merge_provider(value.bandwidth);
+        mgr.merge_provider(value.transport);
         mgr.merge_provider(value.quic);
-        mgr.merge_provider(&value.client);
+        mgr.merge_provider(&value.client_config);
         mgr
     }
 }
@@ -98,6 +98,6 @@ impl TryFrom<&CliArgs> for CopyJobSpec {
     type Error = anyhow::Error;
 
     fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
-        CopyJobSpec::try_from(&args.parameters)
+        CopyJobSpec::try_from(&args.client_params)
     }
 }
