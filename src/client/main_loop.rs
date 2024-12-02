@@ -26,9 +26,8 @@ use tokio::time::Instant;
 use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _, Level};
 
-use super::args::Options;
 use super::job::CopyJobSpec;
-use super::Behaviours;
+use super::{ClientConfiguration, Parameters};
 
 const SHOW_TIME: &str = "file transfer";
 
@@ -36,12 +35,12 @@ const SHOW_TIME: &str = "file transfer";
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 #[allow(clippy::module_name_repetitions)]
 pub async fn client_main(
-    options: Options,
+    options: ClientConfiguration,
     bandwidth: BandwidthParams,
     quic: QuicParams,
     display: MultiProgress,
     job_spec: CopyJobSpec,
-    behaviours: Behaviours,
+    parameters: Parameters,
 ) -> anyhow::Result<bool> {
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
@@ -63,7 +62,7 @@ pub async fn client_main(
         &options,
         bandwidth,
         quic,
-        &behaviours,
+        &parameters,
     )
     .await?;
 
@@ -73,7 +72,7 @@ pub async fn client_main(
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
-    let spinner = if behaviours.quiet {
+    let spinner = if parameters.quiet {
         ProgressBar::hidden()
     } else {
         display.add(ProgressBar::new_spinner().with_style(spinner_style()?))
@@ -108,7 +107,7 @@ pub async fn client_main(
         display.clone(),
         spinner.clone(),
         bandwidth,
-        behaviours.quiet,
+        parameters.quiet,
     )
     .await;
     let total_bytes = match result {
@@ -135,7 +134,7 @@ pub async fn client_main(
     timers.stop();
 
     // Post-transfer chatter -----------
-    if !behaviours.quiet {
+    if !parameters.quiet {
         let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
         crate::util::stats::process_statistics(
             &connection.stats(),
@@ -143,11 +142,11 @@ pub async fn client_main(
             transport_time,
             remote_stats,
             bandwidth,
-            behaviours.statistics,
+            parameters.statistics,
         );
     }
 
-    if behaviours.profile {
+    if parameters.profile {
         info!("Elapsed time by phase:\n{timers}");
     }
     display.clear()?;

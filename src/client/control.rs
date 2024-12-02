@@ -17,7 +17,7 @@ use crate::{
     util::Credentials,
 };
 
-use super::{args::Options, Behaviours};
+use super::{ClientConfiguration, Parameters};
 
 /// Control channel abstraction
 #[derive(Debug)]
@@ -41,13 +41,13 @@ impl Channel {
         remote_host: &str,
         connection_type: ConnectionType,
         display: &MultiProgress,
-        client: &Options,
+        client: &ClientConfiguration,
         bandwidth: BandwidthParams,
         quic: QuicParams,
-        behaviours: &Behaviours,
+        parameters: &Parameters,
     ) -> Result<(Channel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(display, client, bandwidth, quic, remote_host, behaviours)?;
+        let mut new1 = Self::launch(display, client, bandwidth, quic, remote_host, parameters)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -81,11 +81,11 @@ impl Channel {
     /// This is effectively a constructor. At present, it launches a subprocess.
     fn launch(
         display: &MultiProgress,
-        client: &Options,
+        client: &ClientConfiguration,
         bandwidth: BandwidthParams,
         quic: QuicParams,
         remote_host: &str,
-        behaviours: &Behaviours,
+        parameters: &Parameters,
     ) -> Result<Self> {
         let mut server = tokio::process::Command::new(&client.ssh);
         let _ = server.kill_on_drop(true);
@@ -112,7 +112,7 @@ impl Channel {
             "--timeout",
             &quic.timeout.to_string(),
         ]);
-        if behaviours.remote_debug {
+        if parameters.remote_debug {
             let _ = server.arg("--debug");
         }
         if let Some(w) = bandwidth.initial_congestion_window {
@@ -125,7 +125,7 @@ impl Channel {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true);
-        if !behaviours.quiet {
+        if !parameters.quiet {
             let _ = server.stderr(Stdio::piped());
         } // else inherit
         debug!("spawning command: {:?}", server);
@@ -134,7 +134,7 @@ impl Channel {
             .context("Could not launch control connection to remote server")?;
 
         // Whatever the remote outputs, send it to our output in a way that doesn't mess things up.
-        if !behaviours.quiet {
+        if !parameters.quiet {
             let stderr = process.stderr.take();
             let Some(stderr) = stderr else {
                 anyhow::bail!("could not get stderr of remote process");

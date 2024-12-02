@@ -56,9 +56,9 @@ pub(crate) struct CliArgs {
     #[arg(long, action, help_heading("Network tuning"), display_order(50))]
     pub help_buffers: bool,
 
-    // CLIENT-ONLY OPTIONS =================================================================
+    // CLIENT-SIDE CONFIGURABLE OPTIONS ====================================================
     #[command(flatten)]
-    pub client: crate::client::Options_Optional,
+    pub client: crate::client::ClientConfiguration_Optional,
 
     // NETWORK OPTIONS =====================================================================
     #[command(flatten)]
@@ -67,9 +67,9 @@ pub(crate) struct CliArgs {
     #[command(flatten)]
     pub quic: crate::transport::QuicParams_Optional,
 
-    // BEHAVIOURAL OPTIONS =================================================================
+    // CLIENT-SIDE NON-CONFIGURABLE OPTIONS ================================================
     #[command(flatten)]
-    pub behaviours: crate::client::Behaviours,
+    pub parameters: crate::client::Parameters,
 
     // POSITIONAL ARGUMENTS ================================================================
     /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.

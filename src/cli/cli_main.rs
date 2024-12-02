@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use super::{args::CliArgs, styles};
 
 use crate::{
-    client::{client_main, Behaviours, MAX_UPDATE_FPS},
+    client::{client_main, Parameters, MAX_UPDATE_FPS},
     config::{Configuration, Manager},
     os,
     server::server_main,
@@ -16,7 +16,7 @@ use crate::{
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use tracing::error_span;
 
-fn trace_level(args: &Behaviours) -> &str {
+fn trace_level(args: &Parameters) -> &str {
     if args.debug {
         "debug"
     } else if args.quiet {
@@ -47,9 +47,9 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
         MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS))
     });
     setup_tracing(
-        trace_level(&args.behaviours),
+        trace_level(&args.parameters),
         progress.as_ref(),
-        &args.behaviours.log_file,
+        &args.parameters.log_file,
     )
     .inspect_err(|e| eprintln!("{e:?}"))?;
 
@@ -98,7 +98,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
             config.quic,
             progress.unwrap(),
             job_spec,
-            args.behaviours,
+            args.parameters,
         )
         .await
         .inspect_err(|e| tracing::error!("{e}"))

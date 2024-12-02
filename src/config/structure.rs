@@ -26,7 +26,7 @@ pub struct Configuration {
     pub quic: QuicParams,
     /// Configurable options specific to client side
     #[serde(flatten)]
-    pub client: crate::client::Options,
+    pub client: crate::client::ClientConfiguration,
 }
 
 #[cfg(test)]

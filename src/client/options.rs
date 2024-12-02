@@ -10,13 +10,13 @@ use crate::{
     util::{derive_deftly_template_Optionalify, PortRange},
 };
 
-/// Configurable options specific to qcp client mode
+/// Configurable options which only make sense in client mode
 #[derive(Deftly)]
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
 #[derive(Clone, Debug, PartialEq, Eq, Parser, Serialize, Deserialize)]
 #[allow(clippy::struct_excessive_bools)]
-pub struct Options {
+pub struct ClientConfiguration {
     /// Forces IPv4 connection [default: autodetect]
     #[arg(short = '4', long, action, help_heading("Connection"))]
     pub ipv4: bool,
@@ -54,7 +54,7 @@ pub struct Options {
     pub remote_port: Option<PortRange>,
 }
 
-impl Default for Options {
+impl Default for ClientConfiguration {
     fn default() -> Self {
         Self {
             ipv4: false,
@@ -66,7 +66,7 @@ impl Default for Options {
     }
 }
 
-impl Options {
+impl ClientConfiguration {
     pub(crate) fn address_family(&self) -> Option<ConnectionType> {
         if self.ipv4 {
             Some(ConnectionType::Ipv4)
@@ -80,8 +80,8 @@ impl Options {
 
 #[derive(Debug, Parser, Clone, Default)]
 #[allow(clippy::struct_excessive_bools)]
-/// Optional behaviours for qcp
-pub struct Behaviours {
+/// Non-configurable client-side parameters
+pub struct Parameters {
     /// Enable detailed debug output
     ///
     /// This has the same effect as setting `RUST_LOG=qcp=debug` in the environment.
