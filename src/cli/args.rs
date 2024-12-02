@@ -104,14 +104,14 @@ impl CliArgs {
     }
 }
 
-impl From<CliArgs> for Manager {
+impl From<&CliArgs> for Manager {
     /// Merge options from the CLI into the structure.
     /// Any new option packs (_Optional structs) need to be added here.
-    fn from(value: CliArgs) -> Self {
+    fn from(value: &CliArgs) -> Self {
         let mut mgr = Manager::new();
         mgr.merge_provider(value.bandwidth);
         mgr.merge_provider(value.quic);
-        mgr.merge_provider(value.client);
+        mgr.merge_provider(&value.client);
         mgr
     }
 }

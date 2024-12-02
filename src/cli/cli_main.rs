@@ -60,7 +60,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     }
 
     // Now fold the arguments in with the CLI config (which may fail)
-    let config_manager = Manager::from(args.clone()); // TODO declone
+    let config_manager = Manager::from(&args);
 
     let config = match config_manager.get::<Configuration>() {
         Ok(c) => c,
