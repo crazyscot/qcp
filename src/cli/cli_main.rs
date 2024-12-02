@@ -10,7 +10,7 @@ use crate::{
     config::{Configuration, Manager},
     os,
     server::server_main,
-    transport::BandwidthParams as TransportConfig,
+    transport::Configuration as TransportConfig,
     util::setup_tracing,
 };
 use indicatif::{MultiProgress, ProgressDrawTarget};

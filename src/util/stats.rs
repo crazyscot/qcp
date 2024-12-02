@@ -7,7 +7,7 @@ use quinn::ConnectionStats;
 use std::{cmp, fmt::Display, time::Duration};
 use tracing::{info, warn};
 
-use crate::{protocol::control::ClosedownReport, transport::BandwidthParams as TransportConfig};
+use crate::{protocol::control::ClosedownReport, transport::Configuration as TransportConfig};
 
 /// Human friendly output helper
 #[derive(Debug, Clone, Copy)]

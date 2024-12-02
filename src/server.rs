@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, Status};
 use crate::protocol::{self, StreamPair};
-use crate::transport::BandwidthParams as TransportConfig;
+use crate::transport::Configuration as TransportConfig;
 use crate::util::socket::bind_range_for_family;
 use crate::util::Credentials;
 use crate::util::PortRange;

@@ -6,7 +6,7 @@ use crate::client::progress::spinner_style;
 use crate::protocol::session::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
-use crate::transport::{BandwidthParams as TransportConfig, QuicParams, ThroughputMode};
+use crate::transport::{Configuration as TransportConfig, QuicParams, ThroughputMode};
 use crate::util::{
     self, lookup_host_by_family, time::Stopwatch, time::StopwatchChain, Credentials, PortRange,
 };

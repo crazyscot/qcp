@@ -13,7 +13,7 @@ use tracing::{debug, trace, warn};
 
 use crate::{
     protocol::control::{ClientMessage, ClosedownReport, ConnectionType, ServerMessage, BANNER},
-    transport::{BandwidthParams as TransportConfig, QuicParams},
+    transport::{Configuration as TransportConfig, QuicParams},
     util::Credentials,
 };
 

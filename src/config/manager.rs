@@ -371,8 +371,7 @@ mod test {
 
     use crate::{
         transport::{
-            BandwidthParams as TransportConfig,
-            BandwidthParams_Optional as TransportConfig_Optional,
+            Configuration as TransportConfig, Configuration_Optional as TransportConfig_Optional,
         },
         util::PortRange,
     };

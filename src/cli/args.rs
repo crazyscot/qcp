@@ -62,7 +62,7 @@ pub(crate) struct CliArgs {
 
     // NETWORK OPTIONS =====================================================================
     #[command(flatten)]
-    pub transport: crate::transport::BandwidthParams_Optional,
+    pub transport: crate::transport::Configuration_Optional,
 
     #[command(flatten)]
     pub quic: crate::transport::QuicParams_Optional,

@@ -100,7 +100,7 @@ pub enum CongestionControllerType {
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Parser, Serialize, Deserialize)]
-pub struct BandwidthParams {
+pub struct Configuration {
     /// The maximum network bandwidth we expect receiving data FROM the remote system.
     /// [default: 12500k]
     ///
@@ -149,7 +149,7 @@ pub struct BandwidthParams {
     pub initial_congestion_window: Option<u64>,
 }
 
-impl Default for BandwidthParams {
+impl Default for Configuration {
     fn default() -> Self {
         Self {
             rx: 12_500_000.into(),
@@ -161,7 +161,7 @@ impl Default for BandwidthParams {
     }
 }
 
-impl Display for BandwidthParams {
+impl Display for Configuration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let iwind = match self.initial_congestion_window {
             None => "<default>".to_string(),
@@ -181,7 +181,7 @@ impl Display for BandwidthParams {
     }
 }
 
-impl BandwidthParams {
+impl Configuration {
     /// Computes the theoretical bandwidth-delay product for outbound data
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
@@ -243,10 +243,7 @@ impl BandwidthParams {
 }
 
 /// Creates a `quinn::TransportConfig` for the endpoint setup
-pub fn create_config(
-    params: BandwidthParams,
-    mode: ThroughputMode,
-) -> Result<Arc<TransportConfig>> {
+pub fn create_config(params: Configuration, mode: ThroughputMode) -> Result<Arc<TransportConfig>> {
     let mut config = TransportConfig::default();
     let _ = config
         .max_concurrent_bidi_streams(1u8.into())
@@ -258,7 +255,7 @@ pub fn create_config(
         ThroughputMode::Tx | ThroughputMode::Both => {
             let _ = config
                 .send_window(params.send_window())
-                .datagram_send_buffer_size(BandwidthParams::send_buffer().try_into()?);
+                .datagram_send_buffer_size(Configuration::send_buffer().try_into()?);
         }
         ThroughputMode::Rx => (),
     }
@@ -268,7 +265,7 @@ pub fn create_config(
         ThroughputMode::Rx | ThroughputMode::Both => {
             let _ = config
                 .stream_receive_window(params.recv_window().try_into()?)
-                .datagram_receive_buffer_size(Some(BandwidthParams::recv_buffer() as usize));
+                .datagram_receive_buffer_size(Some(Configuration::recv_buffer() as usize));
         }
         ThroughputMode::Tx => (),
     }
@@ -294,9 +291,9 @@ pub fn create_config(
     debug!(
         "Buffer configuration: send window {sw}, buffer {sb}; recv window {rw}, buffer {rb}",
         sw = params.send_window().human_count_bytes(),
-        sb = BandwidthParams::send_buffer().human_count_bytes(),
+        sb = Configuration::send_buffer().human_count_bytes(),
         rw = params.recv_window().human_count_bytes(),
-        rb = BandwidthParams::recv_buffer().human_count_bytes()
+        rb = Configuration::recv_buffer().human_count_bytes()
     );
 
     Ok(config.into())
