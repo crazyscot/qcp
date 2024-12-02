@@ -10,6 +10,8 @@ use crate::{
     util::{derive_deftly_template_Optionalify, PortRange},
 };
 
+use super::FileSpec;
+
 /// Configurable options which only make sense in client mode
 #[derive(Deftly)]
 #[derive_deftly(Optionalify)]
@@ -114,4 +116,54 @@ pub struct Parameters {
     /// Prints timing profile data after completion
     #[arg(long, action, help_heading("Debug"))]
     pub profile: bool,
+
+    // JOB SPECIFICAION ====================================================================
+    // (POSITIONAL ARGUMENTS!)
+    /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
+    ///
+    /// Exactly one of source and destination must be remote.
+    #[arg(
+        conflicts_with_all(crate::cli::MODE_OPTIONS),
+        required = true,
+        value_name = "SOURCE"
+    )]
+    pub source: Option<FileSpec>,
+
+    /// Destination. This may be a file or directory. It may be local or remote.
+    ///
+    /// If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there.
+    ///
+    /// Exactly one of source and destination must be remote.
+    #[arg(
+        conflicts_with_all(crate::cli::MODE_OPTIONS),
+        required = true,
+        value_name = "DESTINATION"
+    )]
+    pub destination: Option<FileSpec>,
+}
+
+impl TryFrom<&Parameters> for crate::client::CopyJobSpec {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &Parameters) -> Result<Self, Self::Error> {
+        let source = args
+            .source
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
+            .clone();
+        let destination = args
+            .destination
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
+            .clone();
+
+        if !(source.host.is_none() ^ destination.host.is_none()) {
+            anyhow::bail!("One file argument must be remote");
+        }
+
+        Ok(Self {
+            source,
+            destination,
+        })
+    }
 }
