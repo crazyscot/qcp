@@ -6,17 +6,17 @@ use std::process::ExitCode;
 use super::{args::CliArgs, styles};
 
 use crate::{
-    client::{client_main, Parameters, MAX_UPDATE_FPS},
+    client::{client_main, Parameters as ClientParameters, MAX_UPDATE_FPS},
     config::{Configuration, Manager},
     os,
     server::server_main,
-    transport::BandwidthParams,
+    transport::BandwidthParams as TransportConfig,
     util::setup_tracing,
 };
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use tracing::error_span;
 
-fn trace_level(args: &Parameters) -> &str {
+fn trace_level(args: &ClientParameters) -> &str {
     if args.debug {
         "debug"
     } else if args.quiet {
@@ -37,8 +37,8 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     let args = CliArgs::custom_parse();
     if args.help_buffers {
         os::print_udp_buffer_size_help_message(
-            BandwidthParams::recv_buffer(),
-            BandwidthParams::send_buffer(),
+            TransportConfig::recv_buffer(),
+            TransportConfig::send_buffer(),
         );
         return Ok(ExitCode::SUCCESS);
     }

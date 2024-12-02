@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, Status};
 use crate::protocol::{self, StreamPair};
-use crate::transport::BandwidthParams;
+use crate::transport::BandwidthParams as TransportConfig;
 use crate::util::socket::bind_range_for_family;
 use crate::util::Credentials;
 use crate::util::PortRange;
@@ -28,7 +28,7 @@ use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 /// Server event loop
 #[allow(clippy::module_name_repetitions)]
 pub async fn server_main(
-    bandwidth: crate::transport::BandwidthParams,
+    bandwidth: TransportConfig,
     quic: crate::transport::QuicParams,
 ) -> anyhow::Result<()> {
     let mut stdin = tokio::io::stdin();
@@ -54,7 +54,7 @@ pub async fn server_main(
     );
 
     let bandwidth_info = format!("{bandwidth:?}");
-    let file_buffer_size = usize::try_from(BandwidthParams::send_buffer())?;
+    let file_buffer_size = usize::try_from(TransportConfig::send_buffer())?;
 
     let credentials = Credentials::generate()?;
     let (endpoint, warning) = create_endpoint(&credentials, client_message, bandwidth, quic.port)?;
@@ -113,7 +113,7 @@ pub async fn server_main(
 fn create_endpoint(
     credentials: &Credentials,
     client_message: ClientMessage,
-    bandwidth: BandwidthParams,
+    bandwidth: TransportConfig,
     ports: Option<PortRange>,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
@@ -135,8 +135,8 @@ fn create_endpoint(
 
     let mut socket = bind_range_for_family(client_message.connection_type, ports)?;
     // We don't know whether client will send or receive, so configure for both.
-    let wanted_send = Some(usize::try_from(BandwidthParams::send_buffer())?);
-    let wanted_recv = Some(usize::try_from(BandwidthParams::recv_buffer())?);
+    let wanted_send = Some(usize::try_from(TransportConfig::send_buffer())?);
+    let wanted_recv = Some(usize::try_from(TransportConfig::recv_buffer())?);
     let warning = util::socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)?
         .inspect(|s| warn!("{s}"));
 

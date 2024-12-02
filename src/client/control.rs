@@ -13,7 +13,7 @@ use tracing::{debug, trace, warn};
 
 use crate::{
     protocol::control::{ClientMessage, ClosedownReport, ConnectionType, ServerMessage, BANNER},
-    transport::{BandwidthParams, QuicParams},
+    transport::{BandwidthParams as TransportConfig, QuicParams},
     util::Credentials,
 };
 
@@ -42,7 +42,7 @@ impl Channel {
         connection_type: ConnectionType,
         display: &MultiProgress,
         client: &ClientConfiguration,
-        bandwidth: BandwidthParams,
+        bandwidth: TransportConfig,
         quic: QuicParams,
         parameters: &Parameters,
     ) -> Result<(Channel, ServerMessage)> {
@@ -82,7 +82,7 @@ impl Channel {
     fn launch(
         display: &MultiProgress,
         client: &ClientConfiguration,
-        bandwidth: BandwidthParams,
+        bandwidth: TransportConfig,
         quic: QuicParams,
         remote_host: &str,
         parameters: &Parameters,

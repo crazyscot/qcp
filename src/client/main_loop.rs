@@ -6,7 +6,7 @@ use crate::client::progress::spinner_style;
 use crate::protocol::session::Status;
 use crate::protocol::session::{FileHeader, FileTrailer, Response};
 use crate::protocol::{RawStreamPair, StreamPair};
-use crate::transport::{BandwidthParams, QuicParams, ThroughputMode};
+use crate::transport::{BandwidthParams as TransportConfig, QuicParams, ThroughputMode};
 use crate::util::{
     self, lookup_host_by_family, time::Stopwatch, time::StopwatchChain, Credentials, PortRange,
 };
@@ -36,7 +36,7 @@ const SHOW_TIME: &str = "file transfer";
 #[allow(clippy::module_name_repetitions)]
 pub async fn client_main(
     options: ClientConfiguration,
-    bandwidth: BandwidthParams,
+    bandwidth: TransportConfig,
     quic: QuicParams,
     display: MultiProgress,
     job_spec: CopyJobSpec,
@@ -161,7 +161,7 @@ async fn manage_request(
     copy_spec: CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
-    bandwidth: BandwidthParams,
+    bandwidth: TransportConfig,
     quiet: bool,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
@@ -261,7 +261,7 @@ pub(crate) fn create_endpoint(
     server_cert: CertificateDer<'_>,
     server_addr: &SocketAddr,
     port: Option<PortRange>,
-    bandwidth: BandwidthParams,
+    bandwidth: TransportConfig,
     mode: ThroughputMode,
 ) -> Result<quinn::Endpoint> {
     let _ = span!(Level::TRACE, "create_endpoint").entered();
@@ -281,13 +281,13 @@ pub(crate) fn create_endpoint(
     let mut socket = util::socket::bind_range_for_peer(server_addr, port)?;
     let wanted_send = match mode {
         ThroughputMode::Both | ThroughputMode::Tx => {
-            Some(BandwidthParams::send_buffer().try_into()?)
+            Some(TransportConfig::send_buffer().try_into()?)
         }
         ThroughputMode::Rx => None,
     };
     let wanted_recv = match mode {
         ThroughputMode::Both | ThroughputMode::Rx => {
-            Some(BandwidthParams::recv_buffer().try_into()?)
+            Some(TransportConfig::recv_buffer().try_into()?)
         }
         ThroughputMode::Tx => None,
     };
@@ -309,7 +309,7 @@ async fn do_get(
     job: &CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
-    bandwidth: BandwidthParams,
+    bandwidth: TransportConfig,
     quiet: bool,
 ) -> Result<u64> {
     let filename = &job.source.filename;
@@ -374,7 +374,7 @@ async fn do_put(
     job: &CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
-    bandwidth: BandwidthParams,
+    bandwidth: TransportConfig,
     quiet: bool,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
@@ -405,7 +405,7 @@ async fn do_put(
     meter.start().await;
 
     trace!("sending command");
-    let mut file = BufReader::with_capacity(BandwidthParams::send_buffer().try_into()?, file);
+    let mut file = BufReader::with_capacity(TransportConfig::send_buffer().try_into()?, file);
 
     outbound
         .write_all(&crate::protocol::session::Command::new_put(dest_filename).serialize())

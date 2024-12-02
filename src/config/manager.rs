@@ -370,7 +370,10 @@ mod test {
     use tempfile::TempDir;
 
     use crate::{
-        transport::{BandwidthParams, BandwidthParams_Optional},
+        transport::{
+            BandwidthParams as TransportConfig,
+            BandwidthParams_Optional as TransportConfig_Optional,
+        },
         util::PortRange,
     };
 
@@ -387,12 +390,12 @@ mod test {
     #[test]
     fn config_merge() {
         // simulate a CLI
-        let entered = BandwidthParams_Optional {
+        let entered = TransportConfig_Optional {
             rx: Some(12345.into()),
             ..Default::default()
         };
         let expected = Configuration {
-            bandwidth: BandwidthParams {
+            bandwidth: TransportConfig {
                 rx: 12345.into(),
                 ..Default::default()
             },
@@ -407,8 +410,8 @@ mod test {
 
     #[test]
     fn extract_substruct() {
-        let cfg: BandwidthParams = Manager::without_files().get().unwrap();
-        assert_eq!(cfg, BandwidthParams::default());
+        let cfg: TransportConfig = Manager::without_files().get().unwrap();
+        assert_eq!(cfg, TransportConfig::default());
     }
 
     fn make_tempfile(data: &str, filename: &str) -> (PathBuf, TempDir) {
@@ -430,7 +433,7 @@ mod test {
         "#,
             "test.toml",
         );
-        let fake_cli = BandwidthParams_Optional {
+        let fake_cli = TransportConfig_Optional {
             rtt: Some(999),
             initial_congestion_window: Some(Some(67890)), // yeah the double-Some is a bit of a wart
             ..Default::default()
