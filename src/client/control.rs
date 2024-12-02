@@ -13,7 +13,7 @@ use tracing::{debug, trace, warn};
 
 use crate::{
     protocol::control::{ClientMessage, ClosedownReport, ConnectionType, ServerMessage, BANNER},
-    transport::{Configuration as TransportConfig, QuicParams},
+    transport::Configuration as TransportConfig,
     util::Credentials,
 };
 
@@ -42,12 +42,11 @@ impl Channel {
         connection_type: ConnectionType,
         display: &MultiProgress,
         client: &ClientConfiguration,
-        bandwidth: TransportConfig,
-        quic: QuicParams,
+        transport: TransportConfig,
         parameters: &Parameters,
     ) -> Result<(Channel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(display, client, bandwidth, quic, remote_host, parameters)?;
+        let mut new1 = Self::launch(display, client, transport, remote_host, parameters)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -82,8 +81,7 @@ impl Channel {
     fn launch(
         display: &MultiProgress,
         client: &ClientConfiguration,
-        bandwidth: TransportConfig,
-        quic: QuicParams,
+        transport: TransportConfig,
         remote_host: &str,
         parameters: &Parameters,
     ) -> Result<Self> {
@@ -101,21 +99,21 @@ impl Channel {
             "--server",
             // Remote receive bandwidth = our transmit bandwidth
             "-b",
-            &bandwidth.tx().to_string(),
+            &transport.tx().to_string(),
             // Remote transmit bandwidth = our receive bandwidth
             "-B",
-            &bandwidth.rx().to_string(),
+            &transport.rx().to_string(),
             "--rtt",
-            &bandwidth.rtt.to_string(),
+            &transport.rtt.to_string(),
             "--congestion",
-            &bandwidth.congestion.to_string(),
+            &transport.congestion.to_string(),
             "--timeout",
-            &quic.timeout.to_string(),
+            &transport.timeout.to_string(),
         ]);
         if parameters.remote_debug {
             let _ = server.arg("--debug");
         }
-        if let Some(w) = bandwidth.initial_congestion_window {
+        if let Some(w) = transport.initial_congestion_window {
             let _ = server.args(["--initial-congestion-window", &w.to_string()]);
         }
         if let Some(pr) = client.remote_port {

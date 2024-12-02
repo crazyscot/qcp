@@ -1,14 +1,14 @@
 // qcp client event loop
 // (c) 2024 Ross Younger
 
-use crate::client::control::Channel;
-use crate::client::progress::spinner_style;
-use crate::protocol::session::Status;
-use crate::protocol::session::{FileHeader, FileTrailer, Response};
-use crate::protocol::{RawStreamPair, StreamPair};
-use crate::transport::{Configuration as TransportConfig, QuicParams, ThroughputMode};
+use super::{control::Channel, progress::spinner_style};
+use crate::protocol::{
+    session::{FileHeader, FileTrailer, Response, Status},
+    RawStreamPair, StreamPair,
+};
+use crate::transport::{Configuration as TransportConfig, ThroughputMode};
 use crate::util::{
-    self, lookup_host_by_family, time::Stopwatch, time::StopwatchChain, Credentials, PortRange,
+    self, lookup_host_by_family, time::Stopwatch, time::StopwatchChain, Credentials,
 };
 
 use anyhow::{Context, Result};
@@ -27,7 +27,7 @@ use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
 use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _, Level};
 
 use super::job::CopyJobSpec;
-use super::{ClientConfiguration, Parameters};
+use super::{ClientConfiguration, Parameters as ClientParameters};
 
 const SHOW_TIME: &str = "file transfer";
 
@@ -36,11 +36,9 @@ const SHOW_TIME: &str = "file transfer";
 #[allow(clippy::module_name_repetitions)]
 pub async fn client_main(
     options: ClientConfiguration,
-    bandwidth: TransportConfig,
-    quic: QuicParams,
+    transport: TransportConfig,
     display: MultiProgress,
-    job_spec: CopyJobSpec,
-    parameters: Parameters,
+    parameters: ClientParameters,
 ) -> anyhow::Result<bool> {
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
@@ -48,6 +46,7 @@ pub async fn client_main(
     let mut timers = StopwatchChain::new_running("setup");
 
     // Prep --------------------------
+    let job_spec = crate::client::CopyJobSpec::try_from(&parameters)?;
     let credentials = Credentials::generate()?;
     let remote_host = job_spec.remote_host();
     let remote_address = lookup_host_by_family(remote_host, options.address_family())?;
@@ -60,8 +59,7 @@ pub async fn client_main(
         remote_address.into(),
         &display,
         &options,
-        bandwidth,
-        quic,
+        transport,
         &parameters,
     )
     .await?;
@@ -84,15 +82,14 @@ pub async fn client_main(
         &credentials,
         server_message.cert.into(),
         &server_address_port,
-        quic.port,
-        bandwidth,
+        transport,
         job_spec.throughput_mode(),
     )?;
 
     debug!("Opening QUIC connection to {server_address_port:?}");
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
     let connection = timeout(
-        quic.timeout_duration(),
+        transport.timeout_duration(),
         endpoint.connect(server_address_port, &server_message.name)?,
     )
     .await
@@ -106,7 +103,7 @@ pub async fn client_main(
         job_spec,
         display.clone(),
         spinner.clone(),
-        bandwidth,
+        transport,
         parameters.quiet,
     )
     .await;
@@ -122,11 +119,11 @@ pub async fn client_main(
     let remote_stats = control.read_closedown_report().await?;
 
     let control_fut = control.close();
-    let _ = timeout(quic.timeout_duration(), endpoint.wait_idle())
+    let _ = timeout(transport.timeout_duration(), endpoint.wait_idle())
         .await
         .inspect_err(|_| warn!("QUIC shutdown timed out")); // otherwise ignore errors
     trace!("QUIC closed; waiting for control channel");
-    let _ = timeout(quic.timeout_duration(), control_fut)
+    let _ = timeout(transport.timeout_duration(), control_fut)
         .await
         .inspect_err(|_| warn!("control channel timed out"));
     // Ignore errors. If the control channel closedown times out, we expect its drop handler will do the Right Thing.
@@ -141,7 +138,7 @@ pub async fn client_main(
             total_bytes,
             transport_time,
             remote_stats,
-            bandwidth,
+            transport,
             parameters.statistics,
         );
     }
@@ -161,7 +158,7 @@ async fn manage_request(
     copy_spec: CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
-    bandwidth: TransportConfig,
+    transport: TransportConfig,
     quiet: bool,
 ) -> Result<u64, u64> {
     let mut tasks = tokio::task::JoinSet::new();
@@ -173,12 +170,12 @@ async fn manage_request(
         // This async block reports on errors.
         if copy_spec.source.host.is_some() {
             // This is a Get
-            do_get(sp, &copy_spec, display, spinner, bandwidth, quiet)
+            do_get(sp, &copy_spec, display, spinner, transport, quiet)
                 .instrument(trace_span!("GET", filename = copy_spec.source.filename))
                 .await
         } else {
             // This is a Put
-            do_put(sp, &copy_spec, display, spinner, bandwidth, quiet)
+            do_put(sp, &copy_spec, display, spinner, transport, quiet)
                 .instrument(trace_span!("PUT", filename = copy_spec.source.filename))
                 .await
         }
@@ -260,11 +257,11 @@ pub(crate) fn create_endpoint(
     credentials: &Credentials,
     server_cert: CertificateDer<'_>,
     server_addr: &SocketAddr,
-    port: Option<PortRange>,
-    bandwidth: TransportConfig,
+    transport: TransportConfig,
     mode: ThroughputMode,
 ) -> Result<quinn::Endpoint> {
     let _ = span!(Level::TRACE, "create_endpoint").entered();
+    let port = transport.port;
     let mut root_store = RootCertStore::empty();
     root_store.add(server_cert)?;
 
@@ -275,7 +272,7 @@ pub(crate) fn create_endpoint(
     );
 
     let mut config = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
-    let _ = config.transport_config(crate::transport::create_config(bandwidth, mode)?);
+    let _ = config.transport_config(crate::transport::create_config(transport, mode)?);
 
     trace!("bind & configure socket, port={port:?}", port = port);
     let mut socket = util::socket::bind_range_for_peer(server_addr, port)?;
@@ -309,7 +306,7 @@ async fn do_get(
     job: &CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
-    bandwidth: TransportConfig,
+    transport: TransportConfig,
     quiet: bool,
 ) -> Result<u64> {
     let filename = &job.source.filename;
@@ -346,7 +343,7 @@ async fn do_get(
         .with_elapsed(Instant::now().duration_since(real_start));
 
     let mut meter =
-        crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, bandwidth.rx());
+        crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, transport.rx());
     meter.start().await;
 
     let inbound = progress_bar.wrap_async_read(stream.recv);
@@ -374,7 +371,7 @@ async fn do_put(
     job: &CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
-    bandwidth: TransportConfig,
+    transport: TransportConfig,
     quiet: bool,
 ) -> Result<u64> {
     let mut stream: StreamPair = sp.into();
@@ -401,7 +398,7 @@ async fn do_put(
     let progress_bar = progress_bar_for(&display, job, steps, quiet)?;
     let mut outbound = progress_bar.wrap_async_write(stream.send);
     let mut meter =
-        crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, bandwidth.tx());
+        crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, transport.tx());
     meter.start().await;
 
     trace!("sending command");

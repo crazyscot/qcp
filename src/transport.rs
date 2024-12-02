@@ -19,43 +19,6 @@ use crate::util::{derive_deftly_template_Optionalify, humanu64::HumanU64, PortRa
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
 
-/// Shared parameters used to set up the QUIC UDP connection
-#[derive(Deftly)]
-#[derive_deftly(Optionalify)]
-#[deftly(visibility = "pub(crate)")]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Parser, Serialize, Deserialize)]
-pub struct QuicParams {
-    /// Uses the given UDP port or range on the local endpoint.
-    ///
-    /// This can be useful when there is a firewall between the endpoints.
-    #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
-    pub port: Option<PortRange>,
-
-    /// Connection timeout for the QUIC endpoints [seconds; default 5]
-    ///
-    /// This needs to be long enough for your network connection, but short enough to provide
-    /// a timely indication that UDP may be blocked.
-    #[arg(short, long, value_name("sec"), help_heading("Connection"))]
-    pub timeout: u16,
-}
-
-impl Default for QuicParams {
-    fn default() -> Self {
-        Self {
-            port: None,
-            timeout: 5,
-        }
-    }
-}
-
-impl QuicParams {
-    /// Converts the `timeout` field into a Duration
-    #[must_use]
-    pub fn timeout_duration(&self) -> Duration {
-        Duration::from_secs(self.timeout.into())
-    }
-}
-
 /// Specifies whether to configure to maximise transmission throughput, receive throughput, or both.
 /// Specifying `Both` for a one-way data transfer will work, but wastes kernel memory.
 #[derive(Copy, Clone, Debug)]
@@ -147,6 +110,19 @@ pub struct Configuration {
     /// Setting this value too high reduces performance!
     #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
     pub initial_congestion_window: Option<u64>,
+
+    /// Uses the given UDP port or range on the local endpoint.
+    ///
+    /// This can be useful when there is a firewall between the endpoints.
+    #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
+    pub port: Option<PortRange>,
+
+    /// Connection timeout for the QUIC endpoints [seconds; default 5]
+    ///
+    /// This needs to be long enough for your network connection, but short enough to provide
+    /// a timely indication that UDP may be blocked.
+    #[arg(short, long, value_name("sec"), help_heading("Connection"))]
+    pub timeout: u16,
 }
 
 impl Default for Configuration {
@@ -157,6 +133,8 @@ impl Default for Configuration {
             rtt: 300,
             congestion: CongestionControllerType::Cubic,
             initial_congestion_window: None,
+            port: None,
+            timeout: 5,
         }
     }
 }
@@ -239,6 +217,12 @@ impl Configuration {
     pub fn send_window(&self) -> u64 {
         // There might be random added latency en route, so provide for a larger send window than theoretical.
         2 * self.bandwidth_delay_product_tx()
+    }
+
+    /// Converts the `timeout` field into a Duration
+    #[must_use]
+    pub fn timeout_duration(&self) -> Duration {
+        Duration::from_secs(self.timeout.into())
     }
 }
 

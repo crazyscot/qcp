@@ -60,12 +60,9 @@ pub(crate) struct CliArgs {
     #[command(flatten)]
     pub client_config: crate::client::ClientConfiguration_Optional,
 
-    // NETWORK OPTIONS =====================================================================
+    // TRANSPORT OPTIONS ===================================================================
     #[command(flatten)]
     pub transport: crate::transport::Configuration_Optional,
-
-    #[command(flatten)]
-    pub quic: crate::transport::QuicParams_Optional,
 
     // CLIENT-SIDE NON-CONFIGURABLE OPTIONS ================================================
     // (including positional arguments!)
@@ -88,7 +85,6 @@ impl From<&CliArgs> for Manager {
     fn from(value: &CliArgs) -> Self {
         let mut mgr = Manager::new();
         mgr.merge_provider(value.transport);
-        mgr.merge_provider(value.quic);
         mgr.merge_provider(&value.client_config);
         mgr
     }

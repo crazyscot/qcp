@@ -86,18 +86,15 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
         Ok(ExitCode::SUCCESS)
     } else if args.server {
         let _span = error_span!("REMOTE").entered();
-        server_main(config.bandwidth, config.quic)
+        server_main(config.bandwidth)
             .await
             .map(|()| ExitCode::SUCCESS)
             .inspect_err(|e| tracing::error!("{e}"))
     } else {
-        let job_spec = crate::client::CopyJobSpec::try_from(&args)?;
         client_main(
             config.client,
             config.bandwidth,
-            config.quic,
             progress.unwrap(),
-            job_spec,
             args.client_params,
         )
         .await
