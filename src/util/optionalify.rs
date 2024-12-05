@@ -147,13 +147,8 @@ define_derive_deftly! {
     }
 }
 
-#[allow(clippy::module_name_repetitions)]
-pub(crate) use derive_deftly_template_FieldsList;
-
 #[cfg(test)]
 mod test {
-    use crate::config::Configuration;
-
     use super::derive_deftly_template_Optionalify;
     use derive_deftly::Deftly;
     use figment::{providers::Serialized, Figment};
@@ -194,8 +189,9 @@ mod test {
 
     #[test]
     fn introspect() {
+        use crate::config::Configuration_Optional;
         use crate::util::FieldsList;
-        let f = Configuration::fields();
+        let f = Configuration_Optional::fields();
         assert_ne!(f.len(), 0);
         println!("fields: {f:?}");
     }

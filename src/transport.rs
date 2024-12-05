@@ -1,12 +1,10 @@
 //! QUIC transport configuration
 // (c) 2024 Ross Younger
 
-use std::{fmt::Display, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
-use clap::Parser;
-use derive_deftly::Deftly;
-use human_repr::{HumanCount, HumanDuration as _};
+use human_repr::HumanCount as _;
 use quinn::{
     congestion::{BbrConfig, CubicConfig},
     TransportConfig,
@@ -14,7 +12,7 @@ use quinn::{
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::util::{derive_deftly_template_Optionalify, humanu64::HumanU64, PortRange};
+use crate::config::Configuration;
 
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
@@ -58,176 +56,8 @@ pub enum CongestionControllerType {
     Bbr,
 }
 
-/// Parameters needed to set up transport configuration
-#[derive(Deftly)]
-#[derive_deftly(Optionalify)]
-#[deftly(visibility = "pub(crate)")]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Parser, Serialize, Deserialize)]
-pub struct Configuration {
-    /// The maximum network bandwidth we expect receiving data FROM the remote system.
-    /// [default: 12500k]
-    ///
-    /// This may be specified directly as a number of bytes, or as an SI quantity
-    /// e.g. "10M" or "256k". Note that this is described in BYTES, not bits;
-    /// if (for example) you expect to fill a 1Gbit ethernet connection,
-    /// 125M might be a suitable setting.
-    #[arg(short('b'), long, alias("rx-bw"), help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
-    pub rx: HumanU64,
-    /// The maximum network bandwidth we expect sending data TO the remote system,
-    /// if it is different from the bandwidth FROM the system.
-    /// [default: use the value of --rx]
-    ///
-    /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
-    #[arg(short('B'), long, alias("tx-bw"), help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
-    pub tx: Option<HumanU64>,
-
-    /// The expected network Round Trip time to the target system, in milliseconds.
-    /// [default: 300]
-    #[arg(
-        short('r'),
-        long,
-        help_heading("Network tuning"),
-        display_order(1),
-        value_name("ms")
-    )]
-    pub rtt: u16,
-
-    /// Specifies the congestion control algorithm to use.
-    /// [default: cubic]
-    #[arg(
-        long,
-        action,
-        value_name = "alg",
-        help_heading("Advanced network tuning")
-    )]
-    #[clap(value_enum)]
-    pub congestion: CongestionControllerType,
-
-    /// (Network wizards only!)
-    /// The initial value for the sending congestion control window.
-    /// [default: use the default for the selected congestion control algorithm]
-    ///
-    /// Setting this value too high reduces performance!
-    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
-    pub initial_congestion_window: Option<u64>,
-
-    /// Uses the given UDP port or range on the local endpoint.
-    ///
-    /// This can be useful when there is a firewall between the endpoints.
-    #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
-    pub port: Option<PortRange>,
-
-    /// Connection timeout for the QUIC endpoints [seconds; default 5]
-    ///
-    /// This needs to be long enough for your network connection, but short enough to provide
-    /// a timely indication that UDP may be blocked.
-    #[arg(short, long, value_name("sec"), help_heading("Connection"))]
-    pub timeout: u16,
-}
-
-impl Default for Configuration {
-    fn default() -> Self {
-        Self {
-            rx: 12_500_000.into(),
-            tx: None,
-            rtt: 300,
-            congestion: CongestionControllerType::Cubic,
-            initial_congestion_window: None,
-            port: None,
-            timeout: 5,
-        }
-    }
-}
-
-impl Display for Configuration {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let iwind = match self.initial_congestion_window {
-            None => "<default>".to_string(),
-            Some(s) => s.human_count_bytes().to_string(),
-        };
-        let (tx, rx) = (self.tx(), self.rx());
-        write!(
-            f,
-            "rx {rx} ({rxbits}), tx {tx} ({txbits}), rtt {rtt}, congestion algorithm {congestion:?} with initial window {iwind}",
-            tx = tx.human_count_bytes(),
-            txbits = (tx * 8).human_count("bit"),
-            rx = rx.human_count_bytes(),
-            rxbits = (rx * 8).human_count("bit"),
-            rtt = self.rtt_duration().human_duration(),
-            congestion = self.congestion,
-        )
-    }
-}
-
-impl Configuration {
-    /// Computes the theoretical bandwidth-delay product for outbound data
-    #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn bandwidth_delay_product_tx(&self) -> u64 {
-        self.tx() * u64::from(self.rtt) / 1000
-    }
-    /// Computes the theoretical bandwidth-delay product for inbound data
-    #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn bandwidth_delay_product_rx(&self) -> u64 {
-        self.rx() * u64::from(self.rtt) / 1000
-    }
-    #[must_use]
-    /// Receive bandwidth (accessor)
-    pub fn rx(&self) -> u64 {
-        *self.rx
-    }
-    #[must_use]
-    /// Transmit bandwidth (accessor)
-    pub fn tx(&self) -> u64 {
-        if let Some(tx) = self.tx {
-            *tx
-        } else {
-            self.rx()
-        }
-    }
-    /// RTT accessor as Duration
-    #[must_use]
-    pub fn rtt_duration(&self) -> Duration {
-        Duration::from_millis(u64::from(self.rtt))
-    }
-
-    /// UDP kernel sending buffer size to use
-    #[must_use]
-    pub fn send_buffer() -> u64 {
-        // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
-        2_097_152
-    }
-    /// UDP kernel receive buffer size to use
-    #[must_use]
-    pub fn recv_buffer() -> u64 {
-        // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
-        2_097_152
-    }
-
-    /// QUIC receive window
-    #[must_use]
-    pub fn recv_window(&self) -> u64 {
-        // The theoretical in-flight limit appears to be sufficient
-        self.bandwidth_delay_product_rx()
-    }
-
-    /// QUIC send window
-    #[must_use]
-    pub fn send_window(&self) -> u64 {
-        // There might be random added latency en route, so provide for a larger send window than theoretical.
-        2 * self.bandwidth_delay_product_tx()
-    }
-
-    /// Converts the `timeout` field into a Duration
-    #[must_use]
-    pub fn timeout_duration(&self) -> Duration {
-        Duration::from_secs(self.timeout.into())
-    }
-}
-
 /// Creates a `quinn::TransportConfig` for the endpoint setup
-pub fn create_config(params: Configuration, mode: ThroughputMode) -> Result<Arc<TransportConfig>> {
+pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc<TransportConfig>> {
     let mut config = TransportConfig::default();
     let _ = config
         .max_concurrent_bidi_streams(1u8.into())
@@ -271,7 +101,10 @@ pub fn create_config(params: Configuration, mode: ThroughputMode) -> Result<Arc<
         }
     }
 
-    debug!("Network configuration: {params}");
+    debug!(
+        "Network configuration: {}",
+        params.format_transport_config()
+    );
     debug!(
         "Buffer configuration: send window {sw}, buffer {sb}; recv window {rw}, buffer {rb}",
         sw = params.send_window().human_count_bytes(),

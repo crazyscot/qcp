@@ -56,13 +56,9 @@ pub(crate) struct CliArgs {
     #[arg(long, action, help_heading("Network tuning"), display_order(50))]
     pub help_buffers: bool,
 
-    // CLIENT-SIDE CONFIGURABLE OPTIONS ====================================================
+    // CONFIGURABLE OPTIONS ================================================================
     #[command(flatten)]
-    pub client_config: crate::client::ClientConfiguration_Optional,
-
-    // TRANSPORT OPTIONS ===================================================================
-    #[command(flatten)]
-    pub transport: crate::transport::Configuration_Optional,
+    pub config: crate::config::Configuration_Optional,
 
     // CLIENT-SIDE NON-CONFIGURABLE OPTIONS ================================================
     // (including positional arguments!)
@@ -84,8 +80,7 @@ impl From<&CliArgs> for Manager {
     /// Any new option packs (_Optional structs) need to be added here.
     fn from(value: &CliArgs) -> Self {
         let mut mgr = Manager::new();
-        mgr.merge_provider(value.transport);
-        mgr.merge_provider(&value.client_config);
+        mgr.merge_provider(&value.config);
         mgr
     }
 }

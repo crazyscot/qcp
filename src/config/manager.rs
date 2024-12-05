@@ -369,14 +369,9 @@ mod test {
     use serde::Deserialize;
     use tempfile::TempDir;
 
-    use crate::{
-        transport::{
-            Configuration as TransportConfig, Configuration_Optional as TransportConfig_Optional,
-        },
-        util::PortRange,
-    };
+    use crate::util::PortRange;
 
-    use super::{Configuration, Manager};
+    use crate::config::{Configuration, Configuration_Optional, Manager};
 
     #[test]
     fn defaults() {
@@ -389,15 +384,12 @@ mod test {
     #[test]
     fn config_merge() {
         // simulate a CLI
-        let entered = TransportConfig_Optional {
+        let entered = Configuration_Optional {
             rx: Some(12345.into()),
             ..Default::default()
         };
         let expected = Configuration {
-            bandwidth: TransportConfig {
-                rx: 12345.into(),
-                ..Default::default()
-            },
+            rx: 12345.into(),
             ..Default::default()
         };
 
@@ -405,12 +397,6 @@ mod test {
         mgr.merge_provider(entered);
         let result = mgr.get().unwrap();
         assert_eq!(expected, result);
-    }
-
-    #[test]
-    fn extract_substruct() {
-        let cfg: TransportConfig = Manager::without_files().get().unwrap();
-        assert_eq!(cfg, TransportConfig::default());
     }
 
     fn make_tempfile(data: &str, filename: &str) -> (PathBuf, TempDir) {
@@ -432,7 +418,7 @@ mod test {
         "#,
             "test.toml",
         );
-        let fake_cli = TransportConfig_Optional {
+        let fake_cli = Configuration_Optional {
             rtt: Some(999),
             initial_congestion_window: Some(Some(67890)), // yeah the double-Some is a bit of a wart
             ..Default::default()

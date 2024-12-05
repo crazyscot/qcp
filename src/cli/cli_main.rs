@@ -7,10 +7,9 @@ use super::{args::CliArgs, styles};
 
 use crate::{
     client::{client_main, Parameters as ClientParameters, MAX_UPDATE_FPS},
-    config::{Configuration, Manager},
+    config::{Configuration, Configuration_Optional, Manager},
     os,
     server::server_main,
-    transport::Configuration as TransportConfig,
     util::setup_tracing,
 };
 use indicatif::{MultiProgress, ProgressDrawTarget};
@@ -37,8 +36,8 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     let args = CliArgs::custom_parse();
     if args.help_buffers {
         os::print_udp_buffer_size_help_message(
-            TransportConfig::recv_buffer(),
-            TransportConfig::send_buffer(),
+            Configuration::recv_buffer(),
+            Configuration::send_buffer(),
         );
         return Ok(ExitCode::SUCCESS);
     }
@@ -84,31 +83,26 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     if args.show_config {
         println!(
             "{}",
-            config_manager.to_display_adapter::<Configuration>(true)
+            config_manager.to_display_adapter::<Configuration_Optional>(true)
         );
         Ok(ExitCode::SUCCESS)
     } else if args.server {
         let _span = error_span!("REMOTE").entered();
-        server_main(config.bandwidth)
+        server_main(&config)
             .await
             .map(|()| ExitCode::SUCCESS)
             .inspect_err(|e| tracing::error!("{e}"))
     } else {
-        client_main(
-            config.client,
-            config.bandwidth,
-            progress.unwrap(),
-            args.client_params,
-        )
-        .await
-        .inspect_err(|e| tracing::error!("{e}"))
-        .or_else(|_| Ok(false))
-        .map(|success| {
-            if success {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::FAILURE
-            }
-        })
+        client_main(&config, progress.unwrap(), args.client_params)
+            .await
+            .inspect_err(|e| tracing::error!("{e}"))
+            .or_else(|_| Ok(false))
+            .map(|success| {
+                if success {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                }
+            })
     }
 }

@@ -4,10 +4,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::config::Configuration;
 use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, Status};
 use crate::protocol::{self, StreamPair};
-use crate::transport::{Configuration as TransportConfig, ThroughputMode};
+use crate::transport::ThroughputMode;
 use crate::util::{io, socket, Credentials};
 
 use anyhow::Context as _;
@@ -24,7 +25,7 @@ use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
 /// Server event loop
 #[allow(clippy::module_name_repetitions)]
-pub async fn server_main(transport: TransportConfig) -> anyhow::Result<()> {
+pub async fn server_main(config: &Configuration) -> anyhow::Result<()> {
     let mut stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
     // There are tricks you can use to get an unbuffered handle to stdout, but at a typing cost.
@@ -47,11 +48,11 @@ pub async fn server_main(transport: TransportConfig) -> anyhow::Result<()> {
         client_message.connection_type,
     );
 
-    let bandwidth_info = format!("{transport:?}");
-    let file_buffer_size = usize::try_from(TransportConfig::send_buffer())?;
+    let bandwidth_info = format!("{config:?}");
+    let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
 
     let credentials = Credentials::generate()?;
-    let (endpoint, warning) = create_endpoint(&credentials, client_message, transport)?;
+    let (endpoint, warning) = create_endpoint(&credentials, client_message, config)?;
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");
     ServerMessage::write(
@@ -73,7 +74,7 @@ pub async fn server_main(transport: TransportConfig) -> anyhow::Result<()> {
     // but a timeout is useful to give the user a cue that UDP isn't getting there.
     trace!("waiting for QUIC");
     let (stats_tx, mut stats_rx) = oneshot::channel();
-    if let Some(conn) = timeout(transport.timeout_duration(), endpoint.accept())
+    if let Some(conn) = timeout(config.timeout_duration(), endpoint.accept())
         .await
         .with_context(|| "Timed out waiting for QUIC connection")?
     {
@@ -107,7 +108,7 @@ pub async fn server_main(transport: TransportConfig) -> anyhow::Result<()> {
 fn create_endpoint(
     credentials: &Credentials,
     client_message: ClientMessage,
-    transport: TransportConfig,
+    transport: &Configuration,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
 
@@ -120,16 +121,16 @@ fn create_endpoint(
     tls_config.max_early_data_size = u32::MAX;
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
-    let mut config = quinn::ServerConfig::with_crypto(Arc::new(qsc));
-    let _ = config.transport_config(crate::transport::create_config(
+    let mut server = quinn::ServerConfig::with_crypto(Arc::new(qsc));
+    let _ = server.transport_config(crate::transport::create_config(
         transport,
         ThroughputMode::Both,
     )?);
 
     let mut socket = socket::bind_range_for_family(client_message.connection_type, transport.port)?;
     // We don't know whether client will send or receive, so configure for both.
-    let wanted_send = Some(usize::try_from(TransportConfig::send_buffer())?);
-    let wanted_recv = Some(usize::try_from(TransportConfig::recv_buffer())?);
+    let wanted_send = Some(usize::try_from(Configuration::send_buffer())?);
+    let wanted_recv = Some(usize::try_from(Configuration::recv_buffer())?);
     let warning = socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)?
         .inspect(|s| warn!("{s}"));
 
@@ -137,7 +138,7 @@ fn create_endpoint(
     let runtime =
         quinn::default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
     Ok((
-        quinn::Endpoint::new(EndpointConfig::default(), Some(config), socket, runtime)?,
+        quinn::Endpoint::new(EndpointConfig::default(), Some(server), socket, runtime)?,
         warning,
     ))
 }

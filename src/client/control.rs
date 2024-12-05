@@ -12,12 +12,12 @@ use tokio::{
 use tracing::{debug, trace, warn};
 
 use crate::{
+    config::Configuration,
     protocol::control::{ClientMessage, ClosedownReport, ConnectionType, ServerMessage, BANNER},
-    transport::Configuration as TransportConfig,
     util::Credentials,
 };
 
-use super::{ClientConfiguration, Parameters};
+use super::Parameters;
 
 /// Control channel abstraction
 #[derive(Debug)]
@@ -41,12 +41,11 @@ impl Channel {
         remote_host: &str,
         connection_type: ConnectionType,
         display: &MultiProgress,
-        client: &ClientConfiguration,
-        transport: TransportConfig,
+        config: &Configuration,
         parameters: &Parameters,
     ) -> Result<(Channel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(display, client, transport, remote_host, parameters)?;
+        let mut new1 = Self::launch(display, config, remote_host, parameters)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -80,43 +79,42 @@ impl Channel {
     /// This is effectively a constructor. At present, it launches a subprocess.
     fn launch(
         display: &MultiProgress,
-        client: &ClientConfiguration,
-        transport: TransportConfig,
+        config: &Configuration,
         remote_host: &str,
         parameters: &Parameters,
     ) -> Result<Self> {
-        let mut server = tokio::process::Command::new(&client.ssh);
+        let mut server = tokio::process::Command::new(&config.ssh);
         let _ = server.kill_on_drop(true);
-        let _ = match client.address_family() {
+        let _ = match config.address_family() {
             None => &mut server,
             Some(ConnectionType::Ipv4) => server.arg("-4"),
             Some(ConnectionType::Ipv6) => server.arg("-6"),
         };
-        let _ = server.args(&client.ssh_opt);
+        let _ = server.args(&config.ssh_opt);
         let _ = server.args([
             remote_host,
             "qcp",
             "--server",
             // Remote receive bandwidth = our transmit bandwidth
             "-b",
-            &transport.tx().to_string(),
+            &config.tx().to_string(),
             // Remote transmit bandwidth = our receive bandwidth
             "-B",
-            &transport.rx().to_string(),
+            &config.rx().to_string(),
             "--rtt",
-            &transport.rtt.to_string(),
+            &config.rtt.to_string(),
             "--congestion",
-            &transport.congestion.to_string(),
+            &config.congestion.to_string(),
             "--timeout",
-            &transport.timeout.to_string(),
+            &config.timeout.to_string(),
         ]);
         if parameters.remote_debug {
             let _ = server.arg("--debug");
         }
-        if let Some(w) = transport.initial_congestion_window {
+        if let Some(w) = config.initial_congestion_window {
             let _ = server.args(["--initial-congestion-window", &w.to_string()]);
         }
-        if let Some(pr) = client.remote_port {
+        if let Some(pr) = config.remote_port {
             let _ = server.args(["--port", &pr.to_string()]);
         }
         let _ = server

@@ -1,9 +1,7 @@
 //! client-side (_initiator_) main loop and supporting structures
 
 mod options;
-pub(crate) use options::ClientConfiguration_Optional;
-#[allow(clippy::module_name_repetitions)]
-pub use options::{ClientConfiguration, Parameters};
+pub use options::Parameters;
 
 mod control;
 pub use control::Channel;
