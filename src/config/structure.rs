@@ -6,6 +6,7 @@ use std::time::Duration;
 use clap::Parser;
 use human_repr::{HumanCount as _, HumanDuration as _};
 use serde::{Deserialize, Serialize};
+use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
     protocol::control::ConnectionType,
@@ -20,7 +21,7 @@ use derive_deftly::Deftly;
 #[derive(Deftly)]
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
-#[derive(Debug, Clone, PartialEq, Eq, Parser, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Parser, Deserialize, Serialize, FieldNamesAsSlice)]
 pub struct Configuration {
     // TRANSPORT PARAMETERS ============================================================================
     // System bandwidth, UDP ports, timeout.

@@ -7,7 +7,7 @@ use super::{args::CliArgs, styles};
 
 use crate::{
     client::{client_main, Parameters as ClientParameters, MAX_UPDATE_FPS},
-    config::{Configuration, Configuration_Optional, Manager},
+    config::{Configuration, Manager},
     os,
     server::server_main,
     util::setup_tracing,
@@ -83,7 +83,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     if args.show_config {
         println!(
             "{}",
-            config_manager.to_display_adapter::<Configuration_Optional>(true)
+            config_manager.to_display_adapter::<Configuration>(true)
         );
         Ok(ExitCode::SUCCESS)
     } else if args.server {

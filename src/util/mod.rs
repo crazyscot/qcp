@@ -20,5 +20,4 @@ mod cli;
 pub use cli::PortRange;
 
 mod optionalify;
-pub(crate) use optionalify::FieldsList;
 pub use optionalify::{derive_deftly_template_Optionalify, insert_if_some};

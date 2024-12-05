@@ -1,8 +1,6 @@
 //! Configuration file wrangling
 // (c) 2024 Ross Younger
 
-use crate::util::FieldsList;
-
 use super::Configuration;
 
 use anyhow::Result;
@@ -17,6 +15,7 @@ use std::{
     fmt::{Debug, Display},
     path::{Path, PathBuf},
 };
+use struct_field_names_as_array::FieldNamesAsSlice;
 use tabled::{settings::style::Style, Table, Tabled};
 
 use tracing::{trace, warn};
@@ -302,10 +301,10 @@ pub(crate) struct DisplayAdapter<'a> {
 impl Manager {
     pub(crate) fn to_display_adapter<'de, T>(&self, warn_on_unused: bool) -> DisplayAdapter<'_>
     where
-        T: Deserialize<'de> + FieldsList,
+        T: Deserialize<'de> + FieldNamesAsSlice,
     {
         let mut fields = HashSet::<String>::new();
-        fields.extend(T::fields());
+        fields.extend(T::FIELD_NAMES_AS_SLICE.iter().map(|s| String::from(*s)));
         DisplayAdapter {
             source: self,
             warn_on_unused,
