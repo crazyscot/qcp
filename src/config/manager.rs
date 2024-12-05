@@ -289,8 +289,8 @@ impl Display for Manager {
     }
 }
 
-/// Type wrapper to Manager, with options
-pub(crate) struct MetaManager<'a> {
+/// Pretty-printing type wrapper to Manager
+pub(crate) struct DisplayAdapter<'a> {
     /// Data source
     source: &'a Manager,
     /// Whether to warn if unused fields are present
@@ -300,13 +300,13 @@ pub(crate) struct MetaManager<'a> {
 }
 
 impl Manager {
-    pub(crate) fn displayable_for<'de, T>(&self, warn_on_unused: bool) -> MetaManager<'_>
+    pub(crate) fn to_display_adapter<'de, T>(&self, warn_on_unused: bool) -> DisplayAdapter<'_>
     where
         T: Deserialize<'de> + FieldsList,
     {
         let mut fields = HashSet::<String>::new();
         fields.extend(T::fields());
-        MetaManager {
+        DisplayAdapter {
             source: self,
             warn_on_unused,
             fields,
@@ -314,7 +314,7 @@ impl Manager {
     }
 }
 
-impl Display for MetaManager<'_> {
+impl Display for DisplayAdapter<'_> {
     /// Formats the contents of this structure which are relevant to a given output type.
     ///
     /// N.B. This function uses CLI styling.
