@@ -1,6 +1,9 @@
 //! General utility code that didn't fit anywhere else
 // (c) 2024 Ross Younger
 
+mod address_family;
+pub use address_family::AddressFamily;
+
 mod dns;
 pub use dns::lookup_host_by_family;
 
