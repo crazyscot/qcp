@@ -16,8 +16,8 @@ pub mod time;
 mod tracing;
 pub use tracing::setup as setup_tracing;
 
-mod cli;
-pub use cli::PortRange;
+mod port_range;
+pub use port_range::PortRange;
 
 mod optionalify;
 pub use optionalify::{derive_deftly_template_Optionalify, insert_if_some};

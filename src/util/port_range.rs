@@ -1,6 +1,5 @@
-// CLI argument
+/// CLI argument helper - PortRange
 // (c) 2024 Ross Younger
-
 use serde::Serialize;
 use std::{fmt::Display, str::FromStr};
 
