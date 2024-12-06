@@ -3,7 +3,7 @@
 use serde::Serialize;
 use std::{fmt::Display, str::FromStr};
 
-use super::humanu64::IntOrString;
+use super::cli::IntOrString;
 
 /// Represents a number or a contiguous range of positive integers
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]

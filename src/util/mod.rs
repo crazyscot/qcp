@@ -7,6 +7,8 @@ pub use dns::lookup_host_by_family;
 mod cert;
 pub use cert::Credentials;
 
+pub mod cli;
+
 pub mod humanu64;
 pub mod io;
 pub mod socket;
