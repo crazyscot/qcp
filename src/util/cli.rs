@@ -18,8 +18,9 @@ pub struct IntOrString<T>(pub PhantomData<fn() -> T>);
 
 impl<'de, T> Visitor<'de> for IntOrString<T>
 where
-    T: Deserialize<'de> + From<u64> + FromStr,
+    T: Deserialize<'de> + TryFrom<u64> + FromStr,
     <T as FromStr>::Err: std::fmt::Display,
+    <T as TryFrom<u64>>::Error: std::fmt::Display,
 {
     type Value = T;
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -37,12 +38,14 @@ where
     where
         E: de::Error,
     {
-        Ok(T::from(value))
+        T::try_from(value).map_err(de::Error::custom)
     }
+
     fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
     where
         E: de::Error,
     {
-        Ok(T::from(value.try_into().map_err(de::Error::custom)?))
+        let u = u64::try_from(value).map_err(de::Error::custom)?;
+        T::try_from(u).map_err(de::Error::custom)
     }
 }
