@@ -78,4 +78,4 @@ jobs:
       if: ${{ matrix.build_deb }} && ${{ github.event_name == 'release' }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: gh release upload ${{ github.ref }} ${{ env.BUILT_DEB_FILE }}
+      run: gh release upload ${{ github.ref_name }} ${{ env.BUILT_DEB_FILE }}
