@@ -6,11 +6,11 @@
 //! # The QCP protocol
 //! `qcp` is a **hybrid protocol**.
 //! The binary contains the complete protocol implementation,
-//! but not the ssh binary used to establish the control channel itself.
+//! except for the ssh binary used to establish the control channel itself.
 //!
 //! The protocol flow looks like this:
 //!
-//! 1. The user runs `qcp` from the a machine we will call the _initiator_ or _client_.
+//! 1. The user runs `qcp` from the machine we will call the _initiator_ or _client_.
 //!    * qcp uses ssh to connect to the _remote_ machine and start a `qcp --server` process there.
 //!    * We call this link between the two processes the _control channel_.
 //!    * The _remote_ machine is also known as the _server_, in keeping with other communication protocols.
