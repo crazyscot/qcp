@@ -3,7 +3,7 @@
 
 use clap::{ArgAction::SetTrue, Args as _, FromArgMatches as _, Parser};
 
-use crate::{client::CopyJobSpec, config::Manager, util::AddressFamily};
+use crate::{config::Manager, util::AddressFamily};
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
 pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers", "show_config", "config_files"];
@@ -108,13 +108,5 @@ impl From<&CliArgs> for Manager {
         let mut mgr = Manager::new();
         mgr.merge_provider(&value.config);
         mgr
-    }
-}
-
-impl TryFrom<&CliArgs> for CopyJobSpec {
-    type Error = anyhow::Error;
-
-    fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
-        CopyJobSpec::try_from(&args.client_params)
     }
 }

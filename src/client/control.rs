@@ -14,7 +14,7 @@ use tracing::{debug, trace, warn};
 use crate::{
     config::Configuration,
     protocol::control::{ClientMessage, ClosedownReport, ConnectionType, ServerMessage, BANNER},
-    util::{AddressFamily, Credentials},
+    util::Credentials,
 };
 
 use super::Parameters;
@@ -35,17 +35,15 @@ impl Channel {
     }
 
     /// Opens the control channel, checks the banner, sends the Client Message, reads the Server Message.
-    #[allow(clippy::too_many_arguments)]
     pub async fn transact(
         credentials: &Credentials,
-        remote_host: &str,
         connection_type: ConnectionType,
         display: &MultiProgress,
         config: &Configuration,
         parameters: &Parameters,
     ) -> Result<(Channel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(display, config, remote_host, parameters)?;
+        let mut new1 = Self::launch(display, config, parameters, connection_type)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -80,19 +78,19 @@ impl Channel {
     fn launch(
         display: &MultiProgress,
         config: &Configuration,
-        remote_host: &str,
         parameters: &Parameters,
+        connection_type: ConnectionType,
     ) -> Result<Self> {
+        let remote_host = parameters.remote_host()?;
         let mut server = tokio::process::Command::new(&config.ssh);
         let _ = server.kill_on_drop(true);
-        let _ = match config.address_family {
-            None => &mut server,
-            Some(AddressFamily::V4) => server.arg("-4"),
-            Some(AddressFamily::V6) => server.arg("-6"),
+        let _ = match connection_type {
+            ConnectionType::Ipv4 => server.arg("-4"),
+            ConnectionType::Ipv6 => server.arg("-6"),
         };
         let _ = server.args(&config.ssh_opt);
         let _ = server.args([
-            remote_host,
+            &remote_host,
             "qcp",
             "--server",
             // Remote receive bandwidth = our transmit bandwidth

@@ -1,7 +1,7 @@
 //! Options specific to qcp client-mode
 // (c) 2024 Ross Younger
 
-use super::FileSpec;
+use super::{CopyJobSpec, FileSpec};
 use clap::Parser;
 
 #[derive(Debug, Parser, Clone, Default)]
@@ -66,7 +66,7 @@ pub struct Parameters {
     pub destination: Option<FileSpec>,
 }
 
-impl TryFrom<&Parameters> for crate::client::CopyJobSpec {
+impl TryFrom<&Parameters> for CopyJobSpec {
     type Error = anyhow::Error;
 
     fn try_from(args: &Parameters) -> Result<Self, Self::Error> {
@@ -89,5 +89,11 @@ impl TryFrom<&Parameters> for crate::client::CopyJobSpec {
             source,
             destination,
         })
+    }
+}
+
+impl Parameters {
+    pub(crate) fn remote_host(&self) -> anyhow::Result<String> {
+        Ok(CopyJobSpec::try_from(self)?.remote_host().to_string())
     }
 }

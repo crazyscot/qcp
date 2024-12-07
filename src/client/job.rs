@@ -68,21 +68,6 @@ impl CopyJobSpec {
         }
     }
 
-    /*
-    pub(crate) fn remote_user_host(&self) -> anyhow::Result<&str> {
-        let src = self.source.as_ref().ok_or(anyhow::anyhow!(
-            "both source and destination must be specified"
-        ))?;
-        let dest = self.destination.as_ref().ok_or(anyhow::anyhow!(
-            "both source and destination must be specified"
-        ))?;
-        Ok(src
-            .host
-            .as_ref()
-            .unwrap_or_else(|| dest.host.as_ref().unwrap()))
-    }
-    */
-
     pub(crate) fn remote_user_host(&self) -> &str {
         self.source
             .host
