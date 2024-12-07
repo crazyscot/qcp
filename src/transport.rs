@@ -41,7 +41,8 @@ pub enum ThroughputMode {
     Serialize,
     Deserialize,
 )]
-#[strum(serialize_all = "kebab_case")]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab_case")] // I'm not entirely sure this does anything in this particular case
 pub enum CongestionControllerType {
     /// The congestion algorithm TCP uses. This is good for most cases.
     Cubic,
