@@ -8,7 +8,6 @@ use std::str::FromStr;
 use figment::error::Actual;
 use serde::Serialize;
 
-use crate::protocol::control::ConnectionType;
 use crate::util::cli::IntOrString;
 
 /// Representation an IP address family
@@ -70,24 +69,6 @@ impl TryFrom<u64> for AddressFamily {
                 "4 or 6".into(),
             )
             .into()),
-        }
-    }
-}
-
-impl From<ConnectionType> for AddressFamily {
-    fn from(value: ConnectionType) -> Self {
-        match value {
-            ConnectionType::Ipv4 => AddressFamily::V4,
-            ConnectionType::Ipv6 => AddressFamily::V6,
-        }
-    }
-}
-
-impl From<AddressFamily> for ConnectionType {
-    fn from(value: AddressFamily) -> Self {
-        match value {
-            AddressFamily::V4 => ConnectionType::Ipv4,
-            AddressFamily::V6 => ConnectionType::Ipv6,
         }
     }
 }
