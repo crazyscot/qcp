@@ -14,7 +14,7 @@ use tracing::{debug, trace, warn};
 use crate::{
     config::Configuration,
     protocol::control::{ClientMessage, ClosedownReport, ConnectionType, ServerMessage, BANNER},
-    util::Credentials,
+    util::{AddressFamily, Credentials},
 };
 
 use super::Parameters;
@@ -85,10 +85,10 @@ impl Channel {
     ) -> Result<Self> {
         let mut server = tokio::process::Command::new(&config.ssh);
         let _ = server.kill_on_drop(true);
-        let _ = match config.address_family() {
+        let _ = match config.address_family {
             None => &mut server,
-            Some(ConnectionType::Ipv4) => server.arg("-4"),
-            Some(ConnectionType::Ipv6) => server.arg("-6"),
+            Some(AddressFamily::V4) => server.arg("-4"),
+            Some(AddressFamily::V6) => server.arg("-6"),
         };
         let _ = server.args(&config.ssh_opt);
         let _ = server.args([

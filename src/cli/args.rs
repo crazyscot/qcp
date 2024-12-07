@@ -37,7 +37,6 @@ pub(crate) struct CliArgs {
         long, help_heading("Modes"), hide = true,
         conflicts_with_all([
             "help_buffers", "show_config", "config_files",
-            "ipv4", "ipv6",
             "quiet", "statistics", "remote_debug", "profile",
             "ssh", "ssh_opt", "remote_port",
             "source", "destination",

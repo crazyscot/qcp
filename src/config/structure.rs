@@ -9,9 +9,8 @@ use serde::{Deserialize, Serialize};
 use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
-    protocol::control::ConnectionType,
     transport::CongestionControllerType,
-    util::{derive_deftly_template_Optionalify, humanu64::HumanU64, PortRange},
+    util::{derive_deftly_template_Optionalify, humanu64::HumanU64, AddressFamily, PortRange},
 };
 use derive_deftly::Deftly;
 
@@ -86,19 +85,10 @@ pub struct Configuration {
     pub timeout: u16,
 
     // CLIENT OPTIONS ==================================================================================
-    // These options are only used at the client end.
-    /// Forces IPv4 connection [default: autodetect]
-    #[arg(short = '4', long, action, help_heading("Connection"))]
-    pub ipv4: bool,
-    /// Forces IPv6 connection [default: autodetect]
-    #[arg(
-        short = '6',
-        long,
-        action,
-        conflicts_with("ipv4"),
-        help_heading("Connection")
-    )]
-    pub ipv6: bool,
+    /// Forces use of a particular IP version when connecting to the remote. [default: autodetect]
+    // (see also [CliArgs::ipv4_alias__] and [CliArgs::ipv6_alias__])
+    #[arg(long, alias("ipv"), help_heading("Connection"), group("ip address"))]
+    pub address_family: Option<AddressFamily>,
 
     /// Specifies the ssh client program to use [default: ssh]
     #[arg(long, help_heading("Connection"))]
@@ -125,16 +115,6 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    pub(crate) fn address_family(&self) -> Option<ConnectionType> {
-        if self.ipv4 {
-            Some(ConnectionType::Ipv4)
-        } else if self.ipv6 {
-            Some(ConnectionType::Ipv6)
-        } else {
-            None
-        }
-    }
-
     /// Computes the theoretical bandwidth-delay product for outbound data
     #[must_use]
     #[allow(clippy::cast_possible_truncation)]
@@ -233,8 +213,7 @@ impl Default for Configuration {
             timeout: 5,
 
             // Client
-            ipv4: false,
-            ipv6: false,
+            address_family: None,
             ssh: "ssh".into(),
             ssh_opt: vec![],
             remote_port: None,

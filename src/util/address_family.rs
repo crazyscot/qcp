@@ -14,12 +14,14 @@ use crate::util::cli::IntOrString;
 /// Representation an IP address family
 ///
 /// This is a local type with special parsing semantics to take part in the config/CLI system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, clap::ValueEnum)]
 #[serde(from = "IntOrString<AddressFamily>", into = "u64")]
 pub enum AddressFamily {
     /// IPv4
+    #[value(name = "4")]
     V4,
     /// IPv6
+    #[value(name = "6")]
     V6,
 }
 

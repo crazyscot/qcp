@@ -49,7 +49,7 @@ pub async fn client_main(
     let job_spec = crate::client::CopyJobSpec::try_from(&parameters)?;
     let credentials = Credentials::generate()?;
     let remote_host = job_spec.remote_host();
-    let remote_address = lookup_host_by_family(remote_host, config.address_family())?;
+    let remote_address = lookup_host_by_family(remote_host, config.address_family)?;
 
     // Control channel ---------------
     timers.next("control channel");
