@@ -88,7 +88,10 @@ impl Provider for SystemDefault {
 
 // CONFIG MANAGER /////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Processes and merges all possible configuration sources
+/// Processes and merges all possible configuration sources.
+///
+/// Configuration file locations are platform-dependent.
+/// To see what applies on the current platform, run `qcp --config-files`.
 #[derive(Debug)]
 pub struct Manager {
     /// Configuration data
@@ -129,7 +132,8 @@ impl Default for Manager {
 }
 
 impl Manager {
-    /// Initialises this structure with the standard set of OS-specific file paths
+    /// Initialises this structure, reading the set of config files appropriate to the platform
+    /// and the current user.
     #[must_use]
     pub fn new() -> Self {
         let mut data = Figment::new().merge(SystemDefault::default());
@@ -143,9 +147,9 @@ impl Manager {
         }
     }
 
-    /// Returns a list of configuration files
+    /// Returns the list of configuration files we read.
     ///
-    /// This is a function of platform and the current user id
+    /// This is a function of platform and the current user id.
     pub fn config_files() -> Vec<String> {
         let inputs = vec![Ok(system_config_path()), user_config_path()];
 
@@ -167,9 +171,9 @@ impl Manager {
         }
     }
 
-    /// Merges in a data set.
+    /// Merges in a data set, which is some sort of [figment::Provider](https://docs.rs/figment/latest/figment/trait.Provider.html).
     ///
-    /// `T` is expected to be a type created by [crate::util::derive_deftly_template_Optionalify].
+    /// Within qcp, we use [crate::util::derive_deftly_template_Optionalify] to implement Provider for [Configuration].
     pub fn merge_provider<T>(&mut self, provider: T)
     where
         T: Provider,
@@ -190,7 +194,7 @@ impl Manager {
 
     /// Attempts to extract a particular struct from the data.
     ///
-    /// Type `T` may be `Configuration` or one of its sub-elements.
+    /// Within qcp, `T` is usually [Configuration], but it isn't intrinsically required to be.
     pub fn get<'de, T>(&self) -> anyhow::Result<T, figment::Error>
     where
         T: Deserialize<'de>,
@@ -289,7 +293,8 @@ impl Display for Manager {
 }
 
 /// Pretty-printing type wrapper to Manager
-pub(crate) struct DisplayAdapter<'a> {
+#[derive(Debug)]
+pub struct DisplayAdapter<'a> {
     /// Data source
     source: &'a Manager,
     /// Whether to warn if unused fields are present
@@ -299,7 +304,12 @@ pub(crate) struct DisplayAdapter<'a> {
 }
 
 impl Manager {
-    pub(crate) fn to_display_adapter<'de, T>(&self, warn_on_unused: bool) -> DisplayAdapter<'_>
+    /// Creates a `DisplayAdapter` for this struct with the given options.
+    ///
+    /// # Returns
+    /// An ephemeral structure implementing `Display`.
+    #[must_use]
+    pub fn to_display_adapter<'de, T>(&self, warn_on_unused: bool) -> DisplayAdapter<'_>
     where
         T: Deserialize<'de> + FieldNamesAsSlice,
     {

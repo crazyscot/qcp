@@ -261,7 +261,6 @@ pub(crate) fn create_endpoint(
     mode: ThroughputMode,
 ) -> Result<quinn::Endpoint> {
     let _ = span!(Level::TRACE, "create_endpoint").entered();
-    let port = options.port;
     let mut root_store = RootCertStore::empty();
     root_store.add(server_cert)?;
 
@@ -274,8 +273,8 @@ pub(crate) fn create_endpoint(
     let mut config = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
     let _ = config.transport_config(crate::transport::create_config(options, mode)?);
 
-    trace!("bind & configure socket, port={port:?}", port = port);
-    let mut socket = util::socket::bind_range_for_peer(server_addr, port)?;
+    trace!("bind & configure socket, port={:?}", options.port);
+    let mut socket = util::socket::bind_range_for_peer(server_addr, options.port)?;
     let wanted_send = match mode {
         ThroughputMode::Both | ThroughputMode::Tx => Some(Configuration::send_buffer().try_into()?),
         ThroughputMode::Rx => None,

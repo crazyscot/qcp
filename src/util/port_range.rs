@@ -5,14 +5,22 @@ use std::{fmt::Display, str::FromStr};
 
 use super::cli::IntOrString;
 
-/// Represents a number or a contiguous range of positive integers
+/// A range of UDP port numbers.
+///
+/// Port 0 is allowed with the usual meaning ("any available port"), but 0 may not form part of a range.
+///
+/// In a configuration file, a range must be specified as a string. For example:
+/// ```toml
+/// remote_port=60000         # a single port can be an integer
+/// remote_port="60000"       # a single port can also be a string
+/// remote_port="60000-60010" # a range must be specified as a string
+/// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(from = "IntOrString<PortRange>", into = "String")]
 pub struct PortRange {
     /// First number in the range
     pub begin: u16,
-    /// Last number in the range.
-    /// The caller defines whether the range is inclusive or exclusive of `end`.
+    /// Last number in the range, inclusive.
     pub end: u16,
 }
 

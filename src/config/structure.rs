@@ -16,7 +16,7 @@ use derive_deftly::Deftly;
 
 /// The set of configurable options supported by qcp.
 ///
-/// **Note:** On this struct, `default()` returns qcp's hard-wired configuration defaults.
+/// **Note:** The implementation of `default()` for this struct returns qcp's hard-wired configuration defaults.
 #[derive(Deftly)]
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
@@ -28,16 +28,17 @@ pub struct Configuration {
     /// [default: 12500k]
     ///
     /// This may be specified directly as a number of bytes, or as an SI quantity
-    /// e.g. "10M" or "256k". Note that this is described in BYTES, not bits;
+    /// like `10M` or `256k`. **Note that this is described in BYTES, not bits**;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable setting.
     #[arg(short('b'), long, alias("rx-bw"), help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
     pub rx: HumanU64,
     /// The maximum network bandwidth we expect sending data TO the remote system,
     /// if it is different from the bandwidth FROM the system.
-    /// [default: use the value of --rx]
     ///
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
+    ///
+    /// If not specified, uses the value of `rx`.
     #[arg(short('B'), long, alias("tx-bw"), help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
     pub tx: Option<HumanU64>,
 
@@ -63,17 +64,21 @@ pub struct Configuration {
     #[clap(value_enum)]
     pub congestion: CongestionControllerType,
 
-    /// (Network wizards only!)
+    /// _(Network wizards only!)_
     /// The initial value for the sending congestion control window.
-    /// [default: use the default for the selected congestion control algorithm]
+    /// If unspecified, the active congestion control algorithm decides.
     ///
-    /// Setting this value too high reduces performance!
+    /// _Setting this value too high reduces performance!_
     #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
     pub initial_congestion_window: Option<u64>,
 
     /// Uses the given UDP port or range on the local endpoint.
-    ///
     /// This can be useful when there is a firewall between the endpoints.
+    ///
+    /// For example: `12345`, `"20000-20100"`
+    /// (in a configuration file, a range must be quoted)
+    ///
+    /// If unspecified, uses any available UDP port.
     #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
     pub port: Option<PortRange>,
 
@@ -85,19 +90,24 @@ pub struct Configuration {
     pub timeout: u16,
 
     // CLIENT OPTIONS ==================================================================================
-    /// Forces use of a particular IP version when connecting to the remote. [default: autodetect]
+    /// Forces use of a particular IP version when connecting to the remote.
+    ///
+    /// If unspecified, uses whatever seems suitable given the target address or the result of DNS lookup.
     // (see also [CliArgs::ipv4_alias__] and [CliArgs::ipv6_alias__])
     #[arg(long, alias("ipv"), help_heading("Connection"), group("ip address"))]
     pub address_family: Option<AddressFamily>,
 
-    /// Specifies the ssh client program to use [default: ssh]
+    /// Specifies the ssh client program to use [default: `ssh`]
     #[arg(long, help_heading("Connection"))]
     pub ssh: String,
 
-    /// Provides an additional option or argument to pass to the ssh client.
+    /// Provides an additional option or argument to pass to the ssh client. [default: none]
     ///
-    /// Note that you must repeat `-S` for each.
+    /// **On the command line** you must repeat `-S` for each argument.
     /// For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`
+    ///
+    /// **In a configuration file** this field is an array of strings.
+    /// For the same example: `ssh_opts=["-i", "/dev/null"]`
     #[arg(
         short = 'S',
         action,
@@ -108,8 +118,12 @@ pub struct Configuration {
     pub ssh_opt: Vec<String>,
 
     /// Uses the given UDP port or range on the remote endpoint.
-    ///
     /// This can be useful when there is a firewall between the endpoints.
+    ///
+    /// For example: `12345`, `"20000-20100"`
+    /// (in a configuration file, a range must be quoted)
+    ///
+    /// If unspecified, uses any available UDP port.
     #[arg(short = 'P', long, value_name("M-N"), help_heading("Connection"))]
     pub remote_port: Option<PortRange>,
 }
@@ -174,7 +188,7 @@ impl Configuration {
         2 * self.bandwidth_delay_product_tx()
     }
 
-    /// Converts the `timeout` field into a Duration
+    /// Accessor for `timeout`, as a Duration
     #[must_use]
     pub fn timeout_duration(&self) -> Duration {
         Duration::from_secs(self.timeout.into())
@@ -201,6 +215,8 @@ impl Configuration {
 }
 
 impl Default for Configuration {
+    /// **(Unusual!)**
+    /// Returns qcp's hard-wired configuration defaults.
     fn default() -> Self {
         Self {
             // Transport

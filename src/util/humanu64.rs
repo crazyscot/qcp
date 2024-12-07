@@ -9,7 +9,10 @@ use serde::Serialize;
 
 use super::cli::IntOrString;
 
-/// Newtype wrapper to u64 that adds a flexible deserializer via `humanize_rs::bytes::Bytes<u64>`
+/// An integer field that may also be expressed using engineering prefixes (k, M, G, etc).
+/// For example, `1k` and `1000` are the same.
+///
+/// (Nerdy description: This is a newtype wrapper to `u64` that adds a flexible deserializer via `humanize_rs::bytes::Bytes<u64>`.)
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(from = "IntOrString<HumanU64>", into = "u64")]

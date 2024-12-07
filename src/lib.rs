@@ -42,6 +42,12 @@
 //!
 //! The [protocol] documentation contains more detail and a discussion of its security properties.
 //!
+//! ## Configuration
+//!
+//! On the command line, qcp has a comprehensive `--help` message.
+//!
+//! Most options can also be specified in a config file. See [config] for detalis.
+//!
 //! ## 📈 Getting the best out of qcp
 //!
 //! See [performance](doc::performance) and [troubleshooting](doc::troubleshooting).

@@ -87,6 +87,11 @@ qcp my-server:/tmp/testfile /tmp/ --rx 37M --tx 12M
 
 Performance tuning can be a tricky subject. See the [performance] documentation.
 
+#### Persistent configuration
+
+The useful options -- those you might want to use regularly including `rx`, `tx` and `rtt` -- can be specified
+in a configuration file. See [config] for details.
+
 ## 📖 How qcp works
 
 The brief version:
@@ -141,6 +146,7 @@ Some ideas for the future, in no particular order:
 [rfc9000]: https://www.rfc-editor.org/rfc/rfc9000.html
 [buying me a coffee]: https://buymeacoffee.com/rossyounger
 [ko-fi]: https://ko-fi.com/rossyounger
+[config]: https://docs.rs/qcp/latest/qcp/doc/config/index.html
 [protocol]: https://docs.rs/qcp/latest/qcp/protocol/index.html
 [performance]: https://docs.rs/qcp/latest/qcp/doc/performance/index.html
 [Github sponsorship]: https://github.com/sponsors/crazyscot?frequency=recurring&sponsor=crazyscot
