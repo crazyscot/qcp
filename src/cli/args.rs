@@ -1,9 +1,9 @@
 // QCP top-level command-line arguments
 // (c) 2024 Ross Younger
 
-use clap::{Args as _, FromArgMatches as _, Parser};
+use clap::{ArgAction::SetTrue, Args as _, FromArgMatches as _, Parser};
 
-use crate::{client::CopyJobSpec, config::Manager};
+use crate::{client::CopyJobSpec, config::Manager, util::AddressFamily};
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
 pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers", "show_config", "config_files"];
@@ -63,6 +63,25 @@ pub(crate) struct CliArgs {
     // (including positional arguments!)
     #[command(flatten)]
     pub client_params: crate::client::Parameters,
+
+    /// Convenience alias for `--address-family 4`
+    // this is actioned by our custom parser
+    #[arg(
+        short = '4',
+        help_heading("Connection"),
+        group("ip address"),
+        action(SetTrue)
+    )]
+    pub ipv4_alias__: bool,
+    /// Convenience alias for `--address-family 6`
+    // this is actioned by our custom parser
+    #[arg(
+        short = '6',
+        help_heading("Connection"),
+        group("ip address"),
+        action(SetTrue)
+    )]
+    pub ipv6_alias__: bool,
 }
 
 impl CliArgs {
@@ -70,7 +89,15 @@ impl CliArgs {
     pub(crate) fn custom_parse() -> Self {
         let cli = clap::Command::new(clap::crate_name!());
         let cli = CliArgs::augment_args(cli).version(crate::version::short());
-        CliArgs::from_arg_matches(&cli.get_matches_from(std::env::args_os())).unwrap()
+        let mut args =
+            CliArgs::from_arg_matches(&cli.get_matches_from(std::env::args_os())).unwrap();
+        // Custom logic: '-4' and '-6' convenience aliases
+        if args.ipv4_alias__ {
+            args.config.address_family = Some(Some(AddressFamily::V4));
+        } else if args.ipv6_alias__ {
+            args.config.address_family = Some(Some(AddressFamily::V6));
+        }
+        args
     }
 }
 
