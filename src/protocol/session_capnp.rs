@@ -11,6 +11,7 @@
     clippy::missing_panics_doc,
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
+    clippy::needless_lifetimes,
     clippy::semicolon_if_nothing_returned,
     clippy::uninlined_format_args,
     clippy::used_underscore_binding

@@ -56,7 +56,6 @@ impl ClientMessage {
         Ok(())
     }
     /// Deserializer
-
     pub async fn read<R>(read: &mut R) -> Result<Self>
     where
         R: tokio::io::AsyncRead + Unpin,

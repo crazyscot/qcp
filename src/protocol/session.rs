@@ -223,7 +223,6 @@ pub struct FileTrailer {}
 
 impl FileTrailer {
     /// One-stop serializer
-
     #[must_use]
     pub fn serialize_direct() -> Vec<u8> {
         let mut msg = ::capnp::message::Builder::new_default();
