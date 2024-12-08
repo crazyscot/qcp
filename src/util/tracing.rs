@@ -110,15 +110,11 @@ pub fn setup(
 }
 
 /// A wrapper type so tracing can output in a way that doesn't mess up `MultiProgress`
-struct ProgressWriter {
-    display: MultiProgress,
-}
+struct ProgressWriter(MultiProgress);
 
 impl ProgressWriter {
     fn wrap(display: &MultiProgress) -> Mutex<Self> {
-        Mutex::new(Self {
-            display: display.clone(),
-        })
+        Mutex::new(Self(display.clone()))
     }
 }
 
@@ -126,10 +122,10 @@ impl Write for ProgressWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let msg = std::str::from_utf8(buf)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        if self.display.is_hidden() {
+        if self.0.is_hidden() {
             eprintln!("{msg}");
         } else {
-            self.display.println(msg)?;
+            self.0.println(msg)?;
         }
         Ok(buf.len())
     }
