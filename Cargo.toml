@@ -17,7 +17,9 @@ lto = "thin"
 strip = "symbols"
 
 [dependencies]
+anstream = "0.6.18"
 anstyle = "1.0.8"
+anstyle-owo-colors = "2.0.3"
 anyhow = "1.0.89"
 capnp = "0.20.1"
 capnp-futures = "0.20.0"
@@ -33,7 +35,9 @@ heck = "0.5.0"
 human-repr = "1.1.0"
 humanize-rs = "0.1.5"
 indicatif = { version = "0.17.8", features = ["tokio"] }
+lazy_static = "1.5.0"
 num-format = { version = "0.4.4" }
+owo-colors = { version = "4.0.0", features = ["supports-color"] }
 quinn = { version = "0.11.5", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
 rcgen = { version = "0.13.1" }
 rustls-pki-types = "1.9.0"
