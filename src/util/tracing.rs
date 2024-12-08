@@ -7,6 +7,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use anstream::eprintln;
 use anyhow::Context;
 use indicatif::MultiProgress;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter, Layer};

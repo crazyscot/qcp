@@ -329,12 +329,16 @@ impl Display for DisplayAdapter<'_> {
     /// N.B. This function uses CLI styling.
     #[allow(clippy::missing_panics_doc)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let warn = crate::cli::styles::warning();
+        use crate::cli::styles::{ERROR_S, WARNING_S};
+        use anstream::eprintln;
+        use owo_colors::OwoColorize as _;
+
         let data = match self.source.data.data() {
             Ok(d) => d,
             Err(e) => {
                 // This isn't terribly helpful as it doesn't have metadata attached; BUT attempting to get() a struct does.
-                return writeln!(f, "{}", warn.apply_to(format!("error: {e}")));
+                eprintln!("{} {e}", "ERROR".style(*ERROR_S));
+                return Ok(());
             }
         };
         // panic is impossible on the Default profile, hence #[allow(clippy::missing_panics_doc)]
@@ -349,21 +353,16 @@ impl Display for DisplayAdapter<'_> {
                 let value = match value {
                     Ok(v) => v,
                     Err(e) => {
-                        writeln!(
-                            f,
-                            "{}",
-                            warn.apply_to(format!("error on field {field}: {e}"))
-                        )?;
+                        eprintln!("{}: error on {field}: {e}", "WARNING".style(*WARNING_S));
                         continue;
                     }
                 };
                 output.push(PrettyConfig::new(field, &value, meta));
             } else if self.warn_on_unused {
                 let source = PrettyConfig::render_source(meta);
-                let _ = writeln!(
-                    f,
-                    "{}",
-                    warn.apply_to(format!("Unrecognised field `{field}` in {source}"))
+                eprintln!(
+                    "{}: unrecognised field `{field}` in {source}",
+                    "WARNING".style(*WARNING_S)
                 );
             }
         }

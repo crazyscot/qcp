@@ -25,7 +25,7 @@ pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers", "show_confi
 {all-args}{after-help}
 "
 ))]
-#[command(styles=super::styles::get())]
+#[command(styles=super::styles::CLAP_STYLES)]
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct CliArgs {
     // MODE SELECTION ======================================================================
