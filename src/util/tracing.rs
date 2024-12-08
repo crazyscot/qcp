@@ -10,7 +10,8 @@ use std::{
 use anstream::eprintln;
 use anyhow::Context;
 use indicatif::MultiProgress;
-use tracing_subscriber::{fmt, prelude::*, EnvFilter, Layer};
+use time::macros::format_description;
+use tracing_subscriber::{fmt::time::OffsetTime, prelude::*, EnvFilter, Layer};
 
 const STANDARD_ENV_VAR: &str = "RUST_LOG";
 const LOG_FILE_DETAIL_ENV_VAR: &str = "RUST_LOG_FILE_DETAIL";
@@ -61,18 +62,29 @@ pub fn setup(
 
     let filter = filter_for(trace_level, STANDARD_ENV_VAR)?;
     // If we used the environment variable, show log targets; if we did not, we're only logging qcp, so do not show targets.
-    let format = fmt::layer().compact().with_target(filter.used_env);
+    let offset = time::UtcOffset::current_local_offset()?;
+    let timer = OffsetTime::<_>::new(
+        offset,
+        format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
+    );
+
+    let format_base = || {
+        tracing_subscriber::fmt::layer()
+            .with_timer(timer.clone())
+            .compact()
+            .with_target(filter.used_env)
+    }; // Users must add a filter.filter after setting up their writer.
 
     match display {
         None => {
-            let format = format
+            let format = format_base()
                 .with_writer(std::io::stderr)
                 .with_filter(filter.filter)
                 .boxed();
             layers.push(format);
         }
         Some(mp) => {
-            let format = format
+            let format = format_base()
                 .with_writer(ProgressWriter::wrap(mp))
                 .with_filter(filter.filter)
                 .boxed();
@@ -92,12 +104,10 @@ pub fn setup(
         } else {
             filter_for(trace_level, STANDARD_ENV_VAR)?
         };
-        let layer = tracing_subscriber::fmt::layer()
-            .with_writer(out_file)
-            // Same logic for if we used the environment variable.
-            .with_target(filter.used_env)
-            .compact()
+        // Same logic for if we used the environment variable.
+        let layer = format_base()
             .with_ansi(false)
+            .with_writer(out_file)
             .with_filter(filter.filter)
             .boxed();
         layers.push(layer);
