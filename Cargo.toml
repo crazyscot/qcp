@@ -1,7 +1,7 @@
 [package]
 name = "qcp"
 description = "Secure remote file copy utility which uses the QUIC protocol over UDP"
-rust-version = "1.81.0"
+rust-version = "1.81.0" # 1.81.0 was the current Rust version when this project started
 resolver = "2"
 version = "0.1.3"
 edition = "2021"

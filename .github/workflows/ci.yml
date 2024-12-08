@@ -100,10 +100,8 @@ jobs:
       - name: install packages
         run: scripts/install-ubuntu-packages
       # Checks begin here!
-      - run: cargo fmt --all -- --check
+      - run: cargo fmt --all --check
       - run: cargo test --locked
       - run: cargo clippy --locked --all-targets
-      # We care that the benchmarks build and run, not about their numeric output.
-      # To keep the CI a bit leaner, do this in the dev profile.
       - run: cargo build --locked --all-targets
       - run: cargo doc --no-deps --locked

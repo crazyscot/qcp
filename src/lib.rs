@@ -21,7 +21,7 @@
 //! I was inspired to write this when I needed to copy a load of multi-GB files from a server on the other side of the planet.
 //!
 //! #### Limitations
-//! - You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection-tracking NAT, things work just fine. This is the case for the vast majority of home and business network connections.)
+//! - You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection-tracking NAT, things work just fine. This is the case for the vast majority of home and business network connections. If need be, you can configure qcp to use a particular port range.)
 //! - Network security systems can't readily identify QUIC traffic as such. It's opaque, and high bandwidth. Some security systems might flag it as a potential threat.
 //!
 //! #### What qcp is not
@@ -51,6 +51,11 @@
 //! ## 📈 Getting the best out of qcp
 //!
 //! See [performance](doc::performance) and [troubleshooting](doc::troubleshooting).
+//!
+//! ## MSRV policy
+//!
+//! As this is an application crate, the MSRV is not guaranteed to remain stable.
+//! The MSRV may be upgraded from time to time to take advantage of new language features.
 //!
 //! [QUIC]: https://quicwg.github.io/
 //! [ssh]: https://en.wikipedia.org/wiki/Secure_Shell

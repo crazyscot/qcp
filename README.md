@@ -12,6 +12,9 @@ high-performance remote file copy utility for long-distance internet connections
 - 🔧 Drop-in replacement for `scp`
 - 🛡️ Similar security to `scp`, using existing, well-known mechanisms
 - 🚀 Better throughput on congested networks
+- **(New in 0.2)** Configuration file support
+
+For a full list of changes, see the [changelog](CHANGELOG.md).
 
 #### Platform support status
 
@@ -23,6 +26,9 @@ high-performance remote file copy utility for long-distance internet connections
 ## 🧰 Getting Started
 
 * You must have ssh access to the target machine.
+  - You must be able to exchange UDP packets with the target on a given port.
+  - If the local machine is behind connection-tracking NAT, things usually work just fine. This is the case for the vast majority of home and business network connections.
+  - You can tell qcp to use a particular port range if you need to.
 * Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine.
 * Run `qcp --help-buffers` and follow its instructions.
 
@@ -103,35 +109,56 @@ The brief version:
 
 The [protocol] documentation contains more detail and a discussion of its security properties.
 
-## ⚖️ License
+## 📘 Project Policies
 
-The initial release is made under the [GNU Affero General Public License](LICENSE).
+### ⚖️ License
 
-## 🧑‍🏭 Contributing
+This project is released publicly under the [GNU Affero General Public License](LICENSE).
 
-Feel free to report bugs via the [bug tracker].
+Alternative license terms can be made available on request on a commercial basis (see below).
 
-I'd particularly welcome performance reports from BSD/OSX users as that's not a platform I use regularly.
+### 🧑‍🏭 Bugs, Features & Contributions
 
-While suggestions and feature requests are welcome, please be aware that I mostly work on this project in my own time.
+Bug reports and feature requests are welcome, please use the [issue] tracker.
+
+- It may be useful to check the [issues list] and the [discussions] first in case somebody else has already raised it.
+- Please be aware that I mostly work on this project in my own time.
+
+🚧 If you're thinking of contributing code, please read [CONTRIBUTING.md](CONTRIBUTING.md).
+
+#### Help wanted: MacOS/BSD
+
+I'd particularly welcome performance reports from MacOS/BSD users as those are not platforms I use regularly.
+
+### 📑 Version number and compatibility
+
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 2.0.0.
+
+In its initial experimental phase, the major number will be kept at 0.
+Breaking changes will be noted in the [changelog](CHANGELOG.md) and will trigger a minor version bump.
+
+The project will move to version 1.x when the protocol has stabilised. After 1.0, breaking changes will trigger a major version bump.
 
 ## 💸 Supporting the project
 
 If you find this software useful and would like to say thank you, please consider [buying me a coffee] or [ko-fi]. [Github sponsorship] is also available.
 
-If you're a business and need a formal invoice for your accountant, my freelancing company can issue the paperwork.
-For this, and any other commercial enquiries (alternative licensing, support, etc) please get in touch, to `qcp@crazyscot.com`.
-
 Please also consider supporting the galaxy of projects this work builds upon.
 Most notably, [Quinn] is a pure-Rust implementation of the [QUIC] protocol, without which qcp simply wouldn't exist in its current form.
 
-### 💡 Roadmap
+If you're a business and need a formal invoice for your accountant, my freelancing company can issue the paperwork.
+For this, and any other commercial enquiries please get in touch, to `qcp@crazyscot.com`. We would be pleased to discuss commercial terms for:
+
+* Alternative licensing
+* Support
+* Sponsoring feature development
+
+## 💡 Future Directions
 
 Some ideas for the future, in no particular order:
 
-* A local config mechanism, so you don't have to type out the network parameters every time
 * Support for copying multiple files (e.g. shell globs or `scp -r`)
-* Windows native support, at least for client mode
+* Windows native support
 * Firewall/NAT traversal
 * Interactive file transfer (akin to `ftp`)
 * Smart file copy using the `rsync` protocol or similar (send only the sections you need to)
@@ -140,7 +167,9 @@ Some ideas for the future, in no particular order:
 * Bind a daemon to a fixed port, for better firewall/NAT traversal properties but at the cost of having to implement user authentication.
 * _The same thing we do every night, Pinky. We try to take over the world!_
 
-[bug tracker]: https://github.com/crazyscot/qcp/issues
+[issue]: https://github.com/crazyscot/qcp/issues/new/choose
+[issues list]: https://github.com/crazyscot/qcp/issues
+[discussions]: https://github.com/crazyscot/qcp/discussions
 [quic]: https://quicwg.github.io/
 [Quinn]: https://opencollective.com/quinn-rs
 [rfc9000]: https://www.rfc-editor.org/rfc/rfc9000.html
