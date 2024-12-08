@@ -53,3 +53,12 @@
 //! If this bothers you, you might want to look into setting up QoS on your router.
 //!
 //! There might be some mileage in having qcp try to limit its bandwidth use or tune it to be less aggressive in the face of congestion, but that's not implemented at the moment.
+//!
+//! ### It takes a long time to set up the control channel
+//!
+//! The control channel is an ordinary ssh connection, so you need to figure out how to make ssh faster.
+//! This is not within qcp's control.
+//!
+//! * Often this is due to a DNS misconfiguration at the server side, causing it to stall until a DNS lookup times out.
+//! * There are a number of guides online purporting to advise you how to speed up ssh connections; I can't vouch for them.
+//! * You might also look into ssh connection multiplexing.
