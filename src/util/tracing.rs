@@ -10,8 +10,11 @@ use std::{
 use anstream::eprintln;
 use anyhow::Context;
 use indicatif::MultiProgress;
-use time::macros::format_description;
-use tracing_subscriber::{fmt::time::OffsetTime, prelude::*, EnvFilter, Layer};
+use tracing_subscriber::{
+    fmt::{time::ChronoLocal, MakeWriter},
+    prelude::*,
+    EnvFilter,
+};
 
 const STANDARD_ENV_VAR: &str = "RUST_LOG";
 const LOG_FILE_DETAIL_ENV_VAR: &str = "RUST_LOG_FILE_DETAIL";
@@ -43,6 +46,27 @@ fn filter_for(trace_level: &str, key: &str) -> anyhow::Result<FilterResult> {
         })
 }
 
+fn layer_factory<S, W, F>(
+    writer: W,
+    filter: F,
+    show_target: bool,
+    ansi: bool,
+) -> Box<dyn tracing_subscriber::Layer<S> + Send + Sync>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+    W: for<'writer> MakeWriter<'writer> + 'static + Sync + Send,
+    F: tracing_subscriber::layer::Filter<S> + 'static + Sync + Send,
+{
+    tracing_subscriber::fmt::layer::<S>()
+        .with_timer(ChronoLocal::rfc_3339())
+        .compact()
+        .with_target(show_target)
+        .with_ansi(ansi)
+        .with_writer(writer)
+        .with_filter(filter)
+        .boxed()
+}
+
 /// Set up rust tracing, to console (via an optional `MultiProgress`) and optionally to file.
 ///
 /// By default we log only our events (qcp), at a given trace level.
@@ -62,33 +86,23 @@ pub fn setup(
 
     let filter = filter_for(trace_level, STANDARD_ENV_VAR)?;
     // If we used the environment variable, show log targets; if we did not, we're only logging qcp, so do not show targets.
-    let offset = time::UtcOffset::current_local_offset()?;
-    let timer = OffsetTime::<_>::new(
-        offset,
-        format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
-    );
-
-    let format_base = || {
-        tracing_subscriber::fmt::layer()
-            .with_timer(timer.clone())
-            .compact()
-            .with_target(filter.used_env)
-    }; // Users must add a filter.filter after setting up their writer.
 
     match display {
         None => {
-            let format = format_base()
-                .with_writer(std::io::stderr)
-                .with_filter(filter.filter)
-                .boxed();
-            layers.push(format);
+            layers.push(layer_factory(
+                std::io::stderr,
+                filter.filter,
+                filter.used_env,
+                true,
+            ));
         }
         Some(mp) => {
-            let format = format_base()
-                .with_writer(ProgressWriter::wrap(mp))
-                .with_filter(filter.filter)
-                .boxed();
-            layers.push(format);
+            layers.push(layer_factory(
+                ProgressWriter::wrap(mp),
+                filter.filter,
+                filter.used_env,
+                true,
+            ));
         }
     };
 
@@ -104,13 +118,13 @@ pub fn setup(
         } else {
             filter_for(trace_level, STANDARD_ENV_VAR)?
         };
-        // Same logic for if we used the environment variable.
-        let layer = format_base()
-            .with_ansi(false)
-            .with_writer(out_file)
-            .with_filter(filter.filter)
-            .boxed();
-        layers.push(layer);
+        // Same logic for whether we used the environment variable.
+        layers.push(layer_factory(
+            out_file,
+            filter.filter,
+            filter.used_env,
+            false,
+        ));
     }
 
     ////////

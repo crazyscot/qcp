@@ -46,11 +46,10 @@ static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
 strum_macros = "0.26.4"
 tabled = "0.17.0"
-time = { version = "0.3.37", features = ["macros"] }
 tokio = { version = "1.40.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
 tokio-util = { version = "0.7.12", features = ["compat"] }
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "time", "local-time"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "chrono"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29.0", features = ["socket"] }
