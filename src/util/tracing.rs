@@ -10,14 +10,51 @@ use std::{
 use anstream::eprintln;
 use anyhow::Context;
 use indicatif::MultiProgress;
+use serde::{Deserialize, Serialize};
 use tracing_subscriber::{
-    fmt::{time::ChronoLocal, MakeWriter},
+    fmt::{
+        time::{ChronoLocal, ChronoUtc},
+        MakeWriter,
+    },
     prelude::*,
     EnvFilter,
 };
 
+const FRIENDLY_FORMAT_LOCAL: &str = "%Y-%m-%d %H:%M:%SL";
+const FRIENDLY_FORMAT_UTC: &str = "%Y-%m-%d %H:%M:%SZ";
+
+/// Environment variable that controls what gets logged to stderr
 const STANDARD_ENV_VAR: &str = "RUST_LOG";
+/// Environment variable that controls what gets logged to file
 const LOG_FILE_DETAIL_ENV_VAR: &str = "RUST_LOG_FILE_DETAIL";
+
+/// Selects the format of time stamps in output messages
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    strum_macros::Display,
+    clap::ValueEnum,
+    Serialize,
+    Deserialize,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum TimeFormat {
+    /// Local time (as best as we can figure it out), as "year-month-day HH:MM:SS"
+    #[default]
+    Local,
+    /// UTC time, as "year-month-day HH:MM:SS"
+    Utc,
+    /// UTC time, in the format described in [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339).
+    ///
+    /// Examples:
+    /// `1997-11-12T09:55:06-06:00`
+    /// `2010-03-14T18:32:03Z`
+    Rfc3339,
+}
 
 /// Result type for `filter_for()`
 struct FilterResult {
@@ -46,9 +83,10 @@ fn filter_for(trace_level: &str, key: &str) -> anyhow::Result<FilterResult> {
         })
 }
 
-fn layer_factory<S, W, F>(
+fn make_tracing_layer<S, W, F>(
     writer: W,
     filter: F,
+    time_format: TimeFormat,
     show_target: bool,
     ansi: bool,
 ) -> Box<dyn tracing_subscriber::Layer<S> + Send + Sync>
@@ -57,14 +95,32 @@ where
     W: for<'writer> MakeWriter<'writer> + 'static + Sync + Send,
     F: tracing_subscriber::layer::Filter<S> + 'static + Sync + Send,
 {
-    tracing_subscriber::fmt::layer::<S>()
-        .with_timer(ChronoLocal::rfc_3339())
+    // The common bit
+    let layer = tracing_subscriber::fmt::layer::<S>()
         .compact()
         .with_target(show_target)
-        .with_ansi(ansi)
-        .with_writer(writer)
-        .with_filter(filter)
-        .boxed()
+        .with_ansi(ansi);
+
+    // Unfortunately, you have to add the timer before you can add the writer and filter, so
+    // there's a bit of duplication here:
+    match time_format {
+        TimeFormat::Local => layer
+            .with_timer(ChronoLocal::new(FRIENDLY_FORMAT_LOCAL.into()))
+            .with_writer(writer)
+            .with_filter(filter)
+            .boxed(),
+        TimeFormat::Utc => layer
+            .with_timer(ChronoUtc::new(FRIENDLY_FORMAT_UTC.into()))
+            .with_writer(writer)
+            .with_filter(filter)
+            .boxed(),
+
+        TimeFormat::Rfc3339 => layer
+            .with_timer(ChronoLocal::rfc_3339())
+            .with_writer(writer)
+            .with_filter(filter)
+            .boxed(),
+    }
 }
 
 /// Set up rust tracing, to console (via an optional `MultiProgress`) and optionally to file.
@@ -79,6 +135,7 @@ pub fn setup(
     trace_level: &str,
     display: Option<&MultiProgress>,
     filename: &Option<String>,
+    time_format: TimeFormat,
 ) -> anyhow::Result<()> {
     let mut layers = Vec::new();
 
@@ -89,17 +146,19 @@ pub fn setup(
 
     match display {
         None => {
-            layers.push(layer_factory(
+            layers.push(make_tracing_layer(
                 std::io::stderr,
                 filter.filter,
+                time_format,
                 filter.used_env,
                 true,
             ));
         }
         Some(mp) => {
-            layers.push(layer_factory(
+            layers.push(make_tracing_layer(
                 ProgressWriter::wrap(mp),
                 filter.filter,
+                time_format,
                 filter.used_env,
                 true,
             ));
@@ -119,9 +178,10 @@ pub fn setup(
             filter_for(trace_level, STANDARD_ENV_VAR)?
         };
         // Same logic for whether we used the environment variable.
-        layers.push(layer_factory(
+        layers.push(make_tracing_layer(
             out_file,
             filter.filter,
+            time_format,
             filter.used_env,
             false,
         ));

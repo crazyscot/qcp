@@ -10,8 +10,12 @@ use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
     transport::CongestionControllerType,
-    util::{derive_deftly_template_Optionalify, humanu64::HumanU64, AddressFamily, PortRange},
+    util::{
+        derive_deftly_template_Optionalify, humanu64::HumanU64, AddressFamily, PortRange,
+        TimeFormat,
+    },
 };
+
 use derive_deftly::Deftly;
 
 /// The set of configurable options supported by qcp.
@@ -126,6 +130,10 @@ pub struct Configuration {
     /// If unspecified, uses any available UDP port.
     #[arg(short = 'P', long, value_name("M-N"), help_heading("Connection"))]
     pub remote_port: Option<PortRange>,
+
+    /// Specifies the time format to use when printing messages to the console or to file
+    #[arg(short = 'T', long, value_name("FORMAT"), help_heading("Output"))]
+    pub time_format: TimeFormat,
 }
 
 impl Configuration {
@@ -233,6 +241,7 @@ impl Default for Configuration {
             ssh: "ssh".into(),
             ssh_opt: vec![],
             remote_port: None,
+            time_format: TimeFormat::Local,
         }
     }
 }

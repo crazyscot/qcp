@@ -50,12 +50,6 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     let progress = (!args.server).then(|| {
         MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS))
     });
-    setup_tracing(
-        trace_level(&args.client_params),
-        progress.as_ref(),
-        &args.client_params.log_file,
-    )
-    .inspect_err(|e| eprintln!("{e:?}"))?;
 
     if args.config_files {
         // do this before attempting to read config, in case it fails
@@ -80,6 +74,14 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
             return Ok(ExitCode::FAILURE);
         }
     };
+
+    setup_tracing(
+        trace_level(&args.client_params),
+        progress.as_ref(),
+        &args.client_params.log_file,
+        config.time_format,
+    )
+    .inspect_err(|e| eprintln!("{e:?}"))?;
 
     if args.show_config {
         println!(

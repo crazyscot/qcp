@@ -19,17 +19,24 @@ pub struct Parameters {
     ///
     /// By default the log receives everything printed to stderr.
     /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
-    #[arg(short('l'), long, action, help_heading("Debug"), value_name("FILE"))]
+    #[arg(short('l'), long, action, value_name("FILE"), help_heading("Output"))]
     pub log_file: Option<String>,
 
     /// Quiet mode
     ///
     /// Switches off progress display and statistics; reports only errors
-    #[arg(short, long, action, conflicts_with("debug"))]
+    #[arg(short, long, action, conflicts_with("debug"), help_heading("Output"))]
     pub quiet: bool,
 
-    /// Outputs additional transfer statistics
-    #[arg(short = 's', long, alias("stats"), action, conflicts_with("quiet"))]
+    /// Show additional transfer statistics
+    #[arg(
+        short = 's',
+        long,
+        alias("stats"),
+        action,
+        conflicts_with("quiet"),
+        help_heading("Output")
+    )]
     pub statistics: bool,
 
     /// Enables detailed debug output from the remote endpoint
@@ -37,8 +44,8 @@ pub struct Parameters {
     #[arg(long, action, help_heading("Debug"))]
     pub remote_debug: bool,
 
-    /// Prints timing profile data after completion
-    #[arg(long, action, help_heading("Debug"))]
+    /// Output timing profile data after completion
+    #[arg(long, action, help_heading("Output"))]
     pub profile: bool,
 
     // JOB SPECIFICAION ====================================================================
