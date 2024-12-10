@@ -1,0 +1,74 @@
+#!/bin/sh
+
+set -e
+
+# By Debian policy, packages must not ask unnecessary questions.
+#
+# Therefore, we examine the persistent sysctl directories to see
+# if there are any mentions of the sysctls we want to set.
+# If not, we presume that the system has no special requirements
+# (this is expected to be the general case).
+
+SYSCTL_FILE=20-qcp.conf
+SYSCTL_PATH=/etc/sysctl.d/${SYSCTL_FILE}
+
+. /usr/share/debconf/confmodule
+db_version 2.0
+db_capb
+db_settitle qcp/title
+
+#when testing this script, this line resets the db:
+#db_fset qcp/sysctl_clash seen false
+
+check_for_clashing_sysctls() {
+    for DIR in /etc/sysctl.d /usr/lib/sysctl.d; do
+        if grep -qcr -e net.core.rmem_max -e net.core.wmem_max --exclude "*${SYSCTL_FILE}*" ${DIR}; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+activate_our_sysctls() {
+    sysctl -w -p ${SYSCTL_PATH}
+}
+
+disable_our_file() {
+    if [ -e ${SYSCTL_PATH} ]; then
+        mv -f ${SYSCTL_PATH} ${SYSCTL_PATH}.disabled
+    fi
+}
+
+try_to_enable_our_file() {
+    if [ -e ${SYSCTL_PATH}.disabled ]; then
+        mv -f ${SYSCTL_PATH}.disabled ${SYSCTL_PATH}
+    fi
+}
+
+alert_sysadmin() {
+    db_input high qcp/sysctl_clash || true
+    db_go || true
+
+    db_get qcp/sysctl_clash || true
+    case "$RET" in
+        "install and activate now")
+            try_to_enable_our_file
+            activate_our_sysctls
+        ;;
+        "install but do NOT activate")
+            try_to_enable_our_file
+            # do nothing
+        ;;
+        "do not install")
+            # they don't want it, OK
+            disable_our_file
+        ;;
+    esac
+}
+
+if check_for_clashing_sysctls; then
+    alert_sysadmin
+else
+    # No clashes; proceed quietly.
+    activate_our_sysctls
+fi

@@ -1,0 +1,20 @@
+#!/bin/sh
+
+set -e
+
+if [ -e /usr/share/debconf/confmodule ]; then
+. /usr/share/debconf/confmodule
+db_version 2
+
+case "$1" in
+purge)
+    # Remove my changes to the db.
+    if [ -e /usr/share/debconf/confmodule ]; then
+        . /usr/share/debconf/confmodule
+        db_version 2
+        db_purge
+    fi
+    ;;
+esac
+
+fi

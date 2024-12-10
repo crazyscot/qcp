@@ -1,0 +1,16 @@
+Template: qcp/title
+Type: title
+Description: qcp sysctl files
+
+Template: qcp/sysctl_clash
+Type: select
+Choices: install and activate now, install but do NOT activate, do not install
+Default: install and activate now
+Description: Install sysctl files for qcp?
+ qcp has detected a possible sysctl clash!
+ .
+ qcp would like to install sysctl files to configure the kernel for good performance.
+ .
+ The sysctls used by qcp are:    net.core.rmem_max  net.core.wmem_max
+ .
+ sysctl config files may be found in:  /etc/sysctl.d  /usr/lib/sysctl.d
