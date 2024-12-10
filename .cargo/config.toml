@@ -1,4 +1,8 @@
-[target.'cfg(target_os="linux")']
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=--ld-path=mold"]
+
+#[target.'cfg(target_os="linux")']
 # using mold breaks cargo cross on musl (the image is based on focal, which does not have a mold package)
 #rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
