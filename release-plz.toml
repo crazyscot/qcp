@@ -73,7 +73,7 @@ commit_parsers = [
   { message = "^chore\\(pr\\)", skip = true },
   { message = "^chore\\(pull\\)", skip = true },
   { message = "^chore\\(skip", skip = true },
-  { message = "^build|^ci", group = "<!-- 7 -->🏗️ Build & CI" },
+  { message = "^build|^ci|^package", group = "<!-- 7 -->🏗️ Build, packaging & CI" },
   { message = "^chore|^misc|^tidyup", group = "<!-- 8 -->⚙️ Miscellaneous Tasks" },
   { message = "^revert", group = "<!-- 9 -->◀️ Revert" },
 ]
