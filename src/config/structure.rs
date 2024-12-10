@@ -21,6 +21,7 @@ use derive_deftly::Deftly;
 /// The set of configurable options supported by qcp.
 ///
 /// **Note:** The implementation of `default()` for this struct returns qcp's hard-wired configuration defaults.
+// Maintainer note: None of the members of this struct should be Option<anything>. That leads to sunspots in the CLI and strange warts (Some(Some(foo))).
 #[derive(Deftly)]
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
@@ -42,9 +43,9 @@ pub struct Configuration {
     ///
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
     ///
-    /// If not specified, uses the value of `rx`.
+    /// If not specified or 0, uses the value of `rx`.
     #[arg(short('B'), long, alias("tx-bw"), help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
-    pub tx: Option<HumanU64>,
+    pub tx: HumanU64,
 
     /// The expected network Round Trip time to the target system, in milliseconds.
     /// [default: 300]
@@ -74,7 +75,7 @@ pub struct Configuration {
     ///
     /// _Setting this value too high reduces performance!_
     #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
-    pub initial_congestion_window: Option<u64>,
+    pub initial_congestion_window: u64,
 
     /// Uses the given UDP port or range on the local endpoint.
     /// This can be useful when there is a firewall between the endpoints.
@@ -84,7 +85,7 @@ pub struct Configuration {
     ///
     /// If unspecified, uses any available UDP port.
     #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
-    pub port: Option<PortRange>,
+    pub port: PortRange,
 
     /// Connection timeout for the QUIC endpoints [seconds; default 5]
     ///
@@ -99,7 +100,7 @@ pub struct Configuration {
     /// If unspecified, uses whatever seems suitable given the target address or the result of DNS lookup.
     // (see also [CliArgs::ipv4_alias__] and [CliArgs::ipv6_alias__])
     #[arg(long, alias("ipv"), help_heading("Connection"), group("ip address"))]
-    pub address_family: Option<AddressFamily>,
+    pub address_family: AddressFamily,
 
     /// Specifies the ssh client program to use [default: `ssh`]
     #[arg(long, help_heading("Connection"))]
@@ -129,7 +130,7 @@ pub struct Configuration {
     ///
     /// If unspecified, uses any available UDP port.
     #[arg(short = 'P', long, value_name("M-N"), help_heading("Connection"))]
-    pub remote_port: Option<PortRange>,
+    pub remote_port: PortRange,
 
     /// Specifies the time format to use when printing messages to the console or to file
     #[arg(short = 'T', long, value_name("FORMAT"), help_heading("Output"))]
@@ -157,10 +158,9 @@ impl Configuration {
     #[must_use]
     /// Transmit bandwidth (accessor)
     pub fn tx(&self) -> u64 {
-        if let Some(tx) = self.tx {
-            *tx
-        } else {
-            self.rx()
+        match *self.tx {
+            0 => self.rx(),
+            tx => tx,
         }
     }
     /// RTT accessor as Duration
@@ -206,8 +206,8 @@ impl Configuration {
     #[must_use]
     pub fn format_transport_config(&self) -> String {
         let iwind = match self.initial_congestion_window {
-            None => "<default>".to_string(),
-            Some(s) => s.human_count_bytes().to_string(),
+            0 => "<default>".to_string(),
+            s => s.human_count_bytes().to_string(),
         };
         let (tx, rx) = (self.tx(), self.rx());
         format!(
@@ -229,18 +229,18 @@ impl Default for Configuration {
         Self {
             // Transport
             rx: 12_500_000.into(),
-            tx: None,
+            tx: 0.into(),
             rtt: 300,
             congestion: CongestionControllerType::Cubic,
-            initial_congestion_window: None,
-            port: None,
+            initial_congestion_window: 0,
+            port: PortRange::default(),
             timeout: 5,
 
             // Client
-            address_family: None,
+            address_family: AddressFamily::Any,
             ssh: "ssh".into(),
             ssh_opt: vec![],
-            remote_port: None,
+            remote_port: PortRange::default(),
             time_format: TimeFormat::Local,
         }
     }

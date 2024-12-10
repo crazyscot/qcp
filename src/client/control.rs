@@ -109,11 +109,14 @@ impl Channel {
         if parameters.remote_debug {
             let _ = server.arg("--debug");
         }
-        if let Some(w) = config.initial_congestion_window {
-            let _ = server.args(["--initial-congestion-window", &w.to_string()]);
+        match config.initial_congestion_window {
+            0 => (),
+            w => {
+                let _ = server.args(["--initial-congestion-window", &w.to_string()]);
+            }
         }
-        if let Some(pr) = config.remote_port {
-            let _ = server.args(["--port", &pr.to_string()]);
+        if !config.remote_port.is_default() {
+            let _ = server.args(["--port", &config.remote_port.to_string()]);
         }
         let _ = server
             .stdin(Stdio::piped())

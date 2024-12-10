@@ -428,7 +428,7 @@ mod test {
         );
         let fake_cli = Configuration_Optional {
             rtt: Some(999),
-            initial_congestion_window: Some(Some(67890)), // yeah the double-Some is a bit of a wart
+            initial_congestion_window: Some(67890),
             ..Default::default()
         };
         let mut mgr = Manager::without_files();

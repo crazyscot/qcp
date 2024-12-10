@@ -86,7 +86,7 @@ pub fn bind_unspecified_for(peer: &SocketAddr) -> anyhow::Result<std::net::UdpSo
 /// Creates and binds a UDP socket from a restricted range of local ports, using the address family necessary to reach the given peer address
 pub fn bind_range_for_peer(
     peer: &SocketAddr,
-    range: Option<PortRange>,
+    range: PortRange,
 ) -> anyhow::Result<std::net::UdpSocket> {
     let addr: IpAddr = match peer {
         SocketAddr::V4(_) => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
@@ -98,12 +98,8 @@ pub fn bind_range_for_peer(
 /// Creates and binds a UDP socket from a restricted range of local ports, for a given local address
 pub fn bind_range_for_address(
     addr: IpAddr,
-    range: Option<PortRange>,
+    range: PortRange,
 ) -> anyhow::Result<std::net::UdpSocket> {
-    let range = match range {
-        None => PortRange { begin: 0, end: 0 },
-        Some(r) => r,
-    };
     if range.begin == range.end {
         return Ok(UdpSocket::bind(SocketAddr::new(addr, range.begin))?);
     }
@@ -119,7 +115,7 @@ pub fn bind_range_for_address(
 /// Creates and binds a UDP socket from a restricted range of local ports, for the unspecified address of the given address family
 pub fn bind_range_for_family(
     family: ConnectionType,
-    range: Option<PortRange>,
+    range: PortRange,
 ) -> anyhow::Result<std::net::UdpSocket> {
     let addr = match family {
         ConnectionType::Ipv4 => IpAddr::V4(Ipv4Addr::UNSPECIFIED),

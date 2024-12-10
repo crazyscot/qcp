@@ -13,8 +13,7 @@ use crate::util::cli::IntOrString;
 /// Representation an IP address family
 ///
 /// This is a local type with special parsing semantics to take part in the config/CLI system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, clap::ValueEnum)]
-#[serde(from = "IntOrString<AddressFamily>", into = "u64")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum AddressFamily {
     /// IPv4
     #[value(name = "4")]
@@ -22,24 +21,39 @@ pub enum AddressFamily {
     /// IPv6
     #[value(name = "6")]
     V6,
+    /// We don't mind what type of IP address
+    Any,
 }
 
-impl From<AddressFamily> for u64 {
+impl From<AddressFamily> for u8 {
     fn from(value: AddressFamily) -> Self {
         match value {
             AddressFamily::V4 => 4,
             AddressFamily::V6 => 6,
+            AddressFamily::Any => 0,
+        }
+    }
+}
+
+impl Serialize for AddressFamily {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match *self {
+            AddressFamily::Any => serializer.serialize_str("any"),
+            t => serializer.serialize_u8(u8::from(t)),
         }
     }
 }
 
 impl Display for AddressFamily {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let u: u8 = match self {
-            AddressFamily::V4 => 4,
-            AddressFamily::V6 => 6,
-        };
-        write!(f, "{u}")
+        if *self == AddressFamily::Any {
+            write!(f, "any")
+        } else {
+            write!(f, "{}", u8::from(*self))
+        }
     }
 }
 
@@ -51,6 +65,8 @@ impl FromStr for AddressFamily {
             Ok(AddressFamily::V4)
         } else if s == "6" {
             Ok(AddressFamily::V6)
+        } else if s == "0" || s == "any" {
+            Ok(AddressFamily::Any)
         } else {
             Err(figment::error::Kind::InvalidType(Actual::Str(s.into()), "4 or 6".into()).into())
         }
@@ -64,6 +80,7 @@ impl TryFrom<u64> for AddressFamily {
         match value {
             4 => Ok(AddressFamily::V4),
             6 => Ok(AddressFamily::V6),
+            0 => Ok(AddressFamily::Any),
             _ => Err(figment::error::Kind::InvalidValue(
                 Actual::Unsigned(value.into()),
                 "4 or 6".into(),

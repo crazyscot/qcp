@@ -76,6 +76,18 @@ impl From<u64> for PortRange {
     }
 }
 
+impl Default for PortRange {
+    fn default() -> Self {
+        Self::from(0)
+    }
+}
+
+impl PortRange {
+    pub(crate) fn is_default(self) -> bool {
+        self.begin == 0 && self.begin == self.end
+    }
+}
+
 impl<'de> serde::Deserialize<'de> for PortRange {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

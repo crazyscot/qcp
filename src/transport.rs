@@ -85,18 +85,19 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
         ThroughputMode::Tx => (),
     }
 
+    let window = params.initial_congestion_window;
     match params.congestion {
         CongestionControllerType::Cubic => {
             let mut cubic = CubicConfig::default();
-            if let Some(w) = params.initial_congestion_window {
-                let _ = cubic.initial_window(w);
+            if window != 0 {
+                let _ = cubic.initial_window(window);
             }
             let _ = config.congestion_controller_factory(Arc::new(cubic));
         }
         CongestionControllerType::Bbr => {
             let mut bbr = BbrConfig::default();
-            if let Some(w) = params.initial_congestion_window {
-                let _ = bbr.initial_window(w);
+            if window != 0 {
+                let _ = bbr.initial_window(window);
             }
             let _ = config.congestion_controller_factory(Arc::new(bbr));
         }
