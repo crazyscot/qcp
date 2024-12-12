@@ -36,7 +36,7 @@ jobs:
       with:
         toolchain: ${{ matrix.rust }}
         targets: ${{ matrix.target }}
-    - uses: taiki-e/install-action@v2.44.58
+    - uses: taiki-e/install-action@v2.46.6
       with:
         tool: cross,cargo-deb
     - uses: Swatinem/rust-cache@v2
