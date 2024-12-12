@@ -48,7 +48,7 @@ pub async fn server_main(config: &Configuration) -> anyhow::Result<()> {
         client_message.connection_type,
     );
 
-    let bandwidth_info = format!("{config:?}");
+    let bandwidth_info = config.format_transport_config().to_string();
     let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
 
     let credentials = Credentials::generate()?;
