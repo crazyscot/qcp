@@ -69,6 +69,7 @@ define_derive_deftly! {
     ${define OPTIONAL_TYPE ${paste $tdeftype _Optional}}
 
     /// Auto-derived struct variant
+    ///
     #[allow(non_camel_case_types)]
     ${tattrs}
     ${if not(tmeta(already_has_default)){

@@ -21,6 +21,14 @@ use derive_deftly::Deftly;
 /// The set of configurable options supported by qcp.
 ///
 /// **Note:** The implementation of `default()` for this struct returns qcp's hard-wired configuration defaults.
+///
+/// This structure uses the [Optionalify](derive_deftly_template_Optionalify) deftly macro to automatically
+/// define the `Configuration_Optional` struct, which is the same but has all members of type `Option<whatever>`.
+/// This is the magic that lets us use the same underlying struct for CLI and saved configuration files:
+/// the CLI uses the `_Optional` version , with everything defaulting to `None`.
+/// The result is that wherever the user does not provide a value, values read from lower priority sources
+/// (configuration files and system defaults) obtain.
+///
 // Maintainer note: None of the members of this struct should be Option<anything>. That leads to sunspots in the CLI and strange warts (Some(Some(foo))).
 #[derive(Deftly)]
 #[derive_deftly(Optionalify)]
