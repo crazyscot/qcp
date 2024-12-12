@@ -21,12 +21,12 @@ strip = "symbols"
 
 [dependencies]
 anstream = "0.6.18"
-anstyle = "1.0.8"
+anstyle = "1.0.10"
 anstyle-owo-colors = "2.0.3"
-anyhow = "1.0.89"
-capnp = "0.20.1"
-capnp-futures = "0.20.0"
-clap = { version = "4.5.19", features = ["wrap_help", "derive", "cargo", "help", "string"] }
+anyhow = "1.0.94"
+capnp = "0.20.3"
+capnp-futures = "0.20.1"
+clap = { version = "4.5.23", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 console = "0.15.8"
 derive-deftly = "0.14.2"
 dns-lookup = "2.0.4"
@@ -37,22 +37,22 @@ gethostname = "0.5.0"
 heck = "0.5.0"
 human-repr = "1.1.0"
 humanize-rs = "0.1.5"
-indicatif = { version = "0.17.8", features = ["tokio"] }
+indicatif = { version = "0.17.9", features = ["tokio"] }
 lazy_static = "1.5.0"
 num-format = { version = "0.4.4" }
-owo-colors = { version = "4.0.0", features = ["supports-color"] }
-quinn = { version = "0.11.5", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
+owo-colors = { version = "4.1.0", features = ["supports-color"] }
+quinn = { version = "0.11.6", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
 rcgen = { version = "0.13.1" }
-rustls-pki-types = "1.9.0"
-serde = { version = "1.0.215", features = ["derive"] }
+rustls-pki-types = "1.10.0"
+serde = { version = "1.0.216", features = ["derive"] }
 static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
 strum_macros = "0.26.4"
 tabled = "0.17.0"
-tokio = { version = "1.40.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
-tokio-util = { version = "0.7.12", features = ["compat"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "chrono"] }
+tokio = { version = "1.42.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
+tokio-util = { version = "0.7.13", features = ["compat"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29.0", features = ["socket"] }
@@ -61,13 +61,13 @@ nix = { version = "0.29.0", features = ["socket"] }
 jemallocator = "0.5.4"
 
 [build-dependencies]
-capnpc = "0.20.0"
+capnpc = "0.20.1"
 
 [dev-dependencies]
-fastrand = "2.1.1"
+fastrand = "2.3.0"
 json = "0.12.4"
 rand = "0.8.5"
-serde_json = "1.0.132"
+serde_json = "1.0.133"
 serde_test = "1.0.177"
 tempfile = "3.14.0"
 toml = "0.8.19"
