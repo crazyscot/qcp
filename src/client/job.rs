@@ -8,7 +8,9 @@ use crate::transport::ThroughputMode;
 /// A file source or destination specified by the user
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileSpec {
-    /// The remote host for the file.
+    /// The remote host for the file. This may be a hostname or an IP address.
+    /// It may also be a _hostname alias_ that matches a Host section in the user's ssh config file.
+    /// (In that case, the ssh config file must specify a HostName.)
     ///
     /// If not present, this is a local file.
     pub host: Option<String>,
@@ -68,13 +70,15 @@ impl CopyJobSpec {
         }
     }
 
-    pub(crate) fn remote_user_host(&self) -> &str {
+    /// The [user@]hostname portion of whichever of the arguments contained a hostname.
+    fn remote_user_host(&self) -> &str {
         self.source
             .host
             .as_ref()
             .unwrap_or_else(|| self.destination.host.as_ref().unwrap())
     }
 
+    /// The hostname portion of whichever of the arguments contained one.
     pub(crate) fn remote_host(&self) -> &str {
         let user_host = self.remote_user_host();
         // It might be user@host, or it might be just the hostname or IP.

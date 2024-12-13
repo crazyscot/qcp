@@ -13,6 +13,7 @@ pub use job::FileSpec;
 mod main_loop;
 mod meter;
 mod progress;
+pub mod ssh;
 
 #[allow(clippy::module_name_repetitions)]
 pub use main_loop::client_main;

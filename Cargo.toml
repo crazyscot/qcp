@@ -45,6 +45,7 @@ quinn = { version = "0.11.6", default-features = false, features = ["runtime-tok
 rcgen = { version = "0.13.1" }
 rustls-pki-types = "1.10.0"
 serde = { version = "1.0.216", features = ["derive"] }
+ssh2-config = "0.2.3"
 static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
 strum_macros = "0.26.4"
