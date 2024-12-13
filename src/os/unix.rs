@@ -87,3 +87,13 @@ can create a file /etc/sysctl.d/20-qcp.conf containing:
     }
     // TODO add other OS-specific notes here
 }
+
+/// Concretions for Unix platforms
+#[derive(Debug, Clone, Copy)]
+pub struct Platform {}
+
+impl super::AbstractPlatform for Platform {
+    fn system_ssh_config() -> &'static str {
+        "/etc/ssh/ssh_config"
+    }
+}
