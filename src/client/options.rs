@@ -98,9 +98,3 @@ impl TryFrom<&Parameters> for CopyJobSpec {
         })
     }
 }
-
-impl Parameters {
-    pub(crate) fn remote_host(&self) -> anyhow::Result<String> {
-        Ok(CopyJobSpec::try_from(self)?.remote_host().to_string())
-    }
-}

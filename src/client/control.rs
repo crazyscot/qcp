@@ -37,13 +37,14 @@ impl Channel {
     /// Opens the control channel, checks the banner, sends the Client Message, reads the Server Message.
     pub async fn transact(
         credentials: &Credentials,
+        remote_host: &str,
         connection_type: ConnectionType,
         display: &MultiProgress,
         config: &Configuration,
         parameters: &Parameters,
     ) -> Result<(Channel, ServerMessage)> {
         trace!("opening control channel");
-        let mut new1 = Self::launch(display, config, parameters, connection_type)?;
+        let mut new1 = Self::launch(display, config, parameters, remote_host, connection_type)?;
         new1.wait_for_banner().await?;
 
         let mut pipe = new1
@@ -79,9 +80,9 @@ impl Channel {
         display: &MultiProgress,
         config: &Configuration,
         parameters: &Parameters,
+        remote_host: &str,
         connection_type: ConnectionType,
     ) -> Result<Self> {
-        let remote_host = parameters.remote_host()?;
         let mut server = tokio::process::Command::new(&config.ssh);
         let _ = server.kill_on_drop(true);
         let _ = match connection_type {
@@ -90,7 +91,7 @@ impl Channel {
         };
         let _ = server.args(&config.ssh_opt);
         let _ = server.args([
-            &remote_host,
+            remote_host,
             "qcp",
             "--server",
             // Remote receive bandwidth = our transmit bandwidth
