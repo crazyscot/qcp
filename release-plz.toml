@@ -58,13 +58,13 @@ body = """
 """
 
 commit_parsers = [
-  { body = ".*security", group = "<!-- 00 -->🛡️ Security" },
-  { message = "^feat", group = "<!-- 01 -->⛰️ Features" },
-  { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
+  { body = ".*security", group = "<!-- 0 -->🛡️ Security" },
+  { message = "^feat", group = "<!-- 1 -->⛰️ Features" },
+  { message = "^fix", group = "<!-- 2 -->🐛 Bug Fixes" },
   { message = "^doc", group = "<!-- 3 -->📚 Documentation" },
   { message = "^perf", group = "<!-- 4 -->⚡ Performance" },
   { message = "^refactor\\(clippy\\)", skip = true },
-  { message = "^refactor", group = "<!-- 2 -->🚜 Refactor" },
+  { message = "^refactor", group = "<!-- 8 -->🚜 Refactor" },
   { message = "^style", group = "<!-- 5 -->🎨 Styling" },
   { message = "^test", group = "<!-- 6 -->🧪 Testing" },
   { message = "^chore\\(release\\):", skip = true },
