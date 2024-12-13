@@ -1,6 +1,8 @@
 //! OS abstraction layer
 // (c) 2024 Ross Younger
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 
 /// OS abstraction trait providing access to socket options
@@ -42,6 +44,21 @@ pub trait AbstractPlatform {
     /// Path to the system ssh config file.
     /// On most platforms this will be `/etc/ssh/ssh_config`
     fn system_ssh_config() -> &'static str;
+
+    /// The directory to store user configuration files in.
+    ///
+    /// On Unix platforms this is the traditional home directory.
+    ///
+    /// If somehow we could not determine the directory to use, returns None (and may emit a warning).
+    fn user_config_dir() -> Option<PathBuf>;
+
+    /// The absolute path to the user configuration file, if one is defined on this platform.
+    ///
+    /// If somehow we could not determine the path to use, returns None (and may emit a warning).
+    fn user_config_path() -> Option<PathBuf>;
+
+    /// The absolute path to the system configuration file, if one is defined on this platform.
+    fn system_config_path() -> Option<PathBuf>;
 }
 
 #[cfg(any(unix, doc))]

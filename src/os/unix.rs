@@ -1,10 +1,12 @@
 // OS abstraction layer for qcp - Unix implementation
 // (c) 2024 Ross Younger
 
+use crate::config::BASE_CONFIG_FILENAME;
+
 use super::SocketOptions;
 use anyhow::Result;
 use nix::sys::socket::{self, sockopt};
-use std::net::UdpSocket;
+use std::{net::UdpSocket, path::PathBuf};
 
 fn bsdish() -> bool {
     cfg!(any(
@@ -95,5 +97,24 @@ pub struct Platform {}
 impl super::AbstractPlatform for Platform {
     fn system_ssh_config() -> &'static str {
         "/etc/ssh/ssh_config"
+    }
+
+    fn user_config_dir() -> Option<PathBuf> {
+        dirs::home_dir()
+    }
+
+    fn user_config_path() -> Option<PathBuf> {
+        // ~/.<filename> for now
+        let mut d: PathBuf = Self::user_config_dir()?;
+        d.push(format!(".{BASE_CONFIG_FILENAME}"));
+        Some(d)
+    }
+
+    fn system_config_path() -> Option<PathBuf> {
+        // /etc/<filename> for now
+        let mut p: PathBuf = PathBuf::new();
+        p.push("/etc");
+        p.push(BASE_CONFIG_FILENAME);
+        Some(p)
     }
 }

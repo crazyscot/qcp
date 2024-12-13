@@ -1,9 +1,10 @@
 //! Configuration file wrangling
 // (c) 2024 Ross Younger
 
+use crate::os::{AbstractPlatform as _, Platform};
+
 use super::Configuration;
 
-use anyhow::Result;
 use figment::{
     providers::{Format, Serialized, Toml},
     value::Value,
@@ -13,52 +14,12 @@ use serde::Deserialize;
 use std::{
     collections::HashSet,
     fmt::{Debug, Display},
-    path::{Path, PathBuf},
+    path::Path,
 };
 use struct_field_names_as_array::FieldNamesAsSlice;
 use tabled::{settings::style::Style, Table, Tabled};
 
 use tracing::{trace, warn};
-
-// PATHS /////////////////////////////////////////////////////////////////////////////////////////////////////
-
-const BASE_CONFIG_FILENAME: &str = "qcp.toml";
-
-#[cfg(unix)]
-fn user_config_dir() -> Result<PathBuf> {
-    // home directory for now
-    use etcetera::BaseStrategy as _;
-    Ok(etcetera::choose_base_strategy()?.home_dir().into())
-}
-
-#[cfg(windows)]
-fn user_config_dir() -> Result<PathBuf> {
-    use etcetera::{choose_app_strategy, AppStrategy as _, AppStrategyArgs};
-
-    Ok(choose_app_strategy(AppStrategyArgs {
-        top_level_domain: "com".to_string(),
-        author: "TeamQCP".to_string(),
-        app_name: env!("CARGO_PKG_NAME").to_string(),
-    })?
-    .config_dir())
-}
-
-#[cfg(unix)]
-fn user_config_path() -> Result<PathBuf> {
-    // ~/.<filename> for now
-    let mut d: PathBuf = user_config_dir()?;
-    d.push(format!(".{BASE_CONFIG_FILENAME}"));
-    Ok(d)
-}
-
-#[cfg(unix)]
-fn system_config_path() -> PathBuf {
-    // /etc/<filename> for now
-    let mut p: PathBuf = PathBuf::new();
-    p.push("/etc");
-    p.push(BASE_CONFIG_FILENAME);
-    p
-}
 
 // SYSTEM DEFAULTS //////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -99,13 +60,11 @@ pub struct Manager {
 }
 
 fn add_user_config(f: Figment) -> Figment {
-    let path = match user_config_path() {
-        Ok(p) => p,
-        Err(e) => {
-            warn!("could not determine user configuration file path: {e}");
-            return f;
-        }
+    let Some(path) = Platform::user_config_path() else {
+        warn!("could not determine user configuration file path");
+        return f;
     };
+
     if !path.exists() {
         trace!("user configuration file {path:?} not present");
         return f;
@@ -114,7 +73,11 @@ fn add_user_config(f: Figment) -> Figment {
 }
 
 fn add_system_config(f: Figment) -> Figment {
-    let path = system_config_path();
+    let Some(path) = Platform::system_config_path() else {
+        warn!("could not determine system configuration file path");
+        return f;
+    };
+
     if !path.exists() {
         trace!("system configuration file {path:?} not present");
         return f;
@@ -150,13 +113,13 @@ impl Manager {
     /// Returns the list of configuration files we read.
     ///
     /// This is a function of platform and the current user id.
+    #[must_use]
     pub fn config_files() -> Vec<String> {
-        let inputs = vec![Ok(system_config_path()), user_config_path()];
+        let inputs = vec![Platform::system_config_path(), Platform::user_config_path()];
 
         inputs
             .into_iter()
-            .filter_map(std::result::Result::ok)
-            .map(|p| p.into_os_string().to_string_lossy().into())
+            .filter_map(|p| Some(p?.into_os_string().to_string_lossy().to_string()))
             .collect()
     }
 

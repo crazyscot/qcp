@@ -36,3 +36,5 @@ pub(crate) use structure::Configuration_Optional;
 
 mod manager;
 pub use manager::Manager;
+
+pub(crate) const BASE_CONFIG_FILENAME: &str = "qcp.toml";

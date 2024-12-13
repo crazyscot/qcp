@@ -29,8 +29,8 @@ capnp-futures = "0.20.1"
 clap = { version = "4.5.23", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 console = "0.15.8"
 derive-deftly = "0.14.2"
+dirs = "5.0.1"
 dns-lookup = "2.0.4"
-etcetera = "0.8.0"
 figment = { version = "0.10.19", features = ["toml"] }
 futures-util = { version = "0.3.31", default-features = false }
 gethostname = "0.5.0"
