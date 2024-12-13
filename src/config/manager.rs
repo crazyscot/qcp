@@ -372,14 +372,9 @@ impl Display for DisplayAdapter<'_> {
 
 #[cfg(test)]
 mod test {
-    use std::path::PathBuf;
-
-    use serde::Deserialize;
-    use tempfile::TempDir;
-
-    use crate::util::PortRange;
-
     use crate::config::{Configuration, Configuration_Optional, Manager};
+    use crate::util::{make_test_tempfile, PortRange};
+    use serde::Deserialize;
 
     #[test]
     fn defaults() {
@@ -407,18 +402,10 @@ mod test {
         assert_eq!(expected, result);
     }
 
-    fn make_tempfile(data: &str, filename: &str) -> (PathBuf, TempDir) {
-        let tempdir = tempfile::tempdir().unwrap();
-        let path = tempdir.path().join(filename);
-        std::fs::write(&path, data).expect("Unable to write tempfile");
-        // println!("temp file is {:?}", &path);
-        (path, tempdir)
-    }
-
     #[test]
     fn dump_config_cli_and_toml() {
         // Not a unit test as such; this is a human test
-        let (path, _tempdir) = make_tempfile(
+        let (path, _tempdir) = make_test_tempfile(
             r#"
             tx = 42
             congestion = "Bbr"
@@ -440,7 +427,7 @@ mod test {
     #[test]
     fn unparseable_toml() {
         // This is a semi unit test; there is one assert, but the secondary goal is that it outputs something sensible
-        let (path, _tempdir) = make_tempfile(
+        let (path, _tempdir) = make_test_tempfile(
             r"
             a = 1
             rx 123 # this line is a syntax error
@@ -465,7 +452,7 @@ mod test {
             magic_: i32,
         }
 
-        let (path, _tempdir) = make_tempfile(
+        let (path, _tempdir) = make_test_tempfile(
             r"
             rx = true # invalid
             rtt = 3.14159 # also invalid
@@ -494,7 +481,7 @@ mod test {
             t2: PortRange,
             t3: PortRange,
         }
-        let (path, _tempdir) = make_tempfile(
+        let (path, _tempdir) = make_test_tempfile(
             r#"
             t1 = 1234
             t2 = "2345"
@@ -535,7 +522,7 @@ mod test {
             ii: Vec<i32>,
         }
 
-        let (path, _tempdir) = make_tempfile(
+        let (path, _tempdir) = make_test_tempfile(
             r"
             ii = [1,2,3,4,6]
         ",
@@ -554,7 +541,7 @@ mod test {
             _p: PortRange,
         }
 
-        let (path, _tempdir) = make_tempfile(
+        let (path, _tempdir) = make_test_tempfile(
             r#"
             _p = "234-123"
         "#,
