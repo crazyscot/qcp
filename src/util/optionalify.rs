@@ -53,7 +53,9 @@ define_derive_deftly! {
     /// must appear <i>after</i> deriving `Optionalify`. It might look something like this:
     /// </div>
     ///
-    /// ```ignore
+    /// ```
+    /// use derive_deftly::Deftly;
+    /// use qcp::derive_deftly_template_Optionalify;
     /// #[derive(Deftly)]
     /// #[derive_deftly(Optionalify)]
     /// #[derive(Debug, Clone /*, WhateverElseYouNeed...*/)]
