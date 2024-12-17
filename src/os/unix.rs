@@ -99,6 +99,15 @@ impl super::AbstractPlatform for Platform {
         "/etc/ssh/ssh_config"
     }
 
+    fn user_ssh_config() -> Result<PathBuf> {
+        let Some(mut pb) = dirs::home_dir() else {
+            anyhow::bail!("could not determine home directory");
+        };
+        pb.push(".ssh");
+        pb.push("config");
+        Ok(pb)
+    }
+
     fn user_config_dir() -> Option<PathBuf> {
         dirs::home_dir()
     }

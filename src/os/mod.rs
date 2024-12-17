@@ -45,6 +45,15 @@ pub trait AbstractPlatform {
     /// On most platforms this will be `/etc/ssh/ssh_config`
     fn system_ssh_config() -> &'static str;
 
+    /// Path to the user ssh config file.
+    /// On most platforms this will be `${HOME}/.ssh/config`
+    /// # Note
+    /// This is a _theoretical_ path construction; it does not guarantee that the path actually exists.
+    /// That is up to the caller to determine and reason about.
+    /// # Errors
+    /// If the current user's home directory could not be determined
+    fn user_ssh_config() -> Result<PathBuf>;
+
     /// The directory to store user configuration files in.
     ///
     /// On Unix platforms this is the traditional home directory.
