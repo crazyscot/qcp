@@ -1,48 +1,83 @@
 //! Interaction with ssh configuration
 // (c) 2024 Ross Younger
 
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 
 use crate::config::ssh::Parser;
-use anyhow::Context;
+use anyhow::{Context, Result};
 use tracing::{debug, warn};
 
 use crate::os::{AbstractPlatform as _, Platform};
 
-/// Attempts to resolve a hostname from a single OpenSSH-style config file
-fn resolve_one(path: &PathBuf, user_config_file: bool, host: &str) -> Option<String> {
-    if !std::fs::exists(path).is_ok_and(|b| b) {
-        // file could not be verified to exist. this is not intrinsically an error; keep quiet
-        return None;
+struct ConfigFile {
+    path: PathBuf,
+    user: bool, // this is a user file i.e. ~ expansion is allowed
+    warn_on_error: bool,
+}
+
+impl ConfigFile {
+    fn for_path(path: PathBuf, user: bool) -> Self {
+        Self {
+            path,
+            user,
+            warn_on_error: false,
+        }
     }
-    let mut parser = match Parser::for_path(path, user_config_file) {
-        Ok(p) => p,
-        Err(e) => {
-            // file permissions issue?
-            warn!("failed to open {path:?}: {e}");
+    fn for_str(path: &str, user: bool, warn_on_error: bool) -> Result<Self> {
+        Ok(Self {
+            path: PathBuf::from_str(path)?,
+            user,
+            warn_on_error,
+        })
+    }
+
+    /// Attempts to resolve a hostname from a single OpenSSH-style config file
+    fn resolve_one(&self, host: &str) -> Option<String> {
+        let path = &self.path;
+        if !std::fs::exists(path).is_ok_and(|b| b) {
+            // file could not be verified to exist.
+            // This is not intrinsically an error; the user or system file might legitimately not be there.
+            // But if this was a file explicitly specified by the user, assume they do care and let them know.
+            if self.warn_on_error {
+                warn!("ssh-config file {path:?} not found");
+            }
             return None;
         }
-    };
-    let data = match parser
-        .parse_file_for(host)
-        .with_context(|| format!("reading configuration file {path:?}"))
-    {
-        Ok(data) => data,
-        Err(e) => {
-            warn!("{e}");
-            return None;
+        let mut parser = match Parser::for_path(path, self.user) {
+            Ok(p) => p,
+            Err(e) => {
+                // file permissions issue?
+                warn!("failed to open {path:?}: {e}");
+                return None;
+            }
+        };
+        let data = match parser
+            .parse_file_for(host)
+            .with_context(|| format!("reading configuration file {path:?}"))
+        {
+            Ok(data) => data,
+            Err(e) => {
+                warn!("{e}");
+                return None;
+            }
+        };
+        if let Some(s) = data.get("hostname") {
+            let result = s.first_arg();
+            debug!("Using hostname '{result}' for '{host}' (from {})", s.source);
+            Some(result)
+        } else {
+            None
         }
-    };
-    if let Some(s) = data.get("hostname") {
-        let result = s.first_arg();
-        debug!("Using hostname '{result}' for '{host}' (from {})", s.source);
-        Some(result)
-    } else {
-        None
     }
 }
 
-/// Attempts to resolve hostname aliasing from the user's and system's ssh config files to resolve aliasing.
+/// Attempts to resolve hostname aliasing from ssh config files.
+///
+/// ## Arguments
+/// * host: the host name alias to look up (matching a 'Host' block in ssh_config)
+/// * config_files: The list of ssh config files to use, in priority order.
+///
+/// If the list is empty, the user's and system's ssh config files will be used.
 ///
 /// ## Returns
 /// Some(hostname) if any config file matched.
@@ -52,19 +87,41 @@ fn resolve_one(path: &PathBuf, user_config_file: bool, host: &str) -> Option<Str
 /// * Match patterns
 /// * CanonicalizeHostname and friends
 #[must_use]
-pub fn resolve_host_alias(host: &str) -> Option<String> {
-    let f = Platform::user_ssh_config().map(|pb| resolve_one(&pb, true, host));
-    if let Ok(Some(s)) = f {
-        return Some(s);
+pub fn resolve_host_alias(host: &str, config_files: &[String]) -> Option<String> {
+    let files = if config_files.is_empty() {
+        let mut v = Vec::new();
+        if let Ok(f) = Platform::user_ssh_config() {
+            v.push(ConfigFile::for_path(f, true));
+        }
+        if let Ok(f) = ConfigFile::for_str(Platform::system_ssh_config(), false, false) {
+            v.push(f);
+        }
+        v
+    } else {
+        config_files
+            .iter()
+            .flat_map(|s| ConfigFile::for_str(s, true, true))
+            .collect()
+    };
+    for cfg in files {
+        let result = cfg.resolve_one(host);
+        if result.is_some() {
+            return result;
+        }
     }
-
-    resolve_one(&PathBuf::from(Platform::system_ssh_config()), false, host)
+    None
 }
 
 #[cfg(test)]
 mod test {
-    use super::resolve_one;
+    use std::path::Path;
+
+    use super::ConfigFile;
     use crate::util::make_test_tempfile;
+
+    fn resolve_one(path: &Path, user: bool, host: &str) -> Option<String> {
+        ConfigFile::for_path(path.to_path_buf(), user).resolve_one(host)
+    }
 
     #[test]
     fn hosts_resolve() {

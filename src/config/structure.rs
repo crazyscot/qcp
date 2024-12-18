@@ -143,6 +143,18 @@ pub struct Configuration {
     /// Specifies the time format to use when printing messages to the console or to file
     #[arg(short = 'T', long, value_name("FORMAT"), help_heading("Output"))]
     pub time_format: TimeFormat,
+
+    /// Alternative ssh config file(s)
+    ///
+    /// By default, qcp reads your user and system ssh config files to look for Hostname aliases.
+    /// In some cases the logic in qcp may not read them successfully; this is an escape hatch,
+    /// allowing you to specify one or more alternative files to read instead (which may be empty,
+    /// nonexistent or /dev/null).
+    ///
+    /// This option is really intended to be used in a qcp configuration file.
+    /// On the command line, you can repeat `--ssh-config file` as many times as needed.
+    #[arg(long, value_name("FILE"), help_heading("Connection"))]
+    pub ssh_config: Vec<String>,
 }
 
 impl Configuration {
@@ -250,6 +262,7 @@ impl Default for Configuration {
             ssh_opt: vec![],
             remote_port: PortRange::default(),
             time_format: TimeFormat::Local,
+            ssh_config: Vec::new(),
         }
     }
 }

@@ -49,8 +49,8 @@ pub async fn client_main(
     let job_spec = crate::client::CopyJobSpec::try_from(&parameters)?;
     let credentials = Credentials::generate()?;
     let user_hostname = job_spec.remote_host();
-    let remote_host =
-        super::ssh::resolve_host_alias(user_hostname).unwrap_or_else(|| user_hostname.into());
+    let remote_host = super::ssh::resolve_host_alias(user_hostname, &config.ssh_config)
+        .unwrap_or_else(|| user_hostname.into());
 
     // If the user didn't specify the address family: we do the DNS lookup, figure it out and tell ssh to use that.
     // (Otherwise if we resolved a v4 and ssh a v6 - as might happen with round-robin DNS - that could be surprising.)
