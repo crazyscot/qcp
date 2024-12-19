@@ -155,6 +155,21 @@ impl Manager {
         self.merge_provider(provider);
     }
 
+    /// Merges in a data set from an ssh config file
+    pub fn merge_ssh_config<F>(&mut self, file: F, host: &str)
+    where
+        F: AsRef<Path>,
+    {
+        let path = file.as_ref();
+        // TODO: differentiate between user and system configs (Include rules)
+        let p = super::ssh::Parser::for_path(file.as_ref(), true)
+            .and_then(|p| p.parse_file_for(host))
+            .map(|hc| self.merge_provider(hc));
+        if let Err(e) = p {
+            warn!("parsing {ff}: {e}", ff = path.to_string_lossy());
+        }
+    }
+
     /// Attempts to extract a particular struct from the data.
     ///
     /// Within qcp, `T` is usually [Configuration], but it isn't intrinsically required to be.
@@ -517,5 +532,34 @@ mod test {
         assert!(result
             .to_string()
             .contains("invalid port range \"234-123\""));
+    }
+
+    #[test]
+    fn ssh_style() {
+        #[derive(Debug, Deserialize)]
+        struct Test {
+            ssh_opt: Vec<String>,
+        }
+
+        let (path, _tempdir) = make_test_tempfile(
+            r"
+           host bar
+           ssh_opt d e f
+           host *
+           ssh_opt a b c
+        ",
+            "test.conf",
+        );
+        let mut mgr = Manager::without_files();
+        mgr.merge_ssh_config(&path, "foo");
+        //println!("{mgr}");
+        let result = mgr.get::<Test>().unwrap();
+        assert_eq!(result.ssh_opt, vec!["a", "b", "c"]);
+
+        let mut mgr = Manager::without_files();
+        mgr.merge_ssh_config(&path, "bar");
+        //println!("{mgr}");
+        let result = mgr.get::<Test>().unwrap();
+        assert_eq!(result.ssh_opt, vec!["d", "e", "f"]);
     }
 }
