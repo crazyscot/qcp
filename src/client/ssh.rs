@@ -43,7 +43,7 @@ impl ConfigFile {
             }
             return None;
         }
-        let mut parser = match Parser::for_path(path, self.user) {
+        let parser = match Parser::for_path(path, self.user) {
             Ok(p) => p,
             Err(e) => {
                 // file permissions issue?

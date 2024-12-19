@@ -179,6 +179,11 @@ fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>> {
     Ok(result)
 }
 
+/// Does the business of reading a config file.
+///
+/// # Note
+/// You can only use this struct once. If for some reason you want to re-parse a file,
+/// you must create a fresh `Parser` to do so.
 pub(crate) struct Parser<R>
 where
     R: Read,
@@ -331,7 +336,9 @@ impl<R: Read> Parser<R> {
         Ok(())
     }
 
-    pub(crate) fn parse_file_for(&mut self, host: &str) -> Result<HostConfiguration> {
+    /// Interprets the source with a given hostname in mind.
+    /// This consumes the `Parser`.
+    pub(crate) fn parse_file_for(mut self, host: &str) -> Result<HostConfiguration> {
         let mut output = HostConfiguration::new(host, self.path.take());
         let mut accepting = true;
         self.parse_file_inner(&mut accepting, 0, &mut output)?;
@@ -635,7 +642,7 @@ mod test {
     #[ignore]
     fn dump_local_config() {
         let path = Platform::user_ssh_config().unwrap();
-        let mut parser = Parser::for_path(path, true).unwrap();
+        let parser = Parser::for_path(path, true).unwrap();
         let data = parser.parse_file_for("lapis").unwrap();
         println!("{data:#?}");
     }
