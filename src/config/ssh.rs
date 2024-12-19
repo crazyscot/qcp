@@ -346,6 +346,34 @@ impl<R: Read> Parser<R> {
     }
 }
 
+impl figment::Provider for HostConfiguration {
+    fn metadata(&self) -> figment::Metadata {
+        // source name: is this an ssh or qcp config file? only qcp for now.
+        let mut response = figment::Metadata::named("qcp config file");
+        if let Some(src) = &self.source {
+            response = response.source(figment::Source::File(src.clone()));
+        }
+        response
+    }
+
+    fn data(
+        &self,
+    ) -> std::result::Result<
+        figment::value::Map<figment::Profile, figment::value::Dict>,
+        figment::Error,
+    > {
+        use figment::value::{Dict, Map};
+
+        let mut dict = Dict::new();
+        for (k, v) in &self.data {
+            let _ = dict.insert(k.to_string(), v.args.clone().into());
+        }
+        let mut map = Map::new();
+        let _ = map.insert(figment::Profile::Default, dict);
+        Ok(map)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use anyhow::{anyhow, Context, Result};
