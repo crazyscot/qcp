@@ -12,6 +12,30 @@ use anyhow::{Context, Result};
 use glob::{glob_with, MatchOptions};
 use tracing::warn;
 
+/// The result of parsing an ssh-style configuration file, with a particular host in mind.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct HostConfiguration {
+    /// The host we were interested in
+    host: String,
+    /// If present, this is the file we read
+    source: Option<PathBuf>,
+    /// Output data
+    data: BTreeMap<String, Setting>,
+}
+
+impl HostConfiguration {
+    fn new(host: &str, source: Option<PathBuf>) -> Self {
+        Self {
+            host: host.into(),
+            source,
+            data: BTreeMap::default(),
+        }
+    }
+    pub(crate) fn get(&self, key: &str) -> Option<&Setting> {
+        self.data.get(key)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 /// A parsed line we read from an ssh config file
 enum Line {
@@ -162,6 +186,7 @@ where
     line_number: usize,
     reader: BufReader<R>,
     source: String,
+    path: Option<PathBuf>,
     is_user: bool,
 }
 
@@ -176,17 +201,24 @@ impl Parser<File> {
         Ok(Self::for_reader(
             reader,
             path.to_string_lossy().to_string(),
+            Some(path.to_path_buf()),
             is_user,
         ))
     }
 }
 
 impl<R: Read> Parser<R> {
-    fn for_reader(reader: BufReader<R>, source: String, is_user: bool) -> Self {
+    fn for_reader(
+        reader: BufReader<R>,
+        source: String,
+        path: Option<PathBuf>,
+        is_user: bool,
+    ) -> Self {
         Self {
             line_number: 0,
             reader,
             source,
+            path,
             is_user,
         }
     }
@@ -194,7 +226,12 @@ impl<R: Read> Parser<R> {
 
 impl<'a> Parser<&'a [u8]> {
     fn for_str(s: &'a str, is_user: bool) -> Self {
-        Self::for_reader(BufReader::new(s.as_bytes()), "<string>".into(), is_user)
+        Self::for_reader(
+            BufReader::new(s.as_bytes()),
+            "<string>".into(),
+            None,
+            is_user,
+        )
     }
 }
 
@@ -239,10 +276,9 @@ impl<R: Read> Parser<R> {
 
     fn parse_file_inner(
         &mut self,
-        host: &str,
         accepting: &mut bool,
         depth: u8,
-        output: &mut BTreeMap<String, Setting>,
+        output: &mut HostConfiguration,
     ) -> Result<()> {
         let mut line = String::new();
         anyhow::ensure!(
@@ -260,7 +296,7 @@ impl<R: Read> Parser<R> {
             match self.parse_line(&line)? {
                 Line::Empty => (),
                 Line::Host { args, .. } => {
-                    *accepting = evaluate_host_match(host, &args);
+                    *accepting = evaluate_host_match(&output.host, &args);
                 }
                 Line::Match { .. } => {
                     warn!("match expressions in ssh_config files are not yet supported");
@@ -276,14 +312,14 @@ impl<R: Read> Parser<R> {
                                         self.source, self.line_number
                                     )
                                 })?;
-                            subparser.parse_file_inner(host, accepting, depth + 1, output)?;
+                            subparser.parse_file_inner(accepting, depth + 1, output)?;
                         }
                     }
                 }
                 Line::Generic { keyword, args, .. } => {
                     if *accepting {
                         // per ssh_config(5), the first matching entry for a given key wins.
-                        let _ = output.entry(keyword).or_insert_with(|| Setting {
+                        let _ = output.data.entry(keyword).or_insert_with(|| Setting {
                             source: self.source.clone(),
                             line_number: self.line_number,
                             args,
@@ -295,10 +331,10 @@ impl<R: Read> Parser<R> {
         Ok(())
     }
 
-    pub(crate) fn parse_file_for(&mut self, host: &str) -> Result<BTreeMap<String, Setting>> {
-        let mut output = BTreeMap::<String, Setting>::new();
+    pub(crate) fn parse_file_for(&mut self, host: &str) -> Result<HostConfiguration> {
+        let mut output = HostConfiguration::new(host, self.path.take());
         let mut accepting = true;
-        self.parse_file_inner(host, &mut accepting, 0, &mut output)?;
+        self.parse_file_inner(&mut accepting, 0, &mut output)?;
         Ok(output)
     }
 }
