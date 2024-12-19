@@ -12,7 +12,7 @@ use figment::{
 };
 use serde::Deserialize;
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     fmt::{Debug, Display},
     path::Path,
 };
@@ -134,6 +134,16 @@ impl Manager {
         }
     }
 
+    /// Testing/internal constructor, does not read files from system
+    #[must_use]
+    #[allow(unused)]
+    pub(crate) fn empty() -> Self {
+        Self {
+            data: Figment::new(),
+            //..Self::default()
+        }
+    }
+
     /// Merges in a data set, which is some sort of [figment::Provider](https://docs.rs/figment/latest/figment/trait.Provider.html).
     ///
     /// Within qcp, we use [crate::util::derive_deftly_template_Optionalify] to implement Provider for [Configuration].
@@ -155,14 +165,30 @@ impl Manager {
         self.merge_provider(provider);
     }
 
+    /// Merges in a data set from an ssh config file
+    pub fn merge_ssh_config<F>(&mut self, file: F, host: &str)
+    where
+        F: AsRef<Path>,
+    {
+        let path = file.as_ref();
+        // TODO: differentiate between user and system configs (Include rules)
+        let p = super::ssh::Parser::for_path(file.as_ref(), true)
+            .and_then(|p| p.parse_file_for(host))
+            .map(|hc| self.merge_provider(hc.as_figment()));
+        if let Err(e) = p {
+            warn!("parsing {ff}: {e}", ff = path.to_string_lossy());
+        }
+    }
+
     /// Attempts to extract a particular struct from the data.
     ///
     /// Within qcp, `T` is usually [Configuration], but it isn't intrinsically required to be.
+    /// (This is useful for unit testing.)
     pub fn get<'de, T>(&self) -> anyhow::Result<T, figment::Error>
     where
         T: Deserialize<'de>,
     {
-        self.data.extract::<T>()
+        self.data.extract_lossy::<T>()
     }
 }
 
@@ -226,32 +252,11 @@ impl PrettyConfig {
     }
 }
 
+static DEFAULT_EMPTY_MAP: BTreeMap<String, Value> = BTreeMap::new();
+
 impl Display for Manager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let data = match self.data.data() {
-            Ok(d) => d,
-            Err(e) => {
-                // This isn't terribly helpful as it doesn't have metadata attached; BUT attempting to get() a struct does.
-                return write!(f, "error: {e}");
-            }
-        };
-        let data = data.get(&figment::Profile::Default).unwrap();
-
-        let mut fields = Vec::<PrettyConfig>::new();
-
-        for field in data.keys() {
-            let value = self.data.find_value(field);
-            let value = match value {
-                Ok(v) => v,
-                Err(e) => {
-                    writeln!(f, "error on field {field}: {e}")?;
-                    continue;
-                }
-            };
-            let meta = self.data.find_metadata(field);
-            fields.push(PrettyConfig::new(field, &value, meta));
-        }
-        write!(f, "{}", Table::new(fields).with(Style::sharp()))
+        std::fmt::Display::fmt(&self.display_everything_adapter(), f)
     }
 }
 
@@ -262,7 +267,7 @@ pub struct DisplayAdapter<'a> {
     source: &'a Manager,
     /// Whether to warn if unused fields are present
     warn_on_unused: bool,
-    /// The fields we want to output
+    /// The fields we want to output. (If empty, outputs everything.)
     fields: HashSet<String>,
 }
 
@@ -284,13 +289,25 @@ impl Manager {
             fields,
         }
     }
+
+    /// Creates a generic `DisplayAdapter` that outputs everything
+    ///
+    /// # Returns
+    /// An ephemeral structure implementing `Display`.
+    #[must_use]
+    pub fn display_everything_adapter(&self) -> DisplayAdapter<'_> {
+        DisplayAdapter {
+            source: self,
+            warn_on_unused: false,
+            fields: HashSet::<String>::new(),
+        }
+    }
 }
 
 impl Display for DisplayAdapter<'_> {
     /// Formats the contents of this structure which are relevant to a given output type.
     ///
     /// N.B. This function uses CLI styling.
-    #[allow(clippy::missing_panics_doc)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use crate::cli::styles::{ERROR_S, WARNING_S};
         use anstream::eprintln;
@@ -304,14 +321,17 @@ impl Display for DisplayAdapter<'_> {
                 return Ok(());
             }
         };
-        // panic is impossible on the Default profile, hence #[allow(clippy::missing_panics_doc)]
-        let data = data.get(&figment::Profile::Default).unwrap();
+        let profile = match data.first_key_value() {
+            None => &figment::Profile::Default,
+            Some((k, _)) => k,
+        };
+        let data = data.get(profile).unwrap_or(&DEFAULT_EMPTY_MAP);
 
         let mut output = Vec::<PrettyConfig>::new();
 
         for field in data.keys() {
             let meta = self.source.data.find_metadata(field);
-            if self.fields.contains(field) {
+            if self.fields.is_empty() || self.fields.contains(field) {
                 let value = self.source.data.find_value(field);
                 let value = match value {
                     Ok(v) => v,
@@ -335,6 +355,7 @@ impl Display for DisplayAdapter<'_> {
 
 #[cfg(test)]
 mod test {
+    use crate::config::ssh::SshConfigError;
     use crate::config::{Configuration, Configuration_Optional, Manager};
     use crate::util::{make_test_tempfile, PortRange};
     use serde::Deserialize;
@@ -514,8 +535,147 @@ mod test {
         mgr.merge_toml_file(path);
         let result = mgr.get::<Test>().unwrap_err();
         println!("{result}");
-        assert!(result
-            .to_string()
-            .contains("must be increasing"));
+        assert!(result.to_string().contains("must be increasing"));
+    }
+
+    #[test]
+    fn ssh_style() {
+        #[derive(Debug, Deserialize)]
+        struct Test {
+            ssh_opt: Vec<String>,
+        }
+
+        // Bear in mind: in an ssh style config file, the first match for a particular keyword wins.
+        let (path, _tempdir) = make_test_tempfile(
+            r"
+           host bar
+           ssh_opt d e f
+           host *
+           ssh_opt a b c
+        ",
+            "test.conf",
+        );
+        let mut mgr = Manager::empty();
+        mgr.merge_ssh_config(&path, "foo");
+        //println!("{mgr}");
+        let result = mgr.get::<Test>().unwrap();
+        assert_eq!(result.ssh_opt, vec!["a", "b", "c"]);
+
+        let mut mgr = Manager::without_files();
+        mgr.merge_ssh_config(&path, "bar");
+        //println!("{mgr}");
+        let result = mgr.get::<Test>().unwrap();
+        assert_eq!(result.ssh_opt, vec!["d", "e", "f"]);
+    }
+
+    #[test]
+    fn types() {
+        use crate::transport::CongestionControllerType;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test {
+            vecs: Vec<String>,
+            s: String,
+            i: u32,
+            b: bool,
+            en: CongestionControllerType,
+            pr: PortRange,
+        }
+
+        let (path, _tempdir) = make_test_tempfile(
+            r"
+           vecs a b c
+           s foo
+           i 42
+           b true
+           en bbr
+           pr 123-456
+        ",
+            "test.conf",
+        );
+        let mut mgr = Manager::empty();
+        mgr.merge_ssh_config(&path, "foo");
+        println!("{mgr}");
+        let result = mgr.get::<Test>().unwrap();
+        assert_eq!(
+            result,
+            Test {
+                vecs: vec!["a".into(), "b".into(), "c".into()],
+                s: "foo".into(),
+                i: 42,
+                b: true,
+                en: CongestionControllerType::Bbr,
+                pr: PortRange {
+                    begin: 123,
+                    end: 456
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn bools() {
+        #[derive(Debug, Deserialize)]
+        struct Test {
+            b: bool,
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let path = tempdir.path().join("testfile");
+
+        for (s, expected) in [
+            ("yes", true),
+            ("true", true),
+            ("1", true),
+            ("no", false),
+            ("false", false),
+            ("0", false),
+        ] {
+            std::fs::write(
+                &path,
+                format!(
+                    r"
+                        b {s}
+                    "
+                ),
+            )
+            .expect("Unable to write tempfile");
+            // ... test it
+            let mut mgr = Manager::empty();
+            mgr.merge_ssh_config(&path, "foo");
+            let result = mgr
+                .get::<Test>()
+                .inspect_err(|e| println!("ERROR: {e}"))
+                .unwrap();
+            assert_eq!(result.b, expected);
+        }
+    }
+
+    #[test]
+    fn invalid_data() {
+        use crate::transport::CongestionControllerType;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test {
+            b: bool,
+            en: CongestionControllerType,
+            i: u32,
+            pr: PortRange,
+        }
+
+        let (path, _tempdir) = make_test_tempfile(
+            r"
+           i wombat
+           b wombat
+           en wombat
+           pr wombat
+        ",
+            "test.conf",
+        );
+        let mut mgr = Manager::empty();
+        mgr.merge_ssh_config(&path, "foo");
+        //println!("{mgr:?}");
+        let err = mgr.get::<Test>().map_err(SshConfigError::from).unwrap_err();
+        println!("{err}");
     }
 }
