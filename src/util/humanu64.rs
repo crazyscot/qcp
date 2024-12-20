@@ -3,9 +3,11 @@
 
 use std::{marker::PhantomData, ops::Deref, str::FromStr};
 
-use anyhow::Context as _;
 use humanize_rs::bytes::Bytes;
-use serde::Serialize;
+use serde::{
+    de::{self, Error as _},
+    Serialize,
+};
 
 use super::cli::IntOrString;
 
@@ -41,12 +43,18 @@ impl From<HumanU64> for u64 {
 }
 
 impl FromStr for HumanU64 {
-    type Err = anyhow::Error;
+    type Err = figment::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use figment::error::Error as FigmentError;
         Ok(Self::new(
             Bytes::from_str(s)
-                .with_context(|| "parsing bytes string")?
+                .map_err(|_| {
+                    FigmentError::invalid_value(
+                        de::Unexpected::Str(s),
+                        &"an integer with optional units (examples: `100`, `10M`, `42k`)",
+                    )
+                })?
                 .size(),
         ))
     }
