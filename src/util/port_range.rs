@@ -1,6 +1,9 @@
 /// CLI argument helper - PortRange
 // (c) 2024 Ross Younger
-use serde::Serialize;
+use serde::{
+    de::{Error, Unexpected},
+    Serialize,
+};
 use std::{fmt::Display, str::FromStr};
 
 use super::cli::IntOrString;
@@ -44,10 +47,19 @@ impl FromStr for PortRange {
     type Err = figment::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use figment::error::Error as FigmentError;
+        static EXPECTED: &str = "a single port number [0..65535] or a range `a-b`";
         if let Ok(n) = s.parse::<u16>() {
             // case 1: it's a number
             // port 0 is allowed here (with the usual "unspecified" semantics), the user may know what they're doing.
             return Ok(Self { begin: n, end: n });
+        }
+        if let Ok(n) = s.parse::<u64>() {
+            // out of range
+            return Err(FigmentError::invalid_value(
+                Unexpected::Unsigned(n),
+                &EXPECTED,
+            ));
         }
         // case 2: it's a range
         if let Some((a, b)) = s.split_once('-') {
@@ -56,15 +68,19 @@ impl FromStr for PortRange {
             if aa.is_ok() && bb.is_ok() {
                 let aa = aa.unwrap_or_default();
                 let bb = bb.unwrap_or_default();
-                if aa != 0 && aa <= bb {
-                    return Ok(Self { begin: aa, end: bb });
+                if aa > bb {
+                    return Err(FigmentError::custom(format!(
+                        "invalid port range `{s}` (must be increasing)"
+                    )));
+                } else if aa == 0 && bb != 0 {
+                    return Err(FigmentError::custom(format!("invalid port range `{s}` (port 0 means \"any\" so cannot be part of a range)")));
                 }
-                // else invalid
+                return Ok(Self { begin: aa, end: bb });
             }
             // else failed to parse
         }
         // else failed to parse
-        Err(figment::error::Kind::Message(format!("invalid port range \"{s}\"")).into())
+        Err(FigmentError::invalid_value(Unexpected::Str(s), &EXPECTED))
     }
 }
 

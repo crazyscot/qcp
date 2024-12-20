@@ -536,7 +536,7 @@ mod test {
         println!("{result}");
         assert!(result
             .to_string()
-            .contains("invalid port range \"234-123\""));
+            .contains("must be increasing"));
     }
 
     #[test]
