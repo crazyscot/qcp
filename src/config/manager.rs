@@ -174,7 +174,7 @@ impl Manager {
         // TODO: differentiate between user and system configs (Include rules)
         let p = super::ssh::Parser::for_path(file.as_ref(), true)
             .and_then(|p| p.parse_file_for(host))
-            .map(|hc| self.merge_provider(hc));
+            .map(|hc| self.merge_provider(hc.as_figment()));
         if let Err(e) = p {
             warn!("parsing {ff}: {e}", ff = path.to_string_lossy());
         }
@@ -675,6 +675,7 @@ mod test {
         );
         let mut mgr = Manager::empty();
         mgr.merge_ssh_config(&path, "foo");
+        //println!("{mgr:?}");
         let err = mgr.get::<Test>().unwrap_err();
         println!("{err}");
     }

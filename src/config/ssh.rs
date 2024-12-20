@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use figment::{Figment, Metadata, Profile, Source};
 use glob::{glob_with, MatchOptions};
 use tracing::warn;
 
@@ -33,6 +34,16 @@ impl HostConfiguration {
     }
     pub(crate) fn get(&self, key: &str) -> Option<&Setting> {
         self.data.get(key)
+    }
+
+    pub(crate) fn as_figment(&self) -> Figment {
+        let mut figment = Figment::new();
+        let profile = figment::Profile::new(&self.host);
+
+        for (k, v) in &self.data {
+            figment = figment.merge(ValueProvider::new(k, v, &profile));
+        }
+        figment
     }
 }
 
@@ -346,14 +357,32 @@ impl<R: Read> Parser<R> {
     }
 }
 
-impl figment::Provider for HostConfiguration {
-    fn metadata(&self) -> figment::Metadata {
-        // source name: is this an ssh or qcp config file? only qcp for now.
-        let mut response = figment::Metadata::named("qcp config file");
-        if let Some(src) = &self.source {
-            response = response.source(figment::Source::File(src.clone()));
+struct ValueProvider<'a> {
+    key: &'a String,
+    value: &'a Setting,
+    profile: &'a Profile,
+}
+
+impl<'a> ValueProvider<'a> {
+    fn new(key: &'a String, value: &'a Setting, profile: &'a Profile) -> Self {
+        Self {
+            key,
+            value,
+            profile,
         }
-        response
+    }
+}
+
+impl figment::Provider for ValueProvider<'_> {
+    fn metadata(&self) -> figment::Metadata {
+        Metadata::from(
+            "configuration file",
+            Source::Custom(format!(
+                "{src} line {line}",
+                src = self.value.source,
+                line = self.value.line_number
+            )),
+        )
     }
 
     fn data(
@@ -363,23 +392,18 @@ impl figment::Provider for HostConfiguration {
         figment::Error,
     > {
         use figment::value::{Dict, Empty, Value};
-
         let mut dict = Dict::new();
-
-        for (k, v) in &self.data {
-            let value: Value = match v.args.len() {
-                0 => Empty::Unit.into(),
-                1 => v.args.first().unwrap().clone().into(),
-                _ => v.args.clone().into(),
-            };
-            let _ = dict.insert(k.to_string(), value);
-        }
-        // TODO: where do we set up the source information? we have it!
-        Ok(figment::Profile::new(&self.host).collect(dict))
+        let value: Value = match self.value.args.len() {
+            0 => Empty::Unit.into(),
+            1 => self.value.args.first().unwrap().clone().into(),
+            _ => self.value.args.clone().into(),
+        };
+        let _ = dict.insert(self.key.clone(), value);
+        Ok(self.profile.collect(dict))
     }
 
-    fn profile(&self) -> Option<figment::Profile> {
-        Some(figment::Profile::new(&self.host))
+    fn profile(&self) -> Option<Profile> {
+        Some(self.profile.clone())
     }
 }
 
