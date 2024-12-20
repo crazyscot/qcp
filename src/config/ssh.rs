@@ -362,15 +362,24 @@ impl figment::Provider for HostConfiguration {
         figment::value::Map<figment::Profile, figment::value::Dict>,
         figment::Error,
     > {
-        use figment::value::{Dict, Map};
+        use figment::value::{Dict, Empty, Value};
 
         let mut dict = Dict::new();
+
         for (k, v) in &self.data {
-            let _ = dict.insert(k.to_string(), v.args.clone().into());
+            let value: Value = match v.args.len() {
+                0 => Empty::Unit.into(),
+                1 => v.args.first().unwrap().clone().into(),
+                _ => v.args.clone().into(),
+            };
+            let _ = dict.insert(k.to_string(), value);
         }
-        let mut map = Map::new();
-        let _ = map.insert(figment::Profile::Default, dict);
-        Ok(map)
+        // TODO: where do we set up the source information? we have it!
+        Ok(figment::Profile::new(&self.host).collect(dict))
+    }
+
+    fn profile(&self) -> Option<figment::Profile> {
+        Some(figment::Profile::new(&self.host))
     }
 }
 

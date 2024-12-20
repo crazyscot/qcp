@@ -12,7 +12,7 @@ use figment::{
 };
 use serde::Deserialize;
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     fmt::{Debug, Display},
     path::Path,
 };
@@ -134,6 +134,16 @@ impl Manager {
         }
     }
 
+    /// Testing/internal constructor, does not read files from system
+    #[must_use]
+    #[allow(unused)]
+    pub(crate) fn empty() -> Self {
+        Self {
+            data: Figment::new(),
+            //..Self::default()
+        }
+    }
+
     /// Merges in a data set, which is some sort of [figment::Provider](https://docs.rs/figment/latest/figment/trait.Provider.html).
     ///
     /// Within qcp, we use [crate::util::derive_deftly_template_Optionalify] to implement Provider for [Configuration].
@@ -173,11 +183,12 @@ impl Manager {
     /// Attempts to extract a particular struct from the data.
     ///
     /// Within qcp, `T` is usually [Configuration], but it isn't intrinsically required to be.
+    /// (This is useful for unit testing.)
     pub fn get<'de, T>(&self) -> anyhow::Result<T, figment::Error>
     where
         T: Deserialize<'de>,
     {
-        self.data.extract::<T>()
+        self.data.extract_lossy::<T>()
     }
 }
 
@@ -241,6 +252,8 @@ impl PrettyConfig {
     }
 }
 
+static DEFAULT_EMPTY_MAP: BTreeMap<String, Value> = BTreeMap::new();
+
 impl Display for Manager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let data = match self.data.data() {
@@ -250,7 +263,12 @@ impl Display for Manager {
                 return write!(f, "error: {e}");
             }
         };
-        let data = data.get(&figment::Profile::Default).unwrap();
+        let profile = match data.first_key_value() {
+            None => &figment::Profile::Default,
+            Some((k, _)) => k,
+        };
+
+        let data = data.get(profile).unwrap_or(&DEFAULT_EMPTY_MAP);
 
         let mut fields = Vec::<PrettyConfig>::new();
 
@@ -541,6 +559,7 @@ mod test {
             ssh_opt: Vec<String>,
         }
 
+        // Bear in mind: in an ssh style config file, the first match for a particular keyword wins.
         let (path, _tempdir) = make_test_tempfile(
             r"
            host bar
@@ -550,7 +569,7 @@ mod test {
         ",
             "test.conf",
         );
-        let mut mgr = Manager::without_files();
+        let mut mgr = Manager::empty();
         mgr.merge_ssh_config(&path, "foo");
         //println!("{mgr}");
         let result = mgr.get::<Test>().unwrap();
@@ -561,5 +580,115 @@ mod test {
         //println!("{mgr}");
         let result = mgr.get::<Test>().unwrap();
         assert_eq!(result.ssh_opt, vec!["d", "e", "f"]);
+    }
+
+    #[test]
+    fn types() {
+        use crate::transport::CongestionControllerType;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test {
+            vecs: Vec<String>,
+            s: String,
+            i: u32,
+            b: bool,
+            en: CongestionControllerType,
+            pr: PortRange,
+        }
+
+        let (path, _tempdir) = make_test_tempfile(
+            r"
+           vecs a b c
+           s foo
+           i 42
+           b true
+           en bbr
+           pr 123-456
+        ",
+            "test.conf",
+        );
+        let mut mgr = Manager::empty();
+        mgr.merge_ssh_config(&path, "foo");
+        println!("{mgr}");
+        let result = mgr.get::<Test>().unwrap();
+        assert_eq!(
+            result,
+            Test {
+                vecs: vec!["a".into(), "b".into(), "c".into()],
+                s: "foo".into(),
+                i: 42,
+                b: true,
+                en: CongestionControllerType::Bbr,
+                pr: PortRange {
+                    begin: 123,
+                    end: 456
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn bools() {
+        #[derive(Debug, Deserialize)]
+        struct Test {
+            b: bool,
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let path = tempdir.path().join("testfile");
+
+        for (s, expected) in [
+            ("yes", true),
+            ("true", true),
+            ("1", true),
+            ("no", false),
+            ("false", false),
+            ("0", false),
+        ] {
+            std::fs::write(
+                &path,
+                format!(
+                    r"
+                        b {s}
+                    "
+                ),
+            )
+            .expect("Unable to write tempfile");
+            // ... test it
+            let mut mgr = Manager::empty();
+            mgr.merge_ssh_config(&path, "foo");
+            let result = mgr
+                .get::<Test>()
+                .inspect_err(|e| println!("ERROR: {e}"))
+                .unwrap();
+            assert_eq!(result.b, expected);
+        }
+    }
+
+    #[test]
+    fn invalid_data() {
+        use crate::transport::CongestionControllerType;
+
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct Test {
+            b: bool,
+            en: CongestionControllerType,
+            i: u32,
+            pr: PortRange,
+        }
+
+        let (path, _tempdir) = make_test_tempfile(
+            r"
+           i wombat
+           b wombat
+           en wombat
+           pr wombat
+        ",
+            "test.conf",
+        );
+        let mut mgr = Manager::empty();
+        mgr.merge_ssh_config(&path, "foo");
+        let err = mgr.get::<Test>().unwrap_err();
+        println!("{err}");
     }
 }
