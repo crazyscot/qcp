@@ -9,9 +9,74 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use figment::{Figment, Metadata, Profile, Source};
+use figment::{
+    error::{Kind, OneOf},
+    Figment, Metadata, Profile, Source,
+};
 use glob::{glob_with, MatchOptions};
 use tracing::warn;
+
+///////////////////////////////////////////////////////////////////////////////////////
+
+/// A newtype wrapper implementing `Display` for errors originating from this module
+#[derive(Debug)]
+pub(crate) struct SshConfigError(figment::Error);
+impl From<figment::Error> for SshConfigError {
+    fn from(value: figment::Error) -> Self {
+        Self(value)
+    }
+}
+
+impl SshConfigError {
+    fn rewrite_expected_type(s: &str) -> String {
+        match s {
+            "a boolean" => format!(
+                "a boolean ({})",
+                OneOf(&["yes", "no", "true", "false", "1", "0"])
+            ),
+            _ => s.to_owned(),
+        }
+    }
+
+    fn fmt_kind(kind: &Kind, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match kind {
+            Kind::InvalidType(v, exp) => write!(
+                f,
+                "invalid type: found {v}, expected {exp}",
+                exp = Self::rewrite_expected_type(exp)
+            ),
+            Kind::UnknownVariant(v, exp) => {
+                write!(f, "unknown variant: found {v}, expected {}", OneOf(exp))
+            }
+            _ => std::fmt::Display::fmt(&kind, f),
+        }
+    }
+}
+
+impl std::fmt::Display for SshConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let e = &self.0;
+        Self::fmt_kind(&e.kind, f)?;
+
+        if let (Some(profile), Some(md)) = (&e.profile, &e.metadata) {
+            if !e.path.is_empty() {
+                let key = md.interpolate(profile, &e.path);
+                write!(f, " for {key}")?;
+            }
+        }
+
+        if let Some(md) = &e.metadata {
+            if let Some(source) = &md.source {
+                write!(f, " at {source}")?;
+            } else {
+                write!(f, " in {}", md.name)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
 
 /// The result of parsing an ssh-style configuration file, with a particular host in mind.
 #[derive(Debug, Clone, PartialEq)]
@@ -47,6 +112,8 @@ impl HostConfiguration {
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug, Clone, PartialEq)]
 /// A parsed line we read from an ssh config file
 enum Line {
@@ -70,6 +137,8 @@ enum Line {
     },
 }
 
+///////////////////////////////////////////////////////////////////////////////////////
+
 #[derive(Debug, Clone, PartialEq, Default)]
 /// A setting we read from a config file
 pub(crate) struct Setting {
@@ -86,6 +155,8 @@ impl Setting {
         self.args.first().cloned().unwrap_or_else(String::new)
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////////////
 
 /// Splits a string into a list of arguments.
 /// Arguments are delimited by whitespace, subject to quoting (single or double quotes), and simple escapes (\\, \", \').
@@ -189,6 +260,8 @@ fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>> {
     }
     Ok(result)
 }
+
+///////////////////////////////////////////////////////////////////////////////////////
 
 /// Does the business of reading a config file.
 ///
@@ -357,6 +430,8 @@ impl<R: Read> Parser<R> {
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////////////
+
 struct ValueProvider<'a> {
     key: &'a String,
     value: &'a Setting,
@@ -378,11 +453,15 @@ impl figment::Provider for ValueProvider<'_> {
         Metadata::from(
             "configuration file",
             Source::Custom(format!(
-                "{src} line {line}",
+                "line {line} of {src}",
                 src = self.value.source,
                 line = self.value.line_number
             )),
         )
+        .interpolater(|profile, path| {
+            let key = path.to_vec();
+            format!("key `{key}` of host `{profile}`", key = key.join("."))
+        })
     }
 
     fn data(
@@ -406,6 +485,8 @@ impl figment::Provider for ValueProvider<'_> {
         Some(self.profile.clone())
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
 mod test {

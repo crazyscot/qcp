@@ -355,6 +355,7 @@ impl Display for DisplayAdapter<'_> {
 
 #[cfg(test)]
 mod test {
+    use crate::config::ssh::SshConfigError;
     use crate::config::{Configuration, Configuration_Optional, Manager};
     use crate::util::{make_test_tempfile, PortRange};
     use serde::Deserialize;
@@ -534,9 +535,7 @@ mod test {
         mgr.merge_toml_file(path);
         let result = mgr.get::<Test>().unwrap_err();
         println!("{result}");
-        assert!(result
-            .to_string()
-            .contains("must be increasing"));
+        assert!(result.to_string().contains("must be increasing"));
     }
 
     #[test]
@@ -676,7 +675,7 @@ mod test {
         let mut mgr = Manager::empty();
         mgr.merge_ssh_config(&path, "foo");
         //println!("{mgr:?}");
-        let err = mgr.get::<Test>().unwrap_err();
+        let err = mgr.get::<Test>().map_err(SshConfigError::from).unwrap_err();
         println!("{err}");
     }
 }
