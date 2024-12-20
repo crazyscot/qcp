@@ -256,35 +256,7 @@ static DEFAULT_EMPTY_MAP: BTreeMap<String, Value> = BTreeMap::new();
 
 impl Display for Manager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let data = match self.data.data() {
-            Ok(d) => d,
-            Err(e) => {
-                // This isn't terribly helpful as it doesn't have metadata attached; BUT attempting to get() a struct does.
-                return write!(f, "error: {e}");
-            }
-        };
-        let profile = match data.first_key_value() {
-            None => &figment::Profile::Default,
-            Some((k, _)) => k,
-        };
-
-        let data = data.get(profile).unwrap_or(&DEFAULT_EMPTY_MAP);
-
-        let mut fields = Vec::<PrettyConfig>::new();
-
-        for field in data.keys() {
-            let value = self.data.find_value(field);
-            let value = match value {
-                Ok(v) => v,
-                Err(e) => {
-                    writeln!(f, "error on field {field}: {e}")?;
-                    continue;
-                }
-            };
-            let meta = self.data.find_metadata(field);
-            fields.push(PrettyConfig::new(field, &value, meta));
-        }
-        write!(f, "{}", Table::new(fields).with(Style::sharp()))
+        std::fmt::Display::fmt(&self.display_everything_adapter(), f)
     }
 }
 
@@ -295,7 +267,7 @@ pub struct DisplayAdapter<'a> {
     source: &'a Manager,
     /// Whether to warn if unused fields are present
     warn_on_unused: bool,
-    /// The fields we want to output
+    /// The fields we want to output. (If empty, outputs everything.)
     fields: HashSet<String>,
 }
 
@@ -317,13 +289,25 @@ impl Manager {
             fields,
         }
     }
+
+    /// Creates a generic `DisplayAdapter` that outputs everything
+    ///
+    /// # Returns
+    /// An ephemeral structure implementing `Display`.
+    #[must_use]
+    pub fn display_everything_adapter(&self) -> DisplayAdapter<'_> {
+        DisplayAdapter {
+            source: self,
+            warn_on_unused: false,
+            fields: HashSet::<String>::new(),
+        }
+    }
 }
 
 impl Display for DisplayAdapter<'_> {
     /// Formats the contents of this structure which are relevant to a given output type.
     ///
     /// N.B. This function uses CLI styling.
-    #[allow(clippy::missing_panics_doc)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use crate::cli::styles::{ERROR_S, WARNING_S};
         use anstream::eprintln;
@@ -337,14 +321,17 @@ impl Display for DisplayAdapter<'_> {
                 return Ok(());
             }
         };
-        // panic is impossible on the Default profile, hence #[allow(clippy::missing_panics_doc)]
-        let data = data.get(&figment::Profile::Default).unwrap();
+        let profile = match data.first_key_value() {
+            None => &figment::Profile::Default,
+            Some((k, _)) => k,
+        };
+        let data = data.get(profile).unwrap_or(&DEFAULT_EMPTY_MAP);
 
         let mut output = Vec::<PrettyConfig>::new();
 
         for field in data.keys() {
             let meta = self.source.data.find_metadata(field);
-            if self.fields.contains(field) {
+            if self.fields.is_empty() || self.fields.contains(field) {
                 let value = self.source.data.find_value(field);
                 let value = match value {
                     Ok(v) => v,
