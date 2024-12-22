@@ -14,12 +14,12 @@ use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashSet},
     fmt::{Debug, Display},
-    path::Path,
+    path::{Path, PathBuf},
 };
 use struct_field_names_as_array::FieldNamesAsSlice;
 use tabled::{settings::style::Style, Table, Tabled};
 
-use tracing::{trace, warn};
+use tracing::{debug, warn};
 
 // SYSTEM DEFAULTS //////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,32 +59,6 @@ pub struct Manager {
     data: Figment,
 }
 
-fn add_user_config(f: Figment) -> Figment {
-    let Some(path) = Platform::user_config_path() else {
-        warn!("could not determine user configuration file path");
-        return f;
-    };
-
-    if !path.exists() {
-        trace!("user configuration file {path:?} not present");
-        return f;
-    }
-    f.merge(Toml::file(path.as_path()))
-}
-
-fn add_system_config(f: Figment) -> Figment {
-    let Some(path) = Platform::system_config_path() else {
-        warn!("could not determine system configuration file path");
-        return f;
-    };
-
-    if !path.exists() {
-        trace!("system configuration file {path:?} not present");
-        return f;
-    }
-    f.merge(Toml::file(path.as_path()))
-}
-
 impl Default for Manager {
     /// Initialises this structure fully-empty (for new(), or testing)
     fn default() -> Self {
@@ -99,15 +73,26 @@ impl Manager {
     /// and the current user.
     #[must_use]
     pub fn standard() -> Self {
-        let mut data = Figment::new().merge(SystemDefault::default());
-        data = add_system_config(data);
-
-        // N.B. This may leave data in a fused-error state, if a data file isn't parseable.
-        data = add_user_config(data);
-        Self {
-            data,
+        let mut new1 = Self {
+            data: Figment::new(),
             //..Self::default()
+        };
+        new1.merge_provider(SystemDefault::default());
+        // N.B. This may leave data in a fused-error state, if a config file isn't parseable.
+        new1.add_config("system", Platform::system_config_path());
+        new1.add_config("user", Platform::user_config_path());
+        new1
+    }
+    fn add_config(&mut self, what: &str, path: Option<PathBuf>) {
+        let Some(path) = path else {
+            warn!("could not determine {what} configuration file path");
+            return;
+        };
+        if !path.exists() {
+            debug!("{what} configuration file {path:?} not present");
+            return;
         }
+        self.merge_provider(Toml::file(path.as_path()));
     }
 
     /// Returns the list of configuration files we read.
@@ -146,7 +131,8 @@ impl Manager {
     }
 
     /// Merges in a data set from a TOML file
-    pub fn merge_toml_file<T>(&mut self, toml: T)
+    #[allow(unused)]
+    pub(crate) fn merge_toml_file<T>(&mut self, toml: T)
     where
         T: AsRef<Path>,
     {
