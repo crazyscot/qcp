@@ -98,7 +98,7 @@ impl Manager {
     /// Initialises this structure, reading the set of config files appropriate to the platform
     /// and the current user.
     #[must_use]
-    pub fn new() -> Self {
+    pub fn standard() -> Self {
         let mut data = Figment::new().merge(SystemDefault::default());
         data = add_system_config(data);
 
@@ -125,21 +125,11 @@ impl Manager {
 
     /// Testing/internal constructor, does not read files from system
     #[must_use]
-    #[allow(unused)]
+    #[cfg(test)]
     pub(crate) fn without_files() -> Self {
         let data = Figment::new().merge(SystemDefault::default());
         Self {
             data,
-            //..Self::default()
-        }
-    }
-
-    /// Testing/internal constructor, does not read files from system
-    #[must_use]
-    #[allow(unused)]
-    pub(crate) fn empty() -> Self {
-        Self {
-            data: Figment::new(),
             //..Self::default()
         }
     }
@@ -555,7 +545,7 @@ mod test {
         ",
             "test.conf",
         );
-        let mut mgr = Manager::empty();
+        let mut mgr = Manager::default();
         mgr.merge_ssh_config(&path, "foo");
         //println!("{mgr}");
         let result = mgr.get::<Test>().unwrap();
@@ -593,7 +583,7 @@ mod test {
         ",
             "test.conf",
         );
-        let mut mgr = Manager::empty();
+        let mut mgr = Manager::default();
         mgr.merge_ssh_config(&path, "foo");
         println!("{mgr}");
         let result = mgr.get::<Test>().unwrap();
@@ -641,7 +631,7 @@ mod test {
             )
             .expect("Unable to write tempfile");
             // ... test it
-            let mut mgr = Manager::empty();
+            let mut mgr = Manager::default();
             mgr.merge_ssh_config(&path, "foo");
             let result = mgr
                 .get::<Test>()
@@ -672,7 +662,7 @@ mod test {
         ",
             "test.conf",
         );
-        let mut mgr = Manager::empty();
+        let mut mgr = Manager::default();
         mgr.merge_ssh_config(&path, "foo");
         //println!("{mgr:?}");
         let err = mgr.get::<Test>().map_err(SshConfigError::from).unwrap_err();
