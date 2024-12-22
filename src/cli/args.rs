@@ -105,7 +105,7 @@ impl From<&CliArgs> for Manager {
     /// Merge options from the CLI into the structure.
     /// Any new option packs (_Optional structs) need to be added here.
     fn from(value: &CliArgs) -> Self {
-        let mut mgr = Manager::new();
+        let mut mgr = Manager::standard();
         mgr.merge_provider(&value.config);
         mgr
     }
