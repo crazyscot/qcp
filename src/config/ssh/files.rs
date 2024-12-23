@@ -17,8 +17,8 @@ use super::{evaluate_host_match, find_include_files, split_args, Line, Setting, 
 /// The result of parsing an ssh-style configuration file, with a particular host in mind.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct HostConfiguration {
-    /// The host we were interested in
-    host: String,
+    /// The host we were interested in. If None, this is "unspecified", i.e. we return data in `Host *` sections or in an unqualified section at the top of the file.
+    host: Option<String>,
     /// If present, this is the file we read
     source: Option<PathBuf>,
     /// Output data
@@ -26,9 +26,9 @@ pub(crate) struct HostConfiguration {
 }
 
 impl HostConfiguration {
-    fn new(host: &str, source: Option<PathBuf>) -> Self {
+    fn new(host: Option<&str>, source: Option<PathBuf>) -> Self {
         Self {
-            host: host.into(),
+            host: host.map(std::borrow::ToOwned::to_owned),
             source,
             data: BTreeMap::default(),
         }
@@ -39,8 +39,10 @@ impl HostConfiguration {
 
     pub(crate) fn as_figment(&self) -> Figment {
         let mut figment = Figment::new();
-        let profile = figment::Profile::new(&self.host);
-
+        let profile = self
+            .host
+            .as_deref()
+            .map_or(figment::Profile::Default, figment::Profile::new);
         for (k, v) in &self.data {
             figment = figment.merge(ValueProvider::new(k, v, &profile));
         }
@@ -170,7 +172,7 @@ impl<R: Read> Parser<R> {
             match self.parse_line(&line)? {
                 Line::Empty => (),
                 Line::Host { args, .. } => {
-                    *accepting = evaluate_host_match(&output.host, &args);
+                    *accepting = evaluate_host_match(output.host.as_deref(), &args);
                 }
                 Line::Match { .. } => {
                     warn!("match expressions in ssh_config files are not yet supported");
@@ -207,7 +209,7 @@ impl<R: Read> Parser<R> {
 
     /// Interprets the source with a given hostname in mind.
     /// This consumes the `Parser`.
-    pub(crate) fn parse_file_for(mut self, host: &str) -> Result<HostConfiguration> {
+    pub(crate) fn parse_file_for(mut self, host: Option<&str>) -> Result<HostConfiguration> {
         let mut output = HostConfiguration::new(host, self.path.take());
         let mut accepting = true;
         self.parse_file_inner(&mut accepting, 0, &mut output)?;
@@ -313,7 +315,7 @@ mod test {
         ",
             true,
         )
-        .parse_file_for("any host")
+        .parse_file_for(None)
         .unwrap();
         //println!("{output:?}");
         assert_1_arg!(output.get("foo"), "Bar");
@@ -332,7 +334,7 @@ mod test {
         ",
             true,
         )
-        .parse_file_for("Fred")
+        .parse_file_for(Some("Fred"))
         .unwrap();
         assert_1_arg!(output.get("foo"), "Bar");
     }
@@ -352,7 +354,7 @@ mod test {
         ",
             true,
         )
-        .parse_file_for("Fred")
+        .parse_file_for(Some("Fred"))
         .unwrap();
         assert_1_arg!(output.get("foo"), "Bar");
     }
@@ -370,7 +372,7 @@ mod test {
         ",
             true,
         )
-        .parse_file_for("Fred")
+        .parse_file_for(Some("Fred"))
         .unwrap();
         assert_1_arg!(output.get("qux"), "Qix");
     }
@@ -385,7 +387,7 @@ mod test {
         );
         let output = Parser::for_path(path, true)
             .unwrap()
-            .parse_file_for("any")
+            .parse_file_for(None)
             .unwrap();
         assert_1_arg!(output.get("hi"), "there");
     }
@@ -402,7 +404,7 @@ mod test {
         std::fs::write(&path, contents).unwrap();
         let err = Parser::for_path(path, true)
             .unwrap()
-            .parse_file_for("any")
+            .parse_file_for(None)
             .unwrap_err();
         assert_contains!(err.to_string(), "too many nested includes");
     }
@@ -419,7 +421,7 @@ mod test {
         std::fs::write(&path3, "green cheese").unwrap();
         let output = Parser::for_path(path1, true)
             .unwrap()
-            .parse_file_for("any")
+            .parse_file_for(None)
             .unwrap();
         assert_1_arg!(output.get("hi"), "there");
         assert_1_arg!(output.get("green"), "cheese");
@@ -430,7 +432,7 @@ mod test {
     fn dump_local_config() {
         let path = Platform::user_ssh_config().unwrap();
         let parser = Parser::for_path(path, true).unwrap();
-        let data = parser.parse_file_for("lapis").unwrap();
+        let data = parser.parse_file_for(Some("lapis")).unwrap();
         println!("{data:#?}");
     }
 }
