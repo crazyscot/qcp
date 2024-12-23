@@ -6,7 +6,7 @@ use clap::{ArgAction::SetTrue, Args as _, FromArgMatches as _, Parser};
 use crate::{config::Manager, util::AddressFamily};
 
 /// Options that switch us into another mode i.e. which don't require source/destination arguments
-pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers", "show_config", "config_files"];
+pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers", "config_files", "show_config"];
 
 #[derive(Debug, Parser, Clone)]
 #[command(
@@ -44,7 +44,14 @@ pub(crate) struct CliArgs {
     )]
     pub server: bool,
 
-    /// Outputs the configuration, then exits
+    /// Outputs the configuration, then exits.
+    ///
+    /// If a remote `SOURCE` or `DESTINATION` argument is given, outputs the configuration we would use
+    /// for operations to that host.
+    ///
+    /// If not, outputs only global settings from configuration, which may be overridden in
+    /// `Host` blocks in configuration files.
+    ///
     #[arg(long, help_heading("Configuration"))]
     pub show_config: bool,
     /// Outputs the paths to configuration file(s), then exits
@@ -101,12 +108,14 @@ impl CliArgs {
     }
 }
 
-impl From<&CliArgs> for Manager {
-    /// Merge options from the CLI into the structure.
-    /// Any new option packs (_Optional structs) need to be added here.
-    fn from(value: &CliArgs) -> Self {
-        let mut mgr = Manager::standard();
+impl TryFrom<&CliArgs> for Manager {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &CliArgs) -> Result<Self, Self::Error> {
+        let host = value.client_params.remote_host_lossy()?;
+
+        let mut mgr = Manager::standard(host.as_deref());
         mgr.merge_provider(&value.config);
-        mgr
+        Ok(mgr)
     }
 }

@@ -60,3 +60,22 @@ impl std::fmt::Display for SshConfigError {
         Ok(())
     }
 }
+
+/// An iterator over all errors in an [`SshConfigError`]
+pub(crate) struct IntoIter(<figment::Error as std::iter::IntoIterator>::IntoIter);
+impl Iterator for IntoIter {
+    type Item = SshConfigError;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(std::convert::Into::into)
+    }
+}
+
+impl IntoIterator for SshConfigError {
+    type Item = SshConfigError;
+    type IntoIter = IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter(self.0.into_iter())
+    }
+}
