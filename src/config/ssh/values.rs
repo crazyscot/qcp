@@ -44,7 +44,7 @@ impl figment::Provider for ValueProvider<'_> {
         Metadata::from(
             "configuration file",
             Source::Custom(format!(
-                "line {line} of {src}",
+                "{src} (line {line})",
                 src = self.value.source,
                 line = self.value.line_number
             )),

@@ -3,10 +3,7 @@
 
 use std::process::ExitCode;
 
-use super::{
-    args::CliArgs,
-    styles::{ERROR_S, INFO_S},
-};
+use super::{args::CliArgs, styles::ERROR_S};
 use crate::{
     client::{client_main, Parameters as ClientParameters, MAX_UPDATE_FPS},
     config::{Configuration, Manager},
@@ -58,19 +55,19 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     }
 
     // Now fold the arguments in with the CLI config (which may fail)
-    let config_manager = Manager::from(&args);
+    let config_manager = match Manager::try_from(&args) {
+        Ok(m) => m,
+        Err(err) => {
+            eprintln!("{}: {err}", "ERROR".style(*ERROR_S));
+            return Ok(ExitCode::FAILURE);
+        }
+    };
 
     let config = match config_manager.get::<Configuration>() {
         Ok(c) => c,
         Err(err) => {
-            println!("{}: Failed to parse configuration", "ERROR".style(*ERROR_S));
-            if err.count() == 1 {
-                println!("{err}");
-            } else {
-                for (i, e) in err.into_iter().enumerate() {
-                    println!("{}: {e}", (i + 1).style(*INFO_S));
-                }
-            }
+            eprintln!("{}: Failed to parse configuration", "ERROR".style(*ERROR_S));
+            err.into_iter().for_each(|e| eprintln!("{e}"));
             return Ok(ExitCode::FAILURE);
         }
     };
@@ -84,10 +81,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     .inspect_err(|e| eprintln!("{e:?}"))?;
 
     if args.show_config {
-        println!(
-            "{}",
-            config_manager.to_display_adapter::<Configuration>(true)
-        );
+        println!("{}", config_manager.to_display_adapter::<Configuration>());
         Ok(ExitCode::SUCCESS)
     } else if args.server {
         let _span = error_span!("REMOTE").entered();

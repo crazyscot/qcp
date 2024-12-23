@@ -32,7 +32,7 @@ derive-deftly = "0.14.2"
 dirs = "5.0.1"
 dns-lookup = "2.0.4"
 expanduser = "1.2.2"
-figment = { version = "0.10.19", features = ["toml"] }
+figment = { version = "0.10.19" }
 futures-util = { version = "0.3.31", default-features = false }
 gethostname = "0.5.0"
 glob = "0.3.1"
@@ -74,7 +74,6 @@ rand = "0.8.5"
 serde_json = "1.0.133"
 serde_test = "1.0.177"
 tempfile = "3.14.0"
-toml = "0.8.19"
 
 [lints.rust]
 dead_code = "warn"

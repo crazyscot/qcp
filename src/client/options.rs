@@ -54,8 +54,7 @@ pub struct Parameters {
     ///
     /// Exactly one of source and destination must be remote.
     #[arg(
-        conflicts_with_all(crate::cli::MODE_OPTIONS),
-        required = true,
+        required_unless_present_any(crate::cli::MODE_OPTIONS),
         value_name = "SOURCE"
     )]
     pub source: Option<FileSpec>,
@@ -66,8 +65,7 @@ pub struct Parameters {
     ///
     /// Exactly one of source and destination must be remote.
     #[arg(
-        conflicts_with_all(crate::cli::MODE_OPTIONS),
-        required = true,
+        required_unless_present_any(crate::cli::MODE_OPTIONS),
         value_name = "DESTINATION"
     )]
     pub destination: Option<FileSpec>,
@@ -95,6 +93,30 @@ impl TryFrom<&Parameters> for CopyJobSpec {
         Ok(Self {
             source,
             destination,
+        })
+    }
+}
+
+impl Parameters {
+    /// A best-effort attempt to extract a single remote host string from the parameters.
+    ///
+    /// # Output
+    /// If neither source nor dest are present, Ok("")
+    /// If at most one of source and dest contains a remote host, Ok(<host>)
+    ///
+    /// # Errors
+    /// If both source and dest contain a remote host, Err("Only one remote file argument is supported")
+    pub(crate) fn remote_host_lossy(&self) -> anyhow::Result<Option<String>> {
+        let src_host = self.source.as_ref().and_then(|fs| fs.host.as_ref());
+        let dst_host = self.destination.as_ref().and_then(|fs| fs.host.as_ref());
+        Ok(if let Some(src_host) = src_host {
+            if dst_host.is_some() {
+                anyhow::bail!("Only one remote file argument is supported");
+            }
+            Some(src_host.to_string())
+        } else {
+            // Destination without source would be an exotic situation, but do our best anyway:
+            dst_host.map(std::string::ToString::to_string)
         })
     }
 }

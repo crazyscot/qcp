@@ -12,11 +12,10 @@ use super::cli::IntOrString;
 ///
 /// Port 0 is allowed with the usual meaning ("any available port"), but 0 may not form part of a range.
 ///
-/// In a configuration file, a range must be specified as a string. For example:
-/// ```toml
-/// remote_port=60000         # a single port can be an integer
-/// remote_port="60000"       # a single port can also be a string
-/// remote_port="60000-60010" # a range must be specified as a string
+/// In a configuration file, a range may specified as an integer or as a pair of ports. For example:
+/// ```text
+/// remote_port 60000         # a single port
+/// remote_port 60000-60010   # a range
 /// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(from = "IntOrString<PortRange>", into = "String")]

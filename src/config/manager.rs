@@ -3,21 +3,20 @@
 
 use crate::os::{AbstractPlatform as _, Platform};
 
-use super::Configuration;
+use super::{ssh::SshConfigError, Configuration};
 
-use figment::{
-    providers::{Format, Serialized, Toml},
-    value::Value,
-    Figment, Metadata, Provider,
-};
+use figment::{providers::Serialized, value::Value, Figment, Metadata, Provider};
 use serde::Deserialize;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     fmt::{Debug, Display},
     path::{Path, PathBuf},
 };
 use struct_field_names_as_array::FieldNamesAsSlice;
-use tabled::{settings::style::Style, Table, Tabled};
+use tabled::{
+    settings::{object::Rows, style::Style, Color},
+    Table, Tabled,
+};
 
 use tracing::{debug, warn};
 
@@ -57,6 +56,8 @@ impl Provider for SystemDefault {
 pub struct Manager {
     /// Configuration data
     data: Figment,
+    /// The host argument this data was read for, if applicable
+    host: Option<String>,
 }
 
 impl Default for Manager {
@@ -64,6 +65,7 @@ impl Default for Manager {
     fn default() -> Self {
         Self {
             data: Figment::default(),
+            host: None,
         }
     }
 }
@@ -72,18 +74,24 @@ impl Manager {
     /// Initialises this structure, reading the set of config files appropriate to the platform
     /// and the current user.
     #[must_use]
-    pub fn standard() -> Self {
+    pub fn standard(for_host: Option<&str>) -> Self {
         let mut new1 = Self {
             data: Figment::new(),
-            //..Self::default()
+            host: for_host.map(std::borrow::ToOwned::to_owned),
         };
         new1.merge_provider(SystemDefault::default());
         // N.B. This may leave data in a fused-error state, if a config file isn't parseable.
-        new1.add_config("system", Platform::system_config_path());
-        new1.add_config("user", Platform::user_config_path());
+        new1.add_config(false, "system", Platform::system_config_path(), for_host);
+        new1.add_config(true, "user", Platform::user_config_path(), for_host);
         new1
     }
-    fn add_config(&mut self, what: &str, path: Option<PathBuf>) {
+    fn add_config(
+        &mut self,
+        is_user: bool,
+        what: &str,
+        path: Option<PathBuf>,
+        for_host: Option<&str>,
+    ) {
         let Some(path) = path else {
             warn!("could not determine {what} configuration file path");
             return;
@@ -92,7 +100,7 @@ impl Manager {
             debug!("{what} configuration file {path:?} not present");
             return;
         }
-        self.merge_provider(Toml::file(path.as_path()));
+        self.merge_ssh_config(path, for_host, is_user);
     }
 
     /// Returns the list of configuration files we read.
@@ -111,12 +119,10 @@ impl Manager {
     /// Testing/internal constructor, does not read files from system
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn without_files() -> Self {
+    pub(crate) fn without_files(host: Option<&str>) -> Self {
         let data = Figment::new().merge(SystemDefault::default());
-        Self {
-            data,
-            //..Self::default()
-        }
+        let host = host.map(std::string::ToString::to_string);
+        Self { data, host }
     }
 
     /// Merges in a data set, which is some sort of [figment::Provider](https://docs.rs/figment/latest/figment/trait.Provider.html).
@@ -130,26 +136,14 @@ impl Manager {
         self.data = f.merge(provider); // in the error case, this leaves the provider in a fused state
     }
 
-    /// Merges in a data set from a TOML file
-    #[allow(unused)]
-    pub(crate) fn merge_toml_file<T>(&mut self, toml: T)
-    where
-        T: AsRef<Path>,
-    {
-        let path = toml.as_ref();
-        let provider = Toml::file_exact(path);
-        self.merge_provider(provider);
-    }
-
     /// Merges in a data set from an ssh config file
-    pub fn merge_ssh_config<F>(&mut self, file: F, host: &str)
+    pub fn merge_ssh_config<F>(&mut self, file: F, host: Option<&str>, is_user: bool)
     where
         F: AsRef<Path>,
     {
         let path = file.as_ref();
-        // TODO: differentiate between user and system configs (Include rules)
-        let p = super::ssh::Parser::for_path(file.as_ref(), true)
-            .and_then(|p| p.parse_file_for(Some(host)))
+        let p = super::ssh::Parser::for_path(file.as_ref(), is_user)
+            .and_then(|p| p.parse_file_for(host))
             .map(|hc| self.merge_provider(hc.as_figment()));
         if let Err(e) = p {
             warn!("parsing {ff}: {e}", ff = path.to_string_lossy());
@@ -160,11 +154,21 @@ impl Manager {
     ///
     /// Within qcp, `T` is usually [Configuration], but it isn't intrinsically required to be.
     /// (This is useful for unit testing.)
-    pub fn get<'de, T>(&self) -> anyhow::Result<T, figment::Error>
+    pub(crate) fn get<'de, T>(&self) -> anyhow::Result<T, SshConfigError>
     where
         T: Deserialize<'de>,
     {
-        self.data.extract_lossy::<T>()
+        let profile = if let Some(host) = &self.host {
+            figment::Profile::new(host)
+        } else {
+            figment::Profile::Default
+        };
+
+        self.data
+            .clone()
+            .select(profile)
+            .extract_lossy::<T>()
+            .map_err(SshConfigError::from)
     }
 }
 
@@ -228,21 +232,11 @@ impl PrettyConfig {
     }
 }
 
-static DEFAULT_EMPTY_MAP: BTreeMap<String, Value> = BTreeMap::new();
-
-impl Display for Manager {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.display_everything_adapter(), f)
-    }
-}
-
 /// Pretty-printing type wrapper to Manager
 #[derive(Debug)]
 pub struct DisplayAdapter<'a> {
     /// Data source
     source: &'a Manager,
-    /// Whether to warn if unused fields are present
-    warn_on_unused: bool,
     /// The fields we want to output. (If empty, outputs everything.)
     fields: HashSet<String>,
 }
@@ -253,7 +247,7 @@ impl Manager {
     /// # Returns
     /// An ephemeral structure implementing `Display`.
     #[must_use]
-    pub fn to_display_adapter<'de, T>(&self, warn_on_unused: bool) -> DisplayAdapter<'_>
+    pub fn to_display_adapter<'de, T>(&self) -> DisplayAdapter<'_>
     where
         T: Deserialize<'de> + FieldNamesAsSlice,
     {
@@ -261,21 +255,7 @@ impl Manager {
         fields.extend(T::FIELD_NAMES_AS_SLICE.iter().map(|s| String::from(*s)));
         DisplayAdapter {
             source: self,
-            warn_on_unused,
             fields,
-        }
-    }
-
-    /// Creates a generic `DisplayAdapter` that outputs everything
-    ///
-    /// # Returns
-    /// An ephemeral structure implementing `Display`.
-    #[must_use]
-    pub fn display_everything_adapter(&self) -> DisplayAdapter<'_> {
-        DisplayAdapter {
-            source: self,
-            warn_on_unused: false,
-            fields: HashSet::<String>::new(),
         }
     }
 }
@@ -285,47 +265,39 @@ impl Display for DisplayAdapter<'_> {
     ///
     /// N.B. This function uses CLI styling.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use crate::cli::styles::{ERROR_S, WARNING_S};
-        use anstream::eprintln;
-        use owo_colors::OwoColorize as _;
-
-        let data = match self.source.data.data() {
-            Ok(d) => d,
-            Err(e) => {
-                // This isn't terribly helpful as it doesn't have metadata attached; BUT attempting to get() a struct does.
-                eprintln!("{} {e}", "ERROR".style(*ERROR_S));
-                return Ok(());
-            }
-        };
-        let profile = match data.first_key_value() {
-            None => &figment::Profile::Default,
-            Some((k, _)) => k,
-        };
-        let data = data.get(profile).unwrap_or(&DEFAULT_EMPTY_MAP);
+        let mut data = self.source.data.clone();
 
         let mut output = Vec::<PrettyConfig>::new();
+        // First line of the table is special
+        let (host_string, host_colour) = if let Some(host) = &self.source.host {
+            let profile = figment::Profile::new(host);
+            data = data.select(profile);
+            (host.clone(), Color::FG_GREEN)
+        } else {
+            ("* (globals)".into(), Color::FG_CYAN)
+        };
+        output.push(PrettyConfig {
+            field: "(Remote host)".into(),
+            value: host_string,
+            source: String::new(),
+        });
 
-        for field in data.keys() {
-            let meta = self.source.data.find_metadata(field);
-            if self.fields.is_empty() || self.fields.contains(field) {
-                let value = self.source.data.find_value(field);
-                let value = match value {
-                    Ok(v) => v,
-                    Err(e) => {
-                        eprintln!("{}: error on {field}: {e}", "WARNING".style(*WARNING_S));
-                        continue;
-                    }
-                };
+        let mut keys = self.fields.iter().collect::<Vec<_>>();
+        keys.sort();
+
+        for field in keys {
+            if let Ok(value) = data.find_value(field) {
+                let meta = data.get_metadata(value.tag());
                 output.push(PrettyConfig::new(field, &value, meta));
-            } else if self.warn_on_unused {
-                let source = PrettyConfig::render_source(meta);
-                eprintln!(
-                    "{}: unrecognised field `{field}` in {source}",
-                    "WARNING".style(*WARNING_S)
-                );
             }
         }
-        write!(f, "{}", Table::new(output).with(Style::sharp()))
+        write!(
+            f,
+            "{}",
+            Table::new(output)
+                .modify(Rows::single(1), host_colour)
+                .with(Style::sharp())
+        )
     }
 }
 
@@ -338,7 +310,7 @@ mod test {
 
     #[test]
     fn defaults() {
-        let mgr = Manager::without_files();
+        let mgr = Manager::without_files(None);
         let result = mgr.get().unwrap();
         let expected = Configuration::default();
         assert_eq!(expected, result);
@@ -356,51 +328,10 @@ mod test {
             ..Default::default()
         };
 
-        let mut mgr = Manager::without_files();
+        let mut mgr = Manager::without_files(None);
         mgr.merge_provider(entered);
         let result = mgr.get().unwrap();
         assert_eq!(expected, result);
-    }
-
-    #[test]
-    fn dump_config_cli_and_toml() {
-        // Not a unit test as such; this is a human test
-        let (path, _tempdir) = make_test_tempfile(
-            r#"
-            tx = 42
-            congestion = "Bbr"
-            unused__ = 42
-        "#,
-            "test.toml",
-        );
-        let fake_cli = Configuration_Optional {
-            rtt: Some(999),
-            initial_congestion_window: Some(67890),
-            ..Default::default()
-        };
-        let mut mgr = Manager::without_files();
-        mgr.merge_toml_file(path);
-        mgr.merge_provider(fake_cli);
-        println!("{mgr}");
-    }
-
-    #[test]
-    fn unparseable_toml() {
-        // This is a semi unit test; there is one assert, but the secondary goal is that it outputs something sensible
-        let (path, _tempdir) = make_test_tempfile(
-            r"
-            a = 1
-            rx 123 # this line is a syntax error
-            b = 2
-        ",
-            "test.toml",
-        );
-        let mut mgr = Manager::without_files();
-        mgr.merge_toml_file(path);
-        let get = mgr.get::<Configuration>();
-        assert!(get.is_err());
-        println!("{}", get.unwrap_err());
-        // println!("{mgr}");
     }
 
     #[test]
@@ -414,84 +345,21 @@ mod test {
 
         let (path, _tempdir) = make_test_tempfile(
             r"
-            rx = true # invalid
-            rtt = 3.14159 # also invalid
-            magic_ = 42
+            rx true # invalid
+            rtt 3.14159 # also invalid
+            magic_ 42
         ",
-            "test.toml",
+            "test.conf",
         );
-        let mut mgr = Manager::without_files();
-        mgr.merge_toml_file(path);
-        // This TOML successfully merges into the config, but you can't extract the struct.
+        let mut mgr = Manager::without_files(None);
+        mgr.merge_ssh_config(path, None, false);
+        // This file successfully merges into the config, but you can't extract the struct.
         let err = mgr.get::<Configuration>().unwrap_err();
         println!("Error: {err}");
-        // TODO: Would really like a rich error message here pointing to the failing key and errant file.
-        // We get no metadata in the error :-(
 
         // But the config as a whole is not broken and other things can be extracted:
         let other_struct = mgr.get::<Test>().unwrap();
         assert_eq!(other_struct.magic_, 42);
-    }
-
-    #[test]
-    fn int_or_string() {
-        #[derive(Deserialize)]
-        struct Test {
-            t1: PortRange,
-            t2: PortRange,
-            t3: PortRange,
-        }
-        let (path, _tempdir) = make_test_tempfile(
-            r#"
-            t1 = 1234
-            t2 = "2345"
-            t3 = "123-456"
-        "#,
-            "test.toml",
-        );
-        let mut mgr = Manager::without_files();
-        mgr.merge_toml_file(path);
-        let res = mgr.get::<Test>().unwrap();
-        assert_eq!(
-            res.t1,
-            PortRange {
-                begin: 1234,
-                end: 1234
-            }
-        );
-        assert_eq!(
-            res.t2,
-            PortRange {
-                begin: 2345,
-                end: 2345
-            }
-        );
-        assert_eq!(
-            res.t3,
-            PortRange {
-                begin: 123,
-                end: 456
-            }
-        );
-    }
-
-    #[test]
-    fn array_type() {
-        #[derive(Deserialize)]
-        struct Test {
-            ii: Vec<i32>,
-        }
-
-        let (path, _tempdir) = make_test_tempfile(
-            r"
-            ii = [1,2,3,4,6]
-        ",
-            "test.toml",
-        );
-        let mut mgr = Manager::without_files();
-        mgr.merge_toml_file(path);
-        let result = mgr.get::<Test>().unwrap();
-        assert_eq!(result.ii, vec![1, 2, 3, 4, 6]);
     }
 
     #[test]
@@ -502,13 +370,13 @@ mod test {
         }
 
         let (path, _tempdir) = make_test_tempfile(
-            r#"
-            _p = "234-123"
-        "#,
-            "test.toml",
+            r"
+            _p 234-123
+        ",
+            "test.conf",
         );
-        let mut mgr = Manager::without_files();
-        mgr.merge_toml_file(path);
+        let mut mgr = Manager::without_files(None);
+        mgr.merge_ssh_config(path, None, true);
         let result = mgr.get::<Test>().unwrap_err();
         println!("{result}");
         assert!(result.to_string().contains("must be increasing"));
@@ -520,7 +388,6 @@ mod test {
         struct Test {
             ssh_opt: Vec<String>,
         }
-
         // Bear in mind: in an ssh style config file, the first match for a particular keyword wins.
         let (path, _tempdir) = make_test_tempfile(
             r"
@@ -531,15 +398,14 @@ mod test {
         ",
             "test.conf",
         );
-        let mut mgr = Manager::default();
-        mgr.merge_ssh_config(&path, "foo");
-        //println!("{mgr}");
+        let mut mgr = Manager::without_files(Some("foo"));
+        mgr.merge_ssh_config(&path, Some("foo"), false);
+        //println!("{}", mgr.to_display_adapter::<Configuration>(false));
         let result = mgr.get::<Test>().unwrap();
         assert_eq!(result.ssh_opt, vec!["a", "b", "c"]);
 
-        let mut mgr = Manager::without_files();
-        mgr.merge_ssh_config(&path, "bar");
-        //println!("{mgr}");
+        let mut mgr = Manager::without_files(Some("bar"));
+        mgr.merge_ssh_config(&path, Some("bar"), false);
         let result = mgr.get::<Test>().unwrap();
         assert_eq!(result.ssh_opt, vec!["d", "e", "f"]);
     }
@@ -569,9 +435,9 @@ mod test {
         ",
             "test.conf",
         );
-        let mut mgr = Manager::default();
-        mgr.merge_ssh_config(&path, "foo");
-        println!("{mgr}");
+        let mut mgr = Manager::without_files(Some("foo"));
+        mgr.merge_ssh_config(&path, Some("foo"), false);
+        // println!("{mgr}");
         let result = mgr.get::<Test>().unwrap();
         assert_eq!(
             result,
@@ -617,8 +483,8 @@ mod test {
             )
             .expect("Unable to write tempfile");
             // ... test it
-            let mut mgr = Manager::default();
-            mgr.merge_ssh_config(&path, "foo");
+            let mut mgr = Manager::without_files(Some("foo"));
+            mgr.merge_ssh_config(&path, Some("foo"), false);
             let result = mgr
                 .get::<Test>()
                 .inspect_err(|e| println!("ERROR: {e}"))
@@ -649,9 +515,31 @@ mod test {
             "test.conf",
         );
         let mut mgr = Manager::default();
-        mgr.merge_ssh_config(&path, "foo");
+        mgr.merge_ssh_config(&path, Some("foo"), false);
         //println!("{mgr:?}");
         let err = mgr.get::<Test>().map_err(SshConfigError::from).unwrap_err();
         println!("{err}");
+    }
+
+    #[test]
+    fn cli_beats_config_file() {
+        // simulate a CLI
+        let entered = Configuration_Optional {
+            rx: Some(12345.into()),
+            ..Default::default()
+        };
+        let (path, _tempdir) = make_test_tempfile(
+            r"
+            rx 66666
+        ",
+            "test.conf",
+        );
+
+        let mut mgr = Manager::without_files(None);
+        mgr.merge_ssh_config(&path, Some("foo"), false);
+        // The order of merging mirrors what happens in Manager::try_from(&CliArgs)
+        mgr.merge_provider(entered);
+        let result = mgr.get::<Configuration>().unwrap();
+        assert_eq!(12345, *result.rx);
     }
 }
