@@ -52,7 +52,7 @@ impl ConfigFile {
             }
         };
         let data = match parser
-            .parse_file_for(host)
+            .parse_file_for(Some(host))
             .with_context(|| format!("reading configuration file {path:?}"))
         {
             Ok(data) => data,

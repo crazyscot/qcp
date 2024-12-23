@@ -149,7 +149,7 @@ impl Manager {
         let path = file.as_ref();
         // TODO: differentiate between user and system configs (Include rules)
         let p = super::ssh::Parser::for_path(file.as_ref(), true)
-            .and_then(|p| p.parse_file_for(host))
+            .and_then(|p| p.parse_file_for(Some(host)))
             .map(|hc| self.merge_provider(hc.as_figment()));
         if let Err(e) = p {
             warn!("parsing {ff}: {e}", ff = path.to_string_lossy());
