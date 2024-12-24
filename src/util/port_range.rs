@@ -1,12 +1,10 @@
 /// CLI argument helper - PortRange
 // (c) 2024 Ross Younger
 use serde::{
-    de::{Error, Unexpected},
+    de::{self, Error, Unexpected},
     Serialize,
 };
 use std::{fmt::Display, str::FromStr};
-
-use super::cli::IntOrString;
 
 /// A range of UDP port numbers.
 ///
@@ -17,8 +15,8 @@ use super::cli::IntOrString;
 /// remote_port 60000         # a single port
 /// remote_port 60000-60010   # a range
 /// ```
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(from = "IntOrString<PortRange>", into = "String")]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(from = "String", into = "String")]
 pub struct PortRange {
     /// First number in the range
     pub begin: u16,
@@ -83,20 +81,6 @@ impl FromStr for PortRange {
     }
 }
 
-impl From<u64> for PortRange {
-    fn from(value: u64) -> Self {
-        #[allow(clippy::cast_possible_truncation)]
-        let v = value as u16;
-        PortRange { begin: v, end: v }
-    }
-}
-
-impl Default for PortRange {
-    fn default() -> Self {
-        Self::from(0)
-    }
-}
-
 impl PortRange {
     pub(crate) fn is_default(self) -> bool {
         self.begin == 0 && self.begin == self.end
@@ -108,7 +92,8 @@ impl<'de> serde::Deserialize<'de> for PortRange {
     where
         D: serde::Deserializer<'de>,
     {
-        deserializer.deserialize_any(IntOrString(std::marker::PhantomData))
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
     }
 }
 
