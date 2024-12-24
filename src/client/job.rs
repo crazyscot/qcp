@@ -70,7 +70,7 @@ impl CopyJobSpec {
         }
     }
 
-    /// The [user@]hostname portion of whichever of the arguments contained a hostname.
+    /// The `[user@]hostname` portion of whichever of the arguments contained a hostname.
     fn remote_user_host(&self) -> &str {
         self.source
             .host
