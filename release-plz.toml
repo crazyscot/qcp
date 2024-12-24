@@ -1,7 +1,7 @@
 [workspace]
 dependencies_update = false
 #allow_dirty = true
-#git_release_draft = true
+git_release_draft = true
 git_release_body = """
 {{ changelog }}
 
