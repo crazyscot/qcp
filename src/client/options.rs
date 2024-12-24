@@ -101,8 +101,8 @@ impl Parameters {
     /// A best-effort attempt to extract a single remote host string from the parameters.
     ///
     /// # Output
-    /// If neither source nor dest are present, Ok("")
-    /// If at most one of source and dest contains a remote host, Ok(<host>)
+    /// If neither source nor dest are present, `Ok("")`
+    /// If at most one of source and dest contains a remote host, `Ok(<host>)`
     ///
     /// # Errors
     /// If both source and dest contain a remote host, Err("Only one remote file argument is supported")
