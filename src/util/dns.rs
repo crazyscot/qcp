@@ -19,8 +19,8 @@ pub fn lookup_host_by_family(host: &str, desired: AddressFamily) -> anyhow::Resu
 
     let found = match desired {
         AddressFamily::Any => it.next(),
-        AddressFamily::V4 => it.find(|addr| addr.is_ipv4()),
-        AddressFamily::V6 => it.find(|addr| addr.is_ipv6()),
+        AddressFamily::Inet => it.find(|addr| addr.is_ipv4()),
+        AddressFamily::Inet6 => it.find(|addr| addr.is_ipv6()),
     };
     found
         .map(std::borrow::ToOwned::to_owned)

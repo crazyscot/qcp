@@ -1,7 +1,7 @@
 //! Serialization helper type - u64 parseable by humanize_rs
 // (c) 2024 Ross Younger
 
-use std::{marker::PhantomData, ops::Deref, str::FromStr};
+use std::{ops::Deref, str::FromStr};
 
 use humanize_rs::bytes::Bytes;
 use serde::{
@@ -9,15 +9,13 @@ use serde::{
     Serialize,
 };
 
-use super::cli::IntOrString;
-
-/// An integer field that may also be expressed using engineering prefixes (k, M, G, etc).
+/// An integer field that may also be expressed using SI notation (k, M, G, etc).
 /// For example, `1k` and `1000` are the same.
 ///
 /// (Nerdy description: This is a newtype wrapper to `u64` that adds a flexible deserializer via `humanize_rs::bytes::Bytes<u64>`.)
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(from = "IntOrString<HumanU64>", into = "u64")]
+#[serde(from = "String", into = "String")]
 pub struct HumanU64(pub u64);
 
 impl HumanU64 {
@@ -39,6 +37,12 @@ impl Deref for HumanU64 {
 impl From<HumanU64> for u64 {
     fn from(value: HumanU64) -> Self {
         value.0
+    }
+}
+
+impl From<HumanU64> for String {
+    fn from(value: HumanU64) -> Self {
+        format!("{}", *value)
     }
 }
 
@@ -71,14 +75,8 @@ impl<'de> serde::Deserialize<'de> for HumanU64 {
     where
         D: serde::Deserializer<'de>,
     {
-        deserializer.deserialize_any(IntOrString(PhantomData))
-    }
-}
-
-#[cfg(test)]
-impl rand::prelude::Distribution<HumanU64> for rand::distributions::Standard {
-    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> HumanU64 {
-        rng.gen::<u64>().into()
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
     }
 }
 
@@ -106,20 +104,14 @@ mod test {
     }
 
     #[test]
-    fn deser_raw_int() {
-        let foo: HumanU64 = serde_json::from_str("12345").unwrap();
-        assert_eq!(*foo, 12345);
-    }
-
-    #[test]
     fn serde_test() {
         let bw = HumanU64::new(42);
-        assert_tokens(&bw, &[Token::U64(42)]);
+        assert_tokens(&bw, &[Token::Str("42")]);
     }
 
     #[test]
     fn from_int() {
-        let result = HumanU64::from(12345);
+        let result = HumanU64::new(12345);
         assert_eq!(*result, 12345);
     }
     #[test]

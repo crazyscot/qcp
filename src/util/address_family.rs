@@ -1,142 +1,97 @@
 //! CLI helper - Address family
 // (c) 2024 Ross Younger
 
-use std::fmt::Display;
-use std::marker::PhantomData;
 use std::str::FromStr;
 
-use figment::error::Actual;
-use serde::Serialize;
+use figment::error::{Actual, OneOf};
+use serde::{de, Deserialize, Serialize};
 
-use crate::util::cli::IntOrString;
-
-/// Representation an IP address family
+/// Representation of an IP address family
 ///
-/// This is a local type with special parsing semantics to take part in the config/CLI system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+/// This is a local type with special parsing semantics and aliasing to take part in the config/CLI system.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Serialize)]
+#[serde(rename_all = "kebab-case")] // to match clap::ValueEnum
 pub enum AddressFamily {
     /// IPv4
-    #[value(name = "4")]
-    V4,
+    #[value(alias("4"), alias("inet4"))]
+    Inet,
     /// IPv6
-    #[value(name = "6")]
-    V6,
+    #[value(alias("6"))]
+    Inet6,
     /// We don't mind what type of IP address
     Any,
-}
-
-impl From<AddressFamily> for u8 {
-    fn from(value: AddressFamily) -> Self {
-        match value {
-            AddressFamily::V4 => 4,
-            AddressFamily::V6 => 6,
-            AddressFamily::Any => 0,
-        }
-    }
-}
-
-impl Serialize for AddressFamily {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match *self {
-            AddressFamily::Any => serializer.serialize_str("any"),
-            t => serializer.serialize_u8(u8::from(t)),
-        }
-    }
-}
-
-impl Display for AddressFamily {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if *self == AddressFamily::Any {
-            write!(f, "any")
-        } else {
-            write!(f, "{}", u8::from(*self))
-        }
-    }
 }
 
 impl FromStr for AddressFamily {
     type Err = figment::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "4" {
-            Ok(AddressFamily::V4)
-        } else if s == "6" {
-            Ok(AddressFamily::V6)
-        } else if s == "0" || s == "any" {
-            Ok(AddressFamily::Any)
-        } else {
-            Err(figment::error::Kind::InvalidType(Actual::Str(s.into()), "4 or 6".into()).into())
-        }
-    }
-}
-
-impl TryFrom<u64> for AddressFamily {
-    type Error = figment::Error;
-
-    fn try_from(value: u64) -> Result<Self, Self::Error> {
-        match value {
-            4 => Ok(AddressFamily::V4),
-            6 => Ok(AddressFamily::V6),
-            0 => Ok(AddressFamily::Any),
-            _ => Err(figment::error::Kind::InvalidValue(
-                Actual::Unsigned(value.into()),
-                "4 or 6".into(),
+        match s {
+            "4" | "inet" | "inet4" => Ok(AddressFamily::Inet),
+            "6" | "inet6" => Ok(AddressFamily::Inet6),
+            "any" => Ok(AddressFamily::Any),
+            _ => Err(figment::error::Kind::InvalidType(
+                Actual::Str(s.into()),
+                OneOf(&["inet", "4", "inet6", "6"]).to_string(),
             )
             .into()),
         }
     }
 }
 
-impl<'de> serde::Deserialize<'de> for AddressFamily {
+impl<'de> Deserialize<'de> for AddressFamily {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        deserializer.deserialize_any(IntOrString(PhantomData))
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use super::AddressFamily;
 
     #[test]
     fn serialize() {
-        let a = AddressFamily::V4;
-        let b = AddressFamily::V6;
+        let a = AddressFamily::Inet;
+        let b = AddressFamily::Inet6;
+        let c = AddressFamily::Any;
 
         let aa = serde_json::to_string(&a);
         let bb = serde_json::to_string(&b);
-        assert_eq!(aa.unwrap(), "4");
-        assert_eq!(bb.unwrap(), "6");
+        let cc = serde_json::to_string(&c);
+        assert_eq!(aa.unwrap(), "\"inet\"");
+        assert_eq!(bb.unwrap(), "\"inet6\"");
+        assert_eq!(cc.unwrap(), "\"any\"");
     }
 
     #[test]
     fn deser_str() {
-        let a: AddressFamily = serde_json::from_str(r#" "4" "#).unwrap();
-        assert_eq!(a, AddressFamily::V4);
-        let a: AddressFamily = serde_json::from_str(r#" "6" "#).unwrap();
-        assert_eq!(a, AddressFamily::V6);
-    }
-
-    #[test]
-    fn deser_int() {
-        let a: AddressFamily = serde_json::from_str("4").unwrap();
-        assert_eq!(a, AddressFamily::V4);
-        let a: AddressFamily = serde_json::from_str("6").unwrap();
-        assert_eq!(a, AddressFamily::V6);
+        use AddressFamily::*;
+        for (str, expected) in &[
+            ("4", Inet),
+            ("inet", Inet),
+            ("inet4", Inet),
+            ("6", Inet6),
+            ("inet6", Inet6),
+            ("any", Any),
+        ] {
+            let raw = AddressFamily::from_str(str).expect(str);
+            let json = format!(r#""{str}""#);
+            let output = serde_json::from_str::<AddressFamily>(&json).expect(str);
+            assert_eq!(raw, *expected);
+            assert_eq!(output, *expected);
+        }
     }
 
     #[test]
     fn deser_invalid() {
-        let _ = serde_json::from_str::<AddressFamily>("true").unwrap_err();
-        let _ = serde_json::from_str::<AddressFamily>("5").unwrap_err();
-        let _ = serde_json::from_str::<AddressFamily>(r#" "5" "#).unwrap_err();
-        let _ = serde_json::from_str::<AddressFamily>("-1").unwrap_err();
-        let _ = serde_json::from_str::<AddressFamily>(r#" "42" "#).unwrap_err();
-        let _ = serde_json::from_str::<AddressFamily>(r#" "string" "#).unwrap_err();
+        for s in &["true", "5", r#""5""#, "-1", r#""42"#, r#""string"#] {
+            let _ = serde_json::from_str::<AddressFamily>(s).expect_err(s);
+        }
     }
 }

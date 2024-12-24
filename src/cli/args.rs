@@ -100,9 +100,9 @@ impl CliArgs {
             CliArgs::from_arg_matches(&cli.get_matches_from(std::env::args_os())).unwrap();
         // Custom logic: '-4' and '-6' convenience aliases
         if args.ipv4_alias__ {
-            args.config.address_family = Some(AddressFamily::V4);
+            args.config.address_family = Some(AddressFamily::Inet);
         } else if args.ipv6_alias__ {
-            args.config.address_family = Some(AddressFamily::V6);
+            args.config.address_family = Some(AddressFamily::Inet6);
         }
         args
     }
