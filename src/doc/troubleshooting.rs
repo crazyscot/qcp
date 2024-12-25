@@ -62,3 +62,21 @@
 //! * Often this is due to a DNS misconfiguration at the server side, causing it to stall until a DNS lookup times out.
 //! * There are a number of guides online purporting to advise you how to speed up ssh connections; I can't vouch for them.
 //! * You might also look into ssh connection multiplexing.
+//!
+//! ### qcp isn't using the network parameters you expected it to
+//! * Parameters specified on the command line always override those in config files.
+//! * Settings in the user config file take precedence over those in the system config file.
+//! * For each setting, the first value found in a matching Host block wins.
+//! * Add `--show-config` to your command line to see the settings qcp is using and where it got them from:
+//! ```text
+//! $ qcp myserver:some-file /tmp/ --show-config
+//! ┌───────────────────────────┬────────────────┬──────────────────────────────┐
+//! │ field                     │ value          │ source                       │
+//! ├───────────────────────────┼────────────────┼──────────────────────────────┤
+//! │ (Remote host)             │ myserver       │                              │
+//! │ address_family            │ inet           │ /home/xyz/.qcp.conf (line 9) │
+//! │ congestion                │ cubic          │ /etc/qcp.conf (line 4)       │
+//! │ initial_congestion_window │ 0              │ default                      │
+//! │ port                      │ 0              │ default                      │
+//!   ...
+//! ```

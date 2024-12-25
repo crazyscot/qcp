@@ -1,59 +1,67 @@
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-.TH qcp 1  "qcp v0.1"
+.TH qcp 1  "qcp v0.2"
 .SH NAME
-qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
+qcp — Secure remote file copy utility which uses the QUIC protocol over UDP
 .SH SYNOPSIS
 \fBqcp\fR [\fB-46qsd\fR]
 [\fB--ssh\fR ssh-command]
 [\fB-S ssh-options\fR]
 [\fB-p local-port-range\fR]
 [\fB-P remote-port-range\fR]
-[\fB--rx-bw bandwidth\fR]
-[\fB--tx-bw bandwidth\fR]
+[\fB--rx bandwidth\fR]
+[\fB--tx bandwidth\fR]
 [\fB-r rtt\fR]
 [\fB-t timeout\fR]
+[\fI<advanced args...>\fR]
 <\fISOURCE\fR> <\fIDESTINATION\fR>
 .TP
 \fBqcp\fR [-h|--help|--help-buffers|-V|--version]
 .SH DESCRIPTION
 .TP
-The QUIC Copier (\fIqcp\fR) is an experimental high-performance remote file copy utility for long-distance internet connections.
-.TP
-It is intended as a drop-in replacement for scp.
+The QUIC Copier (\fIqcp\fR) is an experimental high-performance remote file copy utility for long-distance internet connections. It is intended as a drop-in replacement for scp.
 .TP
 qcp offers similar security to scp using existing, well-known mechanisms, and better throughput on congested networks.
 
 .SH LIMITATIONS
 .TP
-.RS 14
 .IP \(bu 2
-You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection-tracking NAT, things work just fine. This is the case for the vast majority of home and business network connections.)
+You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port.
+(If the local machine is behind connection-tracking NAT, things work just fine.
+This is the case for the vast majority of home and business network connections.)
 .IP \(bu 2
-Network security systems can’t readily identify QUIC traffic as such. It’s opaque, and high bandwidth. Some security systems might flag it as a potential threat.
-.RE
+Network security systems can’t readily identify QUIC traffic as such.
+It’s opaque, and high bandwidth.
+Some security systems might flag it as a potential threat.
 
 .SH ARGUMENTS
 .TP
 <\fISOURCE\fR>
-The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
+The source file.
+This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
 
-Exactly one of source and destination must be remote.
 .TP
 <\fIDESTINATION\fR>
-Destination. This may be a file or directory. It may be local or remote.
+Destination.
+This may be a file or directory. It may be local or remote.
 
 If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there.
 
-Exactly one of source and destination must be remote.
+.TP
+Exactly one of \fIsource\fR and \fIdestination\fR must be remote.
+.TP
+qcp will read your ssh config file to resolve any host name aliases you may have defined. The idea is, if you can ssh directly to a given host, you should be able to qcp to it by the same name. However, some particularly complicated ssh config files may be too much for qcp to understand. (In particular, \fIMatch\fR directives are not currently supported.) In that case, you can use \fI--ssh-config\fR to provide an alternative configuration (or set it in your qcp configuration file).
+
+.SH CONFIGURATION
+Many of qcp's configuration options may be set persistently via configuration files.
+See \fBqcp_config\fR(5) for details.
 
 .SH OPTIONS
-.TP
-\fB\-q\fR, \fB\-\-quiet\fR
-Quiet mode
-.TP
-\fB\-s\fR, \fB\-\-statistics\fR
-Outputs additional transfer statistics
+
+\fINote: this man page is currently maintained by hand.\fR
+In the event of discrepancies or confusion, the help text within the program (\fIqcp --help\fR)
+is more likely to be correct.
+
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)
@@ -61,78 +69,27 @@ Print help (see a summary with \*(Aq\-h\*(Aq)
 \fB\-V\fR, \fB\-\-version\fR
 Print version
 
-.SH Network tuning options
+.SS Network tuning options
+.TP
+\fB\-b\fR, \fB\-\-rx\fR=\fIbytes\fR [default: 12500k]
+The maximum network bandwidth we expect receiving data FROM the remote system.
+
+This may be specified directly as a number of bytes, or as an SI quantity e.g. "10M" or "256k".
+Note that this is described in \fIBYTES\fR, not bits; if (for example) you expect to fill a 1Gbit ethernet connection, 125M might be a suitable setting.
+.TP
+\fB\-B\fR, \fB\-\-tx\fR=\fIbytes\fR
+The maximum network bandwidth (in bytes) we expect sending data TO the remote system,
+if it is different from the bandwidth FROM the system.
+(For example, when you are connected via an asymmetric last\-mile DSL or fibre profile.)
+[default: same as \-\-rx\-bw]
 .TP
 \fB\-r\fR, \fB\-\-rtt\fR=\fIms\fR [default: 300]
 The expected network Round Trip time to the target system, in milliseconds
 .TP
-\fB\-b\fR, \fB\-\-rx\-bw\fR=\fIbytes\fR [default: 12500k]
-The maximum network bandwidth we expect receiving data FROM the remote system.
-
-This may be specified directly as a number of bytes, or as an SI quantity e.g. "10M" or "256k". Note that this is described in BYTES, not bits; if (for example) you expect to fill a 1Gbit ethernet connection, 125M might be a suitable setting.
-.TP
-\fB\-B\fR, \fB\-\-tx\-bw\fR=\fIbytes\fR
-The maximum network bandwidth we expect sending data TO the remote system,
-if it is different from the bandwidth FROM the system. (For example, when you are connected via an asymmetric last\-mile DSL or fibre profile.) [default: same as \-\-rx\-bw]
-.TP
 \fB\-\-help\-buffers\fR
 Outputs additional information about kernel UDP buffer sizes and platform\-specific tips
 
-.SH Connection options
-.TP
-\fB\-4\fR, \fB\-\-ipv4\fR
-Forces IPv4 connection [default: autodetect]
-.TP
-\fB\-6\fR, \fB\-\-ipv6\fR
-Forces IPv6 connection [default: autodetect]
-
-
-.TP
-\fB\-\-ssh\fR=\fISSH\fR [default: ssh]
-Specifies the ssh client program to use
-.TP
-\fB\-S\fR=\fIssh\-option\fR
-Provides an additional option or argument to pass to the ssh client.
-
-Note that you must repeat `\-S` for each. For example, to pass `\-i /dev/null` to ssh, specify: `\-S \-i \-S /dev/null`
-
-.TP
-\fB\-P\fR, \fB\-\-remote\-port\fR=\fIM\-N\fR
-Uses the given UDP port or range on the remote endpoint.
-
-This can be useful when there is a firewall between the endpoints.
-.TP
-\fB\-p\fR, \fB\-\-port\fR=\fIM\-N\fR
-Uses the given UDP port or range on the local endpoint.
-
-This can be useful when there is a firewall between the endpoints.
-.TP
-\fB\-t\fR, \fB\-\-timeout\fR=\fIsec\fR [default: 5]
-Connection timeout for the QUIC endpoints.
-
-This needs to be long enough for your network connection, but short enough to provide a timely indication that UDP may be blocked.
-
-
-.SH Debug options
-.TP
-\fB\-\-remote\-debug\fR
-Enables detailed debug output from the remote endpoint
-.TP
-\fB\-\-profile\fR
-Prints timing profile data after completion
-.TP
-\fB\-d\fR, \fB\-\-debug\fR
-Enable detailed debug output
-
-This has the same effect as setting `RUST_LOG=qcp=debug` in the environment. If present, `RUST_LOG` overrides this option.
-.TP
-\fB\-l\fR, \fB\-\-log\-file\fR=\fIFILE\fR
-Log to a file
-
-By default the log receives everything printed to stderr. To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
-
-
-.SH Advanced network options
+.SS Advanced network tuning
 .TP
 \fB\-\-congestion\fR=\fIalg\fR [default: cubic]
 Specifies the congestion control algorithm to use
@@ -140,11 +97,17 @@ Specifies the congestion control algorithm to use
 
 .br
 \fIPossible values:\fR
-.RS 14
+.RS 8
 .IP \(bu 2
 cubic: The congestion algorithm TCP uses. This is good for most cases
 .IP \(bu 2
-bbr: (Use with caution!) An experimental algorithm created by Google, which increases goodput in some situations (particularly long and fat connections where the intervening buffers are shallow). However this comes at the cost of having more data in\-flight, and much greater packet retransmission. See `https://blog.apnic.net/2020/01/10/when\-to\-use\-and\-not\-use\-bbr/` for more discussion
+bbr: (Use with caution!) An experimental algorithm created by Google, which increases goodput in some situations (particularly long and fat connections where the intervening buffers are shallow).
+However this comes at the cost of having more data in\-flight, and much greater packet retransmission.
+
+See 
+.UR https://blog.apnic.net/2020/01/10/when\-to\-use\-and\-not\-use\-bbr/ 
+.UE
+for more discussion.
 .RE
 .TP
 \fB\-\-initial\-congestion\-window\fR=\fIbytes\fR
@@ -154,44 +117,157 @@ Setting this value too high reduces performance!
 
 If not specified, this setting is determined by the selected congestion control algorithm.
 
+.SS Connection options
+.TP
+\fB\-4\fR
+Forces IPv4 connection [default: autodetect]
+
+.TP
+\fB\-6\fR
+Forces IPv6 connection [default: autodetect]
+
+.TP
+\fB\-\-address\-family\fR=\fIoption\fR [default: any]
+
+\fIPossible values:\fR
+.RS 8
+.IP \(bu 2
+inet: IPv4
+.IP \(bu 2
+inet6: IPv6
+.IP \(bu 2
+any: Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup
+.RE
+
+.TP
+\fB\-p\fR, \fB\-\-port\fR=\fIM\-N\fR
+Uses the given UDP port or range on the local endpoint.
+
+This can be useful when there is a firewall between the endpoints.
+.TP
+\fB\-P\fR, \fB\-\-remote\-port\fR=\fIM\-N\fR
+Uses the given UDP port or range on the remote endpoint.
+This can be useful when there is a firewall between the endpoints.
+
+.TP
+\fB\-S\fR=\fIssh\-option\fR
+Provides an additional option or argument to pass to the ssh client.
+
+Note that you must repeat \fI\-S\fR for each. For example, to pass \fI\-i /dev/null\fR to ssh, specify: \fI\-S \-i \-S /dev/null\fR
+
+.TP
+\fB\-\-ssh\fR=\fISSH\fR [default: ssh]
+Specifies the ssh client program to use
+
+.TP
+\fB\-\-ssh\-config\fR=\fIFILE\fR
+Alternative ssh config file(s)
+
+By default, qcp reads your user and system ssh config files to look for Hostname aliases.
+In some cases the logic in qcp may not read them successfully; this is an escape hatch, allowing you to specify one or more alternative files to read instead (which may be empty, nonexistent or \fI/dev/null\fR).
+
+This option is really intended to be used in a qcp configuration file. On the command line, you can repeat \fI\-\-ssh\-config file\fR as many times as needed.
+
+.TP
+\fB\-t\fR, \fB\-\-timeout\fR=\fIsec\fR [default: 5]
+Connection timeout for the QUIC endpoints.
+
+This needs to be long enough for your network connection, but short enough to provide a timely indication that UDP may be blocked.
+
+
+.SS Output options
+
+.TP
+\fB\-l\fR, \fB\-\-log\-file\fR
+Logs to a file. By default the log receives everything printed to stderr. To override this behaviour, set the environment variable \fIRUST_LOG_FILE_DETAIL\fR (same semantics as \fIRUST_LOG\fR).
+
+.TP
+\fB\-\-profile\fR
+Prints timing profile data after completion
+
+.TP
+\fB\-s\fR, \fB\-\-statistics\fR
+Outputs additional transfer statistics
+
+.TP
+\fB\-T\fR, \fB\-\-time\-format\fR
+Specifies the time format to use when printing messages to the console or to file [default: local]
+
+\fIPossible values:\fR
+.RS 8
+.IP \(bu 2
+local: Local time (as best as we can figure it out), as "year-month-day HH:MM:SS"
+.IP \(bu 2
+utc: UTC time, as "year-month-day HH:MM:SS"
+.IP \(bu 2
+rfc3339: UTC time, in the format described in RFC3339
+.RE
+
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+Quiet mode
+
+.SS Configuration options
+
+.TP
+\fB\-\-config\-files\fR
+Outputs the paths to configuration file(s), then exits
+
+.TP
+\fB\-\-show\-config\fR
+Outputs the configuration, then exits.
+
+If a remote \fISOURCE\fR or \fIDESTINATION\fR argument is given, outputs the configuration
+we would use for operations to that host.
+
+If not, outputs only global settings from configuration, which may be overridden in
+\fIHost\fR blocks in configuration files.
+
+.SS Debug options
+.TP
+\fB\-d\fR, \fB\-\-debug\fR
+Enable detailed debug output
+
+This has the same effect as setting \fIRUST_LOG=qcp=debug\fR in the environment. If present, \fIRUST_LOG\fR overrides this option.
+
+.TP
+\fB\-\-remote\-debug\fR
+Enables detailed debug output from the remote endpoint
+
 .SH EXIT STATUS
 The qcp utility exits 0 on success, and >0 if an error occurs.
 
 .SH PROTOCOL
 
-qcp is a \fIhybrid\fR protocol. We use \fIssh\fR to establish a control channel and exchange ephemeral TLS certificates,
-then a \fIQUIC\fR connection to transport data.
+qcp is a \fIhybrid\fR protocol.
+We use \fIssh\fR to establish a control channel and exchange ephemeral TLS certificates, then a \fIQUIC\fR connection to transport data.
 
 Detailed protocol documentation can be found at
-.nh
-https://docs\.rs/qcp/latest/qcp/protocol/
-.hy
-.
+.UR https://docs\.rs/qcp/latest/qcp/protocol/
+.UE .
 
 .SH PERFORMANCE TUNING
 See
-.nh
-https://docs.rs/qcp/latest/qcp/doc/performance/index.html
-.hy
+.UR https://docs.rs/qcp/latest/qcp/doc/performance/index.html
+.UE
 
 .SH TROUBLESHOOTING
 See
-.nh
-https://docs.rs/qcp/latest/qcp/doc/troubleshooting/index.html
-.hy
+.UR https://docs.rs/qcp/latest/qcp/doc/troubleshooting/index.html
+.UE
 
 .SH SEE ALSO
 .sp
-\fBssh(1)\fP, \fI\%RFC 4254\fP, \fI\%RFC 9000\fP, \fI\%RFC 9001\fP.
+\fBssh\fR(1), \fBqcp_config\fR(5), \fI\%RFC 4254\fP, \fI\%RFC 9000\fP, \fI\%RFC 9001\fP.
 .SH AUTHOR
 Ross Younger
 
 .SH BUGS
 
 Please report via the issue tracker:
-.nh
+.UR
 https://github\.com/crazyscot/qcp/issues
-.hy
+.UE
 
 .SH CAVEATS
 

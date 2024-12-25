@@ -12,14 +12,22 @@ pub struct Parameters {
     ///
     /// This has the same effect as setting `RUST_LOG=qcp=debug` in the environment.
     /// If present, `RUST_LOG` overrides this option.
-    #[arg(short, long, action, help_heading("Debug"))]
+    #[arg(short, long, action, help_heading("Debug"), display_order(0))]
     pub debug: bool,
 
     /// Log to a file
     ///
     /// By default the log receives everything printed to stderr.
     /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
-    #[arg(short('l'), long, action, value_name("FILE"), help_heading("Output"))]
+    #[arg(
+        short('l'),
+        long,
+        action,
+        value_name("FILE"),
+        help_heading("Output"),
+        next_line_help(true),
+        display_order(0)
+    )]
     pub log_file: Option<String>,
 
     /// Quiet mode
@@ -35,24 +43,23 @@ pub struct Parameters {
         alias("stats"),
         action,
         conflicts_with("quiet"),
-        help_heading("Output")
+        help_heading("Output"),
+        display_order(0)
     )]
     pub statistics: bool,
 
     /// Enables detailed debug output from the remote endpoint
     /// (this may interfere with transfer speeds)
-    #[arg(long, action, help_heading("Debug"))]
+    #[arg(long, action, help_heading("Debug"), display_order(0))]
     pub remote_debug: bool,
 
     /// Output timing profile data after completion
-    #[arg(long, action, help_heading("Output"))]
+    #[arg(long, action, help_heading("Output"), display_order(0))]
     pub profile: bool,
 
     // JOB SPECIFICAION ====================================================================
     // (POSITIONAL ARGUMENTS!)
     /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
-    ///
-    /// Exactly one of source and destination must be remote.
     #[arg(
         required_unless_present_any(crate::cli::MODE_OPTIONS),
         value_name = "SOURCE"
@@ -62,8 +69,6 @@ pub struct Parameters {
     /// Destination. This may be a file or directory. It may be local or remote.
     ///
     /// If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there.
-    ///
-    /// Exactly one of source and destination must be remote.
     #[arg(
         required_unless_present_any(crate::cli::MODE_OPTIONS),
         value_name = "DESTINATION"

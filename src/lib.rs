@@ -42,11 +42,19 @@
 //!
 //! The [protocol] documentation contains more detail and a discussion of its security properties.
 //!
+//! * **qcp uses the ssh binary on your system to connect to the target machine**.
+//!   ssh will check the remote host key and prompt you for a password or passphrase in the usual way.
+//! * **qcp will read your ssh config file** to resolve any Hostname aliases you may have defined there.
+//!   The idea is, if you can `ssh` to a host, you should also be able to `qcp` to it.
+//!   However, some particularly complicated ssh config files may be too much for qcp to understand.
+//!   (In particular, `Match` directives are not currently supported.)
+//!   In that case, you can use `--ssh-config` to provide an alternative configuration (or set it in your qcp configuration file).
+//!
 //! ## Configuration
 //!
 //! On the command line, qcp has a comprehensive `--help` message.
 //!
-//! Most options can also be specified in a config file. See [config] for detalis.
+//! Many options can also be specified in a config file. See [config] for detalis.
 //!
 //! ## 📈 Getting the best out of qcp
 //!

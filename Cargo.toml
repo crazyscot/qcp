@@ -134,6 +134,7 @@ assets = [
     [ "misc/changelog.gz", "usr/share/doc/qcp/", "644" ],
     [ "misc/20-qcp.conf", "etc/sysctl.d/", "644" ], # this is automatically recognised as a conffile
     [ "misc/qcp.1", "usr/share/man/man1/", "644" ],
+    [ "misc/qcp_config.5", "usr/share/man/man5/", "644" ],
 ]
 maintainer-scripts="debian"
 depends = "$auto,debconf"

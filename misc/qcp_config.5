@@ -1,0 +1,182 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH qcp_config 5  "December 2024"
+.SH NAME
+qcp_config — Configuration options for qcp
+.SH DESCRIPTION
+\fBqcp\fR(1) obtains run-time configuration from the following sources, in order:
+
+.RS 0
+.IP
+1. Command-line options
+.IP
+2. The user's configuration file (typically \fI~/.qcp.conf\fR)
+.IP
+3. The system-wide configuration file (typically \fI/etc/qcp.conf\fR)
+.IP
+4. Hard-wired defaults
+.RE
+
+Each option may appear in multiple places, but only the first match is used.
+
+\fBNote:\fR Configuration file locations are platform-dependent. To see what applies on the current platform, run \fIqcp --config-files\fR.
+
+.SH FILE FORMAT
+
+qcp uses the same basic format as OpenSSH configuration files.
+
+Each line contains a keyword and one or more arguments.
+Keywords are single words and are case-insensitive.
+
+Arguments are separated from keywords, and each other, by whitespace.
+(It is also possible to write \fIKey=Value\fR or \fIKey = Value\fR.)
+
+Arguments may be surrounded by double quotes ("); this allows you to set an argument containing spaces.
+If a backslash, double or single quote forms part of an argument it must be backslash-escaped i.e. \\" or \\\\
+
+Comments are supported; # introduces a comment (up to the end of the line).
+
+Empty lines are ignored.
+
+qcp supports \fIHost\fR directives with wildcard and negative matching, as well as \fIInclude\fR directives. This allows you to tune your configuration for a range of network hosts.
+
+.SH EXAMPLE
+ Host old-faithful
+ # This is an old server with a very limited CPU which we do not want to overstress
+ rx 125k
+ tx 0
+ 
+ Host *.internal.corp
+ # This is a nearby data centre which we have a dedicated 1Gbit connection to.
+ # We don't need to use qcp, but it's convenient to use one tool in our scripts.
+ rx 125M
+ tx 0
+ rtt 10
+ 
+ # For all other hosts, try to maximise our VDSL
+ Host *
+ rx 5M          # we have 40Mbit download
+ tx 1000000     # we have 8Mbit upload; we could also have written this as "1M"
+ rtt 150        # most servers we care about are an ocean away
+ congestion bbr # this works well for us
+
+.SH CONFIGURATION DIRECTIVES
+
+.TP
+\fBHost\fR \fIpattern [pattern ...]\fR
+Introduces a \fIhost block\fR.
+All following options - up to the next Host - only apply to hosts matching any of the patterns given.
+
+Pattern matching uses '*' and '?' as wildcards in the usual way.
+
+A single asterisk '*' matches all hosts; this is used to provide defaults.
+
+A pattern beginning with '!' is a \fInegative\fR match; it matches all remote hosts \fIexcept\fR those matching the rest of the pattern.
+
+Pattern matching is applied directly to the remote host given on the QCP command line, before DNS or alias resolution.
+If you connect to hosts by IP address, a pattern of \fI10.11.12.*\fR works in the obvious way.
+
+.TP
+\fBInclude\fR \fIfile [file ...]\fR
+
+Include the specified file(s) in the configuration at the current point. Glob wildcards ('*' and '?') are supported in filenames.
+
+User configuration files may refer to pathnames relative to '~' (the user's home directory).
+
+Filenames with relative paths are assumed to be in \fI~/.ssh/\fR if read from a user configuration file, or \fI/etc/ssh/\fR if read from a system configuration file.
+
+An Include directive inside a Host block retains the Host context.
+This may be useful to apply common directives to multiple hosts with minimal repetition.
+Note that if an included file begins a new Host block, that will continue to apply on return to the including file.
+
+It is possible for included files to themselves include additional files; there is a brake that prevents infinite recursion.
+
+.SH CONFIGURATION OPTIONS
+
+The following options from the CLI are supported in configuration files:
+
+\fIrx, tx, rtt, congestion, initial_congestion_window, port, timeout, address_family, ssh, ssh_options, remote_port, time_format, ssh_config\fR
+
+Refer to \fBqcp\fR(1) for details.
+
+In configuration files, option keywords are case insensitive and ignore hyphens and underscores.
+(On the command line, options must be specified in kebab-case.)
+For example, these declarations are all equivalent:
+    RemotePort 12345
+    remoteport 12345
+    remote_port 12345
+    Remote_Port 12345
+    ReMoTePoRt 12345
+    rEmOtE-pOrT 12345
+
+.SH CONFIGURATION EXPLAINER
+
+As configurations can get quite complex, it may be useful to understand where a particular value came from.
+
+qcp will do this for you, with the \fI--show-config\fR option.
+Provide a source and destination as if you were copying a file to/from a host to see the configuration that would apply. For example:
+
+ $ qcp --show-config myserver:some-file /tmp/
+
+ .---------------------------.-------------.------------------------------.
+ | field                     | value       | source                       |
+ .---------------------------.-------------.------------------------------.
+ | (Remote host)             | myserver    |                              |
+ | AddressFamily             | inet        | /home/xyz/.qcp.conf (line 9) |
+ | Congestion                | cubic       | default                      |
+ | InitialCongestionWindow   | 0           | default                      |
+ | Port                      | 0           | default                      |
+ | RemotePort                | 60500-61000 | /home/xyz/.qcp.conf (line 8) |
+ | Rtt                       | 300         | /etc/qcp.conf (line 4)       |
+ | Rx                        | 38M         | /etc/qcp.conf (line 2)       |
+ | Ssh                       | ssh         | default                      |
+ | SshConfig                 | []          | default                      |
+ | SshOption                 | []          | default                      |
+ | TimeFormat                | local       | default                      |
+ | Timeout                   | 5           | default                      |
+ | Tx                        | 12M         | /etc/qcp.conf (line 3)       |
+ .---------------------------.-------------.------------------------------.
+
+.SH TIPS AND TRAPS
+1. Like OpenSSH, for each setting we use the value from the \fIfirst\fR Host block we find that matches the remote hostname.
+
+2. Each setting is evaluated independently.
+In the example above, the \fIHost old-faithful\fR block sets rx but does not set rtt.
+Any operations to old-faithful inherit \fIrtt 150\fR from the Host * block.
+
+3. The tx setting has a default value of 0, which means “use the active rx value”.
+\fIIf you set tx in a Host * block, you probably want to set it explicitly everywhere you set rx.\fR
+
+If you have a complicated config file we suggest you structure it as follows:
+.RS 0
+.IP
+1. Any global settings that are intended to apply to all hosts
+.IP
+2. Host blocks; if you use wildcards, from most-specific to least-specific
+.IP
+3. A Host * block to provide default settings to apply where no more specific value has been given
+.RE
+
+.SH FILES
+
+.TP
+~/.qcp.conf
+The user configuration file (on most platforms)
+
+.TP
+/etc/qcp.conf
+The system configuration file (on most platforms)
+
+.TP
+~/.ssh/ssh_config
+The user ssh configuration file
+
+.TP
+/etc/ssh/ssh_config
+The system ssh configuration file
+
+.SH SEE ALSO
+\fBqcp\fR(1), \fBssh_config\fR(5)
+
+.SH AUTHOR
+Ross Younger

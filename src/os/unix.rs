@@ -1,4 +1,4 @@
-// OS abstraction layer for qcp - Unix implementation
+//! OS concretions for Unix platforms
 // (c) 2024 Ross Younger
 
 use crate::config::BASE_CONFIG_FILENAME;
@@ -8,6 +8,7 @@ use anyhow::Result;
 use nix::sys::socket::{self, sockopt};
 use std::{net::UdpSocket, path::PathBuf};
 
+/// Is this platform BSDish?
 fn bsdish() -> bool {
     cfg!(any(
         target_os = "netbsd",

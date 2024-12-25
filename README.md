@@ -76,8 +76,16 @@ $ qcp my-server:/tmp/testfile /tmp/
 testfile ████████████████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░ 1s @ 6.71 MB/s [10.49 MB]
 ```
 
-**The program uses the ssh binary on your system to connect to the target machine**.
+Things you should know:
+
+* **qcp uses the ssh binary on your system to connect to the target machine**.
 ssh will check the remote host key and prompt you for a password or passphrase in the usual way.
+
+* **qcp will read your ssh config file** to resolve any Hostname aliases you may have defined there.
+The idea is, if you can `ssh` to a host, you should also be able to `qcp` to it.
+However, some particularly complicated ssh config files may be too much for qcp to understand.
+(In particular, `Match` directives are not currently supported.)
+In that case, you can use `--ssh-config` to provide an alternative configuration (or set it in your qcp configuration file).
 
 #### Tuning
 

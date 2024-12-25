@@ -1,4 +1,4 @@
-// qcp client event loop
+//! Main client mode event loop
 // (c) 2024 Ross Younger
 
 use crate::{
@@ -30,6 +30,7 @@ use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _
 use super::job::CopyJobSpec;
 use super::Parameters as ClientParameters;
 
+/// a shared definition string used in a couple of places
 const SHOW_TIME: &str = "file transfer";
 
 /// Main client mode event loop
@@ -224,6 +225,7 @@ async fn manage_request(
     }
 }
 
+/// Adds a progress bar to the stack (in `MultiProgress`) for the current job
 fn progress_bar_for(
     display: &MultiProgress,
     job: &CopyJobSpec,
@@ -301,6 +303,7 @@ pub(crate) fn create_endpoint(
     Ok(endpoint)
 }
 
+/// Actions a GET command
 async fn do_get(
     sp: RawStreamPair,
     job: &CopyJobSpec,
@@ -366,6 +369,7 @@ async fn do_get(
     Ok(header.size)
 }
 
+/// Actions a PUT command
 async fn do_put(
     sp: RawStreamPair,
     job: &CopyJobSpec,

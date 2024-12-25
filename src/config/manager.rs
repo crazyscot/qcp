@@ -23,8 +23,8 @@ use tracing::{debug, warn};
 
 // SYSTEM DEFAULTS //////////////////////////////////////////////////////////////////////////////////////////////
 
-/// A `[https://docs.rs/figment/latest/figment/trait.Provider.html](figment::Provider)` that holds
-/// our set of fixed system default options
+/// A [`figment::Provider`](https://docs.rs/figment/latest/figment/trait.Provider.html) that holds
+/// the set of system default options
 #[derive(Default)]
 struct SystemDefault {}
 
@@ -144,7 +144,10 @@ impl Manager {
         self.data = f.merge(provider); // in the error case, this leaves the provider in a fused state
     }
 
-    /// Merges in a data set from an ssh config file
+    /// Merges in a data set from an ssh config file.
+    ///
+    /// The caller is expected to specify the destination host.
+    /// This simplifies parsing dramatically, as it means we can apply host wildcard matching immediately.
     pub fn merge_ssh_config<F>(&mut self, file: F, host: Option<&str>, is_user: bool)
     where
         F: AsRef<Path>,
@@ -182,6 +185,7 @@ impl Manager {
 
 // PRETTY PRINT SUPPORT ///////////////////////////////////////////////////////////////////////////////////////
 
+/// Data type used when rendering the config table
 #[derive(Tabled)]
 struct PrettyConfig {
     field: String,

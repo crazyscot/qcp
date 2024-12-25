@@ -17,6 +17,7 @@ use indicatif::{MultiProgress, ProgressDrawTarget};
 use owo_colors::OwoColorize as _;
 use tracing::error_span;
 
+/// Computes the trace level for a given set of [ClientParameters]
 fn trace_level(args: &ClientParameters) -> &str {
     if args.debug {
         "debug"

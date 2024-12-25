@@ -1,4 +1,4 @@
-// Instant progress read-out
+//! Instant progress read-out
 // (c) 2024 Ross Younger
 
 //! # Rationale
