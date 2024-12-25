@@ -1,7 +1,7 @@
 //! QUIC transport configuration
 // (c) 2024 Ross Younger
 
-use std::{sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use human_repr::HumanCount as _;
@@ -9,7 +9,8 @@ use quinn::{
     congestion::{BbrConfig, CubicConfig},
     TransportConfig,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
+use strum::VariantNames;
 use tracing::debug;
 
 use crate::config::Configuration;
@@ -36,13 +37,13 @@ pub enum ThroughputMode {
     Debug,
     PartialEq,
     Eq,
-    strum_macros::Display,
+    strum::Display,
+    strum::EnumString,
+    strum::VariantNames,
     clap::ValueEnum,
     Serialize,
-    Deserialize,
 )]
-#[serde(rename_all = "kebab-case")]
-#[strum(serialize_all = "kebab_case")] // I'm not entirely sure this does anything in this particular case
+#[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
 pub enum CongestionControllerType {
     /// The congestion algorithm TCP uses. This is good for most cases.
     Cubic,
@@ -55,6 +56,19 @@ pub enum CongestionControllerType {
     /// `https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/`
     /// for more discussion.
     Bbr,
+}
+
+impl<'de> Deserialize<'de> for CongestionControllerType {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let lower = s.to_ascii_lowercase();
+        // requires strum::EnumString && strum::VariantNames && #[strum(serialize_all = "lowercase")]
+        FromStr::from_str(&lower)
+            .map_err(|_| de::Error::unknown_variant(&s, CongestionControllerType::VARIANTS))
+    }
 }
 
 /// Creates a `quinn::TransportConfig` for the endpoint setup

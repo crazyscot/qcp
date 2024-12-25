@@ -21,7 +21,7 @@ pub(super) enum Line {
     },
     Generic {
         line_number: usize,
-        keyword: String, /*lowercase!*/
+        keyword: String, /*canonicalised!*/
         args: Vec<String>,
     },
 }

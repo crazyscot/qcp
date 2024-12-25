@@ -47,7 +47,7 @@ use std::fmt::Display;
 use tokio_util::compat::TokioAsyncReadCompatExt as _;
 
 /// Command packet
-#[derive(Debug, strum_macros::Display)]
+#[derive(Debug, strum::Display)]
 #[allow(missing_docs)]
 pub enum Command {
     Get(GetArgs),

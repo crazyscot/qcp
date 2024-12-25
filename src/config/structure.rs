@@ -107,7 +107,7 @@ pub struct Configuration {
     ///
     /// If unspecified, uses whatever seems suitable given the target address or the result of DNS lookup.
     // (see also [CliArgs::ipv4_alias__] and [CliArgs::ipv6_alias__])
-    #[arg(long, alias("ipv"), help_heading("Connection"), group("ip address"))]
+    #[arg(long, help_heading("Connection"), group("ip address"))]
     pub address_family: AddressFamily,
 
     /// Specifies the ssh client program to use [default: `ssh`]

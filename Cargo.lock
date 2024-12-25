@@ -1114,7 +1114,7 @@ dependencies = [
  "serde_test",
  "static_assertions",
  "struct-field-names-as-array",
- "strum_macros",
+ "strum",
  "tabled",
  "tempfile",
  "tokio",

@@ -49,7 +49,7 @@ rustls-pki-types = "1.10.0"
 serde = { version = "1.0.216", features = ["derive"] }
 static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
-strum_macros = "0.26.4"
+strum = { version = "0.26.3", features = ["derive"]}
 tabled = "0.17.0"
 tokio = { version = "1.42.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
 tokio-util = { version = "0.7.13", features = ["compat"] }
