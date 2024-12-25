@@ -1,10 +1,17 @@
 //! Host matching
 // (c) 2024 Ross Younger
 
+fn match_one_pattern(host: &str, pattern: &str) -> bool {
+    if let Some(negative_pattern) = pattern.strip_prefix('!') {
+        !wildmatch::WildMatch::new(negative_pattern).matches(host)
+    } else {
+        wildmatch::WildMatch::new(pattern).matches(host)
+    }
+}
+
 pub(super) fn evaluate_host_match(host: Option<&str>, args: &[String]) -> bool {
     if let Some(host) = host {
-        args.iter()
-            .any(|arg| wildmatch::WildMatch::new(arg).matches(host))
+        args.iter().any(|arg| match_one_pattern(host, arg))
     } else {
         // host is None i.e. unspecified; match only on '*'
         args.iter().any(|arg| arg == "*")
@@ -45,6 +52,8 @@ mod test {
             ("oof", sv!["*of"], true),
             ("192.168.1.42", sv!["192.168.?.42"], true),
             ("192.168.10.42", sv!["192.168.?.42"], false),
+            ("xyzy", sv!["!xyzzy"], true),
+            ("xyzy", sv!["!xyzy"], false),
         ] {
             assert_eq_as_result!(evaluate_host_match(Some(host), &args), result)
                 .map_err(|e| anyhow!(e))
