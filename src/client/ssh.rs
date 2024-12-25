@@ -9,9 +9,13 @@ use tracing::{debug, warn};
 
 use crate::os::{AbstractPlatform as _, Platform};
 
+/// Metadata representing a QCP config file
 struct ConfigFile {
+    /// The file to read
     path: PathBuf,
-    user: bool, // this is a user file i.e. ~ expansion is allowed
+    /// if set, this is a user file i.e. ~ expansion is allowed
+    user: bool,
+    /// if set, warns on various failures and attempts to keep going
     warn_on_error: bool,
 }
 

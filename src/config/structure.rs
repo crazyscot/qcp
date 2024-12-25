@@ -44,7 +44,7 @@ pub struct Configuration {
     /// like `10M` or `256k`. **Note that this is described in BYTES, not bits**;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable setting.
-    #[arg(short('b'), long, alias("rx-bw"), help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
+    #[arg(short('b'), long, alias("rx-bw"), help_heading("Network tuning"), display_order(1), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
     pub rx: HumanU64,
     /// The maximum network bandwidth we expect sending data TO the remote system,
     /// if it is different from the bandwidth FROM the system.
@@ -52,7 +52,7 @@ pub struct Configuration {
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
     ///
     /// If not specified or 0, uses the value of `rx`.
-    #[arg(short('B'), long, alias("tx-bw"), help_heading("Network tuning"), display_order(10), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
+    #[arg(short('B'), long, alias("tx-bw"), help_heading("Network tuning"), display_order(1), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
     pub tx: HumanU64,
 
     /// The expected network Round Trip time to the target system, in milliseconds.
@@ -61,7 +61,7 @@ pub struct Configuration {
         short('r'),
         long,
         help_heading("Network tuning"),
-        display_order(1),
+        display_order(10),
         value_name("ms")
     )]
     pub rtt: u16,
@@ -72,7 +72,8 @@ pub struct Configuration {
         long,
         action,
         value_name = "alg",
-        help_heading("Advanced network tuning")
+        help_heading("Advanced network tuning"),
+        display_order(0)
     )]
     #[clap(value_enum)]
     pub congestion: CongestionControllerType,
@@ -82,66 +83,97 @@ pub struct Configuration {
     /// If unspecified, the active congestion control algorithm decides.
     ///
     /// _Setting this value too high reduces performance!_
-    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
+    #[arg(
+        long,
+        help_heading("Advanced network tuning"),
+        value_name = "bytes",
+        display_order(0)
+    )]
     pub initial_congestion_window: u64,
 
     /// Uses the given UDP port or range on the local endpoint.
     /// This can be useful when there is a firewall between the endpoints.
     ///
-    /// For example: `12345`, `"20000-20100"`
-    /// (in a configuration file, a range must be quoted)
+    /// For example: `12345`, `20000-20100`
     ///
     /// If unspecified, uses any available UDP port.
-    #[arg(short = 'p', long, value_name("M-N"), help_heading("Connection"))]
+    #[arg(
+        short = 'p',
+        long,
+        value_name("M-N"),
+        help_heading("Connection"),
+        display_order(0)
+    )]
     pub port: PortRange,
 
     /// Connection timeout for the QUIC endpoints [seconds; default 5]
     ///
     /// This needs to be long enough for your network connection, but short enough to provide
     /// a timely indication that UDP may be blocked.
-    #[arg(short, long, value_name("sec"), help_heading("Connection"))]
+    #[arg(
+        short,
+        long,
+        value_name("sec"),
+        help_heading("Connection"),
+        display_order(0)
+    )]
     pub timeout: u16,
 
     // CLIENT OPTIONS ==================================================================================
-    /// Forces use of a particular IP version when connecting to the remote.
+    /// Forces use of a particular IP version when connecting to the remote. [default: any]
     ///
-    /// If unspecified, uses whatever seems suitable given the target address or the result of DNS lookup.
     // (see also [CliArgs::ipv4_alias__] and [CliArgs::ipv6_alias__])
-    #[arg(long, help_heading("Connection"), group("ip address"))]
+    #[arg(
+        long,
+        help_heading("Connection"),
+        group("ip address"),
+        display_order(0)
+    )]
     pub address_family: AddressFamily,
 
     /// Specifies the ssh client program to use [default: `ssh`]
-    #[arg(long, help_heading("Connection"))]
+    #[arg(long, help_heading("Connection"), display_order(0))]
     pub ssh: String,
 
     /// Provides an additional option or argument to pass to the ssh client. [default: none]
     ///
     /// **On the command line** you must repeat `-S` for each argument.
     /// For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`
-    ///
-    /// **In a configuration file** this field is an array of strings.
-    /// For the same example: `ssh_opts=["-i", "/dev/null"]`
     #[arg(
         short = 'S',
         action,
         value_name("ssh-option"),
         allow_hyphen_values(true),
-        help_heading("Connection")
+        help_heading("Connection"),
+        display_order(0)
     )]
     pub ssh_options: Vec<String>,
 
     /// Uses the given UDP port or range on the remote endpoint.
     /// This can be useful when there is a firewall between the endpoints.
     ///
-    /// For example: `12345`, `"20000-20100"`
-    /// (in a configuration file, a range must be quoted)
+    /// For example: `12345`, `20000-20100`
     ///
     /// If unspecified, uses any available UDP port.
-    #[arg(short = 'P', long, value_name("M-N"), help_heading("Connection"))]
+    #[arg(
+        short = 'P',
+        long,
+        value_name("M-N"),
+        help_heading("Connection"),
+        display_order(0)
+    )]
     pub remote_port: PortRange,
 
     /// Specifies the time format to use when printing messages to the console or to file
-    #[arg(short = 'T', long, value_name("FORMAT"), help_heading("Output"))]
+    /// [default: local]
+    #[arg(
+        short = 'T',
+        long,
+        value_name("FORMAT"),
+        help_heading("Output"),
+        next_line_help(true),
+        display_order(0)
+    )]
     pub time_format: TimeFormat,
 
     /// Alternative ssh config file(s)
@@ -153,7 +185,7 @@ pub struct Configuration {
     ///
     /// This option is really intended to be used in a qcp configuration file.
     /// On the command line, you can repeat `--ssh-config file` as many times as needed.
-    #[arg(long, value_name("FILE"), help_heading("Connection"))]
+    #[arg(long, value_name("FILE"), help_heading("Connection"), display_order(0))]
     pub ssh_config: Vec<String>,
 }
 

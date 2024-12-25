@@ -1,4 +1,4 @@
-/// CLI argument helper - PortRange
+//! CLI argument helper type - a range of UDP port numnbers.
 // (c) 2024 Ross Younger
 use serde::{
     de::{self, Error, Unexpected},

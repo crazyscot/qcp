@@ -1,4 +1,4 @@
-// DNS helpers
+//! DNS helpers
 // (c) 2024 Ross Younger
 
 use std::net::IpAddr;

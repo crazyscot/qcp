@@ -18,7 +18,7 @@ pub enum AddressFamily {
     /// IPv6
     #[value(alias("6"))]
     Inet6,
-    /// We don't mind what type of IP address
+    /// Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup.
     Any,
 }
 

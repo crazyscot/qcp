@@ -1,6 +1,6 @@
 // (c) 2024 Ross Younger
 
-//! Protocol defininitions
+//! 📖 Protocol defininitions
 //!
 #![allow(clippy::doc_markdown)]
 //! # The QCP protocol
