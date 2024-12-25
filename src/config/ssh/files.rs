@@ -10,6 +10,8 @@ use std::{
 
 use anyhow::{Context, Result};
 use figment::Figment;
+use lazy_static::lazy_static;
+use struct_field_names_as_array::FieldNamesAsSlice as _;
 use tracing::warn;
 
 use super::{evaluate_host_match, find_include_files, split_args, Line, Setting, ValueProvider};
@@ -21,8 +23,24 @@ pub(crate) struct HostConfiguration {
     host: Option<String>,
     /// If present, this is the file we read
     source: Option<PathBuf>,
-    /// Output data
+    /// Output data. Field names have been canonicalised (see [`CanonicalIntermediate`]),
+    /// then mapped back to fields in [`super::super::Configuration`] if they match.
     data: BTreeMap<String, Setting>,
+}
+
+/// Creates a reverse mapping of intermediate-canonical keywords to field names for a struct.
+fn create_field_name_map(fields: &'_ [&'_ str]) -> BTreeMap<CanonicalIntermediate, String> {
+    BTreeMap::<CanonicalIntermediate, String>::from_iter(
+        fields
+            .iter()
+            .map(|s| (CanonicalIntermediate::from(*s), (*s).to_string()))
+            .collect::<BTreeMap<CanonicalIntermediate, String>>(),
+    )
+}
+
+lazy_static! {
+    static ref CONFIGURATION_FIELDS_MAP: BTreeMap<CanonicalIntermediate, String> =
+        create_field_name_map(crate::config::Configuration::FIELD_NAMES_AS_SLICE);
 }
 
 impl HostConfiguration {
@@ -47,6 +65,40 @@ impl HostConfiguration {
             figment = figment.merge(ValueProvider::new(k, v, &profile));
         }
         figment
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+
+/// A keyword in an _intermediate canonical format_.
+/// This format is lowercase and contains no underscores or hyphens.
+///
+/// To convert from this format to snake case requires a lookup.
+/// See [`CanonicalIntermediate::to_configuration_field`].
+#[derive(PartialOrd, Ord, PartialEq, Eq, Debug, Clone)]
+struct CanonicalIntermediate(String);
+
+impl CanonicalIntermediate {
+    /// Attempt to reverse-map the canonicalised field to one from Configuration.
+    /// If the field is not known, return it unchanged.
+    fn to_configuration_field(&self) -> String {
+        CONFIGURATION_FIELDS_MAP
+            .get(self)
+            .unwrap_or(&self.0)
+            .clone()
+    }
+}
+
+impl From<&str> for CanonicalIntermediate {
+    /// Converts a keyword into the inner canonical form defined by this module.
+    fn from(input: &str) -> Self {
+        Self(
+            input
+                .chars()
+                .map(|ch| ch.to_ascii_lowercase())
+                .filter(|ch| *ch != '_' && *ch != '-')
+                .collect(),
+        )
     }
 }
 
@@ -126,23 +178,23 @@ impl<R: Read> Parser<R> {
             let mut splitter = line.splitn(2, &[' ', '\t', '=']);
             let keyword = match splitter.next() {
                 None | Some("") => return Ok(Line::Empty),
-                Some(kw) => kw.to_lowercase(),
+                Some(kw) => CanonicalIntermediate::from(kw),
             };
             (keyword, splitter.next().unwrap_or_default())
         };
-        if keyword.starts_with('#') {
+        if keyword.0.starts_with('#') {
             return Ok(Line::Empty);
         }
         let args = split_args(rest).with_context(|| format!("at line {line_number}"))?;
         anyhow::ensure!(!args.is_empty(), "missing argument at line {line_number}");
 
-        Ok(match keyword.as_str() {
+        Ok(match keyword.0.as_str() {
             "host" => Line::Host { line_number, args },
             "match" => Line::Match { line_number, args },
             "include" => Line::Include { line_number, args },
             _ => Line::Generic {
                 line_number,
-                keyword,
+                keyword: keyword.to_configuration_field(),
                 args,
             },
         })
@@ -223,11 +275,13 @@ impl<R: Read> Parser<R> {
 mod test {
     use anyhow::{anyhow, Context, Result};
     use assertables::{assert_contains, assert_contains_as_result, assert_eq_as_result};
+    use struct_field_names_as_array::FieldNamesAsSlice;
 
-    use super::super::Line;
     use super::Parser;
+    use super::{super::Line, CanonicalIntermediate};
 
     use crate::{
+        config::Configuration,
         os::{AbstractPlatform, Platform},
         util::make_test_tempfile,
     };
@@ -287,6 +341,15 @@ mod test {
                 "QUOTED \"abc def\" ghi",
                 generic_("quoted", vec!["abc def", "ghi"]),
             ),
+            // Fields unknown to Configuration, are converted to CanonicalIntermediate:
+            ("kebab-case foo", generic_("kebabcase", vec!["foo"])),
+            ("snake_case foo", generic_("snakecase", vec!["foo"])),
+            (
+                "RanDomcaPitaLiZATion foo",
+                generic_("randomcapitalization", vec!["foo"]),
+            ),
+            // Fields known to Configuration are resolved back to their names from the structure
+            ("AddressFamily foo", generic_("address_family", vec!["foo"])),
         ] {
             let msg = || format!("input \"{input}\" failed");
             assert_eq_as_result!(p.parse_line(input).with_context(msg)?, expected)
@@ -434,5 +497,14 @@ mod test {
         let parser = Parser::for_path(path, true).unwrap();
         let data = parser.parse_file_for(Some("lapis")).unwrap();
         println!("{data:#?}");
+    }
+
+    #[test]
+    fn config_fields_pairwise() {
+        for f in Configuration::FIELD_NAMES_AS_SLICE {
+            let intermed = CanonicalIntermediate::from(*f);
+            let result = intermed.to_configuration_field();
+            assert_eq!(result, *f);
+        }
     }
 }

@@ -6,6 +6,7 @@ use crate::os::{AbstractPlatform as _, Platform};
 use super::{ssh::SshConfigError, Configuration};
 
 use figment::{providers::Serialized, value::Value, Figment, Metadata, Provider};
+use heck::ToUpperCamelCase;
 use serde::Deserialize;
 use std::{
     collections::HashSet,
@@ -223,7 +224,7 @@ impl PrettyConfig {
         }
     }
 
-    fn new(field: &str, value: &Value, meta: Option<&Metadata>) -> Self {
+    fn new<F: Into<String>>(field: F, value: &Value, meta: Option<&Metadata>) -> Self {
         Self {
             field: field.into(),
             value: PrettyConfig::render_value(value),
@@ -288,7 +289,7 @@ impl Display for DisplayAdapter<'_> {
         for field in keys {
             if let Ok(value) = data.find_value(field) {
                 let meta = data.get_metadata(value.tag());
-                output.push(PrettyConfig::new(field, &value, meta));
+                output.push(PrettyConfig::new(field.to_upper_camel_case(), &value, meta));
             }
         }
         write!(
@@ -340,14 +341,14 @@ mod test {
 
         #[derive(Deserialize)]
         struct Test {
-            magic_: i32,
+            magic: i32,
         }
 
         let (path, _tempdir) = make_test_tempfile(
             r"
             rx true # invalid
             rtt 3.14159 # also invalid
-            magic_ 42
+            magic 42
         ",
             "test.conf",
         );
@@ -359,19 +360,20 @@ mod test {
 
         // But the config as a whole is not broken and other things can be extracted:
         let other_struct = mgr.get::<Test>().unwrap();
-        assert_eq!(other_struct.magic_, 42);
+        assert_eq!(other_struct.magic, 42);
     }
 
     #[test]
     fn field_parse_failure() {
         #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
         struct Test {
-            _p: PortRange,
+            p: PortRange,
         }
 
         let (path, _tempdir) = make_test_tempfile(
             r"
-            _p 234-123
+            p 234-123
         ",
             "test.conf",
         );

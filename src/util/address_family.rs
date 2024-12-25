@@ -26,7 +26,8 @@ impl FromStr for AddressFamily {
     type Err = figment::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        let lc = s.to_ascii_lowercase();
+        match lc.as_str() {
             "4" | "inet" | "inet4" => Ok(AddressFamily::Inet),
             "6" | "inet6" => Ok(AddressFamily::Inet6),
             "any" => Ok(AddressFamily::Any),

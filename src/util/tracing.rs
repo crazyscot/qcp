@@ -10,7 +10,8 @@ use std::{
 use anstream::eprintln;
 use anyhow::Context;
 use indicatif::MultiProgress;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
+use strum::VariantNames as _;
 use tracing_subscriber::{
     fmt::{
         time::{ChronoLocal, ChronoUtc},
@@ -36,11 +37,13 @@ const LOG_FILE_DETAIL_ENV_VAR: &str = "RUST_LOG_FILE_DETAIL";
     Default,
     Eq,
     PartialEq,
-    strum_macros::Display,
+    strum::Display,
+    strum::EnumString,
+    strum::VariantNames,
     clap::ValueEnum,
     Serialize,
-    Deserialize,
 )]
+#[strum(serialize_all = "lowercase")]
 #[serde(rename_all = "kebab-case")]
 pub enum TimeFormat {
     /// Local time (as best as we can figure it out), as "year-month-day HH:MM:SS"
@@ -54,6 +57,19 @@ pub enum TimeFormat {
     /// `1997-11-12T09:55:06-06:00`
     /// `2010-03-14T18:32:03Z`
     Rfc3339,
+}
+
+impl<'de> Deserialize<'de> for TimeFormat {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let lower = s.to_ascii_lowercase();
+        // requires strum::EnumString && strum::VariantNames && #[strum(serialize_all = "lowercase")]
+        std::str::FromStr::from_str(&lower)
+            .map_err(|_| de::Error::unknown_variant(&s, TimeFormat::VARIANTS))
+    }
 }
 
 /// Result type for `filter_for()`
