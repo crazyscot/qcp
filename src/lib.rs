@@ -71,6 +71,9 @@
 //! [BitTorrent]: https://en.wikipedia.org/wiki/BitTorrent
 //! [rsync]: https://en.wikipedia.org/wiki/Rsync
 //! [mosh]: https://mosh.org/
+//!
+//! ## Feature flags
+#![doc = document_features::document_features!()]
 
 mod cli;
 pub use cli::cli; // needs to be re-exported for the binary crate
