@@ -3,7 +3,7 @@
 
 use std::process::ExitCode;
 
-use super::{args::CliArgs, styles::ERROR_S};
+use super::args::CliArgs;
 use crate::{
     client::{client_main, Parameters as ClientParameters, MAX_UPDATE_FPS},
     config::{Configuration, Manager},
@@ -14,7 +14,6 @@ use crate::{
 
 use anstream::{eprintln, println};
 use indicatif::{MultiProgress, ProgressDrawTarget};
-use owo_colors::OwoColorize as _;
 use tracing::error_span;
 
 /// Computes the trace level for a given set of [ClientParameters]
@@ -59,7 +58,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     let config_manager = match Manager::try_from(&args) {
         Ok(m) => m,
         Err(err) => {
-            eprintln!("{}: {err}", "ERROR".style(*ERROR_S));
+            eprintln!("ERROR: {err}");
             return Ok(ExitCode::FAILURE);
         }
     };
@@ -67,7 +66,7 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
     let config = match config_manager.get::<Configuration>() {
         Ok(c) => c,
         Err(err) => {
-            eprintln!("{}: Failed to parse configuration", "ERROR".style(*ERROR_S));
+            eprintln!("ERROR: Failed to parse configuration");
             err.into_iter().for_each(|e| eprintln!("{e}"));
             return Ok(ExitCode::FAILURE);
         }
