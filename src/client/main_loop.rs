@@ -46,7 +46,15 @@ pub async fn client_main(
     let _guard = trace_span!("CLIENT").entered();
     let mut timers = StopwatchChain::new_running("setup");
 
+    let spinner = if parameters.quiet {
+        ProgressBar::hidden()
+    } else {
+        display.add(ProgressBar::new_spinner().with_style(spinner_style()?))
+    };
+    spinner.enable_steady_tick(Duration::from_millis(150));
+
     // Prep --------------------------
+    spinner.set_message("Preparing");
     let job_spec = crate::client::CopyJobSpec::try_from(&parameters)?;
     let credentials = Credentials::generate()?;
     let user_hostname = job_spec.remote_host();
@@ -58,6 +66,8 @@ pub async fn client_main(
     let remote_address = lookup_host_by_family(&remote_host, config.address_family)?;
 
     // Control channel ---------------
+    spinner.set_message("Opening control channel");
+    spinner.disable_steady_tick(); // otherwise the spinner messes with ssh passphrase prompting; as we're using tokio spinner.suspend() isn't helpful
     timers.next("control channel");
     let (mut control, server_message) = Channel::transact(
         &credentials,
@@ -75,11 +85,6 @@ pub async fn client_main(
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
     };
 
-    let spinner = if parameters.quiet {
-        ProgressBar::hidden()
-    } else {
-        display.add(ProgressBar::new_spinner().with_style(spinner_style()?))
-    };
     spinner.enable_steady_tick(Duration::from_millis(150));
     spinner.set_message("Establishing data channel");
     timers.next("data channel setup");
