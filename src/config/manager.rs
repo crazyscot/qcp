@@ -86,6 +86,13 @@ impl Manager {
         new1.add_config(true, "user", Platform::user_config_path(), for_host);
         new1
     }
+
+    /// Accessor (only used in tests at the moment)
+    #[cfg(test)]
+    fn host(&self) -> Option<String> {
+        self.host.clone()
+    }
+
     fn add_config(
         &mut self,
         is_user: bool,
@@ -532,15 +539,17 @@ mod test {
         };
         let (path, _tempdir) = make_test_tempfile(
             r"
+            Host foo
             rx 66666
         ",
             "test.conf",
         );
 
-        let mut mgr = Manager::without_files(None);
+        let mut mgr = Manager::without_files(Some("foo"));
         mgr.merge_ssh_config(&path, Some("foo"), false);
         // The order of merging mirrors what happens in Manager::try_from(&CliArgs)
         mgr.merge_provider(entered);
+        assert_eq!(mgr.host(), Some("foo".to_string()));
         let result = mgr.get::<Configuration>().unwrap();
         assert_eq!(12345, *result.rx);
     }

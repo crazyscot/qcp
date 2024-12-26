@@ -109,7 +109,7 @@ define_derive_deftly! {
             )
 
             let mut profile_map = Map::new();
-            let _ = profile_map.insert(Profile::default(), dict);
+            let _ = profile_map.insert(Profile::Global, dict);
 
             Ok(profile_map)
         }
