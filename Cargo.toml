@@ -19,6 +19,11 @@ split-debuginfo="unpacked"
 lto = "thin"
 strip = "symbols"
 
+[features]
+default = ["rustls-log"]
+## Enables rustls debug messages. You still have to request them using the environment variable, e.g. `RUST_LOG="rustls=debug"`.
+rustls-log = ["quinn/rustls-log"]
+
 [dependencies]
 anstream = "0.6.18"
 anstyle = "1.0.10"
@@ -31,6 +36,7 @@ console = "0.15.8"
 derive-deftly = "0.14.2"
 dirs = "5.0.1"
 dns-lookup = "2.0.4"
+document-features = "0.2.10"
 expanduser = "1.2.2"
 figment = { version = "0.10.19" }
 futures-util = { version = "0.3.31", default-features = false }
