@@ -27,7 +27,6 @@ rustls-log = ["quinn/rustls-log"]
 [dependencies]
 anstream = "0.6.18"
 anstyle = "1.0.10"
-anstyle-owo-colors = "2.0.3"
 anyhow = "1.0.94"
 capnp = "0.20.3"
 capnp-futures = "0.20.1"
@@ -48,7 +47,6 @@ humanize-rs = "0.1.5"
 indicatif = { version = "0.17.9", features = ["tokio"] }
 lazy_static = "1.5.0"
 num-format = { version = "0.4.4" }
-owo-colors = { version = "4.1.0", features = ["supports-color"] }
 quinn = { version = "0.11.6", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
 rcgen = { version = "0.13.1" }
 rustls-pki-types = "1.10.0"
