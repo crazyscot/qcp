@@ -89,7 +89,7 @@ impl Channel {
             ConnectionType::Ipv4 => server.arg("-4"),
             ConnectionType::Ipv6 => server.arg("-6"),
         };
-        let _ = server.args(&config.ssh_opt);
+        let _ = server.args(&config.ssh_options);
         let _ = server.args([
             remote_host,
             "qcp",

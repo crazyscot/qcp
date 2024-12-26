@@ -38,7 +38,7 @@ pub(crate) struct CliArgs {
         conflicts_with_all([
             "help_buffers", "show_config", "config_files",
             "quiet", "statistics", "remote_debug", "profile",
-            "ssh", "ssh_opt", "remote_port",
+            "ssh", "ssh_options", "remote_port",
             "source", "destination",
         ])
     )]

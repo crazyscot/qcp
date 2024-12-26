@@ -128,7 +128,7 @@ pub struct Configuration {
         allow_hyphen_values(true),
         help_heading("Connection")
     )]
-    pub ssh_opt: Vec<String>,
+    pub ssh_options: Vec<String>,
 
     /// Uses the given UDP port or range on the remote endpoint.
     /// This can be useful when there is a firewall between the endpoints.
@@ -259,7 +259,7 @@ impl Default for Configuration {
             // Client
             address_family: AddressFamily::Any,
             ssh: "ssh".into(),
-            ssh_opt: vec![],
+            ssh_options: vec![],
             remote_port: PortRange::default(),
             time_format: TimeFormat::Local,
             ssh_config: Vec::new(),

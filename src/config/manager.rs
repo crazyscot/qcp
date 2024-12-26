@@ -395,15 +395,15 @@ mod test {
     fn ssh_style() {
         #[derive(Debug, Deserialize)]
         struct Test {
-            ssh_opt: Vec<String>,
+            ssh_options: Vec<String>,
         }
         // Bear in mind: in an ssh style config file, the first match for a particular keyword wins.
         let (path, _tempdir) = make_test_tempfile(
             r"
            host bar
-           ssh_opt d e f
+           ssh_options d e f
            host *
-           ssh_opt a b c
+           ssh_options a b c
         ",
             "test.conf",
         );
@@ -411,12 +411,12 @@ mod test {
         mgr.merge_ssh_config(&path, Some("foo"), false);
         //println!("{}", mgr.to_display_adapter::<Configuration>(false));
         let result = mgr.get::<Test>().unwrap();
-        assert_eq!(result.ssh_opt, vec!["a", "b", "c"]);
+        assert_eq!(result.ssh_options, vec!["a", "b", "c"]);
 
         let mut mgr = Manager::without_files(Some("bar"));
         mgr.merge_ssh_config(&path, Some("bar"), false);
         let result = mgr.get::<Test>().unwrap();
-        assert_eq!(result.ssh_opt, vec!["d", "e", "f"]);
+        assert_eq!(result.ssh_options, vec!["d", "e", "f"]);
     }
 
     #[test]
