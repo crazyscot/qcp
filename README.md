@@ -183,7 +183,7 @@ Some ideas for the future, in no particular order:
 [rfc9000]: https://www.rfc-editor.org/rfc/rfc9000.html
 [buying me a coffee]: https://buymeacoffee.com/rossyounger
 [ko-fi]: https://ko-fi.com/rossyounger
-[config]: https://docs.rs/qcp/latest/qcp/doc/config/index.html
+[config]: https://docs.rs/qcp/latest/qcp/config/index.html
 [protocol]: https://docs.rs/qcp/latest/qcp/protocol/index.html
 [performance]: https://docs.rs/qcp/latest/qcp/doc/performance/index.html
 [Github sponsorship]: https://github.com/sponsors/crazyscot?frequency=recurring&sponsor=crazyscot
