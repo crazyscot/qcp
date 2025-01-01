@@ -496,6 +496,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
 
 [[package]]
+name = "engineering-repr"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50d2eba4c76170c5f274b50b2ff27b19e0421ae5699a0cbcf75f6efa90e02b20"
+dependencies = [
+ "num-traits",
+ "serde",
+ "thiserror 2.0.9",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -673,12 +684,6 @@ name = "human-repr"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f58b778a5761513caf593693f8951c97a5b610841e754788400f32102eefdff1"
-
-[[package]]
-name = "humanize-rs"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "016b02deb8b0c415d8d56a6f0ab265e50c22df61194e37f9be75ed3a722de8a6"
 
 [[package]]
 name = "iana-time-zone"
@@ -1079,6 +1084,7 @@ dependencies = [
  "dirs 5.0.1",
  "dns-lookup",
  "document-features",
+ "engineering-repr",
  "expanduser",
  "fastrand",
  "figment",
@@ -1087,7 +1093,6 @@ dependencies = [
  "glob",
  "heck 0.5.0",
  "human-repr",
- "humanize-rs",
  "indicatif",
  "jemallocator",
  "json",

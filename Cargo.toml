@@ -36,6 +36,7 @@ derive-deftly = "0.14.2"
 dirs = "5.0.1"
 dns-lookup = "2.0.4"
 document-features = "0.2.10"
+engineering-repr = { version = "0.3.0", features = [ "serde" ] }
 expanduser = "1.2.2"
 figment = { version = "0.10.19" }
 futures-util = { version = "0.3.31", default-features = false }
@@ -43,7 +44,6 @@ gethostname = "0.5.0"
 glob = "0.3.1"
 heck = "0.5.0"
 human-repr = "1.1.0"
-humanize-rs = "0.1.5"
 indicatif = { version = "0.17.9", features = ["tokio"] }
 lazy_static = "1.5.0"
 num-format = { version = "0.4.4" }

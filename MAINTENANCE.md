@@ -10,6 +10,6 @@
 * `git fetch && git merge --ff-only`
 * Finalise the release:
   * ```release-plz release --git-token $GITHUB_QCP_TOKEN```
-  * Check the new (draft) Github release page; update notes as necessary, publish when ready (when artifacts have all uploaded).
+  * Check the new (draft) Github release page; update notes as necessary, publish when ready (this will trigger the artifact builds).
 * Merge `dev` into `main`, or whatever suits the current branching strategy
 * Check the docs built, follow up on the release workflow, etc.
