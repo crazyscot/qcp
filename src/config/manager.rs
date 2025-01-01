@@ -318,6 +318,7 @@ mod test {
     use crate::config::ssh::SshConfigError;
     use crate::config::{Configuration, Configuration_Optional, Manager};
     use crate::util::{make_test_tempfile, PortRange};
+    use engineering_repr::EngineeringQuantity;
     use serde::Deserialize;
 
     #[test]
@@ -332,11 +333,11 @@ mod test {
     fn config_merge() {
         // simulate a CLI
         let entered = Configuration_Optional {
-            rx: Some(12345.into()),
+            rx: Some(12345u64.into()),
             ..Default::default()
         };
         let expected = Configuration {
-            rx: 12345.into(),
+            rx: 12345u64.into(),
             ..Default::default()
         };
 
@@ -536,9 +537,10 @@ mod test {
 
     #[test]
     fn cli_beats_config_file() {
+        let _ee = EngineeringQuantity::<u32>::from_raw(1, 2);
         // simulate a CLI
         let entered = Configuration_Optional {
-            rx: Some(12345.into()),
+            rx: Some(12345u64.into()),
             ..Default::default()
         };
         let (path, _tempdir) = make_test_tempfile(
@@ -555,6 +557,22 @@ mod test {
         mgr.merge_provider(entered);
         assert_eq!(mgr.host(), Some("foo".to_string()));
         let result = mgr.get::<Configuration>().unwrap();
-        assert_eq!(12345, *result.rx);
+        assert_eq!(12345, result.rx());
+    }
+
+    #[test]
+    fn parse_eng_quantity() {
+        let (path, _tempdir) = make_test_tempfile(
+            r"
+            Host foo
+            rx 10M5
+        ",
+            "test.conf",
+        );
+        let mut mgr = Manager::without_files(Some("foo"));
+        mgr.merge_ssh_config(&path, Some("foo"), false);
+        //println!("{mgr:?}");
+        let result = mgr.get::<Configuration>().unwrap();
+        assert_eq!(10_500_000, result.rx());
     }
 }

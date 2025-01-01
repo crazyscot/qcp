@@ -10,7 +10,6 @@ pub use dns::lookup_host_by_family;
 mod cert;
 pub use cert::Credentials;
 
-pub mod humanu64;
 pub mod io;
 pub mod socket;
 pub mod stats;

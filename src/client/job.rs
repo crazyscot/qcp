@@ -90,6 +90,7 @@ impl CopyJobSpec {
 #[cfg(test)]
 mod test {
     type Res = anyhow::Result<()>;
+    use engineering_repr::EngineeringQuantity;
     use human_repr::HumanCount;
 
     use super::FileSpec;
@@ -144,9 +145,8 @@ mod test {
     #[test]
     fn size_is_kb_not_kib() {
         // same mechanism that clap uses
-        use humanize_rs::bytes::Bytes;
-        let s = "1k".parse::<Bytes>().unwrap();
-        assert_eq!(s.size(), 1000);
+        let q = "1k".parse::<EngineeringQuantity<u64>>().unwrap();
+        assert_eq!(u64::from(q), 1000);
     }
     #[test]
     fn human_repr_test() {

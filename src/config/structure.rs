@@ -3,17 +3,16 @@
 
 use std::time::Duration;
 
+use anyhow::Result;
 use clap::Parser;
+use engineering_repr::EngineeringQuantity;
 use human_repr::{HumanCount as _, HumanDuration as _};
 use serde::{Deserialize, Serialize};
 use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
     transport::CongestionControllerType,
-    util::{
-        derive_deftly_template_Optionalify, humanu64::HumanU64, AddressFamily, PortRange,
-        TimeFormat,
-    },
+    util::{derive_deftly_template_Optionalify, AddressFamily, PortRange, TimeFormat},
 };
 
 use derive_deftly::Deftly;
@@ -33,27 +32,41 @@ use derive_deftly::Deftly;
 #[derive(Deftly)]
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
-#[derive(Debug, Clone, PartialEq, Eq, Parser, Deserialize, Serialize, FieldNamesAsSlice)]
+#[derive(Debug, Clone, PartialEq, Parser, Deserialize, Serialize, FieldNamesAsSlice)]
 pub struct Configuration {
     // TRANSPORT PARAMETERS ============================================================================
     // System bandwidth, UDP ports, timeout.
     /// The maximum network bandwidth we expect receiving data FROM the remote system.
-    /// [default: 12500k]
+    /// [default: 12.5M]
     ///
-    /// This may be specified directly as a number of bytes, or as an SI quantity
+    /// This may be specified directly as a number, or as an SI quantity
     /// like `10M` or `256k`. **Note that this is described in BYTES, not bits**;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable setting.
-    #[arg(short('b'), long, alias("rx-bw"), help_heading("Network tuning"), display_order(1), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
-    pub rx: HumanU64,
+    #[arg(
+        short('b'),
+        long,
+        alias("rx-bw"),
+        help_heading("Network tuning"),
+        display_order(1),
+        value_name = "bytes"
+    )]
+    pub rx: EngineeringQuantity<u64>,
     /// The maximum network bandwidth we expect sending data TO the remote system,
     /// if it is different from the bandwidth FROM the system.
     ///
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
     ///
     /// If not specified or 0, uses the value of `rx`.
-    #[arg(short('B'), long, alias("tx-bw"), help_heading("Network tuning"), display_order(1), value_name="bytes", value_parser=clap::value_parser!(HumanU64))]
-    pub tx: HumanU64,
+    #[arg(
+        short('B'),
+        long,
+        alias("tx-bw"),
+        help_heading("Network tuning"),
+        display_order(1),
+        value_name = "bytes"
+    )]
+    pub tx: EngineeringQuantity<u64>,
 
     /// The expected network Round Trip time to the target system, in milliseconds.
     /// [default: 300]
@@ -205,12 +218,12 @@ impl Configuration {
     #[must_use]
     /// Receive bandwidth (accessor)
     pub fn rx(&self) -> u64 {
-        *self.rx
+        self.rx.into()
     }
     #[must_use]
     /// Transmit bandwidth (accessor)
     pub fn tx(&self) -> u64 {
-        match *self.tx {
+        match u64::from(self.tx) {
             0 => self.rx(),
             tx => tx,
         }
@@ -280,8 +293,8 @@ impl Default for Configuration {
     fn default() -> Self {
         Self {
             // Transport
-            rx: 12_500_000.into(),
-            tx: 0.into(),
+            rx: 12_500_000u64.into(),
+            tx: 0u64.into(),
             rtt: 300,
             congestion: CongestionControllerType::Cubic,
             initial_congestion_window: 0,
