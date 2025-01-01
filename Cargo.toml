@@ -41,7 +41,7 @@ expanduser = "1.2.2"
 figment = { version = "0.10.19" }
 futures-util = { version = "0.3.31", default-features = false }
 gethostname = "0.5.0"
-glob = "0.3.1"
+glob = "0.3.2"
 heck = "0.5.0"
 human-repr = "1.1.0"
 indicatif = { version = "0.17.9", features = ["tokio"] }
@@ -50,7 +50,7 @@ num-format = { version = "0.4.4" }
 quinn = { version = "0.11.6", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
 rcgen = { version = "0.13.1" }
 rustls-pki-types = "1.10.0"
-serde = { version = "1.0.216", features = ["derive"] }
+serde = { version = "1.0.217", features = ["derive"] }
 static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
 strum = { version = "0.26.3", features = ["derive"]}
