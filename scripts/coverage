@@ -1,0 +1,13 @@
+#!/bin/sh -e
+
+# Script prerequisites:
+#   Rust toolchain
+#   lcov package (for genhtml)
+#   cargo install cargo-llvm-cov
+
+COVERAGE_DIR=target/coverage
+
+mkdir -p $COVERAGE_DIR
+cargo llvm-cov --all-features --workspace --lcov --output-path $COVERAGE_DIR/lcov.info
+genhtml $COVERAGE_DIR/lcov.info -o $COVERAGE_DIR/html
+echo Coverage written to $COVERAGE_DIR/html
