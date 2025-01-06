@@ -10,6 +10,9 @@ assignees: ''
 **Describe the bug**
 A clear and concise description of what the bug is.
 
+**Version(s) Affected**
+Paste in the output of qcp --version. If you have tried multiple versions, please say which.
+
 **To Reproduce**
 Steps to reproduce the behavior:
 1. Go to '...'
