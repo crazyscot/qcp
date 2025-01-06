@@ -497,9 +497,9 @@ checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
 
 [[package]]
 name = "engineering-repr"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50d2eba4c76170c5f274b50b2ff27b19e0421ae5699a0cbcf75f6efa90e02b20"
+checksum = "6ee062e5233c4755f84b6b95528bdbf3ced36767c77283a1f7a02a714cb1fa80"
 dependencies = [
  "num-traits",
  "serde",
