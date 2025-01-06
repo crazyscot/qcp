@@ -36,7 +36,7 @@ derive-deftly = "0.14.2"
 dirs = "5.0.1"
 dns-lookup = "2.0.4"
 document-features = "0.2.10"
-engineering-repr = { version = "0.3.0", features = [ "serde" ] }
+engineering-repr = { version = "0.3.1", features = [ "serde" ] }
 expanduser = "1.2.2"
 figment = { version = "0.10.19" }
 futures-util = { version = "0.3.31", default-features = false }
