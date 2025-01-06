@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
-use engineering_repr::EngineeringQuantity;
+use engineering_repr::{EngineeringQuantity, EngineeringRepr};
 use human_repr::{HumanCount as _, HumanDuration as _};
 use serde::{Deserialize, Serialize};
 use struct_field_names_as_array::FieldNamesAsSlice;
@@ -16,6 +16,10 @@ use crate::{
 };
 
 use derive_deftly::Deftly;
+
+/// Minimum bandwidth we will accept in either direction.
+/// You have to have a limit somewhere; zero doesn't work. So I chose 1200 baud ...
+const MINIMUM_BANDWIDTH: u64 = 150;
 
 /// The set of configurable options supported by qcp.
 ///
@@ -284,6 +288,39 @@ impl Configuration {
             rtt = self.rtt_duration().human_duration(),
             congestion = self.congestion,
         )
+    }
+
+    /// Performs additional validation checks on the configuration.
+    pub fn validate(self) -> Result<Self> {
+        if self.rx() < MINIMUM_BANDWIDTH {
+            anyhow::bail!(
+                "The receive bandwidth (rx {}B) is too small; it must be at least {}",
+                self.rx.with_precision(0),
+                MINIMUM_BANDWIDTH.to_eng(3)
+            );
+        }
+        if self.tx() < MINIMUM_BANDWIDTH {
+            anyhow::bail!(
+                "The transmit bandwidth (rx {}B) is too small; it must be at least {}",
+                self.tx.with_precision(0),
+                MINIMUM_BANDWIDTH.to_eng(3)
+            );
+        }
+        if self.rx().checked_mul(self.rtt.into()).is_none() {
+            anyhow::bail!(
+                "The receive bandwidth delay product calculation (rx {}B x rtt {}ms) overflowed",
+                self.rx,
+                self.rtt
+            );
+        }
+        if self.tx().checked_mul(self.rtt.into()).is_none() {
+            anyhow::bail!(
+                "The transmit bandwidth delay product calculation (rx {}B x rtt {}ms) overflowed",
+                self.tx,
+                self.rtt
+            );
+        }
+        Ok(self)
     }
 }
 

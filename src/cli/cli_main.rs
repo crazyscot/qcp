@@ -70,7 +70,8 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
             err.into_iter().for_each(|e| eprintln!("{e}"));
             return Ok(ExitCode::FAILURE);
         }
-    };
+    }
+    .validate()?;
 
     setup_tracing(
         trace_level(&args.client_params),
