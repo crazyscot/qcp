@@ -91,7 +91,7 @@ pub async fn server_main(config: &Configuration) -> anyhow::Result<()> {
             trace!("connection completed");
         });
     } else {
-        info!("Endpoint was expectedly closed");
+        info!("Endpoint was unexpectedly closed");
     }
 
     // Graceful closedown. Wait for all connections and streams to finish.

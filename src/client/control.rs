@@ -54,7 +54,7 @@ impl Channel {
             .ok_or(anyhow!("could not access process stdin (can't happen?)"))?;
         ClientMessage::write(&mut pipe, &credentials.certificate, connection_type)
             .await
-            .with_context(|| "writing client message")?;
+            .with_context(|| "failed to write client message")?;
 
         let mut server_output = new1
             .process
@@ -65,7 +65,7 @@ impl Channel {
         trace!("waiting for server message");
         let message = ServerMessage::read(&mut server_output)
             .await
-            .with_context(|| "reading server message")?;
+            .with_context(|| "failed to read server message")?;
 
         trace!("Got server message {message:?}");
         if let Some(w) = message.warning.as_ref() {
