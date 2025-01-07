@@ -16,7 +16,7 @@ pub mod stats;
 pub mod time;
 
 mod tracing;
-pub use tracing::{setup as setup_tracing, TimeFormat};
+pub use tracing::{is_initialized as tracing_is_initialised, setup as setup_tracing, TimeFormat};
 
 mod port_range;
 pub use port_range::PortRange;

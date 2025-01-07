@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
+    cli::styles::{INFO, RESET},
     transport::CongestionControllerType,
     util::{derive_deftly_template_Optionalify, AddressFamily, PortRange, TimeFormat},
 };
@@ -294,29 +295,29 @@ impl Configuration {
     pub fn validate(self) -> Result<Self> {
         if self.rx() < MINIMUM_BANDWIDTH {
             anyhow::bail!(
-                "The receive bandwidth (rx {}B) is too small; it must be at least {}",
+                "The receive bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
                 self.rx.with_precision(0),
                 MINIMUM_BANDWIDTH.to_eng(3)
             );
         }
         if self.tx() < MINIMUM_BANDWIDTH {
             anyhow::bail!(
-                "The transmit bandwidth (rx {}B) is too small; it must be at least {}",
+                "The transmit bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
                 self.tx.with_precision(0),
                 MINIMUM_BANDWIDTH.to_eng(3)
             );
         }
         if self.rx().checked_mul(self.rtt.into()).is_none() {
             anyhow::bail!(
-                "The receive bandwidth delay product calculation (rx {}B x rtt {}ms) overflowed",
-                self.rx,
+                "The receive bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
+                self.rx.with_precision(0),
                 self.rtt
             );
         }
         if self.tx().checked_mul(self.rtt.into()).is_none() {
             anyhow::bail!(
-                "The transmit bandwidth delay product calculation (rx {}B x rtt {}ms) overflowed",
-                self.tx,
+                "The transmit bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
+                self.tx.with_precision(0),
                 self.rtt
             );
         }

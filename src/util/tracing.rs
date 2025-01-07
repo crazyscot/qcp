@@ -4,6 +4,7 @@
 use std::{
     fs::File,
     io::Write,
+    sync::atomic::{AtomicBool, Ordering},
     sync::{Arc, Mutex},
 };
 
@@ -20,6 +21,8 @@ use tracing_subscriber::{
     prelude::*,
     EnvFilter,
 };
+
+static TRACING_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 const FRIENDLY_FORMAT_LOCAL: &str = "%Y-%m-%d %H:%M:%SL";
 const FRIENDLY_FORMAT_UTC: &str = "%Y-%m-%d %H:%M:%SZ";
@@ -89,7 +92,7 @@ fn filter_for(trace_level: &str, key: &str) -> anyhow::Result<FilterResult> {
         .or_else(|e| {
             // The env var was unset or invalid. Which is it?
             if std::env::var(key).is_ok() {
-                anyhow::bail!("{key} (set in environment) was invalid: {e}");
+                anyhow::bail!("{key} (set in environment) was not understood: {e}");
             }
             // It was unset. Fall back.
             Ok(FilterResult {
@@ -206,8 +209,14 @@ pub fn setup(
     ////////
 
     tracing_subscriber::registry().with(layers).init();
+    TRACING_INITIALIZED.store(true, Ordering::Relaxed);
 
     Ok(())
+}
+
+/// Returns whether tracing has been initialized
+pub fn is_initialized() -> bool {
+    TRACING_INITIALIZED.load(Ordering::Relaxed)
 }
 
 /// A wrapper type so tracing can output in a way that doesn't mess up `MultiProgress`

@@ -12,7 +12,7 @@ use crate::{
     util::setup_tracing,
 };
 
-use anstream::{eprintln, println};
+use anstream::println;
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use tracing::error_span;
 
@@ -24,6 +24,35 @@ fn trace_level(args: &ClientParameters) -> &str {
         "error"
     } else {
         "info"
+    }
+}
+
+enum MainMode {
+    Server,
+    Client(MultiProgress),
+    ShowConfig,
+}
+
+impl From<&CliArgs> for MainMode {
+    fn from(args: &CliArgs) -> Self {
+        if args.server {
+            MainMode::Server
+        } else if args.show_config {
+            MainMode::ShowConfig
+        } else {
+            MainMode::Client(MultiProgress::with_draw_target(
+                ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS),
+            ))
+        }
+    }
+}
+
+impl MainMode {
+    fn progress(&self) -> Option<&MultiProgress> {
+        match self {
+            MainMode::Client(mp) => Some(mp),
+            _ => None,
+        }
     }
 }
 
@@ -43,64 +72,52 @@ pub async fn cli() -> anyhow::Result<ExitCode> {
         );
         return Ok(ExitCode::SUCCESS);
     }
-
-    let progress = (!args.server).then(|| {
-        MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS))
-    });
-
     if args.config_files {
         // do this before attempting to read config, in case it fails
+        setup_tracing(
+            trace_level(&args.client_params),
+            None,
+            &None,
+            args.config.time_format.unwrap_or_default(),
+        )?;
         println!("{:?}", Manager::config_files());
         return Ok(ExitCode::SUCCESS);
     }
 
-    // Now fold the arguments in with the CLI config (which may fail)
-    let config_manager = match Manager::try_from(&args) {
-        Ok(m) => m,
-        Err(err) => {
-            eprintln!("ERROR: {err}");
-            return Ok(ExitCode::FAILURE);
-        }
-    };
+    let main_mode = MainMode::from(&args); // side-effect: holds progress bar, if we need one
 
-    let config = match config_manager.get::<Configuration>() {
-        Ok(c) => c,
-        Err(err) => {
-            eprintln!("ERROR: Failed to parse configuration");
-            err.into_iter().for_each(|e| eprintln!("{e}"));
-            return Ok(ExitCode::FAILURE);
-        }
-    }
-    .validate()?;
+    // Now fold the arguments in with the CLI config (which may fail)
+    // (to provoke an error here: `qcp host: host2:`)
+    let config_manager = Manager::try_from(&args)?;
+    let config = config_manager.get::<Configuration>()?.validate()?;
 
     setup_tracing(
         trace_level(&args.client_params),
-        progress.as_ref(),
+        main_mode.progress(),
         &args.client_params.log_file,
         config.time_format,
-    )
-    .inspect_err(|e| eprintln!("{e:?}"))?;
+    )?; // to provoke error: set RUST_LOG=.
 
-    if args.show_config {
-        println!("{}", config_manager.to_display_adapter::<Configuration>());
-        Ok(ExitCode::SUCCESS)
-    } else if args.server {
-        let _span = error_span!("REMOTE").entered();
-        server_main(&config)
-            .await
-            .map(|()| ExitCode::SUCCESS)
-            .inspect_err(|e| tracing::error!("{e}"))
-    } else {
-        client_main(&config, progress.unwrap(), args.client_params)
-            .await
-            .inspect_err(|e| tracing::error!("{e}"))
-            .or_else(|_| Ok(false))
-            .map(|success| {
-                if success {
-                    ExitCode::SUCCESS
-                } else {
-                    ExitCode::FAILURE
-                }
-            })
-    }
+    match main_mode {
+        MainMode::ShowConfig => {
+            println!("{}", config_manager.to_display_adapter::<Configuration>());
+            return Ok(ExitCode::SUCCESS);
+        }
+        MainMode::Server => {
+            let _span = error_span!("REMOTE").entered();
+            server_main(&config).await?;
+            return Ok(ExitCode::SUCCESS);
+        }
+        MainMode::Client(progress) => {
+            return client_main(&config, progress, args.client_params)
+                .await
+                .map(|success| {
+                    if success {
+                        ExitCode::SUCCESS
+                    } else {
+                        ExitCode::FAILURE
+                    }
+                });
+        }
+    };
 }
