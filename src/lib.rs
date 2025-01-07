@@ -76,7 +76,7 @@
 #![doc = document_features::document_features!()]
 
 mod cli;
-pub use cli::cli; // needs to be re-exported for the binary crate
+pub use cli::{cli, styles}; // needs to be re-exported for the binary crate
 
 pub mod client;
 pub mod config;

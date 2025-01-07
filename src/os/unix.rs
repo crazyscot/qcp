@@ -1,6 +1,7 @@
 //! OS concretions for Unix platforms
 // (c) 2024 Ross Younger
 
+use crate::cli::styles::{HEADER, INFO, RESET};
 use crate::config::BASE_CONFIG_FILENAME;
 
 use super::SocketOptions;
@@ -70,21 +71,21 @@ but doing so requires elevated privileges."#
         println!(
             r#"
 To set the kernel limits immediately, run the following command as root:
-    sysctl -w kern.ipc.maxsockbuf={size}
-To have this setting apply at boot, add this line to /etc/sysctl.conf:
-    kern.ipc.maxsockbuf={size}
+    {INFO}sysctl -w kern.ipc.maxsockbuf={size}{RESET}
+To have this setting apply at boot, add this line to {HEADER}/etc/sysctl.conf{RESET}:
+    {INFO}kern.ipc.maxsockbuf={size}{RESET}
             "#
         );
     } else {
         println!(
             r#"
 To set the kernel limits immediately, run the following command as root:
-    sysctl -w net.core.rmem_max={rmem} -w net.core.wmem_max={wmem}
+    {INFO}sysctl -w net.core.rmem_max={rmem} -w net.core.wmem_max={wmem}{RESET}
 
 To have this setting apply at boot, on most Linux distributions you
-can create a file /etc/sysctl.d/20-qcp.conf containing:
-    net.core.rmem_max={rmem}
-    net.core.wmem_max={wmem}
+can create a file {HEADER}/etc/sysctl.d/20-qcp.conf{RESET} containing:
+    {INFO}net.core.rmem_max={rmem}
+    net.core.wmem_max={wmem}{RESET}
 "#
         );
     }
