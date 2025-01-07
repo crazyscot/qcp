@@ -2,15 +2,11 @@
 // (c) 2024 Ross Younger
 
 use figment::error::{Kind, OneOf};
+use thiserror::Error;
 
 /// A newtype wrapper implementing `Display` for errors originating from this module
-#[derive(Debug)]
-pub(crate) struct SshConfigError(figment::Error);
-impl From<figment::Error> for SshConfigError {
-    fn from(value: figment::Error) -> Self {
-        Self(value)
-    }
-}
+#[derive(Debug, Error)]
+pub(crate) struct SshConfigError(#[from] figment::Error);
 
 impl SshConfigError {
     fn rewrite_expected_type(s: &str) -> String {
