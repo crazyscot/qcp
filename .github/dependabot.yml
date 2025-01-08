@@ -10,6 +10,7 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "monthly"
+    target-branch: "dev"
     commit-message:
       prefix: "chore(deps)"
     groups:
@@ -22,6 +23,7 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    target-branch: "dev"
     commit-message:
       prefix: "chore(ci)"
       include: "scope"

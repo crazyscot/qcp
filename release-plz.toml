@@ -1,7 +1,7 @@
 [workspace]
 dependencies_update = false
 #allow_dirty = true
-git_release_draft = true
+git_release_draft = false
 git_release_body = """
 {{ changelog }}
 
@@ -70,6 +70,7 @@ commit_parsers = [
   { message = "^chore\\(release\\):", skip = true },
   { message = "^chore: release", skip = true },
   { message = "^chore\\(deps.*\\)", skip = true },
+  { message = "^chore\\(ci)", skip = true },
   { message = "^chore\\(pr\\)", skip = true },
   { message = "^chore\\(pull\\)", skip = true },
   { message = "^chore\\(skip", skip = true },
