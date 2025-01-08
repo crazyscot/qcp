@@ -3,5 +3,4 @@
 mod args;
 mod cli_main;
 pub mod styles;
-pub(crate) use args::MODE_OPTIONS;
 pub use cli_main::cli;

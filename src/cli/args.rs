@@ -5,9 +5,6 @@ use clap::{ArgAction::SetTrue, Args as _, FromArgMatches as _, Parser};
 
 use crate::{config::Manager, util::AddressFamily};
 
-/// Options that switch us into another mode i.e. which don't require source/destination arguments
-pub(crate) const MODE_OPTIONS: &[&str] = &["server", "help_buffers", "config_files", "show_config"];
-
 /// CLI argument definition
 #[derive(Debug, Parser, Clone)]
 #[command(

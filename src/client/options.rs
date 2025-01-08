@@ -60,19 +60,13 @@ pub struct Parameters {
     // JOB SPECIFICAION ====================================================================
     // (POSITIONAL ARGUMENTS!)
     /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
-    #[arg(
-        required_unless_present_any(crate::cli::MODE_OPTIONS),
-        value_name = "SOURCE"
-    )]
+    #[arg(value_name = "SOURCE")]
     pub source: Option<FileSpec>,
 
     /// Destination. This may be a file or directory. It may be local or remote.
     ///
     /// If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there.
-    #[arg(
-        required_unless_present_any(crate::cli::MODE_OPTIONS),
-        value_name = "DESTINATION"
-    )]
+    #[arg(value_name = "DESTINATION")]
     pub destination: Option<FileSpec>,
 }
 
