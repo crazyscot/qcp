@@ -105,7 +105,7 @@ impl Parameters {
     ///
     /// # Errors
     /// If both source and dest contain a remote host, Err("Only one remote file argument is supported")
-    pub(crate) fn remote_host_lossy(&self) -> anyhow::Result<Option<String>> {
+    pub(crate) fn remote_user_host_lossy(&self) -> anyhow::Result<Option<String>> {
         let src_host = self.source.as_ref().and_then(|fs| fs.host.as_ref());
         let dst_host = self.destination.as_ref().and_then(|fs| fs.host.as_ref());
         Ok(if let Some(src_host) = src_host {
@@ -117,5 +117,80 @@ impl Parameters {
             // Destination without source would be an exotic situation, but do our best anyway:
             dst_host.map(std::string::ToString::to_string)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_debug_option() {
+        let params = Parameters::parse_from(["test", "--debug"]);
+        assert!(params.debug);
+    }
+
+    #[test]
+    fn test_log_file_option() {
+        let params = Parameters::parse_from(["test", "--log-file", "log.txt"]);
+        assert_eq!(params.log_file, Some("log.txt".to_string()));
+    }
+
+    #[test]
+    fn test_quiet_option() {
+        let params = Parameters::parse_from(["test", "--quiet"]);
+        assert!(params.quiet);
+    }
+
+    #[test]
+    fn test_statistics_option() {
+        let params = Parameters::parse_from(["test", "--statistics"]);
+        assert!(params.statistics);
+    }
+
+    #[test]
+    fn test_remote_debug_option() {
+        let params = Parameters::parse_from(["test", "--remote-debug"]);
+        assert!(params.remote_debug);
+    }
+
+    #[test]
+    fn test_profile_option() {
+        let params = Parameters::parse_from(["test", "--profile"]);
+        assert!(params.profile);
+    }
+
+    #[test]
+    fn test_source_and_destination() {
+        let params = Parameters::parse_from(["test", "source.txt", "destination.txt"]);
+        assert_eq!(params.source.unwrap().to_string(), "source.txt");
+        assert_eq!(params.destination.unwrap().to_string(), "destination.txt");
+    }
+
+    #[test]
+    fn test_remote_host_lossy() {
+        let params = Parameters::parse_from(["test", "user@host:source.txt", "destination.txt"]);
+        assert_eq!(
+            params.remote_user_host_lossy().unwrap(),
+            Some("user@host".to_string())
+        );
+
+        let params = Parameters::parse_from(["test", "source.txt", "user@host:destination.txt"]);
+        assert_eq!(
+            params.remote_user_host_lossy().unwrap(),
+            Some("user@host".to_string())
+        );
+
+        let params = Parameters::parse_from(["test", "source.txt", "destination.txt"]);
+        assert_eq!(params.remote_user_host_lossy().unwrap(), None);
+    }
+
+    #[test]
+    fn test_copy_job_spec_conversion() {
+        let params = Parameters::parse_from(["test", "host:source.txt", "destination.txt"]);
+        let copy_job_spec = CopyJobSpec::try_from(&params).unwrap();
+        assert_eq!(copy_job_spec.source.to_string(), "host:source.txt");
+        assert_eq!(copy_job_spec.destination.to_string(), "destination.txt");
     }
 }
