@@ -54,7 +54,7 @@ impl FromStr for FileSpec {
 }
 
 /// Details of a file copy job.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CopyJobSpec {
     pub(crate) source: FileSpec,
     pub(crate) destination: FileSpec,
@@ -91,9 +91,8 @@ impl CopyJobSpec {
 mod test {
     type Res = anyhow::Result<()>;
     use engineering_repr::EngineeringQuantity;
-    use human_repr::HumanCount;
 
-    use super::FileSpec;
+    use super::{CopyJobSpec, FileSpec};
     use std::str::FromStr;
 
     #[test]
@@ -143,13 +142,39 @@ mod test {
         Ok(())
     }
     #[test]
+    fn not_really_ipv6() {
+        let spec = FileSpec::from_str("[1:2:3:4::5").unwrap();
+        assert_eq!(spec.host, None);
+        assert_eq!(spec.filename, "[1:2:3:4::5");
+    }
+
+    #[test]
     fn size_is_kb_not_kib() {
         // same mechanism that clap uses
         let q = "1k".parse::<EngineeringQuantity<u64>>().unwrap();
         assert_eq!(u64::from(q), 1000);
     }
     #[test]
-    fn human_repr_test() {
-        assert_eq!(1000.human_count_bare(), "1k");
+    fn throughput_mode() {
+        let job = CopyJobSpec {
+            destination: FileSpec::from_str("host:file").unwrap(),
+            ..Default::default()
+        };
+        assert_eq!(job.throughput_mode(), crate::transport::ThroughputMode::Tx);
+
+        let job2 = CopyJobSpec {
+            source: FileSpec::from_str("host:file").unwrap(),
+            ..Default::default()
+        };
+        assert_eq!(job2.throughput_mode(), crate::transport::ThroughputMode::Rx);
+    }
+    #[test]
+    fn remote_user_host() {
+        let job = CopyJobSpec {
+            source: FileSpec::from_str("user@host:file").unwrap(),
+            ..Default::default()
+        };
+        assert_eq!(job.remote_host(), "host");
+        assert_eq!(job.remote_user_host(), "user@host");
     }
 }
