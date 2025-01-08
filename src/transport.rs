@@ -20,7 +20,7 @@ pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
 
 /// Specifies whether to configure to maximise transmission throughput, receive throughput, or both.
 /// Specifying `Both` for a one-way data transfer will work, but wastes kernel memory.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ThroughputMode {
     /// We expect to send a lot but not receive
     Tx,
