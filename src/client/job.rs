@@ -53,6 +53,16 @@ impl FromStr for FileSpec {
     }
 }
 
+impl std::fmt::Display for FileSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(host) = &self.host {
+            write!(f, "{}:{}", host, self.filename)
+        } else {
+            write!(f, "{}", self.filename)
+        }
+    }
+}
+
 /// Details of a file copy job.
 #[derive(Debug, Clone, Default)]
 pub struct CopyJobSpec {
