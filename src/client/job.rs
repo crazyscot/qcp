@@ -8,12 +8,12 @@ use crate::transport::ThroughputMode;
 /// A file source or destination specified by the user
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileSpec {
-    /// The remote host for the file. This may be a hostname or an IP address.
+    /// The remote `[user@]host` for the file. This may be a hostname or an IP address.
     /// It may also be a _hostname alias_ that matches a Host section in the user's ssh config file.
     /// (In that case, the ssh config file must specify a HostName.)
     ///
     /// If not present, this is a local file.
-    pub host: Option<String>,
+    pub user_at_host: Option<String>,
     /// Filename
     ///
     /// If this is a destination, it might be a directory.
@@ -29,11 +29,11 @@ impl FromStr for FileSpec {
             match s.split_once("]:") {
                 Some((hostish, filename)) => Ok(Self {
                     // lose the leading bracket as well so it can be looked up as if a hostname
-                    host: Some(hostish[1..].to_owned()),
+                    user_at_host: Some(hostish[1..].to_owned()),
                     filename: filename.into(),
                 }),
                 None => Ok(Self {
-                    host: None,
+                    user_at_host: None,
                     filename: s.to_owned(),
                 }),
             }
@@ -41,11 +41,11 @@ impl FromStr for FileSpec {
             // Host:File or raw IPv4 address 1.2.3.4:File; or just a filename
             match s.split_once(':') {
                 Some((host, filename)) => Ok(Self {
-                    host: Some(host.to_string()),
+                    user_at_host: Some(host.to_string()),
                     filename: filename.to_string(),
                 }),
                 None => Ok(Self {
-                    host: None,
+                    user_at_host: None,
                     filename: s.to_owned(),
                 }),
             }
@@ -55,7 +55,7 @@ impl FromStr for FileSpec {
 
 impl std::fmt::Display for FileSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(host) = &self.host {
+        if let Some(host) = &self.user_at_host {
             write!(f, "{}:{}", host, self.filename)
         } else {
             write!(f, "{}", self.filename)
@@ -73,7 +73,7 @@ pub struct CopyJobSpec {
 impl CopyJobSpec {
     /// What direction of data flow should we optimise for?
     pub(crate) fn throughput_mode(&self) -> ThroughputMode {
-        if self.source.host.is_some() {
+        if self.source.user_at_host.is_some() {
             ThroughputMode::Rx
         } else {
             ThroughputMode::Tx
@@ -83,9 +83,9 @@ impl CopyJobSpec {
     /// The `[user@]hostname` portion of whichever of the arguments contained a hostname.
     fn remote_user_host(&self) -> &str {
         self.source
-            .host
+            .user_at_host
             .as_ref()
-            .unwrap_or_else(|| self.destination.host.as_ref().unwrap())
+            .unwrap_or_else(|| self.destination.user_at_host.as_ref().unwrap())
     }
 
     /// The hostname portion of whichever of the arguments contained one.
@@ -108,7 +108,7 @@ mod test {
     #[test]
     fn filename_no_host() -> Res {
         let fs = FileSpec::from_str("/dir/file")?;
-        assert!(fs.host.is_none());
+        assert!(fs.user_at_host.is_none());
         assert_eq!(fs.filename, "/dir/file");
         Ok(())
     }
@@ -116,7 +116,7 @@ mod test {
     #[test]
     fn host_no_file() -> Res {
         let fs = FileSpec::from_str("host:")?;
-        assert_eq!(fs.host.unwrap(), "host");
+        assert_eq!(fs.user_at_host.unwrap(), "host");
         assert_eq!(fs.filename, "");
         Ok(())
     }
@@ -124,7 +124,7 @@ mod test {
     #[test]
     fn host_and_file() -> Res {
         let fs = FileSpec::from_str("host:file")?;
-        assert_eq!(fs.host.unwrap(), "host");
+        assert_eq!(fs.user_at_host.unwrap(), "host");
         assert_eq!(fs.filename, "file");
         Ok(())
     }
@@ -132,7 +132,7 @@ mod test {
     #[test]
     fn bare_ipv4() -> Res {
         let fs = FileSpec::from_str("1.2.3.4:file")?;
-        assert_eq!(fs.host.unwrap(), "1.2.3.4");
+        assert_eq!(fs.user_at_host.unwrap(), "1.2.3.4");
         assert_eq!(fs.filename, "file");
         Ok(())
     }
@@ -140,21 +140,21 @@ mod test {
     #[test]
     fn bare_ipv6() -> Res {
         let fs = FileSpec::from_str("[1:2:3:4::5]:file")?;
-        assert_eq!(fs.host.unwrap(), "1:2:3:4::5");
+        assert_eq!(fs.user_at_host.unwrap(), "1:2:3:4::5");
         assert_eq!(fs.filename, "file");
         Ok(())
     }
     #[test]
     fn bare_ipv6_localhost() -> Res {
         let fs = FileSpec::from_str("[::1]:file")?;
-        assert_eq!(fs.host.unwrap(), "::1");
+        assert_eq!(fs.user_at_host.unwrap(), "::1");
         assert_eq!(fs.filename, "file");
         Ok(())
     }
     #[test]
     fn not_really_ipv6() {
         let spec = FileSpec::from_str("[1:2:3:4::5").unwrap();
-        assert_eq!(spec.host, None);
+        assert_eq!(spec.user_at_host, None);
         assert_eq!(spec.filename, "[1:2:3:4::5");
     }
 
