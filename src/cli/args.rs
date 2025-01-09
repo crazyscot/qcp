@@ -125,9 +125,9 @@ impl TryFrom<&CliArgs> for Manager {
     type Error = anyhow::Error;
 
     fn try_from(value: &CliArgs) -> Result<Self, Self::Error> {
-        let host = value.client_params.remote_user_host_lossy()?;
+        let host = value.client_params.remote_host_lossy()?;
 
-        let mut mgr = Manager::standard(host.as_deref());
+        let mut mgr = Manager::standard(host);
         mgr.merge_provider(&value.config);
         Ok(mgr)
     }

@@ -20,6 +20,18 @@ pub struct FileSpec {
     pub filename: String,
 }
 
+impl FileSpec {
+    /// Returns only the hostname part of the file, if any; the username is stripped.
+    pub(crate) fn hostname(&self) -> Option<&str> {
+        if let Some(user_host) = &self.user_at_host {
+            let (_user, host) = user_host.split_once('@').unwrap_or(("", user_host));
+            Some(host)
+        } else {
+            None
+        }
+    }
+}
+
 impl FromStr for FileSpec {
     type Err = anyhow::Error;
 
