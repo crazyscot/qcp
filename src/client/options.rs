@@ -105,20 +105,23 @@ impl Parameters {
     ///
     /// # Errors
     /// If both source and dest contain a remote host, Err("Only one remote file argument is supported")
-    pub(crate) fn remote_user_host_lossy(&self) -> anyhow::Result<Option<String>> {
-        let src_host = self.source.as_ref().and_then(|fs| fs.user_at_host.as_ref());
+    pub(crate) fn remote_host_lossy(&self) -> anyhow::Result<Option<&str>> {
+        let src_host = self
+            .source
+            .as_ref()
+            .and_then(super::job::FileSpec::hostname);
         let dst_host = self
             .destination
             .as_ref()
-            .and_then(|fs| fs.user_at_host.as_ref());
+            .and_then(super::job::FileSpec::hostname);
         Ok(if let Some(src_host) = src_host {
             if dst_host.is_some() {
                 anyhow::bail!("Only one remote file argument is supported");
             }
-            Some(src_host.to_string())
+            Some(src_host)
         } else {
             // Destination without source would be an exotic situation, but do our best anyway:
-            dst_host.map(std::string::ToString::to_string)
+            dst_host
         })
     }
 }
@@ -174,19 +177,13 @@ mod tests {
     #[test]
     fn test_remote_host_lossy() {
         let params = Parameters::parse_from(["test", "user@host:source.txt", "destination.txt"]);
-        assert_eq!(
-            params.remote_user_host_lossy().unwrap(),
-            Some("user@host".to_string())
-        );
+        assert_eq!(params.remote_host_lossy().unwrap(), Some("host"));
 
         let params = Parameters::parse_from(["test", "source.txt", "user@host:destination.txt"]);
-        assert_eq!(
-            params.remote_user_host_lossy().unwrap(),
-            Some("user@host".to_string())
-        );
+        assert_eq!(params.remote_host_lossy().unwrap(), Some("host"));
 
         let params = Parameters::parse_from(["test", "source.txt", "destination.txt"]);
-        assert_eq!(params.remote_user_host_lossy().unwrap(), None);
+        assert_eq!(params.remote_host_lossy().unwrap(), None);
     }
 
     #[test]
