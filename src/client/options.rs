@@ -85,7 +85,7 @@ impl TryFrom<&Parameters> for CopyJobSpec {
             .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
             .clone();
 
-        if !(source.host.is_none() ^ destination.host.is_none()) {
+        if !(source.user_at_host.is_none() ^ destination.user_at_host.is_none()) {
             anyhow::bail!("One file argument must be remote");
         }
 
@@ -106,8 +106,11 @@ impl Parameters {
     /// # Errors
     /// If both source and dest contain a remote host, Err("Only one remote file argument is supported")
     pub(crate) fn remote_user_host_lossy(&self) -> anyhow::Result<Option<String>> {
-        let src_host = self.source.as_ref().and_then(|fs| fs.host.as_ref());
-        let dst_host = self.destination.as_ref().and_then(|fs| fs.host.as_ref());
+        let src_host = self.source.as_ref().and_then(|fs| fs.user_at_host.as_ref());
+        let dst_host = self
+            .destination
+            .as_ref()
+            .and_then(|fs| fs.user_at_host.as_ref());
         Ok(if let Some(src_host) = src_host {
             if dst_host.is_some() {
                 anyhow::bail!("Only one remote file argument is supported");

@@ -179,7 +179,7 @@ async fn manage_request(
         let sp = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
         // Called function returns its payload size.
         // This async block reports on errors.
-        if copy_spec.source.host.is_some() {
+        if copy_spec.source.user_at_host.is_some() {
             // This is a Get
             do_get(sp, &copy_spec, display, spinner, &config, quiet)
                 .instrument(trace_span!("GET", filename = copy_spec.source.filename))
