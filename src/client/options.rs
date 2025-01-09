@@ -88,10 +88,15 @@ impl TryFrom<&Parameters> for CopyJobSpec {
         if !(source.user_at_host.is_none() ^ destination.user_at_host.is_none()) {
             anyhow::bail!("One file argument must be remote");
         }
+        let user_at_host = source
+            .user_at_host
+            .clone()
+            .unwrap_or_else(|| destination.user_at_host.clone().unwrap_or_default());
 
         Ok(Self {
             source,
             destination,
+            user_at_host,
         })
     }
 }
@@ -188,9 +193,19 @@ mod tests {
 
     #[test]
     fn test_copy_job_spec_conversion() {
-        let params = Parameters::parse_from(["test", "host:source.txt", "destination.txt"]);
+        let params = Parameters::parse_from(["test", "user@host:source.txt", "destination.txt"]);
         let copy_job_spec = CopyJobSpec::try_from(&params).unwrap();
-        assert_eq!(copy_job_spec.source.to_string(), "host:source.txt");
+        assert_eq!(copy_job_spec.source.to_string(), "user@host:source.txt");
         assert_eq!(copy_job_spec.destination.to_string(), "destination.txt");
+        assert_eq!(copy_job_spec.remote_host(), "host");
+        assert_eq!(copy_job_spec.user_at_host, "user@host");
+    }
+
+    #[test]
+    fn there_can_be_only_one_remote() {
+        let params =
+            Parameters::parse_from(["test", "user@host:source.txt", "user@host:destination.txt"]);
+        let _ = CopyJobSpec::try_from(&params).expect_err("but there can be only one!");
+        assert!(params.remote_host_lossy().is_err());
     }
 }

@@ -5,8 +5,13 @@ use std::str::FromStr;
 
 use crate::transport::ThroughputMode;
 
+/// Strips the optional user@ part off a hostname
+fn hostname_of(user_at_host: &str) -> &str {
+    user_at_host.split_once('@').unwrap_or(("", user_at_host)).1
+}
+
 /// A file source or destination specified by the user
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileSpec {
     /// The remote `[user@]host` for the file. This may be a hostname or an IP address.
     /// It may also be a _hostname alias_ that matches a Host section in the user's ssh config file.
@@ -23,12 +28,7 @@ pub struct FileSpec {
 impl FileSpec {
     /// Returns only the hostname part of the file, if any; the username is stripped.
     pub(crate) fn hostname(&self) -> Option<&str> {
-        if let Some(user_host) = &self.user_at_host {
-            let (_user, host) = user_host.split_once('@').unwrap_or(("", user_host));
-            Some(host)
-        } else {
-            None
-        }
+        self.user_at_host.as_ref().map(|s| hostname_of(s))
     }
 }
 
@@ -76,10 +76,13 @@ impl std::fmt::Display for FileSpec {
 }
 
 /// Details of a file copy job.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CopyJobSpec {
     pub(crate) source: FileSpec,
     pub(crate) destination: FileSpec,
+    /// The `[user@]host` part of whichever of the source or destination contained one.
+    /// (There can be only one.)
+    pub(crate) user_at_host: String,
 }
 
 impl CopyJobSpec {
@@ -92,20 +95,9 @@ impl CopyJobSpec {
         }
     }
 
-    /// The `[user@]hostname` portion of whichever of the arguments contained a hostname.
-    fn remote_user_host(&self) -> &str {
-        self.source
-            .user_at_host
-            .as_ref()
-            .unwrap_or_else(|| self.destination.user_at_host.as_ref().unwrap())
-    }
-
     /// The hostname portion of whichever of the arguments contained one.
     pub(crate) fn remote_host(&self) -> &str {
-        let user_host = self.remote_user_host();
-        // It might be user@host, or it might be just the hostname or IP.
-        let (_, host) = user_host.split_once('@').unwrap_or(("", user_host));
-        host
+        hostname_of(&self.user_at_host)
     }
 }
 
@@ -114,7 +106,7 @@ mod test {
     type Res = anyhow::Result<()>;
     use engineering_repr::EngineeringQuantity;
 
-    use super::{CopyJobSpec, FileSpec};
+    use super::FileSpec;
     use std::str::FromStr;
 
     #[test]
@@ -175,28 +167,5 @@ mod test {
         // same mechanism that clap uses
         let q = "1k".parse::<EngineeringQuantity<u64>>().unwrap();
         assert_eq!(u64::from(q), 1000);
-    }
-    #[test]
-    fn throughput_mode() {
-        let job = CopyJobSpec {
-            destination: FileSpec::from_str("host:file").unwrap(),
-            ..Default::default()
-        };
-        assert_eq!(job.throughput_mode(), crate::transport::ThroughputMode::Tx);
-
-        let job2 = CopyJobSpec {
-            source: FileSpec::from_str("host:file").unwrap(),
-            ..Default::default()
-        };
-        assert_eq!(job2.throughput_mode(), crate::transport::ThroughputMode::Rx);
-    }
-    #[test]
-    fn remote_user_host() {
-        let job = CopyJobSpec {
-            source: FileSpec::from_str("user@host:file").unwrap(),
-            ..Default::default()
-        };
-        assert_eq!(job.remote_host(), "host");
-        assert_eq!(job.remote_user_host(), "user@host");
     }
 }
