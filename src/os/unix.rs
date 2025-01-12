@@ -60,25 +60,25 @@ impl SocketOptions for UdpSocket {
 /// Outputs helpful information for the sysadmin
 pub(crate) fn print_udp_buffer_size_help_message(rmem: u64, wmem: u64) {
     println!(
-        r#"For best performance, it is necessary to set the kernel UDP buffer size limits.
+        r"For best performance, it is necessary to set the kernel UDP buffer size limits.
 This program attempts to automatically set buffer sizes for itself,
-but doing so requires elevated privileges."#
+but doing so requires elevated privileges."
     );
 
     if bsdish() {
         // Received wisdom about BSD kernels leads me to recommend 115% of the max. I'm not sure this is necessary.
         let size = std::cmp::max(rmem, wmem) * 115 / 100;
         println!(
-            r#"
+            r"
 To set the kernel limits immediately, run the following command as root:
     {INFO}sysctl -w kern.ipc.maxsockbuf={size}{RESET}
 To have this setting apply at boot, add this line to {HEADER}/etc/sysctl.conf{RESET}:
     {INFO}kern.ipc.maxsockbuf={size}{RESET}
-            "#
+            "
         );
     } else {
         println!(
-            r#"
+            r"
 To set the kernel limits immediately, run the following command as root:
     {INFO}sysctl -w net.core.rmem_max={rmem} -w net.core.wmem_max={wmem}{RESET}
 
@@ -86,7 +86,7 @@ To have this setting apply at boot, on most Linux distributions you
 can create a file {HEADER}/etc/sysctl.d/20-qcp.conf{RESET} containing:
     {INFO}net.core.rmem_max={rmem}
     net.core.wmem_max={wmem}{RESET}
-"#
+"
         );
     }
     // TODO add other OS-specific notes here
