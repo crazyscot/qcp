@@ -5,9 +5,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::config::Configuration;
-use crate::protocol::control::{ClientMessage, ClosedownReport, ServerMessage};
-use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, Status};
-use crate::protocol::{self, StreamPair};
+use crate::protocol::control::{
+    ClientMessage, ClosedownReport, ClosedownReportV1, CompatibilityLevel, ServerMessage,
+    ServerMessageV1, BANNER,
+};
+use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, ResponseV1, Status};
+use crate::protocol::{common::ProtocolMessage as _, common::StreamPair};
 use crate::transport::ThroughputMode;
 use crate::util::{io, socket, Credentials};
 
@@ -28,24 +31,28 @@ use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 pub async fn server_main(config: &Configuration) -> anyhow::Result<()> {
     let mut stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
+
     // There are tricks you can use to get an unbuffered handle to stdout, but at a typing cost.
     // For now we'll manually flush after each write.
 
-    stdout
-        .write_all(protocol::control::BANNER.as_bytes())
-        .await?;
+    stdout.write_all(BANNER.as_bytes()).await?;
     stdout.flush().await?;
 
-    let client_message = ClientMessage::read(&mut stdin).await.map_err(|_| {
-        // try to be helpful if there's a human reading
-        anyhow::anyhow!(
-            "In server mode, this program expects to receive a binary data packet on stdin"
-        )
-    })?;
+    let client_message = ClientMessage::from_reader_async_framed(&mut stdin)
+        .await
+        .map_err(|_| {
+            // try to be helpful if there's a human reading
+            anyhow::anyhow!(
+                "In server mode, this program expects to receive a binary data packet on stdin"
+            )
+        })?;
+
+    let compat = CompatibilityLevel::from(client_message.compatibility);
     debug!(
-        "got client message length {}, using {:?}",
+        "got client cert length {}, using {:?}, compat level {compat} (raw {})",
         client_message.cert.len(),
         client_message.connection_type,
+        client_message.compatibility,
     );
 
     let bandwidth_info = config.format_transport_config().to_string();
@@ -53,16 +60,20 @@ pub async fn server_main(config: &Configuration) -> anyhow::Result<()> {
 
     let credentials = Credentials::generate()?;
     let (endpoint, warning) = create_endpoint(&credentials, client_message, config)?;
+    let warning = warning.unwrap_or_default();
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");
-    ServerMessage::write(
-        &mut stdout,
-        local_addr.port(),
-        &credentials.certificate,
-        &credentials.hostname,
-        warning.as_deref(),
-        &bandwidth_info,
-    )
+    // FUTURE: When later versions of ServerMessage are created, check client compatibility and send the appropriate version.
+    ServerMessage::V1(ServerMessageV1 {
+        compatibility: CompatibilityLevel::V1.into(),
+        port: local_addr.port(),
+        cert: credentials.certificate.to_vec(),
+        name: credentials.hostname,
+        warning,
+        bandwidth_info,
+        extension: 0,
+    })
+    .to_writer_async_framed(&mut stdout)
     .await?;
     stdout.flush().await?;
 
@@ -100,7 +111,12 @@ pub async fn server_main(config: &Configuration) -> anyhow::Result<()> {
     endpoint.close(1u8.into(), "finished".as_bytes());
     endpoint.wait_idle().await;
     let stats = stats_rx.try_recv().unwrap_or_default();
-    ClosedownReport::write(&mut stdout, &stats).await?;
+
+    // FUTURE: When later versions of ClosedownReport are created, check client compatibility and send the appropriate version.
+    ClosedownReport::V1(ClosedownReportV1::from(&stats))
+        .to_writer_async_framed(&mut stdout)
+        .await?;
+    stdout.flush().await?;
     trace!("finished");
     Ok(())
 }
@@ -183,7 +199,7 @@ async fn handle_connection(
 
 async fn handle_stream(mut sp: StreamPair, file_buffer_size: usize) -> anyhow::Result<()> {
     trace!("reading command");
-    let cmd = Command::read(&mut sp.recv).await?;
+    let cmd = Command::from_reader_async_framed(&mut sp.recv).await?;
     match cmd {
         Command::Get(get) => {
             handle_get(sp, get.filename.clone(), file_buffer_size)
@@ -223,8 +239,9 @@ async fn handle_get(
 
     let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
 
-    let header = FileHeader::serialize_direct(meta.len(), protocol_filename);
-    stream.send.write_all(&header).await?;
+    FileHeader::new_v1(meta.len(), protocol_filename)
+        .to_writer_async_framed(&mut stream.send)
+        .await?;
 
     trace!("sending file payload");
     let result = tokio::io::copy_buf(&mut file, &mut stream.send).await;
@@ -244,8 +261,9 @@ async fn handle_get(
     }
 
     trace!("sending trailer");
-    let trailer = FileTrailer::serialize_direct();
-    stream.send.write_all(&trailer).await?;
+    FileTrailer::V1
+        .to_writer_async_framed(&mut stream.send)
+        .await?;
     stream.send.flush().await?;
     trace!("complete");
     Ok(())
@@ -304,8 +322,9 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
     trace!("responding OK");
     let ((), header) = tokio::try_join!(
         send_response(&mut stream.send, Status::Ok, None),
-        FileHeader::read(&mut stream.recv)
+        FileHeader::from_reader_async_framed(&mut stream.recv)
     )?;
+    let FileHeader::V1(header) = header;
 
     debug!("PUT {} -> destination", &header.filename);
     if append_filename {
@@ -319,7 +338,7 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
         }
     };
     if file
-        .set_len(header.size)
+        .set_len(header.size.0)
         .await
         .inspect_err(|e| error!("Could not set destination file length: {e}"))
         .is_err()
@@ -328,7 +347,7 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
     };
 
     trace!("receiving file payload");
-    let mut limited_recv = stream.recv.take(header.size);
+    let mut limited_recv = stream.recv.take(header.size.0);
     if tokio::io::copy(&mut limited_recv, &mut file)
         .await
         .inspect_err(|e| error!("Failed to write to destination: {e}"))
@@ -340,7 +359,7 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
     stream.recv = limited_recv.into_inner();
 
     trace!("receiving trailer");
-    let _trailer = FileTrailer::read(&mut stream.recv).await?;
+    let _trailer = FileTrailer::from_reader_async_framed(&mut stream.recv).await?;
 
     let f = file.flush();
     send_response(&mut stream.send, Status::Ok, None).await?;
@@ -354,6 +373,10 @@ async fn send_response(
     status: Status,
     message: Option<&str>,
 ) -> anyhow::Result<()> {
-    let buf = Response::serialize_direct(status, message);
-    Ok(send.write_all(&buf).await?)
+    Response::V1(ResponseV1::new(
+        status,
+        message.map(std::string::ToString::to_string),
+    ))
+    .to_writer_async_framed(send)
+    .await
 }

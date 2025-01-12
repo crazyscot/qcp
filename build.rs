@@ -2,14 +2,6 @@
 
 fn main() {
     process_version_string();
-
-    capnpc::CompilerCommand::new()
-        .src_prefix("schema")
-        .file("schema/session.capnp")
-        .file("schema/control.capnp")
-        .default_parent_module(vec!["protocol".into()])
-        .run()
-        .expect("capnpc invocation failed");
 }
 
 fn process_version_string() {

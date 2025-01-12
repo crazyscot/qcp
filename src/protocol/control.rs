@@ -17,293 +17,307 @@
 //! * S ➡️ C: [`ClosedownReport`]
 //! * C ➡️ S: (closes control channel; server takes this as a cue to exit)
 //!
-//! On the wire these are [CapnProto] messages, sent using standard framing.
+//! On the wire these are [BARE] messages, sent using standard framing.
+//!
+//! # See also
+//! [Common](super::common) protocol functions
 //!
 //! [quic]: https://quicwg.github.io/
-//! [capnproto]: https://capnproto.org/
+//! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 
-pub use super::control_capnp::client_message::ConnectionType;
+use std::net::IpAddr;
 
-use super::control_capnp;
-use anyhow::Result;
-use capnp::message::ReaderOptions;
 use quinn::ConnectionStats;
-use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
+use serde::{Deserialize, Serialize};
+use serde_bare::Uint;
+
+use super::common::ProtocolMessage;
 
 /// Server banner message, sent on stdout and checked by the client
-pub const BANNER: &str = "qcp-server-1\n";
+pub const BANNER: &str = "qcp-server-2\n";
 
-/// Helper type for [`control_capnp::client_message`]
-#[derive(Debug)]
-#[allow(missing_docs)]
-pub struct ClientMessage {
-    pub cert: Vec<u8>,
-    pub connection_type: ConnectionType,
+/// Protocol sub-version compatibility identifier
+///
+/// This forms part of the negotiation between client and server.
+/// An endpoint declares the highest version of the protocol that it understands.
+///
+/// An endpoint MUST NOT send any structure variants newer than its peer understands.
+///
+/// While this enum is part of the control protocol, it affects both control and session; the same principles
+/// of compatibility apply.
+#[repr(u16)]
+#[derive(Clone, Copy, Debug, strum::Display, PartialEq, Eq, strum::FromRepr)]
+pub enum CompatibilityLevel {
+    /// Indicates that we do not know the peer's compatibility level.
+    /// This value should never be seen on the wire.
+    UNKNOWN = 0,
+
+    /// Version 1 was introduced in qcp 0.3
+    V1 = 1,
+
+    /// Special value indicating the peer is newer than our latest version.
+    /// This value should never be seen on the wire.
+    /// Where the peer is `NEWER` than us, we would expect to use the latest protocol version we know about.
+    NEWER = 65535,
 }
 
-impl ClientMessage {
-    // This is weirdly asymmetric to avoid needless allocs.
-    /// One-stop serializer
-    pub async fn write<W>(write: &mut W, cert: &[u8], conn_type: ConnectionType) -> Result<()>
-    where
-        W: tokio::io::AsyncWrite + Unpin,
-    {
-        let mut msg = ::capnp::message::Builder::new_default();
-        let mut builder = msg.init_root::<control_capnp::client_message::Builder<'_>>();
-        builder.set_cert(cert);
-        builder.set_connection_type(conn_type);
-        capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
-        Ok(())
-    }
-    /// Deserializer
-    pub async fn read<R>(read: &mut R) -> Result<Self>
-    where
-        R: tokio::io::AsyncRead + Unpin,
-    {
-        let reader =
-            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
-        let msg_reader: control_capnp::client_message::Reader<'_> = reader.get_root()?;
-        let cert = msg_reader.get_cert()?.to_vec();
-        let connection_type: ConnectionType = msg_reader
-            .get_connection_type()
-            .map_err(|_| anyhow::anyhow!("incompatible ClientMessage"))?;
-        Ok(Self {
-            cert,
-            connection_type,
-        })
-    }
-}
-
-/// Helper type for [`control_capnp::server_message`]
-pub struct ServerMessage {
-    /// Port the server is bound to
-    pub port: u16,
-    /// Certificate data (DER encoded)
-    pub cert: Vec<u8>,
-    /// Server's idea of its hostname (should match the certificate)
-    pub name: String,
-    /// Server warning message (if any)
-    pub warning: Option<String>,
-    /// Server bandwidth information message
-    pub bandwidth_info: String,
-}
-
-impl std::fmt::Debug for ServerMessage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ServerMessage")
-            .field("port", &self.port)
-            .field("cert length", &self.cert.len())
-            .field("name", &self.name)
-            .field("warning", &self.warning)
-            .field("bandwidth_info", &self.bandwidth_info)
-            .finish()
-    }
-}
-
-impl ServerMessage {
-    /// Serializer
-    // This is weirdly asymmetric to avoid needless allocs.
-    pub async fn write<W>(
-        write: &mut W,
-        port: u16,
-        cert: &[u8],
-        name: &str,
-        warning: Option<&str>,
-        bandwidth_info: &str,
-    ) -> Result<()>
-    where
-        W: tokio::io::AsyncWrite + Unpin,
-    {
-        let mut msg = ::capnp::message::Builder::new_default();
-        let mut builder = msg.init_root::<control_capnp::server_message::Builder<'_>>();
-        builder.set_port(port);
-        builder.set_cert(cert);
-        builder.set_name(name);
-        if let Some(w) = warning {
-            builder.set_warning(w);
+impl CompatibilityLevel {
+    /// Returns the underlying u16 representation of this value
+    #[must_use]
+    pub fn discriminant(self) -> u16 {
+        #[allow(unsafe_code)]
+        // SAFETY: As this type is marked `repr(u16)`, its contents are guaranteed to lie in the range 0..65535.
+        unsafe {
+            std::mem::transmute(self)
         }
-        builder.set_bandwidth_info(bandwidth_info);
-        capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
-        Ok(())
-    }
-
-    /// Deserializer
-    pub async fn read<R>(read: &mut R) -> anyhow::Result<Self>
-    where
-        R: tokio::io::AsyncRead + Unpin,
-    {
-        let reader =
-            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
-        let msg_reader: control_capnp::server_message::Reader<'_> = reader.get_root()?;
-        let cert = msg_reader.get_cert()?.to_vec();
-        let name = msg_reader.get_name()?.to_str()?.to_string();
-        let port = msg_reader.get_port();
-        let warning = msg_reader.get_warning()?.to_str()?;
-        let warning = if warning.is_empty() {
-            None
-        } else {
-            Some(warning.to_string())
-        };
-        let bandwidth_info = msg_reader.get_bandwidth_info()?.to_str()?.to_string();
-        Ok(Self {
-            port,
-            cert,
-            name,
-            warning,
-            bandwidth_info,
-        })
     }
 }
 
-/// Helper type for [`control_capnp::closedown_report`]
-#[derive(Clone, Copy, Debug)]
-pub struct ClosedownReport {
+impl From<u16> for CompatibilityLevel {
+    /// This conversion is infallible because any unknown value is mapped to `VersionCompatibility::NEWER`.
+    fn from(value: u16) -> Self {
+        match CompatibilityLevel::from_repr(value) {
+            Some(v) => v,
+            None => CompatibilityLevel::NEWER,
+        }
+    }
+}
+impl From<CompatibilityLevel> for u16 {
+    fn from(value: CompatibilityLevel) -> Self {
+        value.discriminant()
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone, Copy)]
+/// Protocol representation of a connection type
+///
+/// Unlike [`AddressFamily`](crate::util::AddressFamily) there is no ANY; types must be explicit here.
+#[repr(u8)]
+pub enum ConnectionType {
+    /// IP version 4
+    #[default]
+    Ipv4 = 4,
+    /// IP version 6
+    Ipv6 = 6,
+}
+
+impl From<IpAddr> for ConnectionType {
+    fn from(value: IpAddr) -> Self {
+        match value {
+            IpAddr::V4(_) => ConnectionType::Ipv4,
+            IpAddr::V6(_) => ConnectionType::Ipv6,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+/// The initial message from client to server.
+///
+/// This is mildly tricky, as we have to send it without knowing what version the server supports.
+pub struct ClientMessage {
+    /// Client's self-signed certificate (DER)
+    pub cert: Vec<u8>,
+    /// The connection type to use (the type of socket we want the server to bind)
+    pub connection_type: ConnectionType,
+    /// Protocol compatibility version identifier
+    ///
+    /// This identifies the client's maximum supported protocol sub-version.
+    ///
+    /// N.B. This is not sent as an enum to avoid breaking the server when we have a newer version!
+    pub compatibility: u16,
+    /// Extension field, reserved for future expansion; for now, must be set to 0
+    pub extension: u8,
+}
+impl ProtocolMessage for ClientMessage {}
+
+#[derive(Serialize, Default, Deserialize, PartialEq, Eq, Debug)]
+#[repr(u16)]
+/// The initial message from client to server
+pub enum ServerMessage {
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    V1(ServerMessageV1) = 1,
+
+    /// Special value indicating a client has not yet read the remote `ServerMessage`.
+    /// This value should never be seen on the wire.
+    #[default]
+    ToFollow = 0,
+}
+impl ProtocolMessage for ServerMessage {}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+/// Version 1 of the message from server to client.
+/// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+pub struct ServerMessageV1 {
+    /// Protocol compatibility version identifier
+    ///
+    /// This identifies the server's maximum supported protocol sub-version.
+    ///
+    /// N.B. This is not sent as an enum to avoid breaking the client when we have a newer version!
+    pub compatibility: u16,
+
+    /// UDP port the server has bound to
+    pub port: u16,
+    /// Server's self-signed certificate (DER)
+    pub cert: Vec<u8>,
+    /// Name in the server cert (this saves us having to unpick it from the certificate)
+    pub name: String,
+    /// If non-zero length, this is a warning message to be relayed to a human
+    pub warning: String,
+    /// Reports the server's active bandwidth configuration
+    pub bandwidth_info: String,
+    /// Extension field, reserved for future expansion; for now, must be set to 0
+    pub extension: u8,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone)]
+#[repr(u16)]
+/// The statistics sent by the server when the job is done
+pub enum ClosedownReport {
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    V1(ClosedownReportV1) = 1,
+}
+impl ProtocolMessage for ClosedownReport {}
+
+/// Version 1 of the closedown report.
+/// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Copy, Clone)]
+pub struct ClosedownReportV1 {
     /// Final congestion window
-    pub cwnd: u64,
-    /// Sent packet count
-    pub sent_packets: u64,
-    /// Send byte count
-    pub sent_bytes: u64,
-    /// Lost packet count
-    pub lost_packets: u64,
-    /// Lost packet total payload
-    pub lost_bytes: u64,
+    pub cwnd: Uint,
+    /// Number of packets sent
+    pub sent_packets: Uint,
+    /// Number of packets lost
+    pub lost_packets: Uint,
+    /// Number of bytes lost
+    pub lost_bytes: Uint,
     /// Number of congestion events detected
-    pub congestion_events: u64,
-    /// Number of black hole events detected
-    pub black_holes_detected: u64,
+    pub congestion_events: Uint,
+    /// Number of black holes detected
+    pub black_holes: Uint,
+    /// Number of bytes sent
+    pub sent_bytes: Uint,
+    /// Extension field, reserved for future expansion; for now, must be set to 0
+    pub extension: u8,
 }
 
-impl ClosedownReport {
-    /// Serializer
-    pub async fn write<W>(write: &mut W, stats: &ConnectionStats) -> Result<()>
-    where
-        W: tokio::io::AsyncWrite + Unpin,
-    {
+impl From<&ConnectionStats> for ClosedownReportV1 {
+    fn from(stats: &ConnectionStats) -> Self {
         let ps = &stats.path;
-        let mut msg = ::capnp::message::Builder::new_default();
-        let mut builder = msg.init_root::<control_capnp::closedown_report::Builder<'_>>();
-        builder.set_final_congestion_window(ps.cwnd);
-        builder.set_sent_packets(ps.sent_packets);
-        builder.set_sent_bytes(stats.udp_tx.bytes);
-        builder.set_lost_packets(ps.lost_packets);
-        builder.set_lost_bytes(ps.lost_bytes);
-        builder.set_congestion_events(ps.congestion_events);
-        builder.set_black_holes(ps.black_holes_detected);
-        capnp_futures::serialize::write_message(write.compat_write(), &msg).await?;
-        Ok(())
-    }
-
-    /// Deserializer
-    pub async fn read<R>(read: &mut R) -> anyhow::Result<Self>
-    where
-        R: tokio::io::AsyncRead + Unpin,
-    {
-        let reader =
-            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
-        let msg_reader: control_capnp::closedown_report::Reader<'_> = reader.get_root()?;
-        let cwnd = msg_reader.get_final_congestion_window();
-        let sent_packets = msg_reader.get_sent_packets();
-        let sent_bytes = msg_reader.get_sent_bytes();
-        let lost_packets = msg_reader.get_lost_packets();
-        let lost_bytes = msg_reader.get_lost_bytes();
-        let congestion_events = msg_reader.get_congestion_events();
-        let black_holes_detected = msg_reader.get_black_holes();
-
-        Ok(Self {
-            cwnd,
-            sent_packets,
-            sent_bytes,
-            lost_packets,
-            lost_bytes,
-            congestion_events,
-            black_holes_detected,
-        })
+        Self {
+            cwnd: Uint(ps.cwnd),
+            sent_packets: Uint(ps.sent_packets),
+            sent_bytes: Uint(stats.udp_tx.bytes),
+            lost_packets: Uint(ps.lost_packets),
+            lost_bytes: Uint(ps.lost_bytes),
+            congestion_events: Uint(ps.congestion_events),
+            black_holes: Uint(ps.black_holes_detected),
+            extension: 0,
+        }
     }
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
+    use std::{
+        io::Cursor,
+        net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    };
 
-    // These tests are really only exercising capnp, proving that we know how to drive it correctly.
+    use quinn::ConnectionStats;
+    use serde::{Deserialize, Serialize};
 
-    use super::{control_capnp, ClientMessage, ServerMessage};
-    use anyhow::Result;
-    use capnp::{message::ReaderOptions, serialize};
+    use crate::protocol::{
+        common::ProtocolMessage,
+        control::{CompatibilityLevel, ConnectionType},
+    };
 
-    fn encode_client(cert: &[u8]) -> Vec<u8> {
-        let mut msg = ::capnp::message::Builder::new_default();
-        let mut client_msg = msg.init_root::<control_capnp::client_message::Builder<'_>>();
-        client_msg.set_cert(cert);
-        serialize::write_message_to_words(&msg)
-    }
+    use super::ClosedownReportV1;
 
-    fn decode_client(wire: &[u8]) -> Result<ClientMessage> {
-        use control_capnp::client_message::{self};
-        let reader = serialize::read_message(wire, ReaderOptions::new())?;
-        let cert_reader: client_message::Reader<'_> = reader.get_root()?;
-        Ok(ClientMessage {
-            cert: Vec::<u8>::from(cert_reader.get_cert()?),
-            connection_type: cert_reader.get_connection_type()?,
-        })
-    }
-    fn encode_server(port: u16, cert: &[u8]) -> Vec<u8> {
-        let mut msg = ::capnp::message::Builder::new_default();
-        let mut server_msg = msg.init_root::<control_capnp::server_message::Builder<'_>>();
-        server_msg.set_port(port);
-        server_msg.set_cert(cert);
-        serialize::write_message_to_words(&msg)
-    }
-    fn decode_server(wire: &[u8]) -> Result<ServerMessage> {
-        use control_capnp::server_message;
-        let reader = serialize::read_message(wire, ReaderOptions::new())?;
-        let msg_reader: server_message::Reader<'_> = reader.get_root()?;
-        let cert = Vec::<u8>::from(msg_reader.get_cert()?);
-        let port = msg_reader.get_port();
-        Ok(ServerMessage {
-            port,
-            cert,
-            name: "localhost".to_string(),
-            warning: Some("foo".to_string()),
-            bandwidth_info: "bar".into(),
-        })
+    #[test]
+    fn test_connection_type() {
+        let ip4 = IpAddr::from(Ipv4Addr::LOCALHOST);
+        let ct4 = ConnectionType::from(ip4);
+        assert_eq!(ct4, ConnectionType::Ipv4);
+
+        let ip6 = IpAddr::from(Ipv6Addr::LOCALHOST);
+        let ct6 = ConnectionType::from(ip6);
+        assert_eq!(ct6, ConnectionType::Ipv6);
     }
 
     #[test]
-    fn client_pairwise_alloc() -> Result<()> {
-        // A single round trip test: encode, decode, check.
+    fn test_closedown_report() {
+        use serde_bare::Uint;
 
-        // Random certificate data of a given length
-        let cert = {
-            let mut temp = Vec::<u8>::with_capacity(128);
-            temp.fill_with(|| fastrand::u8(0..255));
-            temp
+        let mut stats = ConnectionStats::default();
+        stats.path.cwnd = 42;
+        stats.path.black_holes_detected = 88;
+        stats.udp_tx.bytes = 12345;
+        let report = ClosedownReportV1::from(&stats);
+        let expected = ClosedownReportV1 {
+            cwnd: Uint(42),
+            black_holes: Uint(88),
+            sent_bytes: Uint(12345),
+            ..Default::default()
         };
-
-        let wire = encode_client(&cert);
-        println!("Client message encoded size is {}", wire.len());
-        let decoded = decode_client(&wire)?;
-        assert_eq!(cert, decoded.cert);
-        Ok(())
+        assert_eq!(report, expected);
     }
 
     #[test]
-    fn server_pairwise_alloc() -> Result<()> {
-        // A single round trip test: encode, decode, check.
+    fn convert_version_compat() {
+        assert_eq!(u16::from(CompatibilityLevel::V1), 1);
+        assert_eq!(CompatibilityLevel::from(1), CompatibilityLevel::V1);
+        assert_eq!(CompatibilityLevel::from(12345), CompatibilityLevel::NEWER);
+    }
 
-        // Random certificate data of a given length
-        let cert = {
-            let mut temp = Vec::<u8>::with_capacity(128);
-            temp.fill_with(|| fastrand::u8(0..255));
-            temp
+    /// Time-travelling compatibility: Version 1 of the structure.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct Test1 {
+        i: i32,
+        /// In v2 this is an Optional member. In v1 we simply encode as zero, which is interpreted as an Option that is not present.
+        extension: u8,
+    }
+    impl ProtocolMessage for Test1 {}
+
+    /// Time-travelling compatibility: Version 2 of the structure
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct Test2 {
+        i: i32,
+        // In v1 this is a u8 sent as zero.
+        whatever: Option<u64>,
+    }
+    impl ProtocolMessage for Test2 {}
+
+    #[test]
+    /// Confirms that the "extension: u8" trick works, forwards through time.
+    /// That is to say, we can encode V1 and decode it as V2.
+    fn forwards_compatibility() {
+        let t1 = Test1 {
+            i: 42,
+            extension: 0,
         };
-        let port = fastrand::u16(1..65535);
+        let mut buf = Vec::<u8>::new();
+        t1.to_writer_framed(&mut buf).unwrap();
 
-        let wire = encode_server(port, &cert);
-        println!("Server message encoded size is {}", wire.len());
-        let decoded = decode_server(&wire)?;
-        assert_eq!(cert, decoded.cert);
-        assert_eq!(port, decoded.port);
-        Ok(())
+        let decoded = Test2::from_reader_framed(&mut Cursor::new(buf)).unwrap();
+        // The real test here is that decode succeeded.
+        assert_eq!(decoded.i, t1.i);
+        assert!(decoded.whatever.is_none());
+    }
+
+    #[test]
+    /// Confirms that the "extension: u8" trick works, backwards through time.
+    /// That is to say, we can encode V2 of the structure and decode it as V1 (without its optional fields).
+    fn backwards_compatibility() {
+        let t2 = Test2 {
+            i: 78,
+            whatever: Some(12345),
+        };
+        let mut buf = Vec::<u8>::new();
+        t2.to_writer_framed(&mut buf).unwrap();
+
+        let decoded = Test1::from_reader_framed(&mut Cursor::new(buf)).unwrap();
+        // The real test here is that decode succeeded.
+        assert_eq!(decoded.i, t2.i);
+        assert_eq!(decoded.extension, 1);
     }
 }

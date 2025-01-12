@@ -44,8 +44,6 @@ The binaries are statically linked. Linux builds should work on all recent distr
 
 ### Installation from source
 
-Prerequisite: You need to have `capnpc` installed. Your distribution likely packages this, or see https://capnproto.org/.
-
 You can install the package from source using `cargo`:
 
 ```bash
@@ -171,7 +169,6 @@ Some ideas for the future, in no particular order:
 * Interactive file transfer (akin to `ftp`)
 * Smart file copy using the `rsync` protocol or similar (send only the sections you need to)
 * Graphical interface for ftp mode
-* Review the protocol and perhaps pivot to using capnp RPC
 * Bind a daemon to a fixed port, for better firewall/NAT traversal properties but at the cost of having to implement user authentication.
 * _The same thing we do every night, Pinky. We try to take over the world!_
 
