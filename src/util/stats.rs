@@ -7,7 +7,7 @@ use quinn::ConnectionStats;
 use std::{cmp, fmt::Display, time::Duration};
 use tracing::{info, warn};
 
-use crate::{config::Configuration, protocol::control::ClosedownReport};
+use crate::{config::Configuration, protocol::control::ClosedownReportV1};
 
 /// Human friendly output helper
 #[derive(Debug, Clone, Copy)]
@@ -55,7 +55,7 @@ pub fn process_statistics(
     stats: &ConnectionStats,
     payload_bytes: u64,
     transport_time: Option<Duration>,
-    remote_stats: ClosedownReport,
+    remote_stats: ClosedownReportV1,
     bandwidth: &Configuration,
     show_statistics: bool,
 ) {
@@ -71,10 +71,10 @@ pub fn process_statistics(
         info!(
             "Total packets sent: {} by us; {} by remote",
             stats.path.sent_packets.to_formatted_string(locale),
-            remote_stats.sent_packets.to_formatted_string(locale),
+            remote_stats.sent_packets.0.to_formatted_string(locale),
         );
     }
-    let congestion = stats.path.congestion_events + remote_stats.congestion_events;
+    let congestion = stats.path.congestion_events + remote_stats.congestion_events.0;
     if congestion > 0 {
         warn!(
             "Congestion events detected: {}",
@@ -91,27 +91,27 @@ pub fn process_statistics(
             bytes = stats.path.lost_bytes.human_count_bytes(),
         );
     }
-    if remote_stats.lost_packets > 0 {
+    if remote_stats.lost_packets.0 > 0 {
         #[allow(clippy::cast_precision_loss)]
-        let pct = 100. * remote_stats.lost_packets as f64 / remote_stats.sent_packets as f64;
+        let pct = 100. * remote_stats.lost_packets.0 as f64 / remote_stats.sent_packets.0 as f64;
         warn!(
             "Remote lost packets: {count}/{total} ({pct:.2}%, for {bytes})",
-            count = remote_stats.lost_packets.human_count_bare(),
-            total = remote_stats.sent_packets.human_count_bare(),
-            bytes = remote_stats.lost_bytes.human_count_bytes(),
+            count = remote_stats.lost_packets.0.human_count_bare(),
+            total = remote_stats.sent_packets.0.human_count_bare(),
+            bytes = remote_stats.lost_bytes.0.human_count_bytes(),
         );
     }
 
-    let sender_sent_bytes = cmp::max(stats.udp_tx.bytes, remote_stats.sent_bytes);
+    let sender_sent_bytes = cmp::max(stats.udp_tx.bytes, remote_stats.sent_bytes.0);
     if show_statistics {
-        let cwnd = cmp::max(stats.path.cwnd, remote_stats.cwnd);
+        let cwnd = cmp::max(stats.path.cwnd, remote_stats.cwnd.0);
         info!(
             "Path MTU {pmtu}, round-trip time {rtt}, final congestion window {cwnd}",
             pmtu = stats.path.current_mtu,
             rtt = stats.path.rtt.human_duration(),
             cwnd = cwnd.to_formatted_string(locale),
         );
-        let black_holes = stats.path.black_holes_detected + remote_stats.black_holes_detected;
+        let black_holes = stats.path.black_holes_detected + remote_stats.black_holes.0;
         info!(
             "{tx} datagrams sent, {rx} received, {black_holes} black holes detected",
             tx = stats.udp_tx.datagrams.human_count_bare(),

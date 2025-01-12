@@ -4,7 +4,6 @@
 //! The session protocol operates over a QUIC bidirectional stream.
 //!
 //! The protocol consists of [Command] and [Response] packets and helper structs.
-//! Packets are sent using the standard CapnProto framing.
 //!
 //! * Client ➡️ Server: (initiates QUIC stream)
 //! * C ➡️ S : [Command] packet. This is an enum containing arguments needed by the selected command.
@@ -36,145 +35,90 @@
 //! If the server needs to abort the transfer mid-flow, it may send a Response explaining why, then close the stream.
 //!
 //! [quic]: https://quicwg.github.io/
-//! [capnproto]: https://capnproto.org/
+//! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 
-pub use super::session_capnp::Status;
-
-use super::session_capnp;
-use anyhow::Result;
-use capnp::message::ReaderOptions;
+use serde::{Deserialize, Serialize};
+use serde_bare::Uint;
 use std::fmt::Display;
-use tokio_util::compat::TokioAsyncReadCompatExt as _;
 
-/// Command packet
-#[derive(Debug, strum::Display)]
+use super::common::ProtocolMessage;
+
+/// Machine-readable codes advising of the status of an operation
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
+#[repr(u16)]
 #[allow(missing_docs)]
+pub enum Status {
+    Ok = 0,
+    FileNotFound = 1,
+    IncorrectPermissions = 2,
+    DirectoryDoesNotExist = 3,
+    IoError = 4,
+    DiskFull = 5,
+    NotYetImplemented = 6,
+    ItIsADirectory = 7,
+}
+
+/// A command from client to server.
+///
+/// The server must respond with a Response before anything else can happen on this connection.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, strum::Display)]
+#[repr(u16)]
 pub enum Command {
-    Get(GetArgs),
-    Put(PutArgs),
+    /// Retrieves a file. This may fail if the file does not exist or the user doesn't have read permission.
+    /// * Client ➡️ Server: `Get` command
+    /// * S➡️C: [`Response`], [`FileHeader`], file data, [`FileTrailer`].
+    /// * Client closes the stream after transfer.
+    /// * If the client needs to abort transfer, it closes the stream.
+    /// * If the server needs to abort transfer, it closes the stream.
+    Get(GetArgs) = 1,
+    /// Sends a file. This may fail for permissions or if the containing directory doesn't exist.
+    /// * Client ➡️ Server: `Put` command
+    /// * S➡️C: [`Response`] (to the command)
+    /// * (if not OK - close stream or send another command)
+    /// * C➡️S: [`FileHeader`], file data, [`FileTrailer`]
+    /// * S➡️C: [`Response`] (showing transfer status)
+    /// * Then close the stream.
+    ///
+    /// If the server needs to abort the transfer, it may send a Response explaining why, then close the stream.
+    Put(PutArgs) = 2,
 }
-#[derive(Debug)]
-/// Arguments for [Command::Get]
-#[allow(missing_docs)]
+impl ProtocolMessage for Command {}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
+/// Arguments for the `GET` command
 pub struct GetArgs {
+    /// This is a file name only, without any directory components
     pub filename: String,
 }
-#[derive(Debug)]
-/// Arguments for [Command::Put]
-#[allow(missing_docs)]
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
+/// Arguments for the `PUT` command
 pub struct PutArgs {
+    /// This is a file name only, without any directory components
     pub filename: String,
 }
 
-impl Command {
-    /// Specialised constructor for Get
-    #[must_use]
-    pub fn new_get(filename: &str) -> Self {
-        Self::Get(GetArgs {
-            filename: filename.to_string(),
-        })
-    }
-    /// Specialised constructor for Put
-    #[must_use]
-    pub fn new_put(filename: &str) -> Self {
-        Self::Put(PutArgs {
-            filename: filename.to_string(),
-        })
-    }
-
-    /// One-stop serializer
-    #[must_use]
-    pub fn serialize(&self) -> Vec<u8> {
-        use crate::protocol::session::Command::{Get, Put};
-        let mut msg = ::capnp::message::Builder::new_default();
-        let builder = msg.init_root::<session_capnp::command::Builder<'_>>();
-        match self {
-            Get(args) => {
-                let mut build_args = builder.init_args().init_get();
-                build_args.set_filename(&args.filename);
-            }
-            Put(args) => {
-                let mut build_args = builder.init_args().init_put();
-                build_args.set_filename(&args.filename);
-            }
-        }
-        capnp::serialize::write_message_to_words(&msg)
-    }
-
-    /// Deserializer
-    pub async fn read<R>(read: &mut R) -> Result<Self>
-    where
-        R: tokio::io::AsyncRead + Unpin,
-    {
-        use session_capnp::command::{
-            self,
-            args::{Get, Put},
-        };
-        let reader =
-            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
-        let msg: command::Reader<'_> = reader.get_root()?;
-
-        Ok(match msg.get_args().which() {
-            Ok(Get(get)) => Command::Get(GetArgs {
-                filename: get?.get_filename()?.to_string()?,
-            }),
-            Ok(Put(put)) => Command::Put(PutArgs {
-                filename: put?.get_filename()?.to_string()?,
-            }),
-            Err(e) => {
-                anyhow::bail!("unrecognised command id {}", e.0);
-            }
-        })
-    }
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+/// Response packet
+#[repr(u16)]
+pub enum Response {
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    V1(ResponseV1) = 1,
 }
 
-#[derive(Debug)]
-/// Response packet
-#[allow(missing_docs)]
-pub struct Response {
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor)]
+/// Version 1 of [`Response`]
+///
+/// This is an enum to provide for forward compatibility.
+pub struct ResponseV1 {
+    /// Outcome of the operation
     pub status: Status,
+    /// A human-readable message giving more information, if any is pertinent
     pub message: Option<String>,
 }
+impl ProtocolMessage for Response {}
 
-impl Response {
-    /// Serializer
-    #[must_use]
-    pub fn serialize(&self) -> Vec<u8> {
-        Self::serialize_direct(self.status, self.message.as_deref())
-    }
-    /// Serializer without an intervening object
-    #[must_use]
-    pub fn serialize_direct(status: Status, message: Option<&str>) -> Vec<u8> {
-        let mut msg = ::capnp::message::Builder::new_default();
-
-        let mut response_msg = msg.init_root::<session_capnp::response::Builder<'_>>();
-        response_msg.set_status(status);
-        if let Some(s) = message {
-            response_msg.set_message(s);
-        }
-        capnp::serialize::write_message_to_words(&msg)
-    }
-    /// Deserializer
-    pub async fn read<R>(read: &mut R) -> anyhow::Result<Self>
-    where
-        R: tokio::io::AsyncRead + Unpin,
-    {
-        let reader =
-            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
-        let msg_reader: session_capnp::response::Reader<'_> = reader.get_root()?;
-        let status = msg_reader
-            .get_status()
-            .map_err(|_| anyhow::anyhow!("incompatible Response (missing Status)"))?;
-        let message = if msg_reader.has_message() {
-            Some(msg_reader.get_message()?.to_string()?)
-        } else {
-            None
-        };
-        Ok(Self { status, message })
-    }
-}
-
-impl Display for Response {
+impl Display for ResponseV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.message {
             Some(msg) => write!(f, "{:?} with message {}", self.status, msg),
@@ -183,94 +127,73 @@ impl Display for Response {
     }
 }
 
-#[derive(Debug)]
-#[allow(missing_docs)]
-/// File Header packet
-pub struct FileHeader {
-    pub size: u64,
-    pub filename: String,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+/// File Header packet. Metadata sent before file data.
+///
+/// This is an enum to provide for forward compatibility.
+#[repr(u16)]
+pub enum FileHeader {
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    V1(FileHeaderV1) = 1,
 }
 
-impl FileHeader {
-    /// One-stop serializer
-    #[must_use]
-    pub fn serialize_direct(size: u64, filename: &str) -> Vec<u8> {
-        let mut msg = ::capnp::message::Builder::new_default();
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+/// Version 1 of [`FileHeader`]
+pub struct FileHeaderV1 {
+    /// Size of the data that follows.
+    /// This is a variable-length word.
+    pub size: Uint,
+    /// Name of the file. This is a filename only, without any directory component.
+    pub filename: String,
+}
+impl ProtocolMessage for FileHeader {}
 
-        let mut response_msg = msg.init_root::<session_capnp::file_header::Builder<'_>>();
-        response_msg.set_size(size);
-        response_msg.set_filename(filename);
-        capnp::serialize::write_message_to_words(&msg)
-    }
-    /// Deserializer
-    pub async fn read<R>(read: &mut R) -> anyhow::Result<Self>
-    where
-        R: tokio::io::AsyncRead + Unpin,
-    {
-        let reader =
-            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
-        let msg_reader: session_capnp::file_header::Reader<'_> = reader.get_root()?;
-        Ok(Self {
-            size: msg_reader.get_size(),
-            filename: msg_reader.get_filename()?.to_string()?,
+impl FileHeader {
+    #[must_use]
+    /// Convenience constructor
+    pub fn new_v1(size: u64, filename: &str) -> Self {
+        FileHeader::V1(FileHeaderV1 {
+            size: Uint(size),
+            filename: filename.to_string(),
         })
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-/// File Trailer packet
-pub struct FileTrailer {}
-
-impl FileTrailer {
-    /// One-stop serializer
-    #[must_use]
-    pub fn serialize_direct() -> Vec<u8> {
-        let mut msg = ::capnp::message::Builder::new_default();
-
-        let mut _response_msg = msg.init_root::<session_capnp::file_trailer::Builder<'_>>();
-        capnp::serialize::write_message_to_words(&msg)
-    }
-    /// Deserializer
-    pub async fn read<R>(read: &mut R) -> anyhow::Result<Self>
-    where
-        R: tokio::io::AsyncRead + Unpin,
-    {
-        let reader =
-            capnp_futures::serialize::read_message(read.compat(), ReaderOptions::new()).await?;
-        let _msg_reader: session_capnp::file_trailer::Reader<'_> = reader.get_root()?;
-        Ok(Self {})
-    }
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
+/// File Trailer packet. Metadata sent after file data.
+///
+/// This is an enum to provide for forward compatibility.
+pub enum FileTrailer {
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    /// It has no contents. Future versions may introduce some sort of checksum.
+    V1 = 1,
 }
+impl ProtocolMessage for FileTrailer {}
 
 #[cfg(test)]
-mod tests {
-    use super::{Command, FileHeader, FileTrailer, Response, Status};
-    #[test]
-    fn marshal_size() {
-        // not really a test - just a sanity check that nothing has broken
-        let c = Command::new_get("filename").serialize();
-        println!("Command len {}", c.len());
-        assert!(c.len() > 32);
+mod test {
+    use crate::protocol::session::FileHeader;
 
-        let r = Response {
-            status: Status::ItIsADirectory,
-            message: None,
-        }
-        .serialize();
-        println!("Response no msg {}", r.len());
-        assert!(r.len() >= 32);
-        let r = Response {
+    use super::{ResponseV1, Status};
+
+    #[test]
+    fn display() {
+        let r = ResponseV1 {
             status: Status::Ok,
-            message: Some("hello".to_string()),
-        }
-        .serialize();
-        assert!(r.len() >= 32);
-        println!("Response with msg 5 {}", r.len());
-        let head = FileHeader::serialize_direct(1234, "foo");
-        println!("File Header {}", head.len());
-        assert!(head.len() >= 32);
-        let trail = FileTrailer::serialize_direct();
-        println!("File Trailer {}", trail.len());
-        assert!(trail.len() >= 16);
+            message: Some("hi".to_string()),
+        };
+        assert_eq!(format!("{r}"), "Ok with message hi");
+        let r = ResponseV1 {
+            status: Status::Ok,
+            message: None,
+        };
+        assert_eq!(format!("{r}"), "Ok");
+    }
+    #[test]
+    fn ctor() {
+        let h = FileHeader::new_v1(42, "myfile");
+        let FileHeader::V1(h) = h;
+        assert_eq!(h.size.0, 42);
+        assert_eq!(h.filename, "myfile");
     }
 }

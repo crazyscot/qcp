@@ -43,7 +43,7 @@ pub async fn open_file(
 #[allow(clippy::missing_panics_doc)]
 pub async fn create_truncate_file(
     path: &str,
-    header: &crate::protocol::session::FileHeader,
+    header: &crate::protocol::session::FileHeaderV1,
 ) -> anyhow::Result<tokio::fs::File> {
     let mut dest_path = PathBuf::from_str(path).unwrap(); // this is marked as infallible
     let dest_meta = tokio::fs::metadata(&dest_path).await;
@@ -62,7 +62,7 @@ pub async fn create_truncate_file(
     }
 
     let file = tokio::fs::File::create(dest_path).await?;
-    file.set_len(header.size).await?;
+    file.set_len(header.size.0).await?;
     Ok(file)
 }
 

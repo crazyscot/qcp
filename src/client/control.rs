@@ -1,33 +1,58 @@
 //! Control channel management for the qcp client
 // (c) 2024 Ross Younger
 
-use std::{process::Stdio, time::Duration};
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::io::BufReader;
+use tokio::process::{Child, Command};
 
 use anyhow::{anyhow, Context as _, Result};
 use indicatif::MultiProgress;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt as _, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt as _},
     time::timeout,
 };
 use tracing::{debug, trace, warn};
 
-use crate::{
-    config::Configuration,
-    protocol::control::{ClientMessage, ClosedownReport, ConnectionType, ServerMessage, BANNER},
-    util::Credentials,
+use crate::protocol::common::ProtocolMessage as _;
+use crate::protocol::control::{
+    ClientMessage, ClosedownReport, ClosedownReportV1, CompatibilityLevel, ConnectionType,
+    ServerMessage, ServerMessageV1, BANNER,
 };
+use crate::{config::Configuration, util::Credentials};
 
 use super::Parameters;
 
 /// Control channel abstraction
 #[derive(Debug)]
 pub struct Channel {
-    process: tokio::process::Child,
+    process: Child,
+    /// The server's declared compatibility level
+    pub compat: CompatibilityLevel,
+    /// The handshaking message sent by the server
+    pub message: ServerMessageV1,
+}
+
+impl Drop for Channel {
+    fn drop(&mut self) {
+        // Tidy up as best we can.
+        if let Ok(Some(_)) = self.process.try_wait() {
+            return;
+        }
+        let _ = self
+            .process
+            .start_kill()
+            .map_err(|e| warn!("killing connection process: {e}"));
+        let _ = self
+            .process
+            .try_wait()
+            .map_err(|e| warn!("reaping connection process: {e}"));
+    }
 }
 
 impl Channel {
     /// A reasonably controlled shutdown.
-    /// (If you want to be rough, simply drop the `ControlChannel`.)
+    /// (If you want to be rough, simply drop the [`Channel`].)
     pub async fn close(&mut self) -> Result<()> {
         // wait() closes the child process stdin
         let _ = self.process.wait().await?;
@@ -42,19 +67,25 @@ impl Channel {
         display: &MultiProgress,
         config: &Configuration,
         parameters: &Parameters,
-    ) -> Result<(Channel, ServerMessage)> {
+    ) -> Result<Channel> {
         trace!("opening control channel");
         let mut new1 = Self::launch(display, config, parameters, remote_host, connection_type)?;
         new1.wait_for_banner().await?;
 
-        let mut pipe = new1
+        let pipe = new1
             .process
             .stdin
             .as_mut()
             .ok_or(anyhow!("could not access process stdin (can't happen?)"))?;
-        ClientMessage::write(&mut pipe, &credentials.certificate, connection_type)
-            .await
-            .with_context(|| "failed to write client message")?;
+        ClientMessage {
+            cert: credentials.certificate.to_vec(),
+            connection_type,
+            compatibility: CompatibilityLevel::V1.into(),
+            extension: 0,
+        }
+        .to_writer_async_framed(pipe)
+        .await
+        .with_context(|| "failed to write client message")?;
 
         let mut server_output = new1
             .process
@@ -63,16 +94,29 @@ impl Channel {
             .ok_or(anyhow!("could not access process stdout (can't happen?)"))?;
 
         trace!("waiting for server message");
-        let message = ServerMessage::read(&mut server_output)
+        let message = ServerMessage::from_reader_async_framed(&mut server_output)
             .await
             .with_context(|| "failed to read server message")?;
 
         trace!("Got server message {message:?}");
-        if let Some(w) = message.warning.as_ref() {
-            warn!("Remote endpoint warning: {w}");
+        // FUTURE: ServerMessage V2 will require more logic to unpack the message contents.
+        let message1 = match message {
+            ServerMessage::V1(m) => m,
+            ServerMessage::ToFollow => {
+                anyhow::bail!("remote or logic error: unpacked unexpected ServerMessage::ToFollow")
+            }
+        };
+        new1.compat = message1.compatibility.into();
+
+        if !message1.warning.is_empty() {
+            warn!("Remote endpoint warning: {}", &message1.warning);
         }
-        debug!("Remote endpoint network config: {}", message.bandwidth_info);
-        Ok((new1, message))
+        debug!(
+            "Remote endpoint network config: {}",
+            message1.bandwidth_info
+        );
+        new1.message = message1;
+        Ok(new1)
     }
 
     /// This is effectively a constructor. At present, it launches a subprocess.
@@ -83,8 +127,7 @@ impl Channel {
         remote_host: &str,
         connection_type: ConnectionType,
     ) -> Result<Self> {
-        let mut server = tokio::process::Command::new(&config.ssh);
-        let _ = server.kill_on_drop(true);
+        let mut server = Command::new(&config.ssh);
         let _ = match connection_type {
             ConnectionType::Ipv4 => server.arg("-4"),
             ConnectionType::Ipv6 => server.arg("-6"),
@@ -147,7 +190,11 @@ impl Channel {
                 }
             });
         }
-        Ok(Self { process })
+        Ok(Self {
+            process,
+            compat: CompatibilityLevel::UNKNOWN,
+            message: ServerMessageV1::default(),
+        })
     }
 
     async fn wait_for_banner(&mut self) -> Result<()> {
@@ -184,14 +231,18 @@ impl Channel {
     }
 
     /// Retrieves the closedown report
-    pub async fn read_closedown_report(&mut self) -> Result<ClosedownReport> {
+    pub async fn read_closedown_report(&mut self) -> Result<ClosedownReportV1> {
         let pipe = self
             .process
             .stdout
             .as_mut()
             .ok_or(anyhow!("could not access process stdout (can't happen?)"))?;
-        let stats = ClosedownReport::read(pipe).await?;
+        let stats = ClosedownReport::from_reader_async_framed(pipe).await?;
+        // FUTURE: ClosedownReport V2 will require more logic to unpack the message contents.
+        let ClosedownReport::V1(stats) = stats;
+
         debug!("remote reported stats: {:?}", stats);
+
         Ok(stats)
     }
 }

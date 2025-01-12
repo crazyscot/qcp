@@ -5,11 +5,15 @@ use crate::{
     client::{control::Channel, progress::spinner_style},
     config::Configuration,
     protocol::{
-        session::{FileHeader, FileTrailer, Response, Status},
-        RawStreamPair, StreamPair,
+        common::{ProtocolMessage, StreamPair},
+        session::{Command, FileHeader, FileTrailer, GetArgs, PutArgs, Response, Status},
     },
     transport::ThroughputMode,
-    util::{self, lookup_host_by_family, time::Stopwatch, time::StopwatchChain, Credentials},
+    util::{
+        self, lookup_host_by_family,
+        time::{Stopwatch, StopwatchChain},
+        Credentials,
+    },
 };
 
 use anyhow::{Context, Result};
@@ -69,7 +73,7 @@ pub async fn client_main(
     spinner.set_message("Opening control channel");
     spinner.disable_steady_tick(); // otherwise the spinner messes with ssh passphrase prompting; as we're using tokio spinner.suspend() isn't helpful
     timers.next("control channel");
-    let (mut control, server_message) = Channel::transact(
+    let mut control = Channel::transact(
         &credentials,
         &remote_host,
         remote_address.into(),
@@ -78,11 +82,12 @@ pub async fn client_main(
         &parameters,
     )
     .await?;
+    let port = control.message.port;
 
     // Data channel ------------------
     let server_address_port = match remote_address {
-        std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, server_message.port).into(),
-        std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
+        std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, port).into(),
+        std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, port, 0, 0).into(),
     };
 
     spinner.enable_steady_tick(Duration::from_millis(150));
@@ -90,7 +95,7 @@ pub async fn client_main(
     timers.next("data channel setup");
     let endpoint = create_endpoint(
         &credentials,
-        server_message.cert.into(),
+        control.message.cert.clone().into(),
         &server_address_port,
         config,
         job_spec.throughput_mode(),
@@ -100,7 +105,7 @@ pub async fn client_main(
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
     let connection = timeout(
         config.timeout_duration(),
-        endpoint.connect(server_address_port, &server_message.name)?,
+        endpoint.connect(server_address_port, &control.message.name)?,
     )
     .await
     .with_context(|| "UDP connection to QUIC endpoint timed out")??;
@@ -181,12 +186,12 @@ async fn manage_request(
         // This async block reports on errors.
         if copy_spec.source.user_at_host.is_some() {
             // This is a Get
-            do_get(sp, &copy_spec, display, spinner, &config, quiet)
+            do_get(sp.into(), &copy_spec, display, spinner, &config, quiet)
                 .instrument(trace_span!("GET", filename = copy_spec.source.filename))
                 .await
         } else {
             // This is a Put
-            do_put(sp, &copy_spec, display, spinner, &config, quiet)
+            do_put(sp.into(), &copy_spec, display, spinner, &config, quiet)
                 .instrument(trace_span!("PUT", filename = copy_spec.source.filename))
                 .await
         }
@@ -310,7 +315,7 @@ pub(crate) fn create_endpoint(
 
 /// Actions a GET command
 async fn do_get(
-    sp: RawStreamPair,
+    mut stream: StreamPair,
     job: &CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
@@ -320,24 +325,26 @@ async fn do_get(
     let filename = &job.source.filename;
     let dest = &job.destination.filename;
 
-    let mut stream: StreamPair = sp.into();
     let real_start = Instant::now();
     trace!("send command");
-    stream
-        .send
-        .write_all(&crate::protocol::session::Command::new_get(filename).serialize())
-        .await?;
+    Command::Get(GetArgs {
+        filename: filename.to_string(),
+    })
+    .to_writer_async_framed(&mut stream.send)
+    .await?;
     stream.send.flush().await?;
 
     // TODO protocol timeout?
     trace!("await response");
-    let response = Response::read(&mut stream.recv).await?;
+    let response = Response::from_reader_async_framed(&mut stream.recv).await?;
+    let Response::V1(response) = response;
     if response.status != Status::Ok {
         anyhow::bail!(format!("GET ({filename}) failed: {response}"));
     }
 
-    let header = FileHeader::read(&mut stream.recv).await?;
+    let header = FileHeader::from_reader_async_framed(&mut stream.recv).await?;
     trace!("{header:?}");
+    let FileHeader::V1(header) = header;
 
     let mut file = crate::util::io::create_truncate_file(dest, &header).await?;
 
@@ -347,7 +354,7 @@ async fn do_get(
     // Unfortunately, the file data is already well in flight at this point, leading to a flood of packets
     // that causes the estimated rate to spike unhelpfully at the beginning of the transfer.
     // Therefore we incorporate time in flight so far to get the estimate closer to reality.
-    let progress_bar = progress_bar_for(&display, job, header.size + 16, quiet)?
+    let progress_bar = progress_bar_for(&display, job, header.size.0 + 16, quiet)?
         .with_elapsed(Instant::now().duration_since(real_start));
 
     let mut meter =
@@ -356,14 +363,14 @@ async fn do_get(
 
     let inbound = progress_bar.wrap_async_read(stream.recv);
 
-    let mut inbound = inbound.take(header.size);
+    let mut inbound = inbound.take(header.size.0);
     trace!("payload");
     let _ = tokio::io::copy(&mut inbound, &mut file).await?;
     // Retrieve the stream from within the Take wrapper for further operations
     let mut inbound = inbound.into_inner();
 
     trace!("trailer");
-    let _trailer = FileTrailer::read(&mut inbound).await?;
+    let _trailer = FileTrailer::from_reader_async_framed(&mut inbound).await?;
     // Trailer is empty for now, but its existence means the server believes the file was sent correctly
 
     // Note that the Quinn send stream automatically calls finish on drop.
@@ -371,19 +378,18 @@ async fn do_get(
     file.flush().await?;
     trace!("complete");
     progress_bar.finish_and_clear();
-    Ok(header.size)
+    Ok(header.size.0)
 }
 
 /// Actions a PUT command
 async fn do_put(
-    sp: RawStreamPair,
+    mut stream: StreamPair,
     job: &CopyJobSpec,
     display: MultiProgress,
     spinner: ProgressBar,
     config: &Configuration,
     quiet: bool,
 ) -> Result<u64> {
-    let mut stream: StreamPair = sp.into();
     let src_filename = &job.source.filename;
     let dest_filename = &job.destination.filename;
 
@@ -413,23 +419,27 @@ async fn do_put(
     trace!("sending command");
     let mut file = BufReader::with_capacity(Configuration::send_buffer().try_into()?, file);
 
-    outbound
-        .write_all(&crate::protocol::session::Command::new_put(dest_filename).serialize())
-        .await?;
+    Command::Put(PutArgs {
+        filename: dest_filename.to_string(),
+    })
+    .to_writer_async_framed(&mut outbound)
+    .await?;
     outbound.flush().await?;
 
     // TODO protocol timeout?
     trace!("await response");
-    let response = Response::read(&mut stream.recv).await?;
+    let response = Response::from_reader_async_framed(&mut stream.recv).await?;
+    let Response::V1(response) = response;
     if response.status != Status::Ok {
         anyhow::bail!(format!("PUT ({src_filename}) failed: {response}"));
     }
 
     // The filename in the protocol is the file part only of src_filename
     trace!("send header");
-    let protocol_filename = path.file_name().unwrap().to_str().unwrap().to_string(); // can't fail with the preceding checks
-    let header = FileHeader::serialize_direct(payload_len, &protocol_filename);
-    outbound.write_all(&header).await?;
+    let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
+    FileHeader::new_v1(payload_len, protocol_filename)
+        .to_writer_async_framed(&mut outbound)
+        .await?;
 
     // A server-side abort might happen part-way through a large transfer.
     trace!("send payload");
@@ -446,10 +456,11 @@ async fn do_put(
         Err(e) => {
             if e.kind() == tokio::io::ErrorKind::ConnectionReset {
                 // Maybe the connection was cut, maybe the server sent something to help us inform the user.
-                let response = match Response::read(&mut stream.recv).await {
+                let response = match Response::from_reader_async_framed(&mut stream.recv).await {
                     Err(_) => anyhow::bail!("connection closed unexpectedly"),
                     Ok(r) => r,
                 };
+                let Response::V1(response) = response;
                 anyhow::bail!(
                     "remote closed connection: {:?}: {}",
                     response.status,
@@ -465,12 +476,14 @@ async fn do_put(
     }
 
     trace!("send trailer");
-    let trailer = FileTrailer::serialize_direct();
-    outbound.write_all(&trailer).await?;
+    FileTrailer::V1
+        .to_writer_async_framed(&mut outbound)
+        .await?;
     outbound.flush().await?;
     meter.stop().await;
 
-    let response = Response::read(&mut stream.recv).await?;
+    let response = Response::from_reader_async_framed(&mut stream.recv).await?;
+    let Response::V1(response) = response;
     if response.status != Status::Ok {
         anyhow::bail!(format!(
             "PUT ({src_filename}) failed on completion check: {response}"
