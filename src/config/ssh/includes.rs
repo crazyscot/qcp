@@ -2,8 +2,44 @@
 // (c) 2024 Ross Younger
 
 use anyhow::{Context, Result};
+use dirs::home_dir;
 use glob::{glob_with, MatchOptions};
-use std::path::PathBuf;
+use std::path::{PathBuf, MAIN_SEPARATOR};
+
+lazy_static::lazy_static! {
+    static ref HOME_PREFIX: String = format!("~{}", MAIN_SEPARATOR);
+}
+
+fn expand_home_directory(path: &str) -> Result<PathBuf> {
+    Ok(match path {
+        // bare "~"
+        "~" => home_dir().ok_or_else(|| anyhow::anyhow!("could not determine home directory"))?,
+        s if s.starts_with(&*HOME_PREFIX) => {
+            // "~/..."
+            let Some(home) = home_dir() else {
+                anyhow::bail!("could not determine home directory")
+            };
+            home.join(&s[2..])
+        }
+        s if s.starts_with('~') => {
+            // "~someuser/..."
+            let mut parts = s[1..].splitn(2, MAIN_SEPARATOR);
+            let Some(username) = parts.next() else {
+                anyhow::bail!("could not extract username from path")
+            };
+            let Ok(Some(user)) = pwd::Passwd::from_name(username) else {
+                anyhow::bail!("could not find user {username}");
+            };
+            if let Some(path) = parts.next() {
+                PathBuf::from(user.dir).join(path)
+            } else {
+                PathBuf::from(user.dir)
+            }
+        }
+        // default: no modification
+        s => PathBuf::from(s),
+    })
+}
 
 /// Wildcard matching and ~ expansion for Include directives
 pub(super) fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>> {
@@ -12,8 +48,7 @@ pub(super) fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>
             is_user,
             "include paths may not start with ~ in a system configuration file"
         );
-        expanduser::expanduser(arg)
-            .with_context(|| format!("expanding include expression {arg}"))?
+        expand_home_directory(arg).with_context(|| format!("expanding include expression {arg}"))?
     } else {
         PathBuf::from(arg)
     };
@@ -49,42 +84,107 @@ pub(super) fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>
 
 #[cfg(test)]
 mod test {
-    use super::find_include_files;
+    use std::{fs::File, io::Write as _, path::PathBuf};
 
+    use super::{expand_home_directory, find_include_files};
+    use rusty_fork::rusty_fork_test;
+    use tempfile::TempDir;
+
+    fn fake_home_ssh() -> (TempDir, PathBuf) {
+        let tempdir = tempfile::tempdir().unwrap();
+        let fake_home = tempdir.path();
+        let fake_ssh = fake_home.join(".ssh");
+        std::fs::create_dir_all(&fake_ssh).unwrap();
+
+        // Temporarily override HOME environment variable
+        std::env::set_var("HOME", fake_home);
+
+        (tempdir, fake_ssh)
+    }
+
+    // We run some tests in a fork because they modify environment variables, which
+    // could interfere with other tests.
+
+    rusty_fork_test! {
     #[test]
-    #[ignore] // this test is dependent on the current user filespace
     fn tilde_expansion_current_user() {
+        let (fake_home, fake_ssh) = fake_home_ssh();
+
+        // Create a test .conf file
+        let test_conf = fake_ssh.join("test.conf");
+        std::fs::write(&test_conf, "dummy content").unwrap();
+
+        // Create a test file within
+        let filename = format!("{}/foo.conf", fake_home.path().display());
+        let mut file = File::create(&filename).unwrap();
+        file.write_all(b"Hello, world!").unwrap();
+
         let a = find_include_files("~/*.conf", true).expect("~ should expand to home directory");
-        assert!(!a.is_empty());
+        assert_eq!(a, [filename]);
         let _ = find_include_files("~/*", false)
             .expect_err("~ should not be allowed in system configurations");
-    }
+    }}
 
+    rusty_fork_test! {
     #[test]
-    #[ignore] // obviously this won't run on CI. TODO: figure out a way to make it CIable.
-    fn tilde_expansion_arbitrary_user() {
-        let a =
-            find_include_files("~wry/*.conf", true).expect("~ should expand to a home directory");
-        println!("{a:?}");
-        assert!(!a.is_empty());
-        let _ = find_include_files("~/*", false)
-            .expect_err("~ should not be allowed in system configurations");
-    }
-
-    #[test]
-    #[ignore] // TODO: Make this runnable on CI
     fn relative_path_expansion() {
-        let a = find_include_files("config", true).unwrap();
-        println!("{a:?}");
-        assert!(!a.is_empty());
-
-        let a = find_include_files("sshd_config", false).unwrap();
-        println!("{a:?}");
-        assert!(!a.is_empty());
-
-        // but the user does not have an sshd_config:
-        let a = find_include_files("sshd_config", true).unwrap();
-        println!("{a:?}");
+        // relative expansion in ~/.ssh/
+        let (_fake_home, fake_ssh) = fake_home_ssh();
+        let filename = format!("{}/my_config", fake_ssh.display());
+        println!("{filename:?}");
+        let mut file = File::create(&filename).unwrap();
+        file.write_all(b"Hello, world!").unwrap();
+        let a = find_include_files("my_config", true).unwrap();
+        assert_eq!(a, [filename]);
+        let a = find_include_files("nonexistent_config", true).unwrap();
         assert!(a.is_empty());
+
+        // we haven't yet figured out a way to test the contents of /etc/ssh, but we can at least perform a negative test
+        let a = find_include_files("zyxy_nonexistent_file", false).unwrap();
+        assert!(a.is_empty());
+    }}
+
+    // helper macro to make the test cases easier to read and write
+    macro_rules! xhd {
+        ($s:expr) => {
+            *expand_home_directory($s).unwrap().as_os_str()
+        };
+    }
+
+    #[test]
+    fn home_dir() {
+        let home_env = std::env::var("HOME").unwrap_or("dummy-test-home".into());
+        assert_eq!(xhd!("~"), *home_env);
+
+        let s = format!("{home_env}/file");
+        assert_eq!(xhd!("~/file"), *s);
+
+        // tricky case. a username.
+        let user = std::env::var("USER").expect("this test requires a USER");
+        assert!(!user.is_empty());
+        let home = dirs::home_dir().expect("this test requires a HOME");
+        let path_part = format!("~{user}");
+        assert_eq!(xhd!(&path_part), home);
+
+        let s = "any/old~file/";
+        assert_eq!(xhd!("any/old~file/"), *s);
+    }
+
+    #[test]
+    fn include_paths() {
+        let _ = find_include_files("~", false).expect_err("~ in system should be disallowed");
+        let _ = dirs::home_dir().expect("this test requires a HOME");
+        let d = find_include_files("~/zzznonexistent", true)
+            .expect("home directory should have expanded");
+        assert!(d.is_empty());
+        let _ = find_include_files("~nonexistent-user-xyzy", true)
+            .expect_err("non existent user should have bailed");
+    }
+    #[test]
+    fn relative_paths() {
+        let d = find_include_files("nonexistent-really----", false).expect("");
+        assert!(d.is_empty());
+        let d = find_include_files("nonexistent-really----", true).expect("");
+        assert!(d.is_empty());
     }
 }

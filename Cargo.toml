@@ -33,11 +33,10 @@ clap = { version = "4.5.24", features = ["wrap_help", "derive", "cargo", "help",
 console = "0.15.8"
 derive-deftly = "0.14.2"
 derive_more = { version = "1.0.0", features = ["constructor"] }
-dirs = "5.0.1"
+dirs = "6.0.0"
 dns-lookup = "2.0.4"
 document-features = "0.2.10"
 engineering-repr = { version = "1.0.0", features = ["serde"] }
-expanduser = "1.2.2"
 figment = { version = "0.10.19" }
 futures-util = { version = "0.3.31", default-features = false }
 gethostname = "0.5.0"
@@ -47,6 +46,7 @@ human-repr = "1.1.0"
 indicatif = { version = "0.17.9", features = ["tokio"] }
 lazy_static = "1.5.0"
 num-format = { version = "0.4.4" }
+pwd = "1.4.0"
 quinn = { version = "0.11.6", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
 rcgen = { version = "0.13.1" }
 rustls-pki-types = "1.10.0"
@@ -73,6 +73,7 @@ assertables = "9.5.0"
 fastrand = "2.3.0"
 json = "0.12.4"
 rand = "0.8.5"
+rusty-fork = "0.3.0"
 serde_json = "1.0.133"
 serde_test = "1.0.177"
 tempfile = "3.14.0"
