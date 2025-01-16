@@ -91,6 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
@@ -102,7 +103,17 @@ jobs:
         run: scripts/install-ubuntu-packages
       # Checks begin here!
       - run: cargo fmt --all --check
-      - run: cargo test --locked
+      #- run: cargo test --locked # replaced by cargo llvm-cov to run with coverage tests
       - run: cargo clippy --locked --all-targets
       - run: cargo build --locked --all-targets
       - run: cargo doc --no-deps --locked
+      - name: unit tests with coverage
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info --locked
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          path: lcov.info
+      - name: Send to coveralls
+        uses: coverallsapp/github-action@v2.3.4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

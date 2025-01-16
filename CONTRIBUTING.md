@@ -14,6 +14,7 @@ If you're thinking of contributing something non-trivial, it might be best to ra
 * Changes should normally be based on the `dev` branch. _(Exception: hotfixes may be branched against `main`.)_
 * PRs must pass the full set of CI checks (see below). No exceptions.
 * Unit tests are encouraged, particularly those which fail before and pass after a fix.
+  * The CI workflow runs code coverage analysis.
 * Refactoring for its own sake is OK if driven by a feature or bugfix.
 * Clean commit histories are preferred, but don't be discouraged if you don't know how to do this. git can be a tricky tool.
 * Commit messages should follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
@@ -32,6 +33,7 @@ If you're thinking of contributing something non-trivial, it might be best to ra
 | Unit tests pass | `cargo test` |
 | Lints | `cargo clippy --all-targets` | This is a reasonably pedantic set of lints, which I make no apologies for |
 | Docs build | `cargo doc --no-deps` |
+| Code coverage | `./scripts/coverage`, then examine `target/coverage/html` |
 
 
 [issue]: https://github.com/crazyscot/qcp/issues/new/choose
