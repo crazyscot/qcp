@@ -29,7 +29,7 @@ anstream = "0.6.18"
 anstyle = "1.0.10"
 anyhow = "1.0.94"
 bytes = "1.9.0"
-clap = { version = "4.5.23", features = ["wrap_help", "derive", "cargo", "help", "string"] }
+clap = { version = "4.5.24", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 console = "0.15.8"
 derive-deftly = "0.14.2"
 derive_more = { version = "1.0.0", features = ["constructor"] }
