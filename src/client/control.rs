@@ -17,7 +17,7 @@ use tracing::{debug, trace, warn};
 use crate::protocol::common::ProtocolMessage as _;
 use crate::protocol::control::{
     ClientMessage, ClosedownReport, ClosedownReportV1, CompatibilityLevel, ConnectionType,
-    ServerMessage, ServerMessageV1, BANNER,
+    ServerMessage, ServerMessageV1, BANNER, OLD_BANNER,
 };
 use crate::{config::Configuration, util::Credentials};
 
@@ -226,7 +226,16 @@ impl Channel {
             .with_context(|| "error reading control channel")?;
 
         let read_banner = std::str::from_utf8(&buf).with_context(|| "garbage server banner")?;
-        anyhow::ensure!(BANNER == read_banner, "incompatible server banner");
+        match read_banner {
+            BANNER => (),
+            OLD_BANNER => {
+                anyhow::bail!("unsupported protocol version (upgrade server to qcp 0.3.0 or later)")
+            }
+            b => anyhow::bail!(
+                "unsupported protocol version (unrecognised server banner `{}'; may be too new for me?)",
+                &b[0..b.len()-1]
+            ),
+        }
         Ok(())
     }
 

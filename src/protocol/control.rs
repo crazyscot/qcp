@@ -36,6 +36,10 @@ use super::common::ProtocolMessage;
 /// Server banner message, sent on stdout and checked by the client
 pub const BANNER: &str = "qcp-server-2\n";
 
+/// The banner for the initial protocol version (pre-v0.3) that we don't support any more.
+/// Note that it is the same size as the current [`BANNER`].
+pub const OLD_BANNER: &str = "qcp-server-1\n";
+
 /// Protocol sub-version compatibility identifier
 ///
 /// This forms part of the negotiation between client and server.
