@@ -37,6 +37,30 @@ use super::Parameters as ClientParameters;
 /// a shared definition string used in a couple of places
 const SHOW_TIME: &str = "file transfer";
 
+/// Computes the trace level for a given set of [ClientParameters]
+fn trace_level(args: &ClientParameters) -> &str {
+    if args.debug {
+        "debug"
+    } else if args.quiet {
+        "error"
+    } else {
+        "info"
+    }
+}
+
+fn setup_tracing(
+    config: &Configuration,
+    display: &MultiProgress,
+    parameters: &ClientParameters,
+) -> anyhow::Result<()> {
+    crate::util::setup_tracing(
+        trace_level(parameters),
+        Some(display),
+        &parameters.log_file,
+        config.time_format,
+    ) // to provoke error: set RUST_LOG=.
+}
+
 /// Main client mode event loop
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 #[allow(clippy::module_name_repetitions)]
@@ -45,6 +69,8 @@ pub async fn client_main(
     display: MultiProgress,
     parameters: ClientParameters,
 ) -> anyhow::Result<bool> {
+    setup_tracing(config, &display, &parameters)?;
+
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
     let _guard = trace_span!("CLIENT").entered();

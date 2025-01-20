@@ -42,7 +42,8 @@ pub(crate) struct CliArgs {
             "help_buffers", "show_config", "config_files",
             "quiet", "statistics", "remote_debug", "profile",
             "ssh", "ssh_options", "remote_port",
-            "source", "destination",
+            "source", "destination", "port", "debug",
+            "tx", "rx", "rtt", "congestion", "initial_congestion_window", "timeout",
         ])
     )]
     pub server: bool,

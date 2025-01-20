@@ -1,6 +1,7 @@
 //! Control channel management for the qcp client
 // (c) 2024 Ross Younger
 
+use std::cmp::min;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::BufReader;
@@ -16,8 +17,9 @@ use tracing::{debug, trace, warn};
 
 use crate::protocol::common::ProtocolMessage as _;
 use crate::protocol::control::{
-    ClientMessage, ClosedownReport, ClosedownReportV1, CompatibilityLevel, ConnectionType,
-    ServerMessage, ServerMessageV1, BANNER, OLD_BANNER,
+    ClientGreeting, ClientMessage, ClosedownReport, ClosedownReportV1, CompatibilityLevel,
+    ConnectionType, ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
+    OLD_BANNER,
 };
 use crate::{config::Configuration, util::Credentials};
 
@@ -69,23 +71,13 @@ impl Channel {
         parameters: &Parameters,
     ) -> Result<Channel> {
         trace!("opening control channel");
+
+        // PHASE 1: BANNER CHECK
+
         let mut new1 = Self::launch(display, config, parameters, remote_host, connection_type)?;
         new1.wait_for_banner().await?;
 
-        let pipe = new1
-            .process
-            .stdin
-            .as_mut()
-            .ok_or(anyhow!("could not access process stdin (can't happen?)"))?;
-        ClientMessage {
-            cert: credentials.certificate.to_vec(),
-            connection_type,
-            compatibility: CompatibilityLevel::V1.into(),
-            extension: 0,
-        }
-        .to_writer_async_framed(pipe)
-        .await
-        .with_context(|| "failed to write client message")?;
+        // PHASE 2: EXCHANGE GREETINGS
 
         let mut server_output = new1
             .process
@@ -93,10 +85,44 @@ impl Channel {
             .as_mut()
             .ok_or(anyhow!("could not access process stdout (can't happen?)"))?;
 
+        let server_input = new1
+            .process
+            .stdin
+            .as_mut()
+            .ok_or(anyhow!("could not access process stdin (can't happen?)"))?;
+
+        ClientGreeting {
+            compatibility: COMPATIBILITY_LEVEL.into(),
+            debug: parameters.remote_debug,
+            extension: 0,
+        }
+        .to_writer_async_framed(server_input)
+        .await
+        .with_context(|| "error writing client greeting")?;
+
+        let remote_greeting = ServerGreeting::from_reader_async_framed(&mut server_output)
+            .await
+            .with_context(|| "error reading server greeting")?;
+
+        debug!("got server greeting {remote_greeting:?}");
+
+        // FUTURE: We may decide to deprecate older compatibility versions. Check/handle that here.
+        new1.compat = min(remote_greeting.compatibility.into(), COMPATIBILITY_LEVEL);
+        debug!("selected compatibility level {}", new1.compat);
+
+        // PHASE 3: EXCHANGE OF MESSAGES
+
+        // FUTURE: Select the client message version to send based on server's compatibility level.
+        ClientMessage::new(credentials, connection_type, config)
+            .to_writer_async_framed(server_input)
+            .await
+            .with_context(|| "error writing client message")?;
+
         trace!("waiting for server message");
         let message = ServerMessage::from_reader_async_framed(&mut server_output)
             .await
-            .with_context(|| "failed to read server message")?;
+            .inspect_err(|e| eprintln!("{e}"))
+            .with_context(|| "error reading server message")?;
 
         trace!("Got server message {message:?}");
         // FUTURE: ServerMessage V2 will require more logic to unpack the message contents.
@@ -106,7 +132,6 @@ impl Channel {
                 anyhow::bail!("remote or logic error: unpacked unexpected ServerMessage::ToFollow")
             }
         };
-        new1.compat = message1.compatibility.into();
 
         if !message1.warning.is_empty() {
             warn!("Remote endpoint warning: {}", &message1.warning);
@@ -133,35 +158,7 @@ impl Channel {
             ConnectionType::Ipv6 => server.arg("-6"),
         };
         let _ = server.args(&config.ssh_options);
-        let _ = server.args([
-            remote_host,
-            "qcp",
-            "--server",
-            // Remote receive bandwidth = our transmit bandwidth
-            "-b",
-            &config.tx().to_string(),
-            // Remote transmit bandwidth = our receive bandwidth
-            "-B",
-            &config.rx().to_string(),
-            "--rtt",
-            &config.rtt.to_string(),
-            "--congestion",
-            &config.congestion.to_string(),
-            "--timeout",
-            &config.timeout.to_string(),
-        ]);
-        if parameters.remote_debug {
-            let _ = server.arg("--debug");
-        }
-        match config.initial_congestion_window {
-            0 => (),
-            w => {
-                let _ = server.args(["--initial-congestion-window", &w.to_string()]);
-            }
-        }
-        if !config.remote_port.is_default() {
-            let _ = server.args(["--port", &config.remote_port.to_string()]);
-        }
+        let _ = server.args([remote_host, "qcp", "--server"]);
         let _ = server
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -248,7 +245,9 @@ impl Channel {
             .ok_or(anyhow!("could not access process stdout (can't happen?)"))?;
         let stats = ClosedownReport::from_reader_async_framed(pipe).await?;
         // FUTURE: ClosedownReport V2 will require more logic to unpack the message contents.
-        let ClosedownReport::V1(stats) = stats;
+        let ClosedownReport::V1(stats) = stats else {
+            anyhow::bail!("server sent unknown ClosedownReport message type");
+        };
 
         debug!("remote reported stats: {:?}", stats);
 

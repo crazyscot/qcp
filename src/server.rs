@@ -1,20 +1,21 @@
 //! server-side _(remote)_ event loop
 // (c) 2024 Ross Younger
 
+use std::cmp::min;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::config::Configuration;
+use crate::config::{Configuration, Manager};
 use crate::protocol::control::{
-    ClientMessage, ClosedownReport, ClosedownReportV1, CompatibilityLevel, ServerMessage,
-    ServerMessageV1, BANNER,
+    ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport, ClosedownReportV1,
+    PortRange_OnWire, ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
 };
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, ResponseV1, Status};
 use crate::protocol::{common::ProtocolMessage as _, common::StreamPair};
 use crate::transport::ThroughputMode;
-use crate::util::{io, socket, Credentials};
+use crate::util::{io, socket, Credentials, PortRange as ConfigPortRange};
 
-use anyhow::Context as _;
+use anyhow::{Context as _, Result};
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
@@ -26,46 +27,92 @@ use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
+fn setup_tracing(debug: bool, config: &Configuration) -> anyhow::Result<()> {
+    let level = if debug { "debug" } else { "info" };
+    crate::util::setup_tracing(level, None, &None, config.time_format) // to provoke error: set RUST_LOG=.
+}
+
 /// Server event loop
 #[allow(clippy::module_name_repetitions)]
-pub async fn server_main(config: &Configuration) -> anyhow::Result<()> {
+pub async fn server_main() -> anyhow::Result<()> {
+    let mut manager = Manager::standard(None);
+    let early_config = manager.get::<Configuration>()?;
     let mut stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
 
     // There are tricks you can use to get an unbuffered handle to stdout, but at a typing cost.
     // For now we'll manually flush after each write.
 
+    // PHASE 1: BANNER (checked by client)
+
     stdout.write_all(BANNER.as_bytes()).await?;
     stdout.flush().await?;
 
+    // PHASE 2: EXCHANGE GREETINGS
+
+    ServerGreeting {
+        compatibility: COMPATIBILITY_LEVEL.into(),
+        extension: 0,
+    }
+    .to_writer_async_framed(&mut stdout)
+    .await
+    .with_context(|| "sending server greeting")?;
+    stdout.flush().await?;
+
+    let remote_greeting = ClientGreeting::from_reader_async_framed(&mut stdin)
+        .await
+        .with_context(|| "failed to read client greeting")?;
+
+    setup_tracing(remote_greeting.debug, &early_config)?;
+    let _span = tracing::error_span!("REMOTE").entered();
+
+    debug!("got client greeting {remote_greeting:?}");
+
+    let compat = min(remote_greeting.compatibility.into(), COMPATIBILITY_LEVEL);
+    debug!("selected compatibility level {compat}");
+
+    // PHASE 3: EXCHANGE OF MESSAGES
+
     let client_message = ClientMessage::from_reader_async_framed(&mut stdin)
         .await
-        .map_err(|_| {
+        .map_err(|e| {
             // try to be helpful if there's a human reading
+            error!("{e}");
             anyhow::anyhow!(
                 "In server mode, this program expects to receive a binary data packet on stdin"
             )
         })?;
 
-    let compat = CompatibilityLevel::from(client_message.compatibility);
+    trace!("waiting for client message");
+    let message1 = match client_message {
+        ClientMessage::V1(m) => m,
+        ClientMessage::ToFollow => {
+            anyhow::bail!("remote or logic error: unpacked unexpected ClientMessage::ToFollow")
+        }
+    };
+
     debug!(
-        "got client cert length {}, using {:?}, compat level {compat} (raw {})",
-        client_message.cert.len(),
-        client_message.connection_type,
-        client_message.compatibility,
+        "got client cert length {}, using {:?}",
+        message1.cert.len(),
+        message1.connection_type,
     );
+
+    manager.merge_provider(&message1);
+    // for testing:
+    // eprintln!("{}", manager.to_display_adapter::<Configuration>());
+
+    let config = manager.get::<Configuration>()?;
 
     let bandwidth_info = config.format_transport_config().to_string();
     let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
 
     let credentials = Credentials::generate()?;
-    let (endpoint, warning) = create_endpoint(&credentials, client_message, config)?;
+    let (endpoint, warning) = create_endpoint(&credentials, message1, &config)?;
     let warning = warning.unwrap_or_default();
     let local_addr = endpoint.local_addr()?;
     debug!("Local address is {local_addr}");
     // FUTURE: When later versions of ServerMessage are created, check client compatibility and send the appropriate version.
     ServerMessage::V1(ServerMessageV1 {
-        compatibility: CompatibilityLevel::V1.into(),
         port: local_addr.port(),
         cert: credentials.certificate.to_vec(),
         name: credentials.hostname,
@@ -123,7 +170,7 @@ pub async fn server_main(config: &Configuration) -> anyhow::Result<()> {
 
 fn create_endpoint(
     credentials: &Credentials,
-    client_message: ClientMessage,
+    client_message: ClientMessageV1,
     transport: &Configuration,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
@@ -143,7 +190,10 @@ fn create_endpoint(
         ThroughputMode::Both,
     )?);
 
-    let mut socket = socket::bind_range_for_family(client_message.connection_type, transport.port)?;
+    let port = resolve_ports(transport.port, client_message.port)?;
+    debug!("Resolved port range {port}");
+
+    let mut socket = socket::bind_range_for_family(client_message.connection_type, port)?;
     // We don't know whether client will send or receive, so configure for both.
     let wanted_send = Some(usize::try_from(Configuration::send_buffer())?);
     let wanted_recv = Some(usize::try_from(Configuration::recv_buffer())?);
@@ -379,4 +429,78 @@ async fn send_response(
     ))
     .to_writer_async_framed(send)
     .await
+}
+
+/// Look at the configured and client-requested port ranges, determine if a solution can be found
+/// and return it if so.
+fn resolve_ports(
+    ours: ConfigPortRange,
+    theirs: Option<PortRange_OnWire>,
+) -> Result<ConfigPortRange> {
+    Ok(if ours.is_default() {
+        // no config this side; client's prefs win
+        match theirs {
+            Some(pr) => pr.into(),
+            None => ConfigPortRange::default(),
+        }
+    } else {
+        match theirs {
+            None => ours, // no client pref; we win
+            Some(theirs) => {
+                // This is the tricky case.. both sides have expressed a preference.
+                // Intersect both preferences. If that results in no solution, report error.
+                let begin = std::cmp::max(ours.begin, theirs.begin);
+                let end = std::cmp::min(ours.end, theirs.end);
+                anyhow::ensure!(
+                    begin <= end,
+                    "requested port range {theirs} could not be satisfied (our config: {ours})"
+                );
+                ConfigPortRange { begin, end }
+            }
+        }
+    })
+}
+
+#[cfg(test)]
+mod test {
+    use super::{resolve_ports, ConfigPortRange};
+    use crate::protocol::control::PortRange_OnWire as ProtoPortRange;
+
+    #[test]
+    fn port_range_easy_cases() {
+        let config = ConfigPortRange { begin: 42, end: 88 };
+        let request = ProtoPortRange { begin: 77, end: 99 };
+        assert_eq!(
+            resolve_ports(ConfigPortRange::default(), None).unwrap(),
+            ConfigPortRange::default()
+        );
+        assert_eq!(resolve_ports(config, None).unwrap(), config);
+        assert_eq!(
+            resolve_ports(ConfigPortRange::default(), Some(request)).unwrap(),
+            request.into()
+        );
+    }
+
+    #[test]
+    fn port_range_tricky_cases() {
+        fn cpr(begin: u16, end: u16) -> ConfigPortRange {
+            ConfigPortRange { begin, end }
+        }
+        #[allow(clippy::unnecessary_wraps)]
+        fn ppr(begin: u16, end: u16) -> Option<ProtoPortRange> {
+            Some(ProtoPortRange { begin, end })
+        }
+
+        let config = cpr(42, 88);
+        // overlap one end
+        assert_eq!(resolve_ports(config, ppr(77, 99)).unwrap(), cpr(77, 88));
+        // overlap the other end
+        assert_eq!(resolve_ports(config, ppr(5, 49)).unwrap(), cpr(42, 49));
+        // superset
+        assert_eq!(resolve_ports(config, ppr(5, 123)).unwrap(), cpr(42, 88));
+        // subset
+        assert_eq!(resolve_ports(config, ppr(51, 62)).unwrap(), cpr(51, 62));
+        // disjoint
+        let _ = resolve_ports(config, ppr(123, 456)).expect_err("failure expected");
+    }
 }

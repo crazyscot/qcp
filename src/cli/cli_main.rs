@@ -3,27 +3,14 @@
 
 use super::args::CliArgs;
 use crate::{
-    client::{client_main, Parameters as ClientParameters, MAX_UPDATE_FPS},
+    client::{client_main, MAX_UPDATE_FPS},
     config::{Configuration, Manager},
     os,
     server::server_main,
-    util::setup_tracing,
 };
 
 use anstream::println;
 use indicatif::{MultiProgress, ProgressDrawTarget};
-use tracing::error_span;
-
-/// Computes the trace level for a given set of [ClientParameters]
-fn trace_level(args: &ClientParameters) -> &str {
-    if args.debug {
-        "debug"
-    } else if args.quiet {
-        "error"
-    } else {
-        "info"
-    }
-}
 
 enum MainMode {
     Server,
@@ -51,15 +38,6 @@ impl From<&CliArgs> for MainMode {
     }
 }
 
-impl MainMode {
-    fn progress(&self) -> Option<&MultiProgress> {
-        match self {
-            MainMode::Client(mp) => Some(mp),
-            _ => None,
-        }
-    }
-}
-
 /// Main CLI entrypoint
 ///
 /// Call this from `main`. It reads argv.
@@ -74,14 +52,6 @@ pub async fn cli() -> anyhow::Result<bool> {
     // Now fold the arguments in with the CLI config (which may fail)
     // (to provoke an error here: `qcp host: host2:`)
     let config_manager = Manager::try_from(&args)?;
-    let config = config_manager.get::<Configuration>()?.validate()?;
-
-    setup_tracing(
-        trace_level(&args.client_params),
-        mode.progress(),
-        &args.client_params.log_file,
-        config.time_format,
-    )?; // to provoke error: set RUST_LOG=.
 
     match mode {
         MainMode::HelpBuffers => {
@@ -97,10 +67,10 @@ pub async fn cli() -> anyhow::Result<bool> {
             println!("{}", config_manager.to_display_adapter::<Configuration>());
         }
         MainMode::Server => {
-            let _span = error_span!("REMOTE").entered();
-            server_main(&config).await?;
+            server_main().await?;
         }
         MainMode::Client(progress) => {
+            let config = config_manager.get::<Configuration>()?.validate()?;
             // this mode may return false
             return client_main(&config, progress, args.client_params).await;
         }

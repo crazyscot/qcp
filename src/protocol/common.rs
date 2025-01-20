@@ -15,14 +15,13 @@
 //!
 //! Some of the structures in these protocols have a trailing `extension: u8`.
 //! This allows us to add new, optional fields later without a protocol break.
-//! * In v0 of each struct, these must be sent as 0.
+//! * In the original version of each struct, these must be sent as 0.
 //! * A later version can quietly change the definition to `Option<something>`.
 //!
 //! This is on top of the general protocol extension trick of using unions (in Rust, enums with contents)
 //! as described in section 4 of [BARE].
-//! * The downside of this arrangement is that older versions of the software do not understand the newer enum,
-//!   so would choke on it. Nevertheless this scheme is workable, provided there was some sort of protocol
-//!   negotiation phase.
+//! This must itself be used with care:  older versions of the software do not understand any newer enum values,
+//! so would choke on them. This is why the control channel includes [`CompatibilityLevel`](crate::protocol::control::CompatibilityLevel).
 //!
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 //! [serde_bare]: https://docs.rs/serde_bare/latest/serde_bare/

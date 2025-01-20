@@ -36,7 +36,7 @@ derive_more = { version = "1.0.0", features = ["constructor"] }
 dirs = "6.0.0"
 dns-lookup = "2.0.4"
 document-features = "0.2.10"
-engineering-repr = { version = "1.0.0", features = ["serde"] }
+engineering-repr = { version = "1.1.0", features = ["serde"] }
 figment = { version = "0.10.19" }
 futures-util = { version = "0.3.31", default-features = false }
 gethostname = "0.5.0"
@@ -52,6 +52,7 @@ rcgen = { version = "0.13.1" }
 rustls-pki-types = "1.10.0"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_bare = "0.5.0"
+serde_repr = "0.1.19"
 static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
 strum = { version = "0.26.3", features = ["derive"]}
