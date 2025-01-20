@@ -106,6 +106,7 @@ pub fn bind_range_for_address(
     for port in range.begin..range.end {
         let result = UdpSocket::bind(SocketAddr::new(addr, port));
         if let Ok(sock) = result {
+            debug!("bound endpoint to UDP port {port}");
             return Ok(sock);
         }
     }

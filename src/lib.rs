@@ -35,7 +35,7 @@
 //! ## 📖 How it works
 //!
 //! The brief version:
-//! 1. We ssh to the remote machine and run `qcp --server` there
+//! 1. We ssh to the remote machine and run `qcp --server` there (with no further args, i.e. you can use `command="qcp --server"` in your authorized_keys file)
 //! 1. Both sides generate a TLS key and exchange self-signed certs over the ssh pipe between them
 //! 1. We use those certs to set up a QUIC session between the two
 //! 1. We transfer files over QUIC

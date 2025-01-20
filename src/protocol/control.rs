@@ -1,20 +1,28 @@
 //! Control protocol definitions and helper types
 // (c) 2024 Ross Younger
 //!
-//! The control protocol consists data passed between the local qcp client process and the remote qcp server process
+//! The control protocol consists of data passed between the local qcp client process and the remote qcp server process
 //! before establishing the [QUIC] connection.
 //! The two processes are connected via ssh.
 //!
 //! The control protocol looks like this:
 //! * Server ➡️ Client: Banner
+//! * C ➡️ S: [`ClientGreeting`]
+//! * S ➡️ C: [`ServerGreeting`]
+//!   * The two greetings may be sent in parallel.
 //! * C ➡️ S: [`ClientMessage`]
+//!   * The client MUST NOT send its Message until it has received the `ServerGreeting`,
+//!     and it MUST NOT send a newer version of the `ClientMessage` than the server understands.
+//! * S: ⚙️ Parses client message, binds to a port for the session protocol.
 //! * S ➡️ C: [`ServerMessage`]
+//!   * The server MUST NOT send a newer version of the `ServerMessage` than the client understands.
 //! * Client establishes a QUIC connection to the server, on the port given in the [`ServerMessage`].
 //! * Client then opens one or more bidirectional QUIC streams ('sessions') on that connection.
-//!    (See the session protocol for what happens there.)
+//!    (See the [session protocol](crate::protocol::session) for what happens there.)
 //!
 //! When transfer is complete and all QUIC streams are closed:
 //! * S ➡️ C: [`ClosedownReport`]
+//!   * The server MUST NOT send a newer version than the client understands.
 //! * C ➡️ S: (closes control channel; server takes this as a cue to exit)
 //!
 //! On the wire these are [BARE] messages, sent using standard framing.
@@ -25,13 +33,24 @@
 //! [quic]: https://quicwg.github.io/
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 
-use std::net::IpAddr;
+use std::{fmt::Display, net::IpAddr};
 
+use anyhow::anyhow;
+use figment::{
+    value::{Dict, Map},
+    Profile, Provider,
+};
 use quinn::ConnectionStats;
 use serde::{Deserialize, Serialize};
 use serde_bare::Uint;
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use super::common::ProtocolMessage;
+use crate::{
+    config::Configuration,
+    transport::CongestionControllerType,
+    util::{Credentials, PortRange as CliPortRange},
+};
 
 /// Server banner message, sent on stdout and checked by the client
 pub const BANNER: &str = "qcp-server-2\n";
@@ -39,6 +58,12 @@ pub const BANNER: &str = "qcp-server-2\n";
 /// The banner for the initial protocol version (pre-v0.3) that we don't support any more.
 /// Note that it is the same size as the current [`BANNER`].
 pub const OLD_BANNER: &str = "qcp-server-1\n";
+
+/// The protocol compatibility version implemented by this crate
+pub const COMPATIBILITY_LEVEL: CompatibilityLevel = CompatibilityLevel::V1;
+
+////////////////////////////////////////////////////////////////////////////////////////
+// COMPATIBILITY
 
 /// Protocol sub-version compatibility identifier
 ///
@@ -50,7 +75,7 @@ pub const OLD_BANNER: &str = "qcp-server-1\n";
 /// While this enum is part of the control protocol, it affects both control and session; the same principles
 /// of compatibility apply.
 #[repr(u16)]
-#[derive(Clone, Copy, Debug, strum::Display, PartialEq, Eq, strum::FromRepr)]
+#[derive(Clone, Copy, Debug, strum::Display, PartialEq, Eq, strum::FromRepr, PartialOrd, Ord)]
 pub enum CompatibilityLevel {
     /// Indicates that we do not know the peer's compatibility level.
     /// This value should never be seen on the wire.
@@ -65,18 +90,6 @@ pub enum CompatibilityLevel {
     NEWER = 65535,
 }
 
-impl CompatibilityLevel {
-    /// Returns the underlying u16 representation of this value
-    #[must_use]
-    pub fn discriminant(self) -> u16 {
-        #[allow(unsafe_code)]
-        // SAFETY: As this type is marked `repr(u16)`, its contents are guaranteed to lie in the range 0..65535.
-        unsafe {
-            std::mem::transmute(self)
-        }
-    }
-}
-
 impl From<u16> for CompatibilityLevel {
     /// This conversion is infallible because any unknown value is mapped to `VersionCompatibility::NEWER`.
     fn from(value: u16) -> Self {
@@ -88,20 +101,23 @@ impl From<u16> for CompatibilityLevel {
 }
 impl From<CompatibilityLevel> for u16 {
     fn from(value: CompatibilityLevel) -> Self {
-        value.discriminant()
+        value as u16
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone, Copy)]
+////////////////////////////////////////////////////////////////////////////////////////
+// CONNECTION TYPE
+
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Eq, Debug, Default, Clone, Copy)]
 /// Protocol representation of a connection type
 ///
 /// Unlike [`AddressFamily`](crate::util::AddressFamily) there is no ANY; types must be explicit here.
 #[repr(u8)]
 pub enum ConnectionType {
-    /// IP version 4
+    /// IP version 4 (serialize as the byte 0x04)
     #[default]
     Ipv4 = 4,
-    /// IP version 6
+    /// IP version 6 (serialize as the byte 0x06)
     Ipv6 = 6,
 }
 
@@ -114,15 +130,126 @@ impl From<IpAddr> for ConnectionType {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+////////////////////////////////////////////////////////////////////////////////////////
+// CONGESTION CONTROLLER
+
+/// Selects the congestion control algorithm to use.
+/// This is a newtype for [crate::transport::CongestionControllerType]
+/// with different serialization.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone, Copy)]
+#[serde(try_from = "Uint")]
+#[serde(into = "Uint")]
+#[allow(non_camel_case_types)]
+pub struct CongestionController_OnWire(pub CongestionControllerType);
+
+impl From<CongestionController_OnWire> for CongestionControllerType {
+    fn from(value: CongestionController_OnWire) -> Self {
+        value.0
+    }
+}
+impl From<CongestionControllerType> for CongestionController_OnWire {
+    fn from(value: CongestionControllerType) -> Self {
+        Self(value)
+    }
+}
+
+impl From<CongestionController_OnWire> for Uint {
+    fn from(value: CongestionController_OnWire) -> Self {
+        Self(value.0 as u64)
+    }
+}
+
+impl TryFrom<Uint> for CongestionController_OnWire {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Uint) -> anyhow::Result<Self> {
+        let v = u8::try_from(value.0)?;
+        let t = CongestionControllerType::from_repr(v)
+            .ok_or(anyhow!("invalid congestioncontroller enum"))?;
+        Ok(Self(t))
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+// PORT RANGE
+
+/// Representation of a TCP or UDP port range
+///
+/// N.B. This type is structurally identical to, but distinct from,
+/// [`crate::util::PortRange`] so that it can have different serialization
+/// semantics.
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[allow(non_camel_case_types)]
+pub struct PortRange_OnWire {
+    /// The first port of the range
+    pub begin: u16,
+    /// The last port of the range, inclusive. This may be the same as the first.
+    pub end: u16,
+}
+
+impl From<CliPortRange> for PortRange_OnWire {
+    fn from(other: CliPortRange) -> Self {
+        Self {
+            begin: other.begin,
+            end: other.end,
+        }
+    }
+}
+
+impl From<CliPortRange> for Option<PortRange_OnWire> {
+    fn from(value: CliPortRange) -> Self {
+        if value.is_default() {
+            None
+        } else {
+            Some(value.into())
+        }
+    }
+}
+
+impl From<PortRange_OnWire> for CliPortRange {
+    fn from(other: PortRange_OnWire) -> Self {
+        Self {
+            begin: other.begin,
+            end: other.end,
+        }
+    }
+}
+
+impl Display for PortRange_OnWire {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.begin, self.end)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+// CLIENT GREETING
+
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 /// The initial message from client to server.
 ///
-/// This is mildly tricky, as we have to send it without knowing what version the server supports.
-pub struct ClientMessage {
-    /// Client's self-signed certificate (DER)
-    pub cert: Vec<u8>,
-    /// The connection type to use (the type of socket we want the server to bind)
-    pub connection_type: ConnectionType,
+/// We have to send this message without knowing what version the server supports.
+pub struct ClientGreeting {
+    /// Protocol compatibility version identifier
+    ///
+    /// This identifies the client's maximum supported protocol sub-version.
+    ///
+    /// N.B. This is not sent as an enum to avoid breaking the server when we have a newer version!
+    pub compatibility: u16,
+    /// Requests the remote emit debug information over the control channel (stderr).
+    pub debug: bool,
+    /// Extension field, reserved for future expansion; for now, must be set to 0
+    pub extension: u8,
+}
+impl ProtocolMessage for ClientGreeting {}
+
+////////////////////////////////////////////////////////////////////////////////////////
+// SERVER GREETING
+
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+/// The initial message from server to client.
+///
+/// Like [`ClientGreeting`] this is designed to be sent without knowing what version the client supports.
+pub struct ServerGreeting {
     /// Protocol compatibility version identifier
     ///
     /// This identifies the client's maximum supported protocol sub-version.
@@ -132,33 +259,145 @@ pub struct ClientMessage {
     /// Extension field, reserved for future expansion; for now, must be set to 0
     pub extension: u8,
 }
-impl ProtocolMessage for ClientMessage {}
+impl ProtocolMessage for ServerGreeting {}
 
-#[derive(Serialize, Default, Deserialize, PartialEq, Eq, Debug)]
-#[repr(u16)]
-/// The initial message from client to server
-pub enum ServerMessage {
-    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
-    V1(ServerMessageV1) = 1,
+////////////////////////////////////////////////////////////////////////////////////////
+// CLIENT MESSAGE
 
-    /// Special value indicating a client has not yet read the remote `ServerMessage`.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+/// The control parameters send from client to server.
+pub enum ClientMessage {
+    /// Special value indicating an endpoint has not yet read the remote `ClientMessage`.
     /// This value should never be seen on the wire.
     #[default]
-    ToFollow = 0,
+    #[serde(skip_serializing)]
+    ToFollow, // 0
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    /// On the wire this is encoded with enum discriminant 1.
+    V1(ClientMessageV1), //
+}
+impl ProtocolMessage for ClientMessage {}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+/// Version 1 of the client control parameters message.
+/// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+pub struct ClientMessageV1 {
+    /// Client's self-signed certificate (DER)
+    pub cert: Vec<u8>,
+    /// The connection type to use (the type of socket we want the server to bind)
+    pub connection_type: ConnectionType,
+    /// If present, requests the server bind to a UDP port from a given range.
+    pub port: Option<PortRange_OnWire>,
+
+    /// The requested bandwidth to use from client to server
+    pub bandwidth_to_server: Uint,
+    /// The requested bandwidth to use from server to client (if None, use the same as bandwidth to server)
+    pub bandwidth_to_client: Uint,
+    /// The network Round Trip Time, in milliseconds, to use in calculating the bandwidth delay product
+    pub round_trip_time: u16,
+    /// The congestion control algorithm to use
+    pub congestion_algorithm: CongestionController_OnWire,
+    /// The initial congestion window, if specified
+    pub initial_congestion_window: Option<Uint>,
+    /// Connection timeout for the QUIC endpoints, in seconds
+    pub quic_timeout: u16,
+
+    /// Extension field, reserved for future expansion; for now, must be set to 0
+    pub extension: u8,
+}
+
+impl ClientMessage {
+    pub(crate) fn new(
+        credentials: &Credentials,
+        connection_type: ConnectionType,
+        config: &Configuration,
+    ) -> Self {
+        ClientMessage::V1(ClientMessageV1::new(credentials, connection_type, config))
+    }
+}
+
+impl ClientMessageV1 {
+    fn new(
+        credentials: &Credentials,
+        connection_type: ConnectionType,
+        config: &Configuration,
+    ) -> Self {
+        let initial_congestion_window = if config.initial_congestion_window == 0 {
+            None
+        } else {
+            Some(Uint(config.initial_congestion_window))
+        };
+        Self {
+            cert: credentials.certificate.to_vec(),
+            connection_type,
+            port: config.port.into(),
+
+            bandwidth_to_server: Uint(config.tx()),
+            bandwidth_to_client: Uint(config.rx()),
+            round_trip_time: config.rtt,
+            congestion_algorithm: config.congestion.into(),
+            initial_congestion_window,
+            quic_timeout: config.timeout,
+
+            extension: 0,
+        }
+    }
+
+    const META_NAME: &str = "client message";
+}
+
+impl Provider for ClientMessageV1 {
+    fn metadata(&self) -> figment::Metadata {
+        figment::Metadata::named(Self::META_NAME)
+    }
+
+    fn data(&self) -> Result<figment::value::Map<figment::Profile, Dict>, figment::Error> {
+        use crate::util::insert_if_some;
+        let mut dict = Dict::new();
+        let mut insert = |key: &str, val: figment::value::Value| {
+            let _ = dict.insert(key.into(), val);
+        };
+        // storing tx & rx as integers here requires engineering_repr 1.1.0:
+        insert("rx", self.bandwidth_to_server.0.into());
+        insert("tx", self.bandwidth_to_client.0.into());
+
+        insert("rtt", self.round_trip_time.into());
+        insert("congestion", self.congestion_algorithm.0.to_string().into());
+        insert("timeout", self.quic_timeout.into());
+        let _ = insert_if_some(
+            &mut dict,
+            "initial_congestion_window",
+            self.initial_congestion_window,
+        );
+
+        let mut profile_map = Map::new();
+        let _ = profile_map.insert(Profile::Global, dict);
+
+        Ok(profile_map)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+// SERVER MESSAGE
+
+#[derive(Clone, Serialize, Default, Deserialize, PartialEq, Eq, Debug)]
+/// The control parameters sent from server to client
+pub enum ServerMessage {
+    /// Special value indicating an endpoint has not yet read the remote `ServerMessage`.
+    /// This value should never be seen on the wire.
+    #[default]
+    #[serde(skip_serializing)]
+    ToFollow,
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    /// On the wire enum discriminant: 1.
+    V1(ServerMessageV1),
 }
 impl ProtocolMessage for ServerMessage {}
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 /// Version 1 of the message from server to client.
 /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
 pub struct ServerMessageV1 {
-    /// Protocol compatibility version identifier
-    ///
-    /// This identifies the server's maximum supported protocol sub-version.
-    ///
-    /// N.B. This is not sent as an enum to avoid breaking the client when we have a newer version!
-    pub compatibility: u16,
-
     /// UDP port the server has bound to
     pub port: u16,
     /// Server's self-signed certificate (DER)
@@ -173,12 +412,18 @@ pub struct ServerMessageV1 {
     pub extension: u8,
 }
 
+////////////////////////////////////////////////////////////////////////////////////////
+// CLOSEDOWN REPORT
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone)]
-#[repr(u16)]
 /// The statistics sent by the server when the job is done
 pub enum ClosedownReport {
+    /// Special value that should never be seen on the wire
+    #[serde(skip_serializing)]
+    Unknown,
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
-    V1(ClosedownReportV1) = 1,
+    /// On the wire enum discriminant: 1
+    V1(ClosedownReportV1),
 }
 impl ProtocolMessage for ClosedownReport {}
 
@@ -229,13 +474,21 @@ mod test {
 
     use quinn::ConnectionStats;
     use serde::{Deserialize, Serialize};
+    use serde_bare::Uint;
 
-    use crate::protocol::{
-        common::ProtocolMessage,
-        control::{CompatibilityLevel, ConnectionType},
+    use crate::{
+        config::Configuration,
+        protocol::{
+            common::ProtocolMessage,
+            control::{
+                ClosedownReport, CompatibilityLevel, ConnectionType, ServerGreeting,
+                ServerMessageV1,
+            },
+        },
+        util::Credentials,
     };
 
-    use super::ClosedownReportV1;
+    use super::{ClientGreeting, ClientMessage, ClosedownReportV1, ServerMessage};
 
     #[test]
     fn test_connection_type() {
@@ -323,5 +576,98 @@ mod test {
         // The real test here is that decode succeeded.
         assert_eq!(decoded.i, t2.i);
         assert_eq!(decoded.extension, 1);
+    }
+
+    #[test]
+    fn serialize_client_greeting() {
+        let msg = ClientGreeting {
+            compatibility: CompatibilityLevel::V1.into(),
+            debug: false,
+            extension: 0,
+        };
+        let wire = msg.to_vec().unwrap();
+        let deser = ClientGreeting::from_slice(&wire).unwrap();
+        assert_eq!(msg, deser);
+    }
+
+    #[test]
+    fn serialize_server_greeting() {
+        let msg = ServerGreeting {
+            compatibility: CompatibilityLevel::V1.into(),
+            extension: 0,
+        };
+        let wire = msg.to_vec().unwrap();
+        let deser = ServerGreeting::from_slice(&wire).unwrap();
+        assert_eq!(msg, deser);
+    }
+
+    #[test]
+    fn serialize_client_message() {
+        let fake_keypair = &[0u8];
+        let keypair = rustls_pki_types::PrivatePkcs8KeyDer::<'_>::from(fake_keypair.as_slice());
+        let creds = Credentials {
+            certificate: vec![0, 1, 2].into(),
+            keypair: keypair.into(),
+            hostname: "foo".into(),
+        };
+        let config = Configuration {
+            tx: 42u64.into(),
+            rx: 89u64.into(),
+            congestion: crate::transport::CongestionControllerType::Bbr,
+            ..Default::default()
+        };
+        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, &config);
+        let ser = cmsg.to_vec().unwrap();
+        println!("{cmsg:#?}");
+        println!("vec: {ser:?}");
+        assert_eq!(ser[0], 1); // ClientMessage::V1
+        assert_eq!(ser[1], 3); // 3 bytes of certificate
+        assert_eq!(ser[5], 4); // IPv4 serializes as 4
+        assert_eq!(ser[7], 42); // tx bandwidth
+        assert_eq!(ser[11], 1); // Bbr
+        assert_eq!(ser[13], 5); // default timeout 5s
+        assert_eq!(ser[14], 0); // extension 0
+
+        let deser = ClientMessage::from_slice(&ser).unwrap();
+        println!("{deser:#?}");
+        assert_eq!(cmsg, deser);
+    }
+
+    #[test]
+    fn serialize_server_message() {
+        let msg = ServerMessage::V1(ServerMessageV1 {
+            port: 12345,
+            cert: vec![9, 8, 7],
+            name: "hello".to_string(),
+            warning: String::from("this is a warning"),
+            bandwidth_info: String::from("blah blah bandwidth"),
+            extension: 0,
+        });
+        let wire = msg.to_vec().unwrap();
+        let deser = ServerMessage::from_slice(&wire).unwrap();
+        assert_eq!(msg, deser);
+    }
+
+    #[test]
+    fn serialize_closedown_report() {
+        let msg = ClosedownReport::V1(ClosedownReportV1 {
+            cwnd: Uint(42),
+            sent_packets: Uint(123),
+            lost_packets: Uint(234),
+            lost_bytes: Uint(456_798),
+            congestion_events: Uint(44),
+            black_holes: Uint(22),
+            sent_bytes: Uint(987_654),
+            extension: 0,
+        });
+        let wire = msg.to_vec().unwrap();
+        let deser = ClosedownReport::from_slice(&wire).unwrap();
+        assert_eq!(msg, deser);
+    }
+
+    #[test]
+    fn skip_serializing() {
+        let msg = ServerMessage::ToFollow;
+        let _ = msg.to_vec().expect_err("ToFollow cannot be serialized");
     }
 }

@@ -172,9 +172,14 @@ impl ProtocolMessage for FileTrailer {}
 
 #[cfg(test)]
 mod test {
-    use crate::protocol::session::FileHeader;
+    use serde_bare::Uint;
 
-    use super::{ResponseV1, Status};
+    use crate::protocol::{
+        common::ProtocolMessage,
+        session::{FileHeader, FileTrailer},
+    };
+
+    use super::{Command, FileHeaderV1, Response, ResponseV1, Status};
 
     #[test]
     fn display() {
@@ -195,5 +200,42 @@ mod test {
         let FileHeader::V1(h) = h;
         assert_eq!(h.size.0, 42);
         assert_eq!(h.filename, "myfile");
+    }
+
+    #[test]
+    fn serialize_command() {
+        let cmd = Command::Get(super::GetArgs {
+            filename: "myfile".to_string(),
+        });
+        let wire = cmd.to_vec().unwrap();
+        let deser = Command::from_slice(&wire).unwrap();
+        assert_eq!(cmd, deser);
+    }
+
+    #[test]
+    fn serialize_response() {
+        let resp = Response::V1(ResponseV1 {
+            status: Status::ItIsADirectory,
+            message: Some("nope".to_string()),
+        });
+        let wire = resp.to_vec().unwrap();
+        let deser = Response::from_slice(&wire).unwrap();
+        assert_eq!(resp, deser);
+    }
+
+    #[test]
+    fn serialize_file_header_trailer() {
+        let head = FileHeader::V1(FileHeaderV1 {
+            size: Uint(12345),
+            filename: "myfile".to_string(),
+        });
+        let wire = head.to_vec().unwrap();
+        let deser = FileHeader::from_slice(&wire).unwrap();
+        assert_eq!(head, deser);
+
+        let trail = FileTrailer::V1;
+        let wire = trail.to_vec().unwrap();
+        let deser = FileTrailer::from_slice(&wire).unwrap();
+        assert_eq!(trail, deser);
     }
 }

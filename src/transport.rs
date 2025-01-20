@@ -30,23 +30,28 @@ pub enum ThroughputMode {
     Both,
 }
 
-/// Selects the congestion control algorithm to use
+/// Selects the congestion control algorithm to use.
+/// On the wire, this is serialized as a standard BARE enum.
 #[derive(
     Copy,
     Clone,
     Debug,
+    Default,
     PartialEq,
     Eq,
     strum::Display,
     strum::EnumString,
+    strum::FromRepr,
     strum::VariantNames,
     clap::ValueEnum,
     Serialize,
 )]
 #[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
+#[repr(u8)]
 pub enum CongestionControllerType {
     /// The congestion algorithm TCP uses. This is good for most cases.
-    Cubic,
+    #[default]
+    Cubic = 0,
     /// (Use with caution!) An experimental algorithm created by Google,
     /// which increases goodput in some situations
     /// (particularly long and fat connections where the intervening
@@ -55,7 +60,7 @@ pub enum CongestionControllerType {
     /// See
     /// `https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/`
     /// for more discussion.
-    Bbr,
+    Bbr = 1,
 }
 
 impl<'de> Deserialize<'de> for CongestionControllerType {

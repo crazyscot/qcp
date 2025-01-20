@@ -430,9 +430,9 @@ checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
 
 [[package]]
 name = "engineering-repr"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ee6e941bd84e2720a495364cabab0af1ca7563b9cda4e9240ad405ed7b70d3a"
+checksum = "d60b04132ff0d628a3c7163c85f6225758b7d362b8bb6d8afe45ff9e0ddbc3fc"
 dependencies = [
  "num-integer",
  "num-rational",
@@ -1025,6 +1025,7 @@ dependencies = [
  "serde",
  "serde_bare",
  "serde_json",
+ "serde_repr",
  "serde_test",
  "static_assertions",
  "struct-field-names-as-array",
@@ -1341,6 +1342,17 @@ dependencies = [
  "memchr",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_repr"
+version = "0.1.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c64451ba24fc7a6a2d60fc75dd9c83c90903b19028d4eff35e88fc1e86564e9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.95",
 ]
 
 [[package]]
