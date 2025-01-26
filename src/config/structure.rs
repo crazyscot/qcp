@@ -20,7 +20,7 @@ use derive_deftly::Deftly;
 
 /// Minimum bandwidth we will accept in either direction.
 /// You have to have a limit somewhere; zero doesn't work. So I chose 1200 baud ...
-const MINIMUM_BANDWIDTH: u64 = 150;
+pub(crate) const MINIMUM_BANDWIDTH: u64 = 150;
 
 /// The set of configurable options supported by qcp.
 ///
@@ -207,6 +207,27 @@ pub struct Configuration {
     pub ssh_config: Vec<String>,
 }
 
+lazy_static::lazy_static! {
+    static ref SYSTEM_DEFAULT_CONFIG: Configuration = Configuration {
+            // Transport
+            rx: 12_500_000u64.into(),
+            tx: 0u64.into(),
+            rtt: 300,
+            congestion: CongestionControllerType::Cubic,
+            initial_congestion_window: 0,
+            port: PortRange::default(),
+            timeout: 5,
+
+            // Client
+            address_family: AddressFamily::Any,
+            ssh: "ssh".into(),
+            ssh_options: vec![],
+            remote_port: PortRange::default(),
+            time_format: TimeFormat::Local,
+            ssh_config: Vec::new(),
+    };
+}
+
 impl Configuration {
     /// Computes the theoretical bandwidth-delay product for outbound data
     #[must_use]
@@ -323,40 +344,21 @@ impl Configuration {
         }
         Ok(self)
     }
-}
 
-impl Default for Configuration {
-    /// **(Unusual!)**
-    /// Returns qcp's hard-wired configuration defaults.
-    fn default() -> Self {
-        Self {
-            // Transport
-            rx: 12_500_000u64.into(),
-            tx: 0u64.into(),
-            rtt: 300,
-            congestion: CongestionControllerType::Cubic,
-            initial_congestion_window: 0,
-            port: PortRange::default(),
-            timeout: 5,
-
-            // Client
-            address_family: AddressFamily::Any,
-            ssh: "ssh".into(),
-            ssh_options: vec![],
-            remote_port: PortRange::default(),
-            time_format: TimeFormat::Local,
-            ssh_config: Vec::new(),
-        }
+    /// Returns the system default settings
+    #[must_use]
+    pub fn system_default() -> &'static Self {
+        &SYSTEM_DEFAULT_CONFIG
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::Configuration;
+    use super::SYSTEM_DEFAULT_CONFIG;
 
     #[test]
     fn flattened() {
-        let v = Configuration::default();
+        let v = SYSTEM_DEFAULT_CONFIG.clone();
         let j = serde_json::to_string(&v).unwrap();
         let d = json::parse(&j).unwrap();
         assert!(!d.has_key("bw"));

@@ -47,7 +47,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use super::common::ProtocolMessage;
 use crate::{
-    config::Configuration,
+    config::{Configuration, Manager},
     transport::CongestionControllerType,
     util::{Credentials, PortRange as CliPortRange},
 };
@@ -310,34 +310,46 @@ impl ClientMessage {
     pub(crate) fn new(
         credentials: &Credentials,
         connection_type: ConnectionType,
-        config: &Configuration,
+        manager: &Manager,
     ) -> Self {
-        ClientMessage::V1(ClientMessageV1::new(credentials, connection_type, config))
+        ClientMessage::V1(ClientMessageV1::new(credentials, connection_type, manager))
     }
 }
 
 impl ClientMessageV1 {
-    fn new(
-        credentials: &Credentials,
-        connection_type: ConnectionType,
-        config: &Configuration,
-    ) -> Self {
-        let initial_congestion_window = if config.initial_congestion_window == 0 {
-            None
-        } else {
-            Some(Uint(config.initial_congestion_window))
-        };
+    fn new(credentials: &Credentials, connection_type: ConnectionType, manager: &Manager) -> Self {
+        use engineering_repr::EngineeringQuantity as EQ;
+        let defaults: &Configuration = Configuration::system_default();
+        let rx = u64::from(
+            manager
+                .get_field_optional::<EQ<u64>>("rx")
+                .unwrap_or(defaults.rx),
+        );
+        let mut tx = u64::from(
+            manager
+                .get_field_optional::<EQ<u64>>("tx")
+                .unwrap_or(defaults.tx),
+        );
+        if tx == 0 {
+            tx = rx; // TEMP: Will become None
+        }
+
         Self {
             cert: credentials.certificate.to_vec(),
             connection_type,
-            port: config.port.into(),
+            port: manager.get_field_optional("RemotePort"),
 
-            bandwidth_to_server: Uint(config.tx()),
-            bandwidth_to_client: Uint(config.rx()),
-            round_trip_time: config.rtt,
-            congestion_algorithm: config.congestion.into(),
-            initial_congestion_window,
-            quic_timeout: config.timeout,
+            bandwidth_to_server: Uint(tx),
+            bandwidth_to_client: Uint(rx),
+            round_trip_time: manager.get_field_optional("Rtt").unwrap_or(defaults.rtt),
+            congestion_algorithm: manager
+                .get_field_optional::<CongestionControllerType>("Congestion")
+                .unwrap_or(defaults.congestion)
+                .into(),
+            initial_congestion_window: manager.get_field_optional("InitialCongestionWindow"),
+            quic_timeout: manager
+                .get_field_optional("Timeout")
+                .unwrap_or(defaults.timeout),
 
             extension: 0,
         }
@@ -477,14 +489,15 @@ mod test {
     use serde_bare::Uint;
 
     use crate::{
-        config::Configuration,
+        config::{Configuration_Optional, Manager},
         protocol::{
             common::ProtocolMessage,
             control::{
-                ClosedownReport, CompatibilityLevel, ConnectionType, ServerGreeting,
-                ServerMessageV1,
+                ClosedownReport, CompatibilityLevel, CongestionController_OnWire, ConnectionType,
+                ServerGreeting, ServerMessageV1,
             },
         },
+        transport::CongestionControllerType,
         util::Credentials,
     };
 
@@ -603,6 +616,8 @@ mod test {
 
     #[test]
     fn serialize_client_message() {
+        use engineering_repr::EngineeringQuantity as EQ;
+
         let fake_keypair = &[0u8];
         let keypair = rustls_pki_types::PrivatePkcs8KeyDer::<'_>::from(fake_keypair.as_slice());
         let creds = Credentials {
@@ -610,26 +625,45 @@ mod test {
             keypair: keypair.into(),
             hostname: "foo".into(),
         };
-        let config = Configuration {
-            tx: 42u64.into(),
-            rx: 89u64.into(),
-            congestion: crate::transport::CongestionControllerType::Bbr,
+        let mut manager = Manager::without_files(None);
+        let config = Configuration_Optional {
+            tx: Some(42u64.into()),
+            rx: Some(89u64.into()),
+            rtt: Some(1234),
+            congestion: Some(crate::transport::CongestionControllerType::Bbr),
             ..Default::default()
         };
-        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, &config);
-        let ser = cmsg.to_vec().unwrap();
-        println!("{cmsg:#?}");
-        println!("vec: {ser:?}");
-        assert_eq!(ser[0], 1); // ClientMessage::V1
-        assert_eq!(ser[1], 3); // 3 bytes of certificate
-        assert_eq!(ser[5], 4); // IPv4 serializes as 4
-        assert_eq!(ser[7], 42); // tx bandwidth
-        assert_eq!(ser[11], 1); // Bbr
-        assert_eq!(ser[13], 5); // default timeout 5s
-        assert_eq!(ser[14], 0); // extension 0
+        manager.merge_provider(&config);
+        let _ = manager.get_field::<EQ<u64>>("tx").unwrap();
+        assert!(manager.get_field_optional::<EQ<u64>>("tx").is_some());
+        assert_eq!(
+            manager.get_field_optional::<EQ<u64>>("tx").unwrap(),
+            42u64.into()
+        );
+        assert_eq!(
+            manager
+                .get_field::<CongestionControllerType>("congestion")
+                .unwrap(),
+            CongestionControllerType::Bbr
+        );
+        assert_eq!(manager.get_field::<u16>("rtt").unwrap(), 1234);
 
+        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, &manager);
+        let ser = cmsg.to_vec().unwrap();
+        //println!("{cmsg:#?}");
+        //println!("vec: {ser:?}");
         let deser = ClientMessage::from_slice(&ser).unwrap();
         println!("{deser:#?}");
+        if let ClientMessage::V1(detail) = &deser {
+            assert_eq!(detail.bandwidth_to_server.0, 42);
+            assert_eq!(detail.bandwidth_to_client.0, 89);
+            assert_eq!(
+                detail.congestion_algorithm,
+                CongestionController_OnWire(CongestionControllerType::Bbr)
+            );
+        } else {
+            panic!("wrong ClientMessage type");
+        }
         assert_eq!(cmsg, deser);
     }
 

@@ -2,9 +2,12 @@
 // (c) 2024 Ross Younger
 
 use crate::os::{AbstractPlatform as _, Platform};
+use crate::styles::{INFO, RESET};
 
-use super::{ssh::SshConfigError, Configuration};
+use super::{ssh::SshConfigError, structure::MINIMUM_BANDWIDTH, Configuration};
 
+use anyhow::Result;
+use engineering_repr::{EngineeringQuantity as EQ, EngineeringRepr};
 use figment::{providers::Serialized, value::Value, Figment, Metadata, Provider};
 use heck::ToUpperCamelCase;
 use serde::Deserialize;
@@ -25,7 +28,6 @@ use tracing::{debug, warn};
 
 /// A [`figment::Provider`](https://docs.rs/figment/latest/figment/trait.Provider.html) that holds
 /// the set of system default options
-#[derive(Default)]
 struct SystemDefault {}
 
 impl SystemDefault {
@@ -43,7 +45,7 @@ impl Provider for SystemDefault {
         figment::value::Map<figment::Profile, figment::value::Dict>,
         figment::Error,
     > {
-        Serialized::defaults(Configuration::default()).data()
+        Serialized::defaults(Configuration::system_default()).data()
     }
 }
 
@@ -72,15 +74,25 @@ impl Default for Manager {
 }
 
 impl Manager {
+    /// Constructor. The structure is set up to extract data for the given `host`, if any.
+    fn new(host: Option<&str>) -> Self {
+        let profile = if let Some(host) = host {
+            figment::Profile::new(host)
+        } else {
+            figment::Profile::Default
+        };
+
+        Self {
+            data: Figment::new().select(profile),
+            host: host.map(std::borrow::ToOwned::to_owned),
+        }
+    }
+
     /// Initialises this structure, reading the set of config files appropriate to the platform
     /// and the current user.
     #[must_use]
     pub fn standard(for_host: Option<&str>) -> Self {
-        let mut new1 = Self {
-            data: Figment::new(),
-            host: for_host.map(std::borrow::ToOwned::to_owned),
-        };
-        new1.merge_provider(SystemDefault::default());
+        let mut new1 = Self::new(for_host);
         // N.B. This may leave data in a fused-error state, if a config file isn't parseable.
         new1.add_config(false, "system", Platform::system_config_path(), for_host);
         new1.add_config(true, "user", Platform::user_config_path(), for_host);
@@ -128,9 +140,9 @@ impl Manager {
     #[must_use]
     #[cfg(test)]
     pub(crate) fn without_files(host: Option<&str>) -> Self {
-        let data = Figment::new().merge(SystemDefault::default());
-        let host = host.map(std::string::ToString::to_string);
-        Self { data, host }
+        let mut result = Self::new(host);
+        result.merge_provider(SystemDefault {});
+        result
     }
 
     /// Merges in a data set, which is some sort of [figment::Provider](https://docs.rs/figment/latest/figment/trait.Provider.html).
@@ -161,6 +173,12 @@ impl Manager {
         }
     }
 
+    /// Applies the system default settings, at a lower priority than everything else
+    pub fn apply_system_default(&mut self) {
+        let f = std::mem::take(&mut self.data);
+        self.data = f.join(SystemDefault {});
+    }
+
     /// Attempts to extract a particular struct from the data.
     ///
     /// Within qcp, `T` is usually [Configuration], but it isn't intrinsically required to be.
@@ -169,17 +187,74 @@ impl Manager {
     where
         T: Deserialize<'de>,
     {
-        let profile = if let Some(host) = &self.host {
-            figment::Profile::new(host)
-        } else {
-            figment::Profile::Default
-        };
+        self.data.extract_lossy::<T>().map_err(SshConfigError::from)
+    }
 
-        self.data
-            .clone()
-            .select(profile)
-            .extract_lossy::<T>()
-            .map_err(SshConfigError::from)
+    /// Attempts to retrieve a named field from the data.
+    /// It is an error if that field is not present.
+    ///
+    /// <div class="warning">You must specify the correct type `T`, or will most likely get an error</div>
+    pub(crate) fn get_field<'de, T>(&self, field: &str) -> anyhow::Result<T>
+    where
+        T: Deserialize<'de>,
+    {
+        let value = self.data.find_value(&field.to_lowercase())?;
+        let res: T = value.deserialize()?;
+        Ok(res)
+    }
+
+    /// Retrieves a named field from the data, or None if it is not there or errored.
+    ///
+    /// <div class="warning">You must specify the correct type `T`, or will most likely get `None`</div>
+    pub(crate) fn get_field_optional<'de, T>(&self, field: &str) -> Option<T>
+    where
+        T: Deserialize<'de>,
+    {
+        let Ok(value) = self.data.find_value(&field.to_lowercase()) else {
+            return None;
+        };
+        value.deserialize().map_or(None, |r| Some(r))
+    }
+
+    /// Performs additional validation checks on the fields present in the configuration, as far as possible.
+    /// This is only useful when the [`Manager`] holds a [`Configuration`].
+    pub fn validate(self) -> Result<Self> {
+        let rtt = self.get_field_optional::<u16>("rtt").unwrap_or(0);
+        if let Some(rx) = self.get_field_optional::<EQ<u64>>("rx") {
+            let rx = u64::from(rx);
+            if rx < MINIMUM_BANDWIDTH {
+                anyhow::bail!(
+                    "The receive bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
+                    rx.to_eng(0),
+                    MINIMUM_BANDWIDTH.to_eng(3)
+                );
+            }
+            if rx.checked_mul(rtt.into()).is_none() {
+                anyhow::bail!(
+                    "The receive bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
+                    rx.to_eng(0),
+                    rtt
+                );
+            }
+        }
+        if let Some(tx) = self.get_field_optional::<EQ<u64>>("tx") {
+            let tx = u64::from(tx);
+            if tx != 0 && tx < MINIMUM_BANDWIDTH {
+                anyhow::bail!(
+                    "The transmit bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
+                    tx.to_eng(0),
+                    MINIMUM_BANDWIDTH.to_eng(3)
+                );
+            }
+            if tx.checked_mul(rtt.into()).is_none() {
+                anyhow::bail!(
+                    "The transmit bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
+                    tx.to_eng(0),
+                    rtt
+                );
+            }
+        }
+        Ok(self)
     }
 }
 
@@ -277,13 +352,11 @@ impl Display for DisplayAdapter<'_> {
     ///
     /// N.B. This function uses CLI styling.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut data = self.source.data.clone();
+        let data = &self.source.data;
 
         let mut output = Vec::<PrettyConfig>::new();
         // First line of the table is special
         let (host_string, host_colour) = if let Some(host) = &self.source.host {
-            let profile = figment::Profile::new(host);
-            data = data.select(profile);
             (host.clone(), Color::FG_GREEN)
         } else {
             ("* (globals)".into(), Color::FG_CYAN)
@@ -325,8 +398,8 @@ mod test {
     fn defaults() {
         let mgr = Manager::without_files(None);
         let result = mgr.get().unwrap();
-        let expected = Configuration::default();
-        assert_eq!(expected, result);
+        let expected = Configuration::system_default();
+        assert_eq!(*expected, result);
     }
 
     #[test]
@@ -338,7 +411,7 @@ mod test {
         };
         let expected = Configuration {
             rx: 12345u64.into(),
-            ..Default::default()
+            ..Configuration::system_default().clone()
         };
 
         let mut mgr = Manager::without_files(None);
@@ -574,5 +647,25 @@ mod test {
         //println!("{mgr:?}");
         let result = mgr.get::<Configuration>().unwrap();
         assert_eq!(10_500_000, result.rx());
+    }
+
+    #[test]
+    fn extract_field() {
+        type EQ = engineering_repr::EngineeringQuantity<u64>;
+        let mgr = Manager::without_files(None);
+        let expected = Configuration::system_default().rx;
+        assert_eq!(mgr.get_field::<EQ>("rx").unwrap(), expected);
+        let _ = mgr
+            .get_field::<bool>("nonexistent")
+            .expect_err("nonexistent field should have failed");
+    }
+
+    #[test]
+    fn extract_field_optional() {
+        type EQ = engineering_repr::EngineeringQuantity<u64>;
+        let mgr = Manager::without_files(None);
+        let expected = Configuration::system_default().rx;
+        assert_eq!(mgr.get_field_optional::<EQ>("rx"), Some(expected));
+        assert_eq!(mgr.get_field_optional::<bool>("nonexistent"), None);
     }
 }

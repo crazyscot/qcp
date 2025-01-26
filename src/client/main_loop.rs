@@ -3,7 +3,7 @@
 
 use crate::{
     client::{control::Channel, progress::spinner_style},
-    config::Configuration,
+    config::{Configuration, Manager},
     protocol::{
         common::{ProtocolMessage, StreamPair},
         session::{Command, FileHeader, FileTrailer, GetArgs, PutArgs, Response, Status},
@@ -37,39 +37,32 @@ use super::Parameters as ClientParameters;
 /// a shared definition string used in a couple of places
 const SHOW_TIME: &str = "file transfer";
 
-/// Computes the trace level for a given set of [ClientParameters]
-fn trace_level(args: &ClientParameters) -> &str {
-    if args.debug {
-        "debug"
-    } else if args.quiet {
-        "error"
-    } else {
-        "info"
-    }
-}
-
 fn setup_tracing(
-    config: &Configuration,
+    manager: &Manager,
     display: &MultiProgress,
     parameters: &ClientParameters,
 ) -> anyhow::Result<()> {
-    crate::util::setup_tracing(
-        trace_level(parameters),
+    util::setup_tracing(
+        util::trace_level(parameters),
         Some(display),
         &parameters.log_file,
-        config.time_format,
+        manager
+            .get_field_optional("TimeFormat")
+            .unwrap_or(Configuration::system_default().time_format),
     ) // to provoke error: set RUST_LOG=.
 }
 
 /// Main client mode event loop
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 #[allow(clippy::module_name_repetitions)]
+#[allow(clippy::too_many_lines)]
 pub async fn client_main(
-    config: &Configuration,
+    manager: &Manager,
     display: MultiProgress,
     parameters: ClientParameters,
 ) -> anyhow::Result<bool> {
-    setup_tracing(config, &display, &parameters)?;
+    setup_tracing(manager, &display, &parameters)?;
+    let default_config = Configuration::system_default();
 
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
     // not until the control channel is in place, in case ssh wants to ask for a password or passphrase.
@@ -88,12 +81,22 @@ pub async fn client_main(
     let job_spec = crate::client::CopyJobSpec::try_from(&parameters)?;
     let credentials = Credentials::generate()?;
     let hostname = job_spec.remote_host();
-    let remote_host = super::ssh::resolve_host_alias(hostname, &config.ssh_config)
-        .unwrap_or_else(|| hostname.into());
+    let remote_host = super::ssh::resolve_host_alias(
+        hostname,
+        &manager
+            .get_field_optional("SshConfig")
+            .unwrap_or(default_config.ssh_config.clone()),
+    )
+    .unwrap_or_else(|| hostname.into());
 
     // If the user didn't specify the address family: we do the DNS lookup, figure it out and tell ssh to use that.
     // (Otherwise if we resolved a v4 and ssh a v6 - as might happen with round-robin DNS - that could be surprising.)
-    let remote_address = lookup_host_by_family(&remote_host, config.address_family)?;
+    let remote_address = lookup_host_by_family(
+        &remote_host,
+        manager
+            .get_field_optional("AddressFamily")
+            .unwrap_or(default_config.address_family),
+    )?;
 
     // Control channel ---------------
     spinner.set_message("Opening control channel");
@@ -104,11 +107,14 @@ pub async fn client_main(
         &remote_host,
         remote_address.into(),
         &display,
-        config,
+        manager,
         &parameters,
     )
     .await?;
     let port = control.message.port;
+    let config = manager
+        .get::<Configuration>()
+        .with_context(|| "assembling final client configuration from server message")?;
 
     // Data channel ------------------
     let server_address_port = match remote_address {
@@ -123,7 +129,7 @@ pub async fn client_main(
         &credentials,
         control.message.cert.clone().into(),
         &server_address_port,
-        config,
+        &config,
         job_spec.throughput_mode(),
     )?;
 
@@ -144,7 +150,7 @@ pub async fn client_main(
         job_spec,
         display.clone(),
         spinner.clone(),
-        config,
+        &config,
         parameters.quiet,
     )
     .await;
@@ -179,7 +185,7 @@ pub async fn client_main(
             total_bytes,
             transport_time,
             remote_stats,
-            config,
+            &config,
             parameters.statistics,
         );
     }

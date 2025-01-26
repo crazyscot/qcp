@@ -15,13 +15,14 @@ use tokio::{
 };
 use tracing::{debug, trace, warn};
 
+use crate::config::{Configuration, Configuration_Optional, Manager};
 use crate::protocol::common::ProtocolMessage as _;
 use crate::protocol::control::{
     ClientGreeting, ClientMessage, ClosedownReport, ClosedownReportV1, CompatibilityLevel,
     ConnectionType, ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
     OLD_BANNER,
 };
-use crate::{config::Configuration, util::Credentials};
+use crate::util::Credentials;
 
 use super::Parameters;
 
@@ -67,14 +68,14 @@ impl Channel {
         remote_host: &str,
         connection_type: ConnectionType,
         display: &MultiProgress,
-        config: &Configuration,
+        manager: &Manager,
         parameters: &Parameters,
     ) -> Result<Channel> {
         trace!("opening control channel");
 
         // PHASE 1: BANNER CHECK
 
-        let mut new1 = Self::launch(display, config, parameters, remote_host, connection_type)?;
+        let mut new1 = Self::launch(display, manager, parameters, remote_host, connection_type)?;
         new1.wait_for_banner().await?;
 
         // PHASE 2: EXCHANGE GREETINGS
@@ -113,7 +114,7 @@ impl Channel {
         // PHASE 3: EXCHANGE OF MESSAGES
 
         // FUTURE: Select the client message version to send based on server's compatibility level.
-        ClientMessage::new(credentials, connection_type, config)
+        ClientMessage::new(credentials, connection_type, manager)
             .to_writer_async_framed(server_input)
             .await
             .with_context(|| "error writing client message")?;
@@ -147,17 +148,24 @@ impl Channel {
     /// This is effectively a constructor. At present, it launches a subprocess.
     fn launch(
         display: &MultiProgress,
-        config: &Configuration,
+        manager: &Manager,
         parameters: &Parameters,
         remote_host: &str,
         connection_type: ConnectionType,
     ) -> Result<Self> {
-        let mut server = Command::new(&config.ssh);
+        let working_config = manager.get::<Configuration_Optional>().unwrap_or_default();
+        let defaults = Configuration::system_default();
+
+        let mut server = Command::new(working_config.ssh.unwrap_or_else(|| defaults.ssh.clone()));
         let _ = match connection_type {
             ConnectionType::Ipv4 => server.arg("-4"),
             ConnectionType::Ipv6 => server.arg("-6"),
         };
-        let _ = server.args(&config.ssh_options);
+        let _ = server.args(
+            working_config
+                .ssh_options
+                .unwrap_or_else(|| defaults.ssh_options.clone()),
+        );
         let _ = server.args([remote_host, "qcp", "--server"]);
         let _ = server
             .stdin(Stdio::piped())

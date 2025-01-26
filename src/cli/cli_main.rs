@@ -51,7 +51,7 @@ pub async fn cli() -> anyhow::Result<bool> {
 
     // Now fold the arguments in with the CLI config (which may fail)
     // (to provoke an error here: `qcp host: host2:`)
-    let config_manager = Manager::try_from(&args)?;
+    let mut config_manager = Manager::try_from(&args)?;
 
     match mode {
         MainMode::HelpBuffers => {
@@ -64,15 +64,16 @@ pub async fn cli() -> anyhow::Result<bool> {
             println!("{:?}", Manager::config_files());
         }
         MainMode::ShowConfig => {
+            config_manager.apply_system_default();
             println!("{}", config_manager.to_display_adapter::<Configuration>());
         }
         MainMode::Server => {
             server_main().await?;
         }
         MainMode::Client(progress) => {
-            let config = config_manager.get::<Configuration>()?.validate()?;
+            config_manager.apply_system_default();
             // this mode may return false
-            return client_main(&config, progress, args.client_params).await;
+            return client_main(&config_manager.validate()?, progress, args.client_params).await;
         }
     };
     Ok(true)
