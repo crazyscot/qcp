@@ -8,14 +8,14 @@ use std::sync::Arc;
 use crate::config::{Configuration, Manager};
 use crate::protocol::control::{
     ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport, ClosedownReportV1,
-    PortRange_OnWire, ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
+    ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
 };
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, ResponseV1, Status};
 use crate::protocol::{common::ProtocolMessage as _, common::StreamPair};
 use crate::transport::ThroughputMode;
-use crate::util::{io, socket, Credentials, PortRange as ConfigPortRange};
+use crate::util::{io, socket, Credentials, TimeFormat};
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
@@ -27,16 +27,14 @@ use tokio::task::JoinSet;
 use tokio::time::timeout;
 use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
-fn setup_tracing(debug: bool, config: &Configuration) -> anyhow::Result<()> {
+fn setup_tracing(debug: bool, time_format: TimeFormat) -> anyhow::Result<()> {
     let level = if debug { "debug" } else { "info" };
-    crate::util::setup_tracing(level, None, &None, config.time_format) // to provoke error: set RUST_LOG=.
+    crate::util::setup_tracing(level, None, &None, time_format) // to provoke error: set RUST_LOG=.
 }
 
 /// Server event loop
 #[allow(clippy::module_name_repetitions)]
 pub async fn server_main() -> anyhow::Result<()> {
-    let mut manager = Manager::standard(None);
-    let early_config = manager.get::<Configuration>()?;
     let mut stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
 
@@ -63,7 +61,11 @@ pub async fn server_main() -> anyhow::Result<()> {
         .await
         .with_context(|| "failed to read client greeting")?;
 
-    setup_tracing(remote_greeting.debug, &early_config)?;
+    let mut manager = Manager::standard(None);
+    let tf = manager
+        .get_field::<TimeFormat>("TimeFormat")
+        .unwrap_or(Configuration::system_default().time_format);
+    setup_tracing(remote_greeting.debug, tf)?;
     let _span = tracing::error_span!("REMOTE").entered();
 
     debug!("got client greeting {remote_greeting:?}");
@@ -98,6 +100,7 @@ pub async fn server_main() -> anyhow::Result<()> {
     );
 
     manager.merge_provider(&message1);
+    manager.apply_system_default();
     // for testing:
     // eprintln!("{}", manager.to_display_adapter::<Configuration>());
 
@@ -190,7 +193,8 @@ fn create_endpoint(
         ThroughputMode::Both,
     )?);
 
-    let port = resolve_ports(transport.port, client_message.port)?;
+    // TODO: This will move to become part of transport negotiation
+    let port = transport.port.combine(client_message.port)?;
     debug!("Resolved port range {port}");
 
     let mut socket = socket::bind_range_for_family(client_message.connection_type, port)?;
@@ -429,78 +433,4 @@ async fn send_response(
     ))
     .to_writer_async_framed(send)
     .await
-}
-
-/// Look at the configured and client-requested port ranges, determine if a solution can be found
-/// and return it if so.
-fn resolve_ports(
-    ours: ConfigPortRange,
-    theirs: Option<PortRange_OnWire>,
-) -> Result<ConfigPortRange> {
-    Ok(if ours.is_default() {
-        // no config this side; client's prefs win
-        match theirs {
-            Some(pr) => pr.into(),
-            None => ConfigPortRange::default(),
-        }
-    } else {
-        match theirs {
-            None => ours, // no client pref; we win
-            Some(theirs) => {
-                // This is the tricky case.. both sides have expressed a preference.
-                // Intersect both preferences. If that results in no solution, report error.
-                let begin = std::cmp::max(ours.begin, theirs.begin);
-                let end = std::cmp::min(ours.end, theirs.end);
-                anyhow::ensure!(
-                    begin <= end,
-                    "requested port range {theirs} could not be satisfied (our config: {ours})"
-                );
-                ConfigPortRange { begin, end }
-            }
-        }
-    })
-}
-
-#[cfg(test)]
-mod test {
-    use super::{resolve_ports, ConfigPortRange};
-    use crate::protocol::control::PortRange_OnWire as ProtoPortRange;
-
-    #[test]
-    fn port_range_easy_cases() {
-        let config = ConfigPortRange { begin: 42, end: 88 };
-        let request = ProtoPortRange { begin: 77, end: 99 };
-        assert_eq!(
-            resolve_ports(ConfigPortRange::default(), None).unwrap(),
-            ConfigPortRange::default()
-        );
-        assert_eq!(resolve_ports(config, None).unwrap(), config);
-        assert_eq!(
-            resolve_ports(ConfigPortRange::default(), Some(request)).unwrap(),
-            request.into()
-        );
-    }
-
-    #[test]
-    fn port_range_tricky_cases() {
-        fn cpr(begin: u16, end: u16) -> ConfigPortRange {
-            ConfigPortRange { begin, end }
-        }
-        #[allow(clippy::unnecessary_wraps)]
-        fn ppr(begin: u16, end: u16) -> Option<ProtoPortRange> {
-            Some(ProtoPortRange { begin, end })
-        }
-
-        let config = cpr(42, 88);
-        // overlap one end
-        assert_eq!(resolve_ports(config, ppr(77, 99)).unwrap(), cpr(77, 88));
-        // overlap the other end
-        assert_eq!(resolve_ports(config, ppr(5, 49)).unwrap(), cpr(42, 49));
-        // superset
-        assert_eq!(resolve_ports(config, ppr(5, 123)).unwrap(), cpr(42, 88));
-        // subset
-        assert_eq!(resolve_ports(config, ppr(51, 62)).unwrap(), cpr(51, 62));
-        // disjoint
-        let _ = resolve_ports(config, ppr(123, 456)).expect_err("failure expected");
-    }
 }

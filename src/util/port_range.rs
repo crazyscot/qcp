@@ -6,6 +6,8 @@ use serde::{
 };
 use std::{fmt::Display, str::FromStr};
 
+use crate::protocol::control::PortRange_OnWire;
+
 /// A range of UDP port numbers.
 ///
 /// Port 0 is allowed with the usual meaning ("any available port"), but 0 may not form part of a range.
@@ -85,6 +87,33 @@ impl PortRange {
     pub(crate) fn is_default(self) -> bool {
         self.begin == 0 && self.begin == self.end
     }
+
+    /// Look at the configured and client-requested port ranges, determine if a solution can be found
+    /// and return it if so.
+    pub(crate) fn combine(self, theirs: Option<PortRange_OnWire>) -> anyhow::Result<PortRange> {
+        Ok(if self.is_default() {
+            // no config this side; client's prefs win
+            match theirs {
+                Some(pr) => pr.into(),
+                None => PortRange::default(),
+            }
+        } else {
+            match theirs {
+                None => self, // no client pref; we win
+                Some(theirs) => {
+                    // This is the tricky case.. both sides have expressed a preference.
+                    // Intersect both preferences. If that results in no solution, report error.
+                    let begin = std::cmp::max(self.begin, theirs.begin);
+                    let end = std::cmp::min(self.end, theirs.end);
+                    anyhow::ensure!(
+                        begin <= end,
+                        "requested port range {theirs} could not be satisfied (our config: {self})"
+                    );
+                    PortRange { begin, end }
+                }
+            }
+        })
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for PortRange {
@@ -99,6 +128,8 @@ impl<'de> serde::Deserialize<'de> for PortRange {
 
 #[cfg(test)]
 mod tests {
+    use super::PortRange as ConfigPortRange;
+    use crate::protocol::control::PortRange_OnWire as ProtoPortRange;
     use std::str::FromStr;
 
     type Uut = super::PortRange;
@@ -142,5 +173,43 @@ mod tests {
     #[test]
     fn port_range_not_zero() {
         let _ = Uut::from_str("0-1000").expect_err("should have failed");
+    }
+
+    #[test]
+    fn port_range_easy_cases() {
+        let config = ConfigPortRange { begin: 42, end: 88 };
+        let request = ProtoPortRange { begin: 77, end: 99 };
+        assert_eq!(
+            ConfigPortRange::default().combine(None).unwrap(),
+            ConfigPortRange::default()
+        );
+        assert_eq!(config.combine(None).unwrap(), config);
+        assert_eq!(
+            ConfigPortRange::default().combine(Some(request)).unwrap(),
+            request.into()
+        );
+    }
+
+    #[test]
+    fn port_range_tricky_cases() {
+        fn cpr(begin: u16, end: u16) -> ConfigPortRange {
+            ConfigPortRange { begin, end }
+        }
+        #[allow(clippy::unnecessary_wraps)]
+        fn ppr(begin: u16, end: u16) -> Option<ProtoPortRange> {
+            Some(ProtoPortRange { begin, end })
+        }
+
+        let config = cpr(42, 88);
+        // overlap one end
+        assert_eq!(config.combine(ppr(77, 99)).unwrap(), cpr(77, 88));
+        // overlap the other end
+        assert_eq!(config.combine(ppr(5, 49)).unwrap(), cpr(42, 49));
+        // superset
+        assert_eq!(config.combine(ppr(5, 123)).unwrap(), cpr(42, 88));
+        // subset
+        assert_eq!(config.combine(ppr(51, 62)).unwrap(), cpr(51, 62));
+        // disjoint
+        let _ = config.combine(ppr(123, 456)).expect_err("failure expected");
     }
 }

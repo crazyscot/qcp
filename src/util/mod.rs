@@ -16,6 +16,7 @@ pub mod stats;
 pub mod time;
 
 mod tracing;
+pub(crate) use tracing::trace_level;
 pub use tracing::{is_initialized as tracing_is_initialised, setup as setup_tracing, TimeFormat};
 
 mod port_range;

@@ -56,11 +56,11 @@ impl HostConfiguration {
     }
 
     pub(crate) fn as_figment(&self) -> Figment {
-        let mut figment = Figment::new();
         let profile = self
             .host
             .as_deref()
             .map_or(figment::Profile::Default, figment::Profile::new);
+        let mut figment = Figment::new().select(profile.clone());
         for (k, v) in &self.data {
             figment = figment.merge(ValueProvider::new(k, v, &profile));
         }
