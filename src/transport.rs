@@ -1,7 +1,7 @@
 //! QUIC transport configuration
 // (c) 2024 Ross Younger
 
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{convert::Infallible, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use human_repr::HumanCount as _;
@@ -13,7 +13,10 @@ use serde::{de, Deserialize, Serialize};
 use strum::VariantNames;
 use tracing::debug;
 
-use crate::config::Configuration;
+use crate::{
+    config::{Configuration, Configuration_Optional, Manager},
+    protocol::control::ClientMessageV1,
+};
 
 /// Keepalive interval for the QUIC connection
 pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
@@ -123,7 +126,7 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
     }
 
     debug!(
-        "Network configuration: {}",
+        "Final network configuration: {}",
         params.format_transport_config()
     );
     debug!(
@@ -135,4 +138,139 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
     );
 
     Ok(config.into())
+}
+
+/// Negotiation logic for a single parameter where they are both the same type
+fn negotiate<T, E>(
+    a: Option<T>,
+    b: Option<T>,
+    default: T,
+    conflict: fn(T, T) -> Result<T, E>,
+) -> Result<T, E> {
+    match (a, b) {
+        (None, None) => Ok(default),
+        (Some(aa), None) => Ok(aa),
+        (None, Some(bb)) => Ok(bb),
+        (Some(aa), Some(bb)) => conflict(aa, bb),
+    }
+}
+
+/// Negotiation logic for a single parameter where they are different but convertible types.
+/// The type of `default` governs the output type.
+fn negotiate_mixed<T, U, D, E>(
+    a: Option<T>,
+    b: Option<U>,
+    default: D,
+    conflict: fn(D, D) -> Result<D, E>,
+) -> Result<D, E>
+where
+    D: From<T> + From<U>,
+{
+    match (a, b) {
+        (None, None) => Ok(default),
+        (Some(aa), None) => Ok(aa.into()),
+        (None, Some(bb)) => Ok(bb.into()),
+        (Some(aa), Some(bb)) => conflict(aa.into(), bb.into()),
+    }
+}
+
+/// Applies the bandwidth/parameter negotiation logic given the server's configuration (`server`) and the client's requests (`client`).
+///
+/// # Logic
+/// The general rules are:
+/// * All parameters are optional from both sides.
+/// * If one side does not express a preference for a parameter, the other side's preference automatically wins.
+/// * If neither side specifies a given parameter, the system default shall obtain.
+/// * If both sides specify a preference, consult the following table to determine how to resolve the situation.
+///
+/// ## Parameter resolution
+///
+///
+/// | [Configuration] field  | [Control protocol](ClientMessageV1) | Resolution |
+/// | ---                    | ---                 | ---       |
+/// | Client [`rx`](Configuration#structfield.rx) / Server [`tx`](Configuration#structfield.tx) | [`bandwidth_to_client`](ClientMessageV1#structfield.bandwidth_to_client) | Use the smaller of the two |
+/// | Client [`tx`](Configuration#structfield.tx) / Server [`rx`](Configuration#structfield.rx) | [`bandwidth_to_server`](ClientMessageV1#structfield.bandwidth_to_server) | Use the smaller of the two |
+/// | [`rtt`](Configuration#structfield.rtt) |  [`round_trip_time`](ClientMessageV1#structfield.round_trip_time) | Client preference wins |
+/// | [`congestion`](Configuration#structfield.congestion) | [`congestion_algorithm`](ClientMessageV1#structfield.congestion_algorithm) | If the two prefs match, use that; if not, error |
+/// | [`initial_congestion_window`](Configuration#structfield.initial_congestion_window) | [`initial_congestion_window`](ClientMessageV1#structfield.initial_congestion_window) | Client preference wins |
+/// | [`timeout`](Configuration#structfield.timeout) | [`quic_timeout`](ClientMessageV1#structfield.quic_timeout) | Client preference wins |
+/// | Client [`remote_port`](Configuration#structfield.remote_port) / Server [`port`](ClientMessageV1#structfield.port) | [`port`](ClientMessageV1#structfield.port) | Treat port `0` as "no preference". Compute the intersection of the two ranges. If they do not intersect, error. |
+///
+/// # Return value
+/// A fresh [`Configuration`] object holding the result of this logic.
+///
+/// # Errors
+/// * If the input [`Manager`] is in the fused-error state
+/// * If the resultant [`Configuration`] fails validation checks
+///
+pub fn combine_bandwidth_configurations(
+    manager: &Manager,
+    client: &ClientMessageV1,
+) -> Result<Configuration> {
+    #[allow(clippy::unnecessary_wraps)]
+    fn client_wins<T>(_server: T, client: T) -> Result<T, Infallible> {
+        Ok(client)
+    }
+
+    let server: Configuration_Optional = manager.get::<Configuration_Optional>()?;
+    let defaults = Configuration::system_default();
+
+    let result = Configuration {
+        rx: negotiate_mixed(
+            server.rx,
+            client.bandwidth_to_server.map(|u| u.0),
+            u64::from(defaults.rx),
+            |a, b| Ok::<u64, Infallible>(std::cmp::min(a, b)),
+        )?
+        .into(),
+        tx: negotiate_mixed(
+            server.tx,
+            client.bandwidth_to_client.map(|u| u.0),
+            u64::from(defaults.tx),
+            |a, b| Ok::<u64, Infallible>(std::cmp::min(a, b)),
+        )?
+        .into(),
+        rtt: negotiate(
+            server.rtt,
+            client.round_trip_time,
+            defaults.rtt,
+            client_wins,
+        )?,
+        congestion: negotiate_mixed(
+            server.congestion,
+            client.congestion_algorithm,
+            defaults.congestion,
+            |_, _| {
+                anyhow::bail!(
+                    "server and client have incompatible congestion algorithm requirements"
+                )
+            },
+        )?,
+        initial_congestion_window: negotiate_mixed(
+            server.initial_congestion_window,
+            client.initial_congestion_window.map(|u| u.0),
+            defaults.initial_congestion_window,
+            |a, _| Ok::<u64, Infallible>(a),
+        )?,
+        port: negotiate_mixed(server.port, client.port, defaults.port, |a, b| {
+            a.combine(b.into())
+        })?,
+        timeout: negotiate(
+            server.timeout,
+            client.quic_timeout,
+            defaults.timeout,
+            client_wins,
+        )?,
+
+        // Other fields are irrelevant to the negotiation.
+        // We do not use ..defaults here, as we want the compiler to catch if/when a new field is added.
+        address_family: defaults.address_family,
+        ssh: defaults.ssh.clone(),
+        ssh_options: defaults.ssh_options.clone(),
+        remote_port: defaults.remote_port,
+        time_format: defaults.time_format,
+        ssh_config: defaults.ssh_config.clone(),
+    };
+
+    result.validate()
 }

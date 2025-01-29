@@ -32,7 +32,7 @@ bytes = "1.9.0"
 clap = { version = "4.5.27", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 console = "0.15.8"
 derive-deftly = "0.14.2"
-derive_more = { version = "1.0.0", features = ["constructor"] }
+derive_more = { version = "1.0.0", features = ["constructor", "display"] }
 dirs = "6.0.0"
 dns-lookup = "2.0.4"
 document-features = "0.2.10"

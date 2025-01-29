@@ -57,7 +57,7 @@ fn setup_tracing(
 #[allow(clippy::module_name_repetitions)]
 #[allow(clippy::too_many_lines)]
 pub async fn client_main(
-    manager: &Manager,
+    manager: &mut Manager,
     display: MultiProgress,
     parameters: ClientParameters,
 ) -> anyhow::Result<bool> {

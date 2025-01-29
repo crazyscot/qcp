@@ -71,9 +71,13 @@ pub async fn cli() -> anyhow::Result<bool> {
             server_main().await?;
         }
         MainMode::Client(progress) => {
-            config_manager.apply_system_default();
             // this mode may return false
-            return client_main(&config_manager.validate()?, progress, args.client_params).await;
+            return client_main(
+                &mut config_manager.validate()?,
+                progress,
+                args.client_params,
+            )
+            .await;
         }
     };
     Ok(true)

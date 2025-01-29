@@ -12,7 +12,7 @@ use crate::protocol::control::{
 };
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, ResponseV1, Status};
 use crate::protocol::{common::ProtocolMessage as _, common::StreamPair};
-use crate::transport::ThroughputMode;
+use crate::transport::{combine_bandwidth_configurations, ThroughputMode};
 use crate::util::{io, socket, Credentials, TimeFormat};
 
 use anyhow::Context as _;
@@ -21,6 +21,7 @@ use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::rustls::{self, RootCertStore};
 use quinn::{ConnectionStats, EndpointConfig};
 use rustls_pki_types::CertificateDer;
+use serde_bare::Uint;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
@@ -34,6 +35,7 @@ fn setup_tracing(debug: bool, time_format: TimeFormat) -> anyhow::Result<()> {
 
 /// Server event loop
 #[allow(clippy::module_name_repetitions)]
+#[allow(clippy::too_many_lines)]
 pub async fn server_main() -> anyhow::Result<()> {
     let mut stdin = tokio::io::stdin();
     let mut stdout = tokio::io::stdout();
@@ -61,7 +63,7 @@ pub async fn server_main() -> anyhow::Result<()> {
         .await
         .with_context(|| "failed to read client greeting")?;
 
-    let mut manager = Manager::standard(None);
+    let manager = Manager::standard(None); // Server does not use Host-specific configuration at the moment.
     let tf = manager
         .get_field::<TimeFormat>("TimeFormat")
         .unwrap_or(Configuration::system_default().time_format);
@@ -98,29 +100,31 @@ pub async fn server_main() -> anyhow::Result<()> {
         message1.cert.len(),
         message1.connection_type,
     );
+    //debug!("client msg {message1:?}");
 
-    manager.merge_provider(&message1);
-    manager.apply_system_default();
     // for testing:
     // eprintln!("{}", manager.to_display_adapter::<Configuration>());
+    let config = combine_bandwidth_configurations(&manager, &message1)?;
 
-    let config = manager.get::<Configuration>()?;
-
-    let bandwidth_info = config.format_transport_config().to_string();
     let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
 
     let credentials = Credentials::generate()?;
     let (endpoint, warning) = create_endpoint(&credentials, message1, &config)?;
     let warning = warning.unwrap_or_default();
     let local_addr = endpoint.local_addr()?;
-    debug!("Local address is {local_addr}");
+    debug!("Local endpoint address is {local_addr}");
     // FUTURE: When later versions of ServerMessage are created, check client compatibility and send the appropriate version.
     ServerMessage::V1(ServerMessageV1 {
         port: local_addr.port(),
         cert: credentials.certificate.to_vec(),
         name: credentials.hostname,
+        bandwidth_to_server: Uint(config.rx()),
+        bandwidth_to_client: Uint(config.tx()),
+        round_trip_time: config.rtt,
+        congestion_algorithm: config.congestion.into(),
+        initial_congestion_window: Uint(config.initial_congestion_window),
+        quic_timeout: config.timeout,
         warning,
-        bandwidth_info,
         extension: 0,
     })
     .to_writer_async_framed(&mut stdout)
@@ -174,7 +178,7 @@ pub async fn server_main() -> anyhow::Result<()> {
 fn create_endpoint(
     credentials: &Credentials,
     client_message: ClientMessageV1,
-    transport: &Configuration,
+    config: &Configuration,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
     let client_cert: CertificateDer<'_> = client_message.cert.into();
 
@@ -189,15 +193,12 @@ fn create_endpoint(
     let qsc = QuicServerConfig::try_from(tls_config)?;
     let mut server = quinn::ServerConfig::with_crypto(Arc::new(qsc));
     let _ = server.transport_config(crate::transport::create_config(
-        transport,
+        config,
         ThroughputMode::Both,
     )?);
 
-    // TODO: This will move to become part of transport negotiation
-    let port = transport.port.combine(client_message.port)?;
-    debug!("Resolved port range {port}");
-
-    let mut socket = socket::bind_range_for_family(client_message.connection_type, port)?;
+    debug!("Using port range {}", config.port);
+    let mut socket = socket::bind_range_for_family(client_message.connection_type, config.port)?;
     // We don't know whether client will send or receive, so configure for both.
     let wanted_send = Some(usize::try_from(Configuration::send_buffer())?);
     let wanted_recv = Some(usize::try_from(Configuration::recv_buffer())?);
