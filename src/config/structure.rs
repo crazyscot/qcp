@@ -24,7 +24,11 @@ pub(crate) const MINIMUM_BANDWIDTH: u64 = 150;
 
 /// The set of configurable options supported by qcp.
 ///
-/// **Note:** The implementation of `default()` for this struct returns qcp's hard-wired configuration defaults.
+/// Options from the server and client are combined at runtime.
+/// See [`combine_bandwidth_configurations`](crate::transport::combine_bandwidth_configurations) for details.
+///
+/// ### Developer notes
+/// The implementation of `default()` for this struct returns qcp's hard-wired configuration defaults.
 ///
 /// This structure uses the [Optionalify](derive_deftly_template_Optionalify) deftly macro to automatically
 /// define the `Configuration_Optional` struct, which is the same but has all members of type `Option<whatever>`.
@@ -48,6 +52,8 @@ pub struct Configuration {
     /// like `10M` or `256k`. **Note that this is described in BYTES, not bits**;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable setting.
+    ///
+    /// This parameter is always interpreted as the **local** bandwidth, whether operating in client or server mode.
     #[arg(
         short('b'),
         long,
@@ -59,8 +65,9 @@ pub struct Configuration {
     pub rx: EngineeringQuantity<u64>,
     /// The maximum network bandwidth we expect sending data TO the remote system,
     /// if it is different from the bandwidth FROM the system.
-    ///
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
+    ///
+    /// This parameter is always interpreted as the **local** bandwidth, whether operating in client or server mode.
     ///
     /// If not specified or 0, uses the value of `rx`.
     #[arg(

@@ -68,7 +68,7 @@ impl Channel {
         remote_host: &str,
         connection_type: ConnectionType,
         display: &MultiProgress,
-        manager: &Manager,
+        manager: &mut Manager,
         parameters: &Parameters,
     ) -> Result<Channel> {
         trace!("opening control channel");
@@ -114,7 +114,9 @@ impl Channel {
         // PHASE 3: EXCHANGE OF MESSAGES
 
         // FUTURE: Select the client message version to send based on server's compatibility level.
-        ClientMessage::new(credentials, connection_type, manager)
+        let message = ClientMessage::new(credentials, connection_type, manager);
+        debug!("Our client message: {message}");
+        message
             .to_writer_async_framed(server_input)
             .await
             .with_context(|| "error writing client message")?;
@@ -133,15 +135,14 @@ impl Channel {
                 anyhow::bail!("remote or logic error: unpacked unexpected ServerMessage::ToFollow")
             }
         };
+        manager.merge_provider(&message1);
+        manager.apply_system_default(); // SOMEDAY: If we split config into two (bandwidth & options) this shouldn't be necessary.
 
         if !message1.warning.is_empty() {
             warn!("Remote endpoint warning: {}", &message1.warning);
         }
-        debug!(
-            "Remote endpoint network config: {}",
-            message1.bandwidth_info
-        );
         new1.message = message1;
+        //eprintln!("{manager:#?}");
         Ok(new1)
     }
 

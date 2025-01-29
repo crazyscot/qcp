@@ -1,4 +1,4 @@
-//! Control protocol definitions and helper types
+//! # Control protocol definitions and helper types
 // (c) 2024 Ross Younger
 //!
 //! The control protocol consists of data passed between the local qcp client process and the remote qcp server process
@@ -13,7 +13,9 @@
 //! * C ➡️ S: [`ClientMessage`]
 //!   * The client MUST NOT send its Message until it has received the `ServerGreeting`,
 //!     and it MUST NOT send a newer version of the `ClientMessage` than the server understands.
-//! * S: ⚙️ Parses client message, binds to a port for the session protocol.
+//! * S: ⚙️ Parses client message, applies parameter negotiation rules
+//!     (see [`combine_bandwidth_configurations`](crate::transport::combine_bandwidth_configurations)),
+//!     binds to a UDP port for the session protocol.
 //! * S ➡️ C: [`ServerMessage`]
 //!   * The server MUST NOT send a newer version of the `ServerMessage` than the client understands.
 //! * Client establishes a QUIC connection to the server, on the port given in the [`ServerMessage`].
@@ -25,7 +27,7 @@
 //!   * The server MUST NOT send a newer version than the client understands.
 //! * C ➡️ S: (closes control channel; server takes this as a cue to exit)
 //!
-//! On the wire these are [BARE] messages, sent using standard framing.
+//! On the wire these are [BARE] messages.
 //!
 //! # See also
 //! [Common](super::common) protocol functions
@@ -47,9 +49,9 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use super::common::ProtocolMessage;
 use crate::{
-    config::{Configuration, Manager},
+    config::{Configuration_Optional, Manager},
     transport::CongestionControllerType,
-    util::{Credentials, PortRange as CliPortRange},
+    util::{insert_if_some, Credentials, PortRange as CliPortRange},
 };
 
 /// Server banner message, sent on stdout and checked by the client
@@ -108,7 +110,9 @@ impl From<CompatibilityLevel> for u16 {
 ////////////////////////////////////////////////////////////////////////////////////////
 // CONNECTION TYPE
 
-#[derive(Serialize_repr, Deserialize_repr, PartialEq, Eq, Debug, Default, Clone, Copy)]
+#[derive(
+    Serialize_repr, Deserialize_repr, PartialEq, Eq, Debug, Default, Clone, Copy, strum::Display,
+)]
 /// Protocol representation of a connection type
 ///
 /// Unlike [`AddressFamily`](crate::util::AddressFamily) there is no ANY; types must be explicit here.
@@ -167,6 +171,12 @@ impl TryFrom<Uint> for CongestionController_OnWire {
         let t = CongestionControllerType::from_repr(v)
             .ok_or(anyhow!("invalid congestioncontroller enum"))?;
         Ok(Self(t))
+    }
+}
+
+impl Display for CongestionController_OnWire {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -264,7 +274,7 @@ impl ProtocolMessage for ServerGreeting {}
 ////////////////////////////////////////////////////////////////////////////////////////
 // CLIENT MESSAGE
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default, derive_more::Display)]
 /// The control parameters send from client to server.
 pub enum ClientMessage {
     /// Special value indicating an endpoint has not yet read the remote `ClientMessage`.
@@ -290,17 +300,17 @@ pub struct ClientMessageV1 {
     pub port: Option<PortRange_OnWire>,
 
     /// The requested bandwidth to use from client to server
-    pub bandwidth_to_server: Uint,
+    pub bandwidth_to_server: Option<Uint>,
     /// The requested bandwidth to use from server to client (if None, use the same as bandwidth to server)
-    pub bandwidth_to_client: Uint,
+    pub bandwidth_to_client: Option<Uint>,
     /// The network Round Trip Time, in milliseconds, to use in calculating the bandwidth delay product
-    pub round_trip_time: u16,
+    pub round_trip_time: Option<u16>,
     /// The congestion control algorithm to use
-    pub congestion_algorithm: CongestionController_OnWire,
+    pub congestion_algorithm: Option<CongestionController_OnWire>,
     /// The initial congestion window, if specified
     pub initial_congestion_window: Option<Uint>,
     /// Connection timeout for the QUIC endpoints, in seconds
-    pub quic_timeout: u16,
+    pub quic_timeout: Option<u16>,
 
     /// Extension field, reserved for future expansion; for now, must be set to 0
     pub extension: u8,
@@ -318,38 +328,21 @@ impl ClientMessage {
 
 impl ClientMessageV1 {
     fn new(credentials: &Credentials, connection_type: ConnectionType, manager: &Manager) -> Self {
-        use engineering_repr::EngineeringQuantity as EQ;
-        let defaults: &Configuration = Configuration::system_default();
-        let rx = u64::from(
-            manager
-                .get_field_optional::<EQ<u64>>("rx")
-                .unwrap_or(defaults.rx),
-        );
-        let mut tx = u64::from(
-            manager
-                .get_field_optional::<EQ<u64>>("tx")
-                .unwrap_or(defaults.tx),
-        );
-        if tx == 0 {
-            tx = rx; // TEMP: Will become None
-        }
+        let working = manager.get::<Configuration_Optional>().unwrap_or_default();
 
         Self {
             cert: credentials.certificate.to_vec(),
             connection_type,
-            port: manager.get_field_optional("RemotePort"),
+            port: manager
+                .get_field_optional::<CliPortRange>("remote_port")
+                .map(std::convert::Into::into),
 
-            bandwidth_to_server: Uint(tx),
-            bandwidth_to_client: Uint(rx),
-            round_trip_time: manager.get_field_optional("Rtt").unwrap_or(defaults.rtt),
-            congestion_algorithm: manager
-                .get_field_optional::<CongestionControllerType>("Congestion")
-                .unwrap_or(defaults.congestion)
-                .into(),
-            initial_congestion_window: manager.get_field_optional("InitialCongestionWindow"),
-            quic_timeout: manager
-                .get_field_optional("Timeout")
-                .unwrap_or(defaults.timeout),
+            bandwidth_to_server: working.tx.map(u64::from).map(Uint),
+            bandwidth_to_client: working.rx.map(u64::from).map(Uint),
+            round_trip_time: working.rtt,
+            congestion_algorithm: working.congestion.map(CongestionController_OnWire),
+            initial_congestion_window: working.initial_congestion_window.map(Uint),
+            quic_timeout: working.timeout,
 
             extension: 0,
         }
@@ -364,28 +357,42 @@ impl Provider for ClientMessageV1 {
     }
 
     fn data(&self) -> Result<figment::value::Map<figment::Profile, Dict>, figment::Error> {
-        use crate::util::insert_if_some;
         let mut dict = Dict::new();
-        let mut insert = |key: &str, val: figment::value::Value| {
-            let _ = dict.insert(key.into(), val);
-        };
-        // storing tx & rx as integers here requires engineering_repr 1.1.0:
-        insert("rx", self.bandwidth_to_server.0.into());
-        insert("tx", self.bandwidth_to_client.0.into());
 
-        insert("rtt", self.round_trip_time.into());
-        insert("congestion", self.congestion_algorithm.0.to_string().into());
-        insert("timeout", self.quic_timeout.into());
-        let _ = insert_if_some(
+        // This is written from the consumer's (server's) point of view, i.e. bandwidth_to_server is server's rx.
+        // N.B. storing tx & rx as integers here requires engineering_repr 1.1.0.
+        insert_if_some(&mut dict, "rx", self.bandwidth_to_server.map(|v| v.0))?;
+        insert_if_some(&mut dict, "tx", self.bandwidth_to_client.map(|v| v.0))?;
+        insert_if_some(&mut dict, "rtt", self.round_trip_time)?;
+        insert_if_some(&mut dict, "congestion", self.congestion_algorithm)?;
+        insert_if_some(&mut dict, "timeout", self.quic_timeout)?;
+        insert_if_some(
             &mut dict,
             "initial_congestion_window",
             self.initial_congestion_window,
-        );
+        )?;
 
         let mut profile_map = Map::new();
         let _ = profile_map.insert(Profile::Global, dict);
 
         Ok(profile_map)
+    }
+}
+
+impl Display for ClientMessageV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "type {}, port {:?}, ToClient {:?}, ToServer {:?}, rtt {:?}, congestion {:?}/{:?}, timeout {:?}",
+            self.connection_type,
+            self.port,
+            self.bandwidth_to_client,
+            self.bandwidth_to_server,
+            self.round_trip_time,
+            self.congestion_algorithm,
+            self.initial_congestion_window,
+            self.quic_timeout
+        )
     }
 }
 
@@ -416,12 +423,57 @@ pub struct ServerMessageV1 {
     pub cert: Vec<u8>,
     /// Name in the server cert (this saves us having to unpick it from the certificate)
     pub name: String,
+
+    /// The final bandwidth to use from client to server
+    pub bandwidth_to_server: Uint,
+    /// The final bandwidth to use from server to client
+    pub bandwidth_to_client: Uint,
+    /// The final round-trip-time to use on the connection
+    pub round_trip_time: u16,
+    /// The congestion control algorithm to use
+    pub congestion_algorithm: CongestionController_OnWire,
+    /// The initial congestion window to use (0 means "use algorithm default")
+    pub initial_congestion_window: Uint,
+    /// Connection timeout for the QUIC endpoints, in seconds
+    pub quic_timeout: u16,
+
     /// If non-zero length, this is a warning message to be relayed to a human
     pub warning: String,
-    /// Reports the server's active bandwidth configuration
-    pub bandwidth_info: String,
     /// Extension field, reserved for future expansion; for now, must be set to 0
     pub extension: u8,
+}
+
+impl ServerMessageV1 {
+    const META_NAME: &str = "server message";
+}
+
+impl Provider for ServerMessageV1 {
+    fn metadata(&self) -> figment::Metadata {
+        figment::Metadata::named(Self::META_NAME)
+    }
+
+    fn data(&self) -> Result<figment::value::Map<figment::Profile, Dict>, figment::Error> {
+        let mut dict = Dict::new();
+        let mut insert = |key: &str, val: figment::value::Value| {
+            let _ = dict.insert(key.into(), val);
+        };
+        // This is written from the consumer's (client's) point of view, i.e. bandwidth_to_server is client's tx.
+        insert("tx", self.bandwidth_to_server.0.into());
+        insert("rx", self.bandwidth_to_client.0.into());
+
+        insert("rtt", self.round_trip_time.into());
+        insert("congestion", self.congestion_algorithm.0.to_string().into());
+        insert("timeout", self.quic_timeout.into());
+        insert(
+            "initial_congestion_window",
+            self.initial_congestion_window.0.into(),
+        );
+
+        let mut profile_map = Map::new();
+        let _ = profile_map.insert(Profile::Global, dict);
+
+        Ok(profile_map)
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -655,11 +707,11 @@ mod test {
         let deser = ClientMessage::from_slice(&ser).unwrap();
         println!("{deser:#?}");
         if let ClientMessage::V1(detail) = &deser {
-            assert_eq!(detail.bandwidth_to_server.0, 42);
-            assert_eq!(detail.bandwidth_to_client.0, 89);
+            assert_eq!(detail.bandwidth_to_server.unwrap().0, 42);
+            assert_eq!(detail.bandwidth_to_client.unwrap().0, 89);
             assert_eq!(
                 detail.congestion_algorithm,
-                CongestionController_OnWire(CongestionControllerType::Bbr)
+                Some(CongestionController_OnWire(CongestionControllerType::Bbr))
             );
         } else {
             panic!("wrong ClientMessage type");
@@ -673,8 +725,13 @@ mod test {
             port: 12345,
             cert: vec![9, 8, 7],
             name: "hello".to_string(),
+            bandwidth_to_client: Uint(123),
+            bandwidth_to_server: Uint(456),
+            round_trip_time: 789,
+            congestion_algorithm: CongestionController_OnWire(CongestionControllerType::Bbr),
+            initial_congestion_window: Uint(4321),
+            quic_timeout: 42,
             warning: String::from("this is a warning"),
-            bandwidth_info: String::from("blah blah bandwidth"),
             extension: 0,
         });
         let wire = msg.to_vec().unwrap();
