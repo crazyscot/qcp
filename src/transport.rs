@@ -247,9 +247,12 @@ pub fn combine_bandwidth_configurations(
             defaults.initial_congestion_window,
             |a, _| Ok::<u64, Infallible>(a),
         )?,
-        port: negotiate_mixed(server.port, client.port, defaults.port, |a, b| {
-            a.combine(b.into())
-        })?,
+        port: negotiate_mixed(
+            server.port,
+            client.port,
+            defaults.port,
+            crate::util::PortRange::combine,
+        )?,
         timeout: negotiate(
             server.timeout,
             client.timeout,
