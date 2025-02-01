@@ -3,7 +3,7 @@
 
 use crate::{
     client::{control::Channel, progress::spinner_style},
-    config::{Configuration, Manager},
+    config::{Configuration, Configuration_Optional, Manager},
     protocol::{
         common::{ProtocolMessage, StreamPair},
         session::{Command, FileHeader, FileTrailer, GetArgs, PutArgs, Response, Status},
@@ -12,7 +12,7 @@ use crate::{
     util::{
         self, lookup_host_by_family,
         time::{Stopwatch, StopwatchChain},
-        Credentials,
+        Credentials, TimeFormat,
     },
 };
 
@@ -38,17 +38,15 @@ use super::Parameters as ClientParameters;
 const SHOW_TIME: &str = "file transfer";
 
 fn setup_tracing(
-    manager: &Manager,
     display: &MultiProgress,
     parameters: &ClientParameters,
+    time_format: TimeFormat,
 ) -> anyhow::Result<()> {
     util::setup_tracing(
         util::trace_level(parameters),
         Some(display),
         &parameters.log_file,
-        manager
-            .get_field_optional("TimeFormat")
-            .unwrap_or(Configuration::system_default().time_format),
+        time_format,
     ) // to provoke error: set RUST_LOG=.
 }
 
@@ -61,7 +59,12 @@ pub async fn client_main(
     display: MultiProgress,
     parameters: ClientParameters,
 ) -> anyhow::Result<bool> {
-    setup_tracing(manager, &display, &parameters)?;
+    let working_config = manager.get::<Configuration_Optional>().unwrap_or_default();
+    setup_tracing(
+        &display,
+        &parameters,
+        working_config.time_format.unwrap_or_default(),
+    )?;
     let default_config = Configuration::system_default();
 
     // N.B. While we have a MultiProgress we do not set up any `ProgressBar` within it yet...
@@ -83,8 +86,8 @@ pub async fn client_main(
     let hostname = job_spec.remote_host();
     let remote_host = super::ssh::resolve_host_alias(
         hostname,
-        &manager
-            .get_field_optional("SshConfig")
+        &working_config
+            .ssh_config
             .unwrap_or(default_config.ssh_config.clone()),
     )
     .unwrap_or_else(|| hostname.into());
@@ -93,8 +96,8 @@ pub async fn client_main(
     // (Otherwise if we resolved a v4 and ssh a v6 - as might happen with round-robin DNS - that could be surprising.)
     let remote_address = lookup_host_by_family(
         &remote_host,
-        manager
-            .get_field_optional("AddressFamily")
+        working_config
+            .address_family
             .unwrap_or(default_config.address_family),
     )?;
 

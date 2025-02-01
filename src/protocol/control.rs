@@ -333,9 +333,7 @@ impl ClientMessageV1 {
         Self {
             cert: credentials.certificate.to_vec(),
             connection_type,
-            port: manager
-                .get_field_optional::<CliPortRange>("remote_port")
-                .map(std::convert::Into::into),
+            port: working.remote_port.map(std::convert::Into::into),
 
             bandwidth_to_server: working.tx.map(u64::from).map(Uint),
             bandwidth_to_client: working.rx.map(u64::from).map(Uint),
@@ -541,7 +539,7 @@ mod test {
     use serde_bare::Uint;
 
     use crate::{
-        config::{Configuration_Optional, Manager},
+        config::{Configuration, Configuration_Optional, Manager},
         protocol::{
             common::ProtocolMessage,
             control::{
@@ -668,8 +666,6 @@ mod test {
 
     #[test]
     fn serialize_client_message() {
-        use engineering_repr::EngineeringQuantity as EQ;
-
         let fake_keypair = &[0u8];
         let keypair = rustls_pki_types::PrivatePkcs8KeyDer::<'_>::from(fake_keypair.as_slice());
         let creds = Credentials {
@@ -686,19 +682,10 @@ mod test {
             ..Default::default()
         };
         manager.merge_provider(&config);
-        let _ = manager.get_field::<EQ<u64>>("tx").unwrap();
-        assert!(manager.get_field_optional::<EQ<u64>>("tx").is_some());
-        assert_eq!(
-            manager.get_field_optional::<EQ<u64>>("tx").unwrap(),
-            42u64.into()
-        );
-        assert_eq!(
-            manager
-                .get_field::<CongestionControllerType>("congestion")
-                .unwrap(),
-            CongestionControllerType::Bbr
-        );
-        assert_eq!(manager.get_field::<u16>("rtt").unwrap(), 1234);
+        let working = manager.get::<Configuration>().unwrap();
+        assert_eq!(working.tx, 42u64.into());
+        assert_eq!(working.congestion, CongestionControllerType::Bbr);
+        assert_eq!(working.rtt, 1234);
 
         let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, &manager);
         let ser = cmsg.to_vec().unwrap();

@@ -5,7 +5,7 @@ use std::cmp::min;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::config::{Configuration, Manager};
+use crate::config::{Configuration, Configuration_Optional, Manager};
 use crate::protocol::control::{
     ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport, ClosedownReportV1,
     ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
@@ -64,10 +64,14 @@ pub async fn server_main() -> anyhow::Result<()> {
         .with_context(|| "failed to read client greeting")?;
 
     let manager = Manager::standard(None); // Server does not use Host-specific configuration at the moment.
-    let tf = manager
-        .get_field::<TimeFormat>("TimeFormat")
-        .unwrap_or(Configuration::system_default().time_format);
-    setup_tracing(remote_greeting.debug, tf)?;
+    setup_tracing(
+        remote_greeting.debug,
+        manager
+            .get::<Configuration_Optional>()
+            .unwrap_or_default()
+            .time_format
+            .unwrap_or_default(),
+    )?;
     let _span = tracing::error_span!("REMOTE").entered();
 
     debug!("got client greeting {remote_greeting:?}");

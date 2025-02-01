@@ -73,7 +73,7 @@ pub async fn cli() -> anyhow::Result<bool> {
         MainMode::Client(progress) => {
             // this mode may return false
             return client_main(
-                &mut config_manager.validate()?,
+                &mut config_manager.validate_configuration()?,
                 progress,
                 args.client_params,
             )
