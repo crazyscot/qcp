@@ -1,7 +1,5 @@
 *~
 *.swp
 .temp
-
-# Added by cargo
-
 /target
+/target.*
