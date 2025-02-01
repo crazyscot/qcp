@@ -5,7 +5,6 @@ use std::cmp::min;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::BufReader;
-use tokio::process::{Child, Command};
 
 use anyhow::{anyhow, Context as _, Result};
 use indicatif::MultiProgress;
@@ -29,7 +28,7 @@ use super::Parameters;
 /// Control channel abstraction
 #[derive(Debug)]
 pub struct Channel {
-    process: Child,
+    process: tokio::process::Child,
     /// The server's declared compatibility level
     pub compat: CompatibilityLevel,
     /// The handshaking message sent by the server
@@ -62,6 +61,19 @@ impl Channel {
         Ok(())
     }
 
+    fn input(&mut self) -> Result<&mut tokio::process::ChildStdin> {
+        self.process
+            .stdin
+            .as_mut()
+            .ok_or(anyhow!("could not access process stdin (can't happen?)"))
+    }
+    fn output(&mut self) -> Result<&mut tokio::process::ChildStdout> {
+        self.process
+            .stdout
+            .as_mut()
+            .ok_or(anyhow!("could not access process stdout (can't happen?)"))
+    }
+
     /// Opens the control channel, checks the banner, sends the Client Message, reads the Server Message.
     pub async fn transact(
         credentials: &Credentials,
@@ -80,28 +92,16 @@ impl Channel {
 
         // PHASE 2: EXCHANGE GREETINGS
 
-        let mut server_output = new1
-            .process
-            .stdout
-            .as_mut()
-            .ok_or(anyhow!("could not access process stdout (can't happen?)"))?;
-
-        let server_input = new1
-            .process
-            .stdin
-            .as_mut()
-            .ok_or(anyhow!("could not access process stdin (can't happen?)"))?;
-
         ClientGreeting {
             compatibility: COMPATIBILITY_LEVEL.into(),
             debug: parameters.remote_debug,
             extension: 0,
         }
-        .to_writer_async_framed(server_input)
+        .to_writer_async_framed(new1.input()?)
         .await
         .with_context(|| "error writing client greeting")?;
 
-        let remote_greeting = ServerGreeting::from_reader_async_framed(&mut server_output)
+        let remote_greeting = ServerGreeting::from_reader_async_framed(new1.output()?)
             .await
             .with_context(|| "error reading server greeting")?;
 
@@ -117,12 +117,12 @@ impl Channel {
         let message = ClientMessage::new(credentials, connection_type, manager);
         debug!("Our client message: {message}");
         message
-            .to_writer_async_framed(server_input)
+            .to_writer_async_framed(new1.input()?)
             .await
             .with_context(|| "error writing client message")?;
 
         trace!("waiting for server message");
-        let message = ServerMessage::from_reader_async_framed(&mut server_output)
+        let message = ServerMessage::from_reader_async_framed(&mut new1.output()?)
             .await
             .inspect_err(|e| eprintln!("{e}"))
             .with_context(|| "error reading server message")?;
@@ -157,7 +157,9 @@ impl Channel {
         let working_config = manager.get::<Configuration_Optional>().unwrap_or_default();
         let defaults = Configuration::system_default();
 
-        let mut server = Command::new(working_config.ssh.unwrap_or_else(|| defaults.ssh.clone()));
+        let mut server = tokio::process::Command::new(
+            working_config.ssh.unwrap_or_else(|| defaults.ssh.clone()),
+        );
         let _ = match connection_type {
             ConnectionType::Ipv4 => server.arg("-4"),
             ConnectionType::Ipv6 => server.arg("-6"),
