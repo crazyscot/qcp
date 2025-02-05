@@ -190,10 +190,10 @@ where
 /// | ---                    | ---                 | ---       |
 /// | Client [`rx`](Configuration#structfield.rx) / Server [`tx`](Configuration#structfield.tx) | [`bandwidth_to_client`](ClientMessageV1#structfield.bandwidth_to_client) | Use the smaller of the two |
 /// | Client [`tx`](Configuration#structfield.tx) / Server [`rx`](Configuration#structfield.rx) | [`bandwidth_to_server`](ClientMessageV1#structfield.bandwidth_to_server) | Use the smaller of the two |
-/// | [`rtt`](Configuration#structfield.rtt) |  [`round_trip_time`](ClientMessageV1#structfield.round_trip_time) | Client preference wins |
-/// | [`congestion`](Configuration#structfield.congestion) | [`congestion_algorithm`](ClientMessageV1#structfield.congestion_algorithm) | If the two prefs match, use that; if not, error |
+/// | [`rtt`](Configuration#structfield.rtt) |  [`rtt`](ClientMessageV1#structfield.rtt) | Client preference wins |
+/// | [`congestion`](Configuration#structfield.congestion) | [`congestion`](ClientMessageV1#structfield.congestion) | If the two prefs match, use that; if not, error |
 /// | [`initial_congestion_window`](Configuration#structfield.initial_congestion_window) | [`initial_congestion_window`](ClientMessageV1#structfield.initial_congestion_window) | Client preference wins |
-/// | [`timeout`](Configuration#structfield.timeout) | [`quic_timeout`](ClientMessageV1#structfield.quic_timeout) | Client preference wins |
+/// | [`timeout`](Configuration#structfield.timeout) | [`timeout`](ClientMessageV1#structfield.timeout) | Client preference wins |
 /// | Client [`remote_port`](Configuration#structfield.remote_port) / Server [`port`](ClientMessageV1#structfield.port) | [`port`](ClientMessageV1#structfield.port) | Treat port `0` as "no preference". Compute the intersection of the two ranges. If they do not intersect, error. |
 ///
 /// # Return value
@@ -230,15 +230,10 @@ pub fn combine_bandwidth_configurations(
             |a, b| Ok::<u64, Infallible>(std::cmp::min(a, b)),
         )?
         .into(),
-        rtt: negotiate(
-            server.rtt,
-            client.round_trip_time,
-            defaults.rtt,
-            client_wins,
-        )?,
+        rtt: negotiate(server.rtt, client.rtt, defaults.rtt, client_wins)?,
         congestion: negotiate_mixed(
             server.congestion,
-            client.congestion_algorithm,
+            client.congestion,
             defaults.congestion,
             |_, _| {
                 anyhow::bail!(
@@ -257,7 +252,7 @@ pub fn combine_bandwidth_configurations(
         })?,
         timeout: negotiate(
             server.timeout,
-            client.quic_timeout,
+            client.timeout,
             defaults.timeout,
             client_wins,
         )?,

@@ -304,13 +304,13 @@ pub struct ClientMessageV1 {
     /// The requested bandwidth to use from server to client (if None, use the same as bandwidth to server)
     pub bandwidth_to_client: Option<Uint>,
     /// The network Round Trip Time, in milliseconds, to use in calculating the bandwidth delay product
-    pub round_trip_time: Option<u16>,
+    pub rtt: Option<u16>,
     /// The congestion control algorithm to use
-    pub congestion_algorithm: Option<CongestionController_OnWire>,
+    pub congestion: Option<CongestionController_OnWire>,
     /// The initial congestion window, if specified
     pub initial_congestion_window: Option<Uint>,
     /// Connection timeout for the QUIC endpoints, in seconds
-    pub quic_timeout: Option<u16>,
+    pub timeout: Option<u16>,
 
     /// Extension field, reserved for future expansion; for now, must be set to 0
     pub extension: u8,
@@ -339,10 +339,10 @@ impl ClientMessageV1 {
 
             bandwidth_to_server: working.tx.map(u64::from).map(Uint),
             bandwidth_to_client: working.rx.map(u64::from).map(Uint),
-            round_trip_time: working.rtt,
-            congestion_algorithm: working.congestion.map(CongestionController_OnWire),
+            rtt: working.rtt,
+            congestion: working.congestion.map(CongestionController_OnWire),
             initial_congestion_window: working.initial_congestion_window.map(Uint),
-            quic_timeout: working.timeout,
+            timeout: working.timeout,
 
             extension: 0,
         }
@@ -363,9 +363,9 @@ impl Provider for ClientMessageV1 {
         // N.B. storing tx & rx as integers here requires engineering_repr 1.1.0.
         insert_if_some(&mut dict, "rx", self.bandwidth_to_server.map(|v| v.0))?;
         insert_if_some(&mut dict, "tx", self.bandwidth_to_client.map(|v| v.0))?;
-        insert_if_some(&mut dict, "rtt", self.round_trip_time)?;
-        insert_if_some(&mut dict, "congestion", self.congestion_algorithm)?;
-        insert_if_some(&mut dict, "timeout", self.quic_timeout)?;
+        insert_if_some(&mut dict, "rtt", self.rtt)?;
+        insert_if_some(&mut dict, "congestion", self.congestion)?;
+        insert_if_some(&mut dict, "timeout", self.timeout)?;
         insert_if_some(
             &mut dict,
             "initial_congestion_window",
@@ -388,10 +388,10 @@ impl Display for ClientMessageV1 {
             self.port,
             self.bandwidth_to_client,
             self.bandwidth_to_server,
-            self.round_trip_time,
-            self.congestion_algorithm,
+            self.rtt,
+            self.congestion,
             self.initial_congestion_window,
-            self.quic_timeout
+            self.timeout
         )
     }
 }
@@ -429,13 +429,13 @@ pub struct ServerMessageV1 {
     /// The final bandwidth to use from server to client
     pub bandwidth_to_client: Uint,
     /// The final round-trip-time to use on the connection
-    pub round_trip_time: u16,
+    pub rtt: u16,
     /// The congestion control algorithm to use
-    pub congestion_algorithm: CongestionController_OnWire,
+    pub congestion: CongestionController_OnWire,
     /// The initial congestion window to use (0 means "use algorithm default")
     pub initial_congestion_window: Uint,
     /// Connection timeout for the QUIC endpoints, in seconds
-    pub quic_timeout: u16,
+    pub timeout: u16,
 
     /// If non-zero length, this is a warning message to be relayed to a human
     pub warning: String,
@@ -461,9 +461,9 @@ impl Provider for ServerMessageV1 {
         insert("tx", self.bandwidth_to_server.0.into());
         insert("rx", self.bandwidth_to_client.0.into());
 
-        insert("rtt", self.round_trip_time.into());
-        insert("congestion", self.congestion_algorithm.0.to_string().into());
-        insert("timeout", self.quic_timeout.into());
+        insert("rtt", self.rtt.into());
+        insert("congestion", self.congestion.0.to_string().into());
+        insert("timeout", self.timeout.into());
         insert(
             "initial_congestion_window",
             self.initial_congestion_window.0.into(),
@@ -710,7 +710,7 @@ mod test {
             assert_eq!(detail.bandwidth_to_server.unwrap().0, 42);
             assert_eq!(detail.bandwidth_to_client.unwrap().0, 89);
             assert_eq!(
-                detail.congestion_algorithm,
+                detail.congestion,
                 Some(CongestionController_OnWire(CongestionControllerType::Bbr))
             );
         } else {
@@ -727,10 +727,10 @@ mod test {
             name: "hello".to_string(),
             bandwidth_to_client: Uint(123),
             bandwidth_to_server: Uint(456),
-            round_trip_time: 789,
-            congestion_algorithm: CongestionController_OnWire(CongestionControllerType::Bbr),
+            rtt: 789,
+            congestion: CongestionController_OnWire(CongestionControllerType::Bbr),
             initial_congestion_window: Uint(4321),
-            quic_timeout: 42,
+            timeout: 42,
             warning: String::from("this is a warning"),
             extension: 0,
         });

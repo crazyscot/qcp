@@ -120,10 +120,10 @@ pub async fn server_main() -> anyhow::Result<()> {
         name: credentials.hostname,
         bandwidth_to_server: Uint(config.rx()),
         bandwidth_to_client: Uint(config.tx()),
-        round_trip_time: config.rtt,
-        congestion_algorithm: config.congestion.into(),
+        rtt: config.rtt,
+        congestion: config.congestion.into(),
         initial_congestion_window: Uint(config.initial_congestion_window),
-        quic_timeout: config.timeout,
+        timeout: config.timeout,
         warning,
         extension: 0,
     })
