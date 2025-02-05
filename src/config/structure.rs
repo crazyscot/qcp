@@ -112,11 +112,12 @@ pub struct Configuration {
         long,
         help_heading("Advanced network tuning"),
         value_name = "bytes",
+        alias("cwnd"),
         display_order(0)
     )]
     pub initial_congestion_window: u64,
 
-    /// Uses the given UDP port or range on the local endpoint.
+    /// Uses the given UDP port or range on the **local** endpoint.
     /// This can be useful when there is a firewall between the endpoints.
     ///
     /// For example: `12345`, `20000-20100`
@@ -174,7 +175,7 @@ pub struct Configuration {
     )]
     pub ssh_options: Vec<String>,
 
-    /// Uses the given UDP port or range on the remote endpoint.
+    /// Uses the given UDP port or range on the **remote** endpoint.
     /// This can be useful when there is a firewall between the endpoints.
     ///
     /// For example: `12345`, `20000-20100`
