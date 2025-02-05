@@ -77,7 +77,7 @@ impl Channel {
     /// Opens the control channel, checks the banner, sends the Client Message, reads the Server Message.
     pub async fn transact(
         credentials: &Credentials,
-        remote_host: &str,
+        ssh_hostname: &str,
         connection_type: ConnectionType,
         display: &MultiProgress,
         manager: &mut Manager,
@@ -87,7 +87,7 @@ impl Channel {
 
         // PHASE 1: BANNER CHECK
 
-        let mut new1 = Self::launch(display, manager, parameters, remote_host, connection_type)?;
+        let mut new1 = Self::launch(display, manager, parameters, ssh_hostname, connection_type)?;
         new1.wait_for_banner().await?;
 
         // PHASE 2: EXCHANGE GREETINGS
@@ -151,7 +151,7 @@ impl Channel {
         display: &MultiProgress,
         manager: &Manager,
         parameters: &Parameters,
-        remote_host: &str,
+        ssh_hostname: &str,
         connection_type: ConnectionType,
     ) -> Result<Self> {
         let working_config = manager.get::<Configuration_Optional>().unwrap_or_default();
@@ -169,7 +169,7 @@ impl Channel {
                 .ssh_options
                 .unwrap_or_else(|| defaults.ssh_options.clone()),
         );
-        let _ = server.args([remote_host, "qcp", "--server"]);
+        let _ = server.args([ssh_hostname, "qcp", "--server"]);
         let _ = server
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

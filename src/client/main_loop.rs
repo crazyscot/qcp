@@ -83,19 +83,19 @@ pub async fn client_main(
     spinner.set_message("Preparing");
     let job_spec = crate::client::CopyJobSpec::try_from(&parameters)?;
     let credentials = Credentials::generate()?;
-    let hostname = job_spec.remote_host();
-    let remote_host = super::ssh::resolve_host_alias(
-        hostname,
+    let remote_ssh_hostname = job_spec.remote_host();
+    let remote_dns_name = super::ssh::resolve_host_alias(
+        remote_ssh_hostname,
         &working_config
             .ssh_config
             .unwrap_or(default_config.ssh_config.clone()),
     )
-    .unwrap_or_else(|| hostname.into());
+    .unwrap_or_else(|| remote_ssh_hostname.into());
 
     // If the user didn't specify the address family: we do the DNS lookup, figure it out and tell ssh to use that.
     // (Otherwise if we resolved a v4 and ssh a v6 - as might happen with round-robin DNS - that could be surprising.)
     let remote_address = lookup_host_by_family(
-        &remote_host,
+        &remote_dns_name,
         working_config
             .address_family
             .unwrap_or(default_config.address_family),
@@ -107,7 +107,7 @@ pub async fn client_main(
     timers.next("control channel");
     let mut control = Channel::transact(
         &credentials,
-        &remote_host,
+        remote_ssh_hostname,
         remote_address.into(),
         &display,
         manager,
