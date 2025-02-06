@@ -335,7 +335,10 @@ impl ClientMessageV1 {
             connection_type,
             port: working.remote_port.map(std::convert::Into::into),
 
-            bandwidth_to_server: working.tx.map(u64::from).map(Uint),
+            bandwidth_to_server: match working.tx.map(u64::from) {
+                None | Some(0) => None,
+                Some(v) => Some(Uint(v)),
+            },
             bandwidth_to_client: working.rx.map(u64::from).map(Uint),
             rtt: working.rtt,
             congestion: working.congestion.map(CongestionController_OnWire),

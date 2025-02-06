@@ -174,6 +174,17 @@ where
     }
 }
 
+#[allow(clippy::unnecessary_wraps)]
+fn min_ignoring_zero(a: u64, b: u64) -> Result<u64, Infallible> {
+    Ok(if a == 0 {
+        b
+    } else if b == 0 {
+        a
+    } else {
+        std::cmp::min(a, b)
+    })
+}
+
 /// Applies the bandwidth/parameter negotiation logic given the server's configuration (`server`) and the client's requests (`client`).
 ///
 /// # Logic
@@ -188,8 +199,8 @@ where
 ///
 /// | [Configuration] field  | [Control protocol](ClientMessageV1) | Resolution |
 /// | ---                    | ---                 | ---       |
-/// | Client [`rx`](Configuration#structfield.rx) / Server [`tx`](Configuration#structfield.tx) | [`bandwidth_to_client`](ClientMessageV1#structfield.bandwidth_to_client) | Use the smaller of the two |
-/// | Client [`tx`](Configuration#structfield.tx) / Server [`rx`](Configuration#structfield.rx) | [`bandwidth_to_server`](ClientMessageV1#structfield.bandwidth_to_server) | Use the smaller of the two |
+/// | Client [`rx`](Configuration#structfield.rx) / Server [`tx`](Configuration#structfield.tx) | [`bandwidth_to_client`](ClientMessageV1#structfield.bandwidth_to_client) | Use the smaller of the two (ignoring zeroes) |
+/// | Client [`tx`](Configuration#structfield.tx) / Server [`rx`](Configuration#structfield.rx) | [`bandwidth_to_server`](ClientMessageV1#structfield.bandwidth_to_server) | Use the smaller of the two (ignoring zeroes) |
 /// | [`rtt`](Configuration#structfield.rtt) |  [`rtt`](ClientMessageV1#structfield.rtt) | Client preference wins |
 /// | [`congestion`](Configuration#structfield.congestion) | [`congestion`](ClientMessageV1#structfield.congestion) | If the two prefs match, use that; if not, error |
 /// | [`initial_congestion_window`](Configuration#structfield.initial_congestion_window) | [`initial_congestion_window`](ClientMessageV1#structfield.initial_congestion_window) | Client preference wins |
@@ -220,14 +231,14 @@ pub fn combine_bandwidth_configurations(
             server.rx,
             client.bandwidth_to_server.map(|u| u.0),
             u64::from(defaults.rx),
-            |a, b| Ok::<u64, Infallible>(std::cmp::min(a, b)),
+            min_ignoring_zero,
         )?
         .into(),
         tx: negotiate_mixed(
             server.tx,
             client.bandwidth_to_client.map(|u| u.0),
             u64::from(defaults.tx),
-            |a, b| Ok::<u64, Infallible>(std::cmp::min(a, b)),
+            min_ignoring_zero,
         )?
         .into(),
         rtt: negotiate(server.rtt, client.rtt, defaults.rtt, client_wins)?,
