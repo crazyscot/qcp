@@ -57,6 +57,11 @@ pub struct Parameters {
     #[arg(long, action, help_heading("Output"), display_order(0))]
     pub profile: bool,
 
+    /// Connects to a remote server but does not actually transfer any files.
+    /// This is useful to test that the control channel works and when debugging the negotiated bandwidth parameters.
+    #[arg(long, action, help_heading("Configuration"), display_order(0))]
+    pub dry_run: bool,
+
     // JOB SPECIFICAION ====================================================================
     // (POSITIONAL ARGUMENTS!)
     /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.

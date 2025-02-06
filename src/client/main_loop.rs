@@ -51,6 +51,10 @@ fn setup_tracing(
 }
 
 /// Main client mode event loop
+///
+/// # Return value
+/// `true` if the requested operation succeeded.
+///
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 #[allow(clippy::module_name_repetitions)]
 #[allow(clippy::too_many_lines)]
@@ -118,6 +122,16 @@ pub async fn client_main(
     let config = manager
         .get::<Configuration>()
         .with_context(|| "assembling final client configuration from server message")?;
+
+    // Dry run mode ends here! -------
+    if parameters.dry_run {
+        info!("Dry run mode selected, not connecting to data channel");
+        info!(
+            "Negotiated network configuration: {}",
+            config.format_transport_config()
+        );
+        return Ok(true);
+    }
 
     // Data channel ------------------
     let server_address_port = match remote_address {
