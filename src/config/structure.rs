@@ -321,34 +321,7 @@ impl Configuration {
 
     /// Performs additional validation checks on the configuration.
     pub fn validate(self) -> Result<Self> {
-        if self.rx() < MINIMUM_BANDWIDTH {
-            anyhow::bail!(
-                "The receive bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
-                self.rx.with_precision(0),
-                MINIMUM_BANDWIDTH.to_eng(3)
-            );
-        }
-        if self.tx() < MINIMUM_BANDWIDTH {
-            anyhow::bail!(
-                "The transmit bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
-                self.tx.with_precision(0),
-                MINIMUM_BANDWIDTH.to_eng(3)
-            );
-        }
-        if self.rx().checked_mul(self.rtt.into()).is_none() {
-            anyhow::bail!(
-                "The receive bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
-                self.rx.with_precision(0),
-                self.rtt
-            );
-        }
-        if self.tx().checked_mul(self.rtt.into()).is_none() {
-            anyhow::bail!(
-                "The transmit bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
-                self.tx.with_precision(0),
-                self.rtt
-            );
-        }
+        Configuration_Optional::from(&self).validate()?;
         Ok(self)
     }
 
@@ -356,6 +329,47 @@ impl Configuration {
     #[must_use]
     pub fn system_default() -> &'static Self {
         &SYSTEM_DEFAULT_CONFIG
+    }
+}
+
+impl Configuration_Optional {
+    pub(crate) fn validate(self) -> Result<()> {
+        let rtt = self.rtt.unwrap_or(0);
+        if let Some(rx) = self.rx {
+            let rx = u64::from(rx);
+            if rx < MINIMUM_BANDWIDTH {
+                anyhow::bail!(
+                    "The receive bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
+                    rx.to_eng(0),
+                    MINIMUM_BANDWIDTH.to_eng(3)
+                );
+            }
+            if rx.checked_mul(rtt.into()).is_none() {
+                anyhow::bail!(
+                    "The receive bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
+                    rx.to_eng(0),
+                    rtt
+                );
+            }
+        }
+        if let Some(tx) = self.tx {
+            let tx = u64::from(tx);
+            if tx != 0 && tx < MINIMUM_BANDWIDTH {
+                anyhow::bail!(
+                    "The transmit bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
+                    tx.to_eng(0),
+                    MINIMUM_BANDWIDTH.to_eng(3)
+                );
+            }
+            if tx.checked_mul(rtt.into()).is_none() {
+                anyhow::bail!(
+                    "The transmit bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
+                    tx.to_eng(0),
+                    rtt
+                );
+            }
+        }
+        Ok(())
     }
 }
 

@@ -2,14 +2,10 @@
 // (c) 2024 Ross Younger
 
 use crate::os::{AbstractPlatform as _, Platform};
-use crate::styles::{INFO, RESET};
 
-use super::{
-    ssh::SshConfigError, structure::MINIMUM_BANDWIDTH, Configuration, Configuration_Optional,
-};
+use super::{ssh::SshConfigError, Configuration, Configuration_Optional};
 
 use anyhow::Result;
-use engineering_repr::EngineeringRepr;
 use figment::{providers::Serialized, value::Value, Figment, Metadata, Provider};
 use heck::ToUpperCamelCase;
 use serde::Deserialize;
@@ -186,41 +182,7 @@ impl Manager {
     /// This is only useful when the [`Manager`] holds a [`Configuration`].
     pub fn validate_configuration(self) -> Result<Self> {
         let working: Configuration_Optional = self.get::<Configuration_Optional>()?;
-        let rtt = working.rtt.unwrap_or(0);
-        if let Some(rx) = working.rx {
-            let rx = u64::from(rx);
-            if rx < MINIMUM_BANDWIDTH {
-                anyhow::bail!(
-                    "The receive bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
-                    rx.to_eng(0),
-                    MINIMUM_BANDWIDTH.to_eng(3)
-                );
-            }
-            if rx.checked_mul(rtt.into()).is_none() {
-                anyhow::bail!(
-                    "The receive bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
-                    rx.to_eng(0),
-                    rtt
-                );
-            }
-        }
-        if let Some(tx) = working.tx {
-            let tx = u64::from(tx);
-            if tx != 0 && tx < MINIMUM_BANDWIDTH {
-                anyhow::bail!(
-                    "The transmit bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
-                    tx.to_eng(0),
-                    MINIMUM_BANDWIDTH.to_eng(3)
-                );
-            }
-            if tx.checked_mul(rtt.into()).is_none() {
-                anyhow::bail!(
-                    "The transmit bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
-                    tx.to_eng(0),
-                    rtt
-                );
-            }
-        }
+        working.validate()?;
         Ok(self)
     }
 }
