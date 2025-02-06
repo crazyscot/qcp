@@ -121,7 +121,7 @@ pub async fn client_main(
     let port = control.message.port;
     let config = manager
         .get::<Configuration>()
-        .with_context(|| "assembling final client configuration from server message")?;
+        .context("assembling final client configuration from server message")?;
 
     // Dry run mode ends here! -------
     if parameters.dry_run {
@@ -157,7 +157,7 @@ pub async fn client_main(
         endpoint.connect(server_address_port, &control.message.name)?,
     )
     .await
-    .with_context(|| "UDP connection to QUIC endpoint timed out")??;
+    .context("UDP connection to QUIC endpoint timed out")??;
 
     // Show time! ---------------------
     spinner.set_message("Transferring data");

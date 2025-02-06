@@ -56,12 +56,12 @@ pub async fn server_main() -> anyhow::Result<()> {
     }
     .to_writer_async_framed(&mut stdout)
     .await
-    .with_context(|| "sending server greeting")?;
+    .context("sending server greeting")?;
     stdout.flush().await?;
 
     let remote_greeting = ClientGreeting::from_reader_async_framed(&mut stdin)
         .await
-        .with_context(|| "failed to read client greeting")?;
+        .context("failed to read client greeting")?;
 
     let manager = Manager::standard(None); // Server does not use Host-specific configuration at the moment.
     setup_tracing(
@@ -145,7 +145,7 @@ pub async fn server_main() -> anyhow::Result<()> {
     let (stats_tx, mut stats_rx) = oneshot::channel();
     if let Some(conn) = timeout(config.timeout_duration(), endpoint.accept())
         .await
-        .with_context(|| "Timed out waiting for QUIC connection")?
+        .context("Timed out waiting for QUIC connection")?
     {
         let _ = tasks.spawn(async move {
             let result = handle_connection(conn, file_buffer_size).await;
