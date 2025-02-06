@@ -7,6 +7,7 @@ use crate::{
     config::{Configuration, Manager},
     os,
     server::server_main,
+    styles::{ERROR, RESET},
 };
 
 use anstream::println;
@@ -68,7 +69,13 @@ pub async fn cli() -> anyhow::Result<bool> {
             println!("{}", config_manager.to_display_adapter::<Configuration>());
         }
         MainMode::Server => {
-            server_main().await?;
+            return Ok(server_main().await.map_or_else(
+                |e| {
+                    eprintln!("{ERROR}ERROR{RESET} Server: {e}");
+                    false
+                },
+                |()| true,
+            ));
         }
         MainMode::Client(progress) => {
             // this mode may return false

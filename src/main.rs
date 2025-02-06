@@ -11,9 +11,9 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 fn main() -> ExitCode {
     if qcp::cli().unwrap_or_else(|e| {
         if qcp::util::tracing_is_initialised() {
-            tracing::error!("{e}");
+            tracing::error!("{e:#}");
         } else {
-            eprintln!("{ERROR}Error:{RESET} {e}");
+            eprintln!("{ERROR}Error:{RESET} {e:#}");
         }
         false
     }) {
