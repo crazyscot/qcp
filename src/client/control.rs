@@ -99,11 +99,11 @@ impl Channel {
         }
         .to_writer_async_framed(new1.input()?)
         .await
-        .with_context(|| "error writing client greeting")?;
+        .context("error writing client greeting")?;
 
         let remote_greeting = ServerGreeting::from_reader_async_framed(new1.output()?)
             .await
-            .with_context(|| "error reading server greeting")?;
+            .context("error reading server greeting")?;
 
         debug!("got server greeting {remote_greeting:?}");
 
@@ -119,12 +119,12 @@ impl Channel {
         message
             .to_writer_async_framed(new1.input()?)
             .await
-            .with_context(|| "error writing client message")?;
+            .context("error writing client message")?;
 
         trace!("waiting for server message");
         let message = ServerMessage::from_reader_async_framed(&mut new1.output()?)
             .await
-            .with_context(|| "error reading server message")?;
+            .context("error reading server message")?;
 
         trace!("Got server message {message:?}");
         // FUTURE: ServerMessage V2 will require more logic to unpack the message contents.
@@ -220,7 +220,7 @@ impl Channel {
         let n = reader
             .read_exact(&mut buf[0..1])
             .await
-            .with_context(|| "failed to connect control channel")?;
+            .context("failed to connect control channel")?;
         anyhow::ensure!(n == 1, "control channel closed unexpectedly");
 
         // Now we have a character, apply a timeout to read the rest.
@@ -228,11 +228,11 @@ impl Channel {
         let _ = timeout(Duration::from_secs(1), reader.read_exact(&mut buf[1..]))
             .await
             // outer failure means we timed out:
-            .with_context(|| "timed out reading server banner")?
+            .context("timed out reading server banner")?
             // inner failure is some sort of I/O error or unexpected eof
-            .with_context(|| "error reading control channel")?;
+            .context("error reading control channel")?;
 
-        let read_banner = std::str::from_utf8(&buf).with_context(|| "garbage server banner")?;
+        let read_banner = std::str::from_utf8(&buf).context("garbage server banner")?;
         match read_banner {
             BANNER => (),
             OLD_BANNER => {
