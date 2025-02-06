@@ -114,6 +114,15 @@ define_derive_deftly! {
             Ok(profile_map)
         }
     }
+    impl From<&$tdeftype> for $OPTIONAL_TYPE {
+        fn from(value: &$tdeftype) -> Self {
+            Self {
+                $(
+                    $fname: Some(value.$fname.clone()),
+                )
+            }
+        }
+    }
 }
 
 #[allow(clippy::module_name_repetitions)]
