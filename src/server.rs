@@ -72,7 +72,7 @@ pub async fn server_main() -> anyhow::Result<()> {
             .time_format
             .unwrap_or_default(),
     )?;
-    let _span = tracing::error_span!("REMOTE").entered();
+    let _span = tracing::error_span!("Server").entered();
 
     debug!("got client greeting {remote_greeting:?}");
 

@@ -124,7 +124,6 @@ impl Channel {
         trace!("waiting for server message");
         let message = ServerMessage::from_reader_async_framed(&mut new1.output()?)
             .await
-            .inspect_err(|e| eprintln!("{e}"))
             .with_context(|| "error reading server message")?;
 
         trace!("Got server message {message:?}");
