@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::config::{Configuration, Configuration_Optional, Manager};
 use crate::protocol::control::{
-    ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport, ClosedownReportV1,
+    ClientGreeting, ClientMessage, ClosedownReport, ClosedownReportV1, ConnectionType,
     ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
 };
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, ResponseV1, Status};
@@ -113,7 +113,12 @@ pub async fn server_main() -> anyhow::Result<()> {
     let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
 
     let credentials = Credentials::generate()?;
-    let (endpoint, warning) = create_endpoint(&credentials, message1, &config)?;
+    let (endpoint, warning) = create_endpoint(
+        &credentials,
+        &message1.cert,
+        message1.connection_type,
+        &config,
+    )?;
     let warning = warning.unwrap_or_default();
     let local_addr = endpoint.local_addr()?;
     debug!("Local endpoint address is {local_addr}");
@@ -180,18 +185,22 @@ pub async fn server_main() -> anyhow::Result<()> {
 }
 
 fn create_endpoint(
-    credentials: &Credentials,
-    client_message: ClientMessageV1,
+    our_credentials: &Credentials,
+    their_cert: &[u8],
+    connection_type: ConnectionType,
     config: &Configuration,
 ) -> anyhow::Result<(quinn::Endpoint, Option<String>)> {
-    let client_cert: CertificateDer<'_> = client_message.cert.into();
+    let client_cert: CertificateDer<'_> = their_cert.into();
 
     let mut root_store = RootCertStore::empty();
     root_store.add(client_cert)?;
     let verifier = WebPkiClientVerifier::builder(root_store.into()).build()?;
     let mut tls_config = rustls::ServerConfig::builder()
         .with_client_cert_verifier(verifier)
-        .with_single_cert(credentials.cert_chain(), credentials.keypair.clone_key())?;
+        .with_single_cert(
+            our_credentials.cert_chain(),
+            our_credentials.keypair.clone_key(),
+        )?;
     tls_config.max_early_data_size = u32::MAX;
 
     let qsc = QuicServerConfig::try_from(tls_config)?;
@@ -202,7 +211,7 @@ fn create_endpoint(
     )?);
 
     debug!("Using port range {}", config.port);
-    let mut socket = socket::bind_range_for_family(client_message.connection_type, config.port)?;
+    let mut socket = socket::bind_range_for_family(connection_type, config.port)?;
     // We don't know whether client will send or receive, so configure for both.
     let wanted_send = Some(usize::try_from(Configuration::send_buffer())?);
     let wanted_recv = Some(usize::try_from(Configuration::recv_buffer())?);
