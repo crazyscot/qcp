@@ -41,7 +41,7 @@ jobs:
         toolchain: ${{ matrix.rust }}
         targets: ${{ matrix.target }}
     - name: Install tools
-      uses: taiki-e/install-action@v2.47.25
+      uses: taiki-e/install-action@v2.48.1
       with:
         tool: cross,cargo-deb
     #- name: Set minimal profile (Windows only)
