@@ -71,7 +71,7 @@ pub async fn cli() -> anyhow::Result<bool> {
         MainMode::Server => {
             return Ok(server_main().await.map_or_else(
                 |e| {
-                    eprintln!("{ERROR}ERROR{RESET} Server: {e}");
+                    eprintln!("{ERROR}ERROR{RESET} Server: {e:?}");
                     false
                 },
                 |()| true,
