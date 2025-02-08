@@ -51,7 +51,7 @@ use super::common::ProtocolMessage;
 use crate::{
     config::{Configuration_Optional, Manager},
     transport::CongestionControllerType,
-    util::{insert_if_some, Credentials, PortRange as CliPortRange},
+    util::{Credentials, PortRange as CliPortRange},
 };
 
 /// Server banner message, sent on stdout and checked by the client
@@ -352,36 +352,6 @@ impl ClientMessageV1 {
             extension: 0,
         }
     }
-
-    const META_NAME: &str = "client message";
-}
-
-impl Provider for ClientMessageV1 {
-    fn metadata(&self) -> figment::Metadata {
-        figment::Metadata::named(Self::META_NAME)
-    }
-
-    fn data(&self) -> Result<figment::value::Map<figment::Profile, Dict>, figment::Error> {
-        let mut dict = Dict::new();
-
-        // This is written from the consumer's (server's) point of view, i.e. bandwidth_to_server is server's rx.
-        // N.B. storing tx & rx as integers here requires engineering_repr 1.1.0.
-        insert_if_some(&mut dict, "rx", self.bandwidth_to_server.map(|v| v.0))?;
-        insert_if_some(&mut dict, "tx", self.bandwidth_to_client.map(|v| v.0))?;
-        insert_if_some(&mut dict, "rtt", self.rtt)?;
-        insert_if_some(&mut dict, "congestion", self.congestion)?;
-        insert_if_some(&mut dict, "timeout", self.timeout)?;
-        insert_if_some(
-            &mut dict,
-            "initial_congestion_window",
-            self.initial_congestion_window,
-        )?;
-
-        let mut profile_map = Map::new();
-        let _ = profile_map.insert(Profile::Global, dict);
-
-        Ok(profile_map)
-    }
 }
 
 impl Display for ClientMessageV1 {
@@ -547,7 +517,7 @@ mod test {
     use serde_bare::Uint;
 
     use crate::{
-        config::{Configuration_Optional, Manager},
+        config::{Configuration, Configuration_Optional, Manager},
         protocol::{
             common::ProtocolMessage,
             control::{
@@ -556,10 +526,12 @@ mod test {
             },
         },
         transport::CongestionControllerType,
-        util::Credentials,
+        util::{Credentials, PortRange as CliPortRange},
     };
 
-    use super::{ClientGreeting, ClientMessage, ClosedownReportV1, ServerMessage};
+    use super::{
+        ClientGreeting, ClientMessage, ClosedownReportV1, PortRange_OnWire, ServerMessage,
+    };
 
     #[test]
     fn test_connection_type() {
@@ -672,56 +644,96 @@ mod test {
         assert_eq!(msg, deser);
     }
 
-    #[test]
-    fn serialize_client_message() {
+    fn dummy_credentials() -> Credentials {
         let fake_keypair = &[0u8];
         let keypair = rustls_pki_types::PrivatePkcs8KeyDer::<'_>::from(fake_keypair.as_slice());
-        let creds = Credentials {
+        Credentials {
             certificate: vec![0, 1, 2].into(),
             keypair: keypair.into(),
             hostname: "foo".into(),
-        };
-        let mut manager = Manager::without_default(None);
-        {
-            let temp = manager.get::<Configuration_Optional>().unwrap();
-            assert_eq!(temp.remote_port, None);
         }
+    }
+
+    #[test]
+    fn serialize_client_message() {
         let config = Configuration_Optional {
             tx: Some(42u64.into()),
             rx: Some(89u64.into()),
             rtt: Some(1234),
-            congestion: Some(crate::transport::CongestionControllerType::Bbr),
-            ..Default::default()
+            congestion: Some(CongestionControllerType::Bbr),
+            initial_congestion_window: Some(12345),
+            port: Some(CliPortRange { begin: 17, end: 98 }),
+            remote_port: Some(CliPortRange {
+                begin: 123,
+                end: 456,
+            }),
+            timeout: Some(432),
+            // other client options are irrelevant to this test but we'll specify them anyway so we can rely on the compiler to catch any missing fields
+            address_family: None,
+            ssh: None,
+            ssh_options: None,
+            time_format: None,
+            ssh_config: None,
         };
-        assert_eq!(config.remote_port, None);
-        manager.merge_provider(&config);
 
-        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, &manager);
+        let cmsg = {
+            let creds = dummy_credentials();
+            let mut manager = Manager::without_default(None);
+            manager.merge_provider(&config);
+            ClientMessage::new(&creds, ConnectionType::Ipv4, &manager)
+        };
         let ser = cmsg.to_vec().unwrap();
         //println!("{cmsg:#?}");
         //println!("vec: {ser:?}");
         let deser = ClientMessage::from_slice(&ser).unwrap();
         //println!("{deser:#?}");
+
+        let disp = format!("{cmsg}");
+        assert!(disp.contains("PortRange_OnWire { begin: 123, end: 456 }"));
+
         assert_matches!(
             deser,
             ClientMessage::V1(ClientMessageV1 {
                 cert: _,
                 connection_type: ConnectionType::Ipv4,
-                port: None,
+                port: Some(PortRange_OnWire {
+                    // crucial check: this is client config.remote_port
+                    begin: 123,
+                    end: 456
+                }),
                 bandwidth_to_server: Some(Uint(42)),
                 bandwidth_to_client: Some(Uint(89)),
                 rtt: Some(1234),
                 congestion: Some(CongestionController_OnWire(CongestionControllerType::Bbr)),
-                initial_congestion_window: None,
-                timeout: None,
+                initial_congestion_window: Some(Uint(12345)),
+                timeout: Some(432),
                 extension: 0,
             })
         );
     }
 
     #[test]
-    fn serialize_server_message() {
-        let msg = ServerMessage::V1(ServerMessageV1 {
+    fn construct_client_message() {
+        // additional serialization cases not tested by serialize_and_provide_client_message
+        let creds = dummy_credentials();
+        let mut manager = Manager::without_default(None);
+        let config = Configuration_Optional::default();
+        manager.merge_provider(&config);
+        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, &manager);
+        assert_matches!(
+            cmsg,
+            ClientMessage::V1(ClientMessageV1 {
+                bandwidth_to_server: None,
+                ..
+            })
+        );
+    }
+
+    #[test]
+    fn serialize_provide_server_message() {
+        use engineering_repr::EngineeringQuantity as EQ;
+
+        let v1 = ServerMessageV1 {
             port: 12345,
             cert: vec![9, 8, 7],
             name: "hello".to_string(),
@@ -733,10 +745,27 @@ mod test {
             timeout: 42,
             warning: String::from("this is a warning"),
             extension: 0,
-        });
+        };
+        let msg = ServerMessage::V1(v1.clone());
         let wire = msg.to_vec().unwrap();
         let deser = ServerMessage::from_slice(&wire).unwrap();
         assert_eq!(msg, deser);
+
+        let mut manager = Manager::without_files(None); // with system defaults
+        manager.merge_provider(&v1);
+        let cfg = manager.get::<Configuration>().unwrap();
+        println!("{cfg:?}");
+        let expected = Configuration {
+            // Server message is processed by the client, so bandwidth_to_client becomes config.rx
+            rx: EQ::<u64>::from(v1.bandwidth_to_client.0),
+            tx: EQ::<u64>::from(v1.bandwidth_to_server.0),
+            rtt: v1.rtt,
+            congestion: v1.congestion.into(),
+            initial_congestion_window: v1.initial_congestion_window.0,
+            timeout: v1.timeout,
+            ..Configuration::system_default().clone()
+        };
+        assert_eq!(cfg, expected);
     }
 
     #[test]
@@ -760,5 +789,26 @@ mod test {
     fn skip_serializing() {
         let msg = ServerMessage::ToFollow;
         let _ = msg.to_vec().expect_err("ToFollow cannot be serialized");
+    }
+
+    #[test]
+    fn type_conversions_congestion() {
+        let c = CongestionControllerType::Cubic;
+        let c2 = CongestionController_OnWire::from(c);
+        println!("{c2}");
+        assert_eq!(CongestionControllerType::from(c2), c);
+    }
+
+    #[test]
+    fn type_conversions_port_range() {
+        let cli = CliPortRange { begin: 1, end: 10 };
+        let wire = PortRange_OnWire::from(cli);
+        assert_eq!(CliPortRange::from(wire), cli);
+        println!("{wire}");
+
+        let opt1: Option<PortRange_OnWire> = cli.into();
+        assert_eq!(opt1, Some(PortRange_OnWire { begin: 1, end: 10 }));
+        let opt2: Option<PortRange_OnWire> = CliPortRange::default().into();
+        assert_eq!(opt2, None);
     }
 }
