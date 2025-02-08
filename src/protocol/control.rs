@@ -541,17 +541,18 @@ mod test {
         net::{IpAddr, Ipv4Addr, Ipv6Addr},
     };
 
+    use assertables::assert_matches;
     use quinn::ConnectionStats;
     use serde::{Deserialize, Serialize};
     use serde_bare::Uint;
 
     use crate::{
-        config::{Configuration, Configuration_Optional, Manager},
+        config::{Configuration_Optional, Manager},
         protocol::{
             common::ProtocolMessage,
             control::{
-                ClosedownReport, CompatibilityLevel, CongestionController_OnWire, ConnectionType,
-                ServerGreeting, ServerMessageV1,
+                ClientMessageV1, ClosedownReport, CompatibilityLevel, CongestionController_OnWire,
+                ConnectionType, ServerGreeting, ServerMessageV1,
             },
         },
         transport::CongestionControllerType,
@@ -680,7 +681,11 @@ mod test {
             keypair: keypair.into(),
             hostname: "foo".into(),
         };
-        let mut manager = Manager::without_files(None);
+        let mut manager = Manager::without_default(None);
+        {
+            let temp = manager.get::<Configuration_Optional>().unwrap();
+            assert_eq!(temp.remote_port, None);
+        }
         let config = Configuration_Optional {
             tx: Some(42u64.into()),
             rx: Some(89u64.into()),
@@ -688,29 +693,30 @@ mod test {
             congestion: Some(crate::transport::CongestionControllerType::Bbr),
             ..Default::default()
         };
+        assert_eq!(config.remote_port, None);
         manager.merge_provider(&config);
-        let working = manager.get::<Configuration>().unwrap();
-        assert_eq!(working.tx, 42u64.into());
-        assert_eq!(working.congestion, CongestionControllerType::Bbr);
-        assert_eq!(working.rtt, 1234);
 
         let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, &manager);
         let ser = cmsg.to_vec().unwrap();
         //println!("{cmsg:#?}");
         //println!("vec: {ser:?}");
         let deser = ClientMessage::from_slice(&ser).unwrap();
-        println!("{deser:#?}");
-        if let ClientMessage::V1(detail) = &deser {
-            assert_eq!(detail.bandwidth_to_server.unwrap().0, 42);
-            assert_eq!(detail.bandwidth_to_client.unwrap().0, 89);
-            assert_eq!(
-                detail.congestion,
-                Some(CongestionController_OnWire(CongestionControllerType::Bbr))
-            );
-        } else {
-            panic!("wrong ClientMessage type");
-        }
-        assert_eq!(cmsg, deser);
+        //println!("{deser:#?}");
+        assert_matches!(
+            deser,
+            ClientMessage::V1(ClientMessageV1 {
+                cert: _,
+                connection_type: ConnectionType::Ipv4,
+                port: None,
+                bandwidth_to_server: Some(Uint(42)),
+                bandwidth_to_client: Some(Uint(89)),
+                rtt: Some(1234),
+                congestion: Some(CongestionController_OnWire(CongestionControllerType::Bbr)),
+                initial_congestion_window: None,
+                timeout: None,
+                extension: 0,
+            })
+        );
     }
 
     #[test]
