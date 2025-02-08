@@ -116,7 +116,9 @@ pub struct ResponseV1 {
     /// A human-readable message giving more information, if any is pertinent
     pub message: Option<String>,
 }
-impl ProtocolMessage for Response {}
+impl ProtocolMessage for Response {
+    const WIRE_ENCODING_LIMIT: u32 = 65_536;
+}
 
 impl Display for ResponseV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -146,7 +148,9 @@ pub struct FileHeaderV1 {
     /// Name of the file. This is a filename only, without any directory component.
     pub filename: String,
 }
-impl ProtocolMessage for FileHeader {}
+impl ProtocolMessage for FileHeader {
+    const WIRE_ENCODING_LIMIT: u32 = 65_536;
+}
 
 impl FileHeader {
     #[must_use]
@@ -168,7 +172,9 @@ pub enum FileTrailer {
     /// It has no contents. Future versions may introduce some sort of checksum.
     V1 = 1,
 }
-impl ProtocolMessage for FileTrailer {}
+impl ProtocolMessage for FileTrailer {
+    const WIRE_ENCODING_LIMIT: u32 = 65_536;
+}
 
 #[cfg(test)]
 mod test {

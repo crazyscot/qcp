@@ -250,7 +250,9 @@ pub struct ClientGreeting {
     /// Extension field, reserved for future expansion; for now, must be set to 0
     pub extension: u8,
 }
-impl ProtocolMessage for ClientGreeting {}
+impl ProtocolMessage for ClientGreeting {
+    const WIRE_ENCODING_LIMIT: u32 = 4_096;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // SERVER GREETING
@@ -269,7 +271,9 @@ pub struct ServerGreeting {
     /// Extension field, reserved for future expansion; for now, must be set to 0
     pub extension: u8,
 }
-impl ProtocolMessage for ServerGreeting {}
+impl ProtocolMessage for ServerGreeting {
+    const WIRE_ENCODING_LIMIT: u32 = 4_096;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // CLIENT MESSAGE

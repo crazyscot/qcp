@@ -59,10 +59,9 @@ pub struct MessageHeader {
 }
 
 impl MessageHeader {
-    /// The on-wire size of this struct, which is fixed (any change would constitute a breaking protocol change)
+    /// The on-wire size of this struct (of `MessageHeader` itself), which is fixed (any change would constitute a breaking protocol change)
     pub const SIZE: u32 = 4;
 }
-
 impl ProtocolMessage for MessageHeader {}
 
 /// Provides I/O functions for all structs taking part in our protocol.
@@ -74,6 +73,34 @@ pub trait ProtocolMessage
 where
     Self: serde::Serialize + serde::de::DeserializeOwned + Sync,
 {
+    /// Specifies an absolute limit on the wire encoding of this type.
+    /// The `from_..._framed` functions reject any attempts to deserialise
+    /// a message with a header frame longer than the given value for the type.
+    ///
+    /// <div class="warning">
+    /// This limit is important to prevent excessive memory consumption in the event of unforeseen bugs or network corruption,
+    /// but set it with caution. The protocol is designed to have forwards compatibility, which these limits may break.
+    /// The default limit is therefore somewhat permissive.
+    /// </div>
+    const WIRE_ENCODING_LIMIT: u32 = 1_048_576;
+
+    /// Checks the passed-in limit against this type's [`WIRE_ENCODING_LIMIT`](Self::WIRE_ENCODING_LIMIT).
+    ///
+    /// # Return
+    /// true iff the passed-in limit satisfies any requirement specified by this type
+    fn check_size(size: u32) -> Result<(), Error> {
+        anyhow::ensure!(
+            size <= Self::WIRE_ENCODING_LIMIT,
+            format!(
+                "Wire message size {} was too long for {} (limit: {})",
+                size,
+                std::any::type_name::<Self>(),
+                Self::WIRE_ENCODING_LIMIT
+            )
+        );
+        Ok(())
+    }
+
     /// Creates this struct from a slice of bytes.
     /// The slice must be the correct size for the payload (that's what [`MessageHeader`] is for).
     fn from_slice(slice: &[u8]) -> Result<Self, sbError> {
@@ -113,14 +140,19 @@ where
     }
 
     /// Deserializes this struct from an arbitrary reader by reading a [`MessageHeader`], then this struct as payload.
+    ///
+    /// This function checks the struct's [`WIRE_ENCODING_LIMIT`](Self::WIRE_ENCODING_LIMIT).
     fn from_reader_framed<R>(reader: &mut R) -> Result<Self, Error>
     where
         R: std::io::Read,
     {
         let header = MessageHeader::from_reader(reader, MessageHeader::SIZE)?;
+        Self::check_size(header.size)?;
         Self::from_reader(reader, header.size)
     }
     /// Deserializes this struct asynchronously from an arbitrary async reader by reading a [`MessageHeader`], then this struct as payload.
+    ///
+    /// This function checks the struct's [`WIRE_ENCODING_LIMIT`](Self::WIRE_ENCODING_LIMIT).
     fn from_reader_async_framed<R>(
         reader: &mut R,
     ) -> impl std::future::Future<Output = Result<Self, Error>> + Send
@@ -129,6 +161,7 @@ where
     {
         async {
             let header = MessageHeader::from_reader_async(reader, MessageHeader::SIZE).await?;
+            Self::check_size(header.size)?;
             Self::from_reader_async(reader, header.size).await
         }
     }
@@ -169,6 +202,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::protocol::common::MessageHeader;
+
     use super::{Error, ProtocolMessage};
     use serde::{Deserialize, Serialize};
     use std::io::Cursor;
@@ -179,7 +214,9 @@ mod tests {
         data: Vec<u8>,
     }
 
-    impl ProtocolMessage for TestMessage {}
+    impl ProtocolMessage for TestMessage {
+        const WIRE_ENCODING_LIMIT: u32 = 1024;
+    }
 
     #[test]
     fn test_sync_framed_roundtrip() -> Result<(), Error> {
@@ -226,5 +263,62 @@ mod tests {
         let output = MyPair::from(input);
         assert_eq!(output.send, 12);
         assert_eq!(output.recv, 34);
+    }
+
+    #[test]
+    fn deserialize_limit() {
+        #[allow(clippy::cast_possible_truncation)]
+        let msg = TestMessage {
+            data: vec![0u8; (TestMessage::WIRE_ENCODING_LIMIT + 1) as usize],
+        };
+        let mut buf = Vec::new();
+        msg.to_writer_framed(&mut buf).unwrap();
+        let _ = TestMessage::from_reader_framed(&mut Cursor::new(buf))
+            .expect_err("an error was expected");
+    }
+
+    #[tokio::test]
+    async fn deserialize_limit_async() {
+        #[allow(clippy::cast_possible_truncation)]
+        let msg = TestMessage {
+            data: vec![0u8; (TestMessage::WIRE_ENCODING_LIMIT + 1) as usize],
+        };
+        let mut buf = Vec::new();
+        msg.to_writer_framed(&mut buf).unwrap();
+        let _ = TestMessage::from_reader_async_framed(&mut Cursor::new(buf))
+            .await
+            .expect_err("an error was expected");
+    }
+
+    #[test]
+    fn deserialize_junk_over_long() {
+        // Edge cases above 2^32, to trap any signedness issues
+        // (but without allocing a 4GB vec, i.e. more like a fuzz test)
+        for testcase in &[1u32 << 31, 4_294_967_295 /* 2^32 - 1 */] {
+            let buf = MessageHeader { size: *testcase }.to_vec().unwrap();
+            let _ = TestMessage::from_reader_framed(&mut Cursor::new(buf))
+                .expect_err("an error was expected");
+        }
+    }
+    #[test]
+    fn deserialize_junk_zero_data() {
+        let buf = MessageHeader { size: 0 }.to_vec().unwrap();
+        let _ = TestMessage::from_reader_framed(&mut Cursor::new(buf))
+            .expect_err("an error was expected");
+    }
+    #[test]
+    fn deserialize_junk_insufficient_data() {
+        #![allow(clippy::cast_possible_truncation)]
+        // The header is correct for the payload, but the payload is inconsistent.
+        // This test relies on knowing how a TestMessage is encoded (Length, <data>)
+        let mut bogus_payload = vec![10u8 /*length*/, 1, 2, 3 /* short data */];
+        let mut buf = MessageHeader {
+            size: bogus_payload.len() as u32,
+        }
+        .to_vec()
+        .unwrap();
+        buf.append(&mut bogus_payload);
+        let _ = TestMessage::from_reader_framed(&mut Cursor::new(buf))
+            .expect_err("an error was expected");
     }
 }
