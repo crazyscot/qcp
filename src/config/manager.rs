@@ -133,6 +133,13 @@ impl Manager {
         result
     }
 
+    /// Testing/internal constructor, does not read files from system or apply system default
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) fn without_default(host: Option<&str>) -> Self {
+        Self::new(host)
+    }
+
     /// Merges in a data set, which is some sort of [figment::Provider](https://docs.rs/figment/latest/figment/trait.Provider.html).
     ///
     /// Within qcp, we use [crate::util::derive_deftly_template_Optionalify] to implement Provider for [Configuration].
