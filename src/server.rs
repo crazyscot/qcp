@@ -64,7 +64,7 @@ pub async fn server_main() -> anyhow::Result<()> {
         .context("failed to read client greeting")?;
 
     let remote_ip = ssh_remote_address();
-    let manager = Manager::standard(remote_ip.as_deref());
+    let mut manager = Manager::standard(remote_ip.as_deref());
     setup_tracing(
         remote_greeting.debug,
         manager
@@ -108,9 +108,7 @@ pub async fn server_main() -> anyhow::Result<()> {
     );
     //debug!("client msg {message1:?}");
 
-    // for testing:
-    // eprintln!("{}", manager.to_display_adapter::<Configuration>());
-    let config = combine_bandwidth_configurations(&manager, &message1)?;
+    let config = combine_bandwidth_configurations(&mut manager, &message1)?;
 
     let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
 

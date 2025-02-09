@@ -1,9 +1,10 @@
 //! QUIC transport configuration
 // (c) 2024 Ross Younger
 
-use std::{convert::Infallible, str::FromStr, sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::Result;
+use figment::{value::Dict, Provider};
 use human_repr::HumanCount as _;
 use quinn::{
     congestion::{BbrConfig, CubicConfig},
@@ -16,6 +17,7 @@ use tracing::debug;
 use crate::{
     config::{Configuration, Configuration_Optional, Manager},
     protocol::control::ClientMessageV1,
+    util::PortRange,
 };
 
 /// Keepalive interval for the QUIC connection
@@ -76,6 +78,12 @@ impl<'de> Deserialize<'de> for CongestionControllerType {
         // requires strum::EnumString && strum::VariantNames && #[strum(serialize_all = "lowercase")]
         FromStr::from_str(&lower)
             .map_err(|_| de::Error::unknown_variant(&s, CongestionControllerType::VARIANTS))
+    }
+}
+
+impl From<CongestionControllerType> for figment::value::Value {
+    fn from(value: CongestionControllerType) -> Self {
+        value.to_string().into()
     }
 }
 
@@ -140,49 +148,70 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
     Ok(config.into())
 }
 
-/// Negotiation logic for a single parameter where they are both the same type
-fn negotiate<T, E>(
-    a: Option<T>,
-    b: Option<T>,
-    default: T,
-    conflict: fn(T, T) -> Result<T, E>,
-) -> Result<T, E> {
-    match (a, b) {
-        (None, None) => Ok(default),
-        (Some(aa), None) => Ok(aa),
-        (None, Some(bb)) => Ok(bb),
-        (Some(aa), Some(bb)) => conflict(aa, bb),
-    }
+enum CombinationResponse<T> {
+    Server,
+    Client,
+    Combined(T),
+    Failure(anyhow::Error),
 }
 
-/// Negotiation logic for a single parameter where they are different but convertible types.
-/// The type of `default` governs the output type.
-fn negotiate_mixed<T, U, D, E>(
-    a: Option<T>,
-    b: Option<U>,
-    default: D,
-    conflict: fn(D, D) -> Result<D, E>,
-) -> Result<D, E>
+/// Negotiation logic for a single parameter. The two input types must be convertible.
+///
+/// If both server and client have a preference, the function `resolve_conflict` is invoked to determine the result.
+///
+/// # Output
+/// This function has three possible outcomes:
+/// * Add `key` and the client value to `client_out`, if the client configuration was selected
+/// * Add `key` and the combined value to `resolved_out`, if there was a conflict and the result is a combined value
+/// * Do nothing, if the server configuration was selected or if neither side expressed a preference.
+///
+fn negotiate_v3<ClientType, ServerType, BaseType>(
+    client: Option<ClientType>,
+    server: Option<ServerType>,
+    resolve_conflict: fn(BaseType, BaseType) -> CombinationResponse<BaseType>,
+    client_out: &mut NegotiatedConfig,
+    resolved_out: &mut NegotiatedConfig,
+    key: &str,
+) -> Result<()>
 where
-    D: From<T> + From<U>,
+    BaseType: From<ClientType> + From<ServerType>,
+    ClientType: Clone + Into<figment::value::Value> + Into<BaseType> + Into<ServerType>,
+    figment::value::Value: From<BaseType>,
+    ServerType: std::cmp::PartialEq,
 {
-    match (a, b) {
-        (None, None) => Ok(default),
-        (Some(aa), None) => Ok(aa.into()),
-        (None, Some(bb)) => Ok(bb.into()),
-        (Some(aa), Some(bb)) => conflict(aa.into(), bb.into()),
+    match (client, server) {
+        (None, None) => return Ok(()),
+        (Some(cc), None) => {
+            // only client specified; add to output
+            client_out.add(key, cc.into());
+        }
+        (None, Some(_)) => (), // only server specified; it's already in our config layer
+        (Some(cc), Some(ss)) => {
+            if <ClientType as Into<ServerType>>::into(cc.clone()) == ss {
+                // treat as server config
+                return Ok(());
+            }
+            match resolve_conflict(cc.clone().into(), ss.into()) {
+                CombinationResponse::Server => (),
+                CombinationResponse::Client => {
+                    client_out.add(key, cc.into());
+                }
+                CombinationResponse::Combined(val) => {
+                    resolved_out.add(key, val.into());
+                }
+                CombinationResponse::Failure(err) => return Err(err),
+            }
+        }
     }
+    Ok(())
 }
 
-#[allow(clippy::unnecessary_wraps)]
-fn min_ignoring_zero(a: u64, b: u64) -> Result<u64, Infallible> {
-    Ok(if a == 0 {
-        b
-    } else if b == 0 {
-        a
-    } else {
-        std::cmp::min(a, b)
-    })
+fn min_ignoring_zero(cli: u64, srv: u64) -> CombinationResponse<u64> {
+    match (cli, srv) {
+        (0, _) => CombinationResponse::Server,
+        (_, 0) => CombinationResponse::Client,
+        (cc, ss) => CombinationResponse::Combined(std::cmp::min(cc, ss)),
+    }
 }
 
 /// Applies the bandwidth/parameter negotiation logic given the server's configuration (`server`) and the client's requests (`client`).
@@ -207,79 +236,122 @@ fn min_ignoring_zero(a: u64, b: u64) -> Result<u64, Infallible> {
 /// | [`timeout`](Configuration#structfield.timeout) | [`timeout`](ClientMessageV1#structfield.timeout) | Client preference wins |
 /// | Client [`remote_port`](Configuration#structfield.remote_port) / Server [`port`](ClientMessageV1#structfield.port) | [`port`](ClientMessageV1#structfield.port) | Treat port `0` as "no preference". Compute the intersection of the two ranges. If they do not intersect, error. |
 ///
-/// # Return value
-/// A fresh [`Configuration`] object holding the result of this logic.
+/// # Outputs
+/// This function returns a fresh [`Configuration`] object holding the result of this logic.
+///
+/// In addition the input [`Manager`] is modified to show the provenance of each of the values.
 ///
 /// # Errors
 /// * If the input [`Manager`] is in the fused-error state
 /// * If the resultant [`Configuration`] fails validation checks
 ///
 pub fn combine_bandwidth_configurations(
-    manager: &Manager,
+    manager: &mut Manager,
     client: &ClientMessageV1,
 ) -> Result<Configuration> {
-    #[allow(clippy::unnecessary_wraps)]
-    fn client_wins<T>(_server: T, client: T) -> Result<T, Infallible> {
-        Ok(client)
+    let server: Configuration_Optional = manager.get::<Configuration_Optional>()?;
+    let mut client_picks = NegotiatedConfig::new(NegotiatedConfig::META_CLIENT);
+    let mut negotiated = NegotiatedConfig::new(NegotiatedConfig::META_NEGOTIATED);
+
+    // a little syntactic sugar to reduce repetitions
+    macro_rules! negotiate {
+        ($cli:expr, $ser:expr, $resolve:expr, $key:expr) => {
+            negotiate_v3(
+                $cli,
+                $ser,
+                $resolve,
+                &mut client_picks,
+                &mut negotiated,
+                $key,
+            )
+        };
     }
 
-    let server: Configuration_Optional = manager.get::<Configuration_Optional>()?;
-    let defaults = Configuration::system_default();
+    // This is written from the server's point of view, i.e. bandwidth_to_server is server's rx.
+    negotiate!(
+        client.bandwidth_to_server.map(|u| u.0),
+        server.rx,
+        min_ignoring_zero,
+        "rx"
+    )?;
+    negotiate!(
+        client.bandwidth_to_client.map(|u| u.0),
+        server.tx,
+        min_ignoring_zero,
+        "tx"
+    )?;
+    negotiate!(
+        client.rtt,
+        server.rtt,
+        |_: u16, _| CombinationResponse::Client,
+        "rtt"
+    )?;
+    negotiate!(
+        client.congestion.map(CongestionControllerType::from),
+        server.congestion,
+        |_: CongestionControllerType, _| CombinationResponse::Failure(anyhow::anyhow!(
+            "server and client have incompatible congestion algorithm requirements"
+        )),
+        "congestion"
+    )?;
+    negotiate!(
+        client.initial_congestion_window.map(|u| u.0),
+        server.initial_congestion_window,
+        |_: u64, _| CombinationResponse::Server,
+        "initial_congestion_window"
+    )?;
+    negotiate!(
+        client.port.map(PortRange::from),
+        server.port.map(PortRange::from),
+        |a, b| crate::util::PortRange::combine(a, b)
+            .map_or_else(CombinationResponse::Failure, CombinationResponse::Combined),
+        "port"
+    )?;
+    negotiate!(
+        client.timeout,
+        server.timeout,
+        |_: u16, _| CombinationResponse::Client,
+        "timeout"
+    )?;
 
-    let result = Configuration {
-        rx: negotiate_mixed(
-            server.rx,
-            client.bandwidth_to_server.map(|u| u.0),
-            u64::from(defaults.rx),
-            min_ignoring_zero,
-        )?
-        .into(),
-        tx: negotiate_mixed(
-            server.tx,
-            client.bandwidth_to_client.map(|u| u.0),
-            u64::from(defaults.tx),
-            min_ignoring_zero,
-        )?
-        .into(),
-        rtt: negotiate(server.rtt, client.rtt, defaults.rtt, client_wins)?,
-        congestion: negotiate_mixed(
-            server.congestion,
-            client.congestion,
-            defaults.congestion,
-            |_, _| {
-                anyhow::bail!(
-                    "server and client have incompatible congestion algorithm requirements"
-                )
-            },
-        )?,
-        initial_congestion_window: negotiate_mixed(
-            server.initial_congestion_window,
-            client.initial_congestion_window.map(|u| u.0),
-            defaults.initial_congestion_window,
-            |a, _| Ok::<u64, Infallible>(a),
-        )?,
-        port: negotiate_mixed(
-            server.port,
-            client.port,
-            defaults.port,
-            crate::util::PortRange::combine,
-        )?,
-        timeout: negotiate(
-            server.timeout,
-            client.timeout,
-            defaults.timeout,
-            client_wins,
-        )?,
+    manager.merge_provider(client_picks);
+    manager.merge_provider(negotiated);
+    manager.apply_system_default();
 
-        // Other fields are irrelevant to the negotiation.
-        // We do not use ..defaults here, as we want the compiler to catch if/when a new field is added.
-        address_family: defaults.address_family,
-        ssh: defaults.ssh.clone(),
-        ssh_options: defaults.ssh_options.clone(),
-        remote_port: defaults.remote_port,
-        time_format: defaults.time_format,
-        ssh_config: defaults.ssh_config.clone(),
-    };
-
+    let result = manager.get::<Configuration>()?;
     result.validate()
+}
+
+struct NegotiatedConfig {
+    source: String,
+    data: figment::value::Dict,
+}
+
+impl NegotiatedConfig {
+    const META_CLIENT: &str = "requested by client";
+    const META_NEGOTIATED: &str = "config resolution logic";
+
+    fn new(source: &str) -> Self {
+        Self {
+            source: source.to_string(),
+            data: Dict::new(),
+        }
+    }
+
+    fn add(&mut self, key: &str, val: figment::value::Value) {
+        let _ = self.data.insert(key.into(), val);
+    }
+}
+
+impl Provider for NegotiatedConfig {
+    fn metadata(&self) -> figment::Metadata {
+        figment::Metadata::named(self.source.clone())
+    }
+    fn data(
+        &self,
+    ) -> Result<figment::value::Map<figment::Profile, figment::value::Dict>, figment::Error> {
+        let mut profile_map = figment::value::Map::new();
+        let _ = profile_map.insert(figment::Profile::Global, self.data.clone());
+        Ok(profile_map)
+    }
 }
