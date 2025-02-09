@@ -28,7 +28,8 @@ pub(crate) const MINIMUM_BANDWIDTH: u64 = 150;
 /// See [`combine_bandwidth_configurations`](crate::transport::combine_bandwidth_configurations) for details.
 ///
 /// ### Developer notes
-/// The implementation of `default()` for this struct returns qcp's hard-wired configuration defaults.
+/// There is no `default()`.
+/// You can access qcp's hard-wired configuration defaults through [`Configuration::system_default()`].
 ///
 /// This structure uses the [Optionalify](derive_deftly_template_Optionalify) deftly macro to automatically
 /// define the `Configuration_Optional` struct, which is the same but has all members of type `Option<whatever>`.

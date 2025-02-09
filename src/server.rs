@@ -63,7 +63,8 @@ pub async fn server_main() -> anyhow::Result<()> {
         .await
         .context("failed to read client greeting")?;
 
-    let manager = Manager::standard(None); // Server does not use Host-specific configuration at the moment.
+    let remote_ip = ssh_remote_address();
+    let manager = Manager::standard(remote_ip.as_deref());
     setup_tracing(
         remote_greeting.debug,
         manager
@@ -75,6 +76,7 @@ pub async fn server_main() -> anyhow::Result<()> {
     let _span = tracing::error_span!("Server").entered();
 
     debug!("got client greeting {remote_greeting:?}");
+    debug!("client IP is {}", remote_ip.as_ref().map_or("none", |v| v));
 
     let compat = min(remote_greeting.compatibility.into(), COMPATIBILITY_LEVEL);
     debug!("selected compatibility level {compat}");
@@ -232,7 +234,10 @@ async fn handle_connection(
     file_buffer_size: usize,
 ) -> anyhow::Result<ConnectionStats> {
     let connection = conn.await?;
-    debug!("accepted connection from {}", connection.remote_address());
+    debug!(
+        "accepted QUIC connection from {}",
+        connection.remote_address()
+    );
 
     async {
         loop {
@@ -447,4 +452,29 @@ async fn send_response(
     ))
     .to_writer_async_framed(send)
     .await
+}
+
+/// Attempts to read the ssh client's IP address.
+///
+/// This relies on standard OpenSSH behaviour, which is to set environment variables.
+/// Returns `None` if the remote address could not be determined.
+fn ssh_remote_address() -> Option<String> {
+    let env = std::env::var("SSH_CONNECTION");
+    if let Ok(s) = env {
+        // SSH_CONNECTION: client IP, client port, server IP, server port
+        let it = s.split(' ').next();
+        if let Some(client) = it {
+            return Some(client.to_string());
+        }
+    }
+    let env = std::env::var("SSH_CLIENT");
+    if let Ok(s) = env {
+        // SSH_CLIENT: client IP, client port, server port
+        let it = s.split(' ').next();
+        if let Some(client) = it {
+            return Some(client.to_string());
+        }
+    }
+    warn!("no SSH_CONNECTION or SSH_CLIENT in environment; not attempting remote-specific configuration");
+    None
 }
