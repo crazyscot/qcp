@@ -107,8 +107,21 @@ pub async fn server_main() -> anyhow::Result<()> {
         message1.connection_type,
     );
     //debug!("client msg {message1:?}");
+    if message1.show_config {
+        info!(
+            "Static configuration:\n{}",
+            manager.to_display_adapter::<Configuration>()
+        );
+    }
 
     let config = combine_bandwidth_configurations(&mut manager, &message1)?;
+
+    if message1.show_config {
+        info!(
+            "Final configuration:\n{}",
+            manager.to_display_adapter::<Configuration>()
+        );
+    }
 
     let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
 

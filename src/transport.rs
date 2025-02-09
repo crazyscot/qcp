@@ -169,8 +169,8 @@ fn negotiate_v3<ClientType, ServerType, BaseType>(
     client: Option<ClientType>,
     server: Option<ServerType>,
     resolve_conflict: fn(BaseType, BaseType) -> CombinationResponse<BaseType>,
-    client_out: &mut NegotiatedConfig,
-    resolved_out: &mut NegotiatedConfig,
+    client_out: &mut ConfigBucket,
+    resolved_out: &mut ConfigBucket,
     key: &str,
 ) -> Result<()>
 where
@@ -250,8 +250,8 @@ pub fn combine_bandwidth_configurations(
     client: &ClientMessageV1,
 ) -> Result<Configuration> {
     let server: Configuration_Optional = manager.get::<Configuration_Optional>()?;
-    let mut client_picks = NegotiatedConfig::new(NegotiatedConfig::META_CLIENT);
-    let mut negotiated = NegotiatedConfig::new(NegotiatedConfig::META_NEGOTIATED);
+    let mut client_picks = ConfigBucket::new(ConfigBucket::META_CLIENT);
+    let mut negotiated = ConfigBucket::new(ConfigBucket::META_NEGOTIATED);
 
     // a little syntactic sugar to reduce repetitions
     macro_rules! negotiate {
@@ -314,6 +314,10 @@ pub fn combine_bandwidth_configurations(
         "timeout"
     )?;
 
+    // Convert selected fields to human-friendly representations
+    make_dict_human_friendly(client_picks.borrow());
+    make_dict_human_friendly(negotiated.borrow());
+
     manager.merge_provider(client_picks);
     manager.merge_provider(negotiated);
     manager.apply_system_default();
@@ -322,12 +326,32 @@ pub fn combine_bandwidth_configurations(
     result.validate()
 }
 
-struct NegotiatedConfig {
+fn make_entry_human_friendly(
+    entry: std::collections::btree_map::Entry<'_, String, figment::value::Value>,
+) {
+    use engineering_repr::EngineeringRepr as _;
+    use figment::value::Value;
+
+    let _ = entry.and_modify(|v| {
+        if let Value::Num(_tag, num) = v {
+            if let Some(u) = num.to_u128() {
+                *v = Value::from(u.to_eng(0).to_string());
+            }
+        }
+    });
+}
+
+fn make_dict_human_friendly(dict: &mut figment::value::Dict) {
+    make_entry_human_friendly(dict.entry("rx".into()));
+    make_entry_human_friendly(dict.entry("tx".into()));
+}
+
+struct ConfigBucket {
     source: String,
     data: figment::value::Dict,
 }
 
-impl NegotiatedConfig {
+impl ConfigBucket {
     const META_CLIENT: &str = "requested by client";
     const META_NEGOTIATED: &str = "config resolution logic";
 
@@ -341,9 +365,13 @@ impl NegotiatedConfig {
     fn add(&mut self, key: &str, val: figment::value::Value) {
         let _ = self.data.insert(key.into(), val);
     }
+
+    fn borrow(&mut self) -> &mut figment::value::Dict {
+        &mut self.data
+    }
 }
 
-impl Provider for NegotiatedConfig {
+impl Provider for ConfigBucket {
     fn metadata(&self) -> figment::Metadata {
         figment::Metadata::named(self.source.clone())
     }

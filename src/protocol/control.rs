@@ -302,6 +302,8 @@ pub struct ClientMessageV1 {
     pub connection_type: ConnectionType,
     /// If present, requests the server bind to a UDP port from a given range.
     pub port: Option<PortRange_OnWire>,
+    /// Requests the server show its configuration for this connection
+    pub show_config: bool,
 
     /// The requested bandwidth to use from client to server
     pub bandwidth_to_server: Option<Uint>,
@@ -324,20 +326,32 @@ impl ClientMessage {
     pub(crate) fn new(
         credentials: &Credentials,
         connection_type: ConnectionType,
+        remote_config: bool,
         manager: &Manager,
     ) -> Self {
-        ClientMessage::V1(ClientMessageV1::new(credentials, connection_type, manager))
+        ClientMessage::V1(ClientMessageV1::new(
+            credentials,
+            connection_type,
+            remote_config,
+            manager,
+        ))
     }
 }
 
 impl ClientMessageV1 {
-    fn new(credentials: &Credentials, connection_type: ConnectionType, manager: &Manager) -> Self {
+    fn new(
+        credentials: &Credentials,
+        connection_type: ConnectionType,
+        remote_config: bool,
+        manager: &Manager,
+    ) -> Self {
         let working = manager.get::<Configuration_Optional>().unwrap_or_default();
 
         Self {
             cert: credentials.certificate.to_vec(),
             connection_type,
             port: working.remote_port.map(std::convert::Into::into),
+            show_config: remote_config,
 
             bandwidth_to_server: match working.tx.map(u64::from) {
                 None | Some(0) => None,
@@ -680,7 +694,7 @@ mod test {
             let creds = dummy_credentials();
             let mut manager = Manager::without_default(None);
             manager.merge_provider(&config);
-            ClientMessage::new(&creds, ConnectionType::Ipv4, &manager)
+            ClientMessage::new(&creds, ConnectionType::Ipv4, false, &manager)
         };
         let ser = cmsg.to_vec().unwrap();
         //println!("{cmsg:#?}");
@@ -701,6 +715,7 @@ mod test {
                     begin: 123,
                     end: 456
                 }),
+                show_config: false,
                 bandwidth_to_server: Some(Uint(42)),
                 bandwidth_to_client: Some(Uint(89)),
                 rtt: Some(1234),
@@ -719,7 +734,7 @@ mod test {
         let mut manager = Manager::without_default(None);
         let config = Configuration_Optional::default();
         manager.merge_provider(&config);
-        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, &manager);
+        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, false, &manager);
         assert_matches!(
             cmsg,
             ClientMessage::V1(ClientMessageV1 {

@@ -134,7 +134,8 @@
 //!    Be sure to place them _above_ `Host *` in the config file.
 //! 1. Try it out! Copy some files around and see what network performance is like.
 //!    Note that you need to copy large files (hundreds of MB or more) to reach peak performance.
-//!    * Use `--dry-run` mode to preview the final network configuration for a proposed copy. If this isn't what you expected, use `--show-config` to see where your local settings are coming from. If necessary, `--debug` and `--remote-debug` may help you spot what's going on.
+//!    * Use `--dry-run` mode to preview the final network configuration for a proposed file transfer.
+//!      If the output isn't what you expected, use `--remote-config` to see where the various settings came from.
 //!    * See also the [performance notes](crate::doc::performance).
 //!
 
