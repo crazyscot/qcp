@@ -114,7 +114,12 @@ impl Channel {
         // PHASE 3: EXCHANGE OF MESSAGES
 
         // FUTURE: Select the client message version to send based on server's compatibility level.
-        let message = ClientMessage::new(credentials, connection_type, manager);
+        let message = ClientMessage::new(
+            credentials,
+            connection_type,
+            parameters.remote_config,
+            manager,
+        );
         debug!("Our client message: {message}");
         message
             .to_writer_async_framed(new1.input()?)

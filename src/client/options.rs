@@ -58,9 +58,16 @@ pub struct Parameters {
     pub profile: bool,
 
     /// Connects to a remote server but does not actually transfer any files.
-    /// This is useful to test that the control channel works and when debugging the negotiated bandwidth parameters.
+    /// This is useful to test that the control channel works and when debugging the negotiated bandwidth parameters (see also `--remote-config`).
     #[arg(long, action, help_heading("Configuration"), display_order(0))]
     pub dry_run: bool,
+    /// Outputs the server's configuration for this connection.
+    /// (Unlike `--show-config`, this option does not prevent a file transfer. However, you can do so by selecting `--dry-run` mode.)
+    ///
+    /// The output shows both the server's _static_ configuration (by reading config files)
+    /// and its _final_ configuration (taking account of the client's expressed preferences).
+    #[arg(long, help_heading("Configuration"), display_order(0))]
+    pub remote_config: bool,
 
     // JOB SPECIFICAION ====================================================================
     // (POSITIONAL ARGUMENTS!)
