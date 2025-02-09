@@ -135,6 +135,9 @@ impl Channel {
         // FUTURE: ServerMessage V2 will require more logic to unpack the message contents.
         let message1 = match message {
             ServerMessage::V1(m) => m,
+            ServerMessage::Failure(f) => {
+                anyhow::bail!("server sent failure message: {f}");
+            }
             ServerMessage::ToFollow => {
                 anyhow::bail!("remote or logic error: unpacked unexpected ServerMessage::ToFollow")
             }
