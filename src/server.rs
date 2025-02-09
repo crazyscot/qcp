@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::config::{Configuration, Configuration_Optional, Manager};
 use crate::protocol::control::{
     ClientGreeting, ClientMessage, ClosedownReport, ClosedownReportV1, ConnectionType,
-    ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
+    ServerFailure, ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
 };
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, ResponseV1, Status};
 use crate::protocol::{common::ProtocolMessage as _, common::StreamPair};
@@ -83,20 +83,27 @@ pub async fn server_main() -> anyhow::Result<()> {
 
     // PHASE 3: EXCHANGE OF MESSAGES
 
-    let client_message = ClientMessage::from_reader_async_framed(&mut stdin)
-        .await
-        .map_err(|e| {
+    let client_message = match ClientMessage::from_reader_async_framed(&mut stdin).await {
+        Ok(cm) => cm,
+        Err(e) => {
+            ServerMessage::Failure(ServerFailure::Malformed)
+                .to_writer_async_framed(&mut stdout)
+                .await?;
             // try to be helpful if there's a human reading
             error!("{e}");
-            anyhow::anyhow!(
+            anyhow::bail!(
                 "In server mode, this program expects to receive a binary data packet on stdin"
-            )
-        })?;
+            );
+        }
+    };
 
     trace!("waiting for client message");
     let message1 = match client_message {
         ClientMessage::V1(m) => m,
         ClientMessage::ToFollow => {
+            ServerMessage::Failure(ServerFailure::Malformed)
+                .to_writer_async_framed(&mut stdout)
+                .await?;
             anyhow::bail!("remote or logic error: unpacked unexpected ClientMessage::ToFollow")
         }
     };
@@ -114,7 +121,15 @@ pub async fn server_main() -> anyhow::Result<()> {
         );
     }
 
-    let config = combine_bandwidth_configurations(&mut manager, &message1)?;
+    let config = match combine_bandwidth_configurations(&mut manager, &message1) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            ServerMessage::Failure(ServerFailure::NegotiationFailed(format!("{e}")))
+                .to_writer_async_framed(&mut stdout)
+                .await?;
+            return Ok(());
+        }
+    };
 
     if message1.show_config {
         info!(
@@ -126,12 +141,20 @@ pub async fn server_main() -> anyhow::Result<()> {
     let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
 
     let credentials = Credentials::generate()?;
-    let (endpoint, warning) = create_endpoint(
+    let (endpoint, warning) = match create_endpoint(
         &credentials,
         &message1.cert,
         message1.connection_type,
         &config,
-    )?;
+    ) {
+        Ok(t) => t,
+        Err(e) => {
+            ServerMessage::Failure(ServerFailure::EndpointFailed(format!("{e}")))
+                .to_writer_async_framed(&mut stdout)
+                .await?;
+            return Ok(());
+        }
+    };
     let warning = warning.unwrap_or_default();
     let local_addr = endpoint.local_addr()?;
     debug!("Local endpoint address is {local_addr}");

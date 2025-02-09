@@ -399,6 +399,9 @@ pub enum ServerMessage {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
     /// On the wire enum discriminant: 1.
     V1(ServerMessageV1),
+    /// This message type was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    /// On the wire enum discriminant: 2.
+    Failure(ServerFailure),
 }
 impl ProtocolMessage for ServerMessage {}
 
@@ -462,6 +465,44 @@ impl Provider for ServerMessageV1 {
         let _ = profile_map.insert(Profile::Global, dict);
 
         Ok(profile_map)
+    }
+}
+
+/// A special type of message indicating that an error occurred and the connection cannot proceed.
+///
+/// Protocol Version Compatibility: V1
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub enum ServerFailure {
+    /// The server failed to understand control channel traffic received from the client.
+    ///
+    /// Protocol Version Compatibility: V1
+    Malformed,
+    /// The client's configuration and server's configuration could not be reconciled.
+    /// The string within explains why.
+    ///
+    /// Protocol Version Compatibility: V1
+    NegotiationFailed(String),
+    /// The QUIC endpoint could not be set up.
+    /// The string within contains more detail.
+    ///
+    /// Protocol Version Compatibility: V1
+    EndpointFailed(String),
+    /// An unknown error occurred. This is a catch-all for forward compatibility.
+    ///
+    /// Protocol Version Compatibility: V1
+    Unknown(String),
+}
+
+impl Display for ServerFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[allow(clippy::enum_glob_use)]
+        use ServerFailure::*;
+        match self {
+            Malformed => f.write_str("Malformed"),
+            NegotiationFailed(msg) => write!(f, "Negotiation Failed: {msg}"),
+            EndpointFailed(msg) => write!(f, "Endpoint Failed: {msg}"),
+            Unknown(msg) => write!(f, "Unknown error: {msg}"),
+        }
     }
 }
 
@@ -544,7 +585,8 @@ mod test {
     };
 
     use super::{
-        ClientGreeting, ClientMessage, ClosedownReportV1, PortRange_OnWire, ServerMessage,
+        ClientGreeting, ClientMessage, ClosedownReportV1, PortRange_OnWire, ServerFailure,
+        ServerMessage,
     };
 
     #[test]
@@ -825,5 +867,17 @@ mod test {
         assert_eq!(opt1, Some(PortRange_OnWire { begin: 1, end: 10 }));
         let opt2: Option<PortRange_OnWire> = CliPortRange::default().into();
         assert_eq!(opt2, None);
+    }
+
+    #[test]
+    fn display_server_failure() {
+        let sf = ServerFailure::Malformed;
+        assert_eq!(format!("{sf}"), "Malformed");
+        let sf = ServerFailure::NegotiationFailed("hello".to_string());
+        assert_eq!(format!("{sf}"), "Negotiation Failed: hello");
+        let sf = ServerFailure::EndpointFailed("hello".to_string());
+        assert_eq!(format!("{sf}"), "Endpoint Failed: hello");
+        let sf = ServerFailure::Unknown("hello".to_string());
+        assert_eq!(format!("{sf}"), "Unknown error: hello");
     }
 }
