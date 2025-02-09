@@ -40,8 +40,9 @@
 //! * Pattern matching uses `*` and `?` as wildcards in the usual way.
 //! * A single asterisk `*` matches all hosts; this is used to provide defaults.
 //! * A pattern beginning with `!` is a _negative_ match; it matches all remote hosts _except_ those matching the rest of the pattern.
-//! * Pattern matching is applied directly to the remote host given on the QCP command line, before DNS or alias resolution.
-//!   If you connect to hosts by IP address, a pattern of `10.11.12.*` works in the obvious way.
+//! * The qcp client process matches against the remote host given on the QCP command line, before DNS or alias resolution.
+//!   It does _not_ resolve hostname to IP address. However, if you connect to hosts by IP address, patterns (for example `10.11.12.*`) work in the obvious way.
+//! * The remote (server) process matches the IP address passed to it by the ssh server in the `SSH_CONNECTION` or `SSH_CLIENT` environment variables.
 //!
 //! #### Include
 //!
@@ -72,14 +73,20 @@
 //!
 //! ```text
 //! Host old-faithful
-//! # This is an old server with a very limited CPU which we do not want to overstress
-//! rx 125k
-//! tx 0
-//! RemotePort 65400-65500 # allowed in firewall config
+//! # This is an old server with a very limited CPU which we do not want to overstress.
+//! # old-faithful isn't its DNS name; it's a hostname aliased in ssh_config.
+//! rx 125k  # 1 Mbit limit. Yes, it's a really old server.
+//! tx 0     # tx 0 means "same as rx"
+//! # This server runs a tight firewall; inbound UDP is only allowed on certain ports.
+//! RemotePort 65400-65500
 //!
-//! Host *.internal.corp
+//! Host *.internal.corp 172.31.200.*
 //! # This is a nearby data centre which we have a dedicated 1Gbit connection to.
 //! # We don't need to use qcp, but it's convenient to use one tool in our scripts.
+//! # We specify the group both by domain name and netblock: the qcp client process
+//! # matches against whatever you give on the command line, and the qcp server
+//! # uses only the connecting IP address.
+//! # (IPv6 addresses would work here too.)
 //! rx 125M
 //! tx 0
 //! rtt 10
@@ -98,11 +105,37 @@
 //!    In the example above, the `Host old-faithful` block sets an `rx` but does not set `rtt`.
 //!    Any operations to `old-faithful` therefore inherit `rtt 150` from the `Host *` block.
 //! 1. The `tx` setting has a default value of 0, which means "use the active rx value". If you set `tx` in a `Host *` block, you probably want to set it explicitly everywhere you set `rx`.
+//! 1. The qcp client process does NOT resolve hostname to IP address when determining which `Host` block(s) to match.
+//!    This is consistent with OpenSSH.
+//!    * However, the qcp server process ONLY matches against the IP address passed to it by the OpenSSH server.
+//!    * Therefore, in an environment which may act as both qcp client and server, you may need to specify options by both name and netblock.
 //!
 //! If you have a complicated config file we recommend you structure it as follows:
 //! * Any global settings that are intended to apply to all hosts
 //! * `Host` blocks; if you use wildcards, from most-specific to least-specific
 //! * A `Host *` block to provide default settings to apply where no more specific value has been given
+//!
+//! ## Building a configuration
+//! We suggest the following approach to setting up a configuration file.
+//!
+//! 1. Set up a `Host *` block specifying `Tx` and `Rx` suitable for your local network uplink.
+//!    * In a data centre environment, the bandwidth limits will likely be whatever your network interface is capable of.
+//!      (If the data centre has limited bandwidth, or your contract specifies something lower, use that instead.)
+//!    * In a host connected to a standard ISP connection, the bandwidth limits will be whatever you're paying your ISP for.
+//!      If you're not sure, you might use speedtest.net or a similar service.
+//! 1. Make a best-guess to what the Round Trip Time might be in the default case, and add this to `Host *`.
+//!    If you mostly deal with servers on the same continent as you, this might be somewhere around 50 or 100ms.
+//!    If you mostly deal with servers on the other side of the planet, this might be 300s or even more.
+//! 1. Add any other global options to the `Host *` block.
+//!    1. If this machine will act as a qcp server and has a firewall that limits incoming UDP traffic, set up a firewall exception on a range of ports and configure that as `port`.
+//!    1. Set up any non-standard `ssh`, `ssh_options` or `ssh_config` that may be needed.
+//!    1. If you want to use UTC when printing messages, set `TimeFormat`.
+//! 1. If there are any specific hosts or network blocks that merit different network settings, add `Host` block(s) for them as required.
+//!    Be sure to place them _above_ `Host *` in the config file.
+//! 1. Try it out! Copy some files around and see what network performance is like.
+//!    Note that you need to copy large files (hundreds of MB or more) to reach peak performance.
+//!    * Use `--dry-run` mode to preview the final network configuration for a proposed copy. If this isn't what you expected, use `--show-config` to see where your local settings are coming from. If necessary, `--debug` and `--remote-debug` may help you spot what's going on.
+//!    * See also the [performance notes](crate::doc::performance).
 //!
 
 mod structure;
