@@ -141,6 +141,7 @@ impl Manager {
     }
 
     /// Merges in a data set, which is some sort of [figment::Provider](https://docs.rs/figment/latest/figment/trait.Provider.html).
+    /// This uses figment's `merge` operation, which prefers to _replace_ existing items.
     ///
     /// Within qcp, we use [crate::util::derive_deftly_template_Optionalify] to implement Provider for [Configuration].
     pub fn merge_provider<T>(&mut self, provider: T)

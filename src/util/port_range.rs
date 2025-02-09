@@ -118,6 +118,12 @@ impl<'de> serde::Deserialize<'de> for PortRange {
     }
 }
 
+impl From<PortRange> for figment::value::Value {
+    fn from(value: PortRange) -> Self {
+        value.to_string().into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::PortRange as ConfigPortRange;
