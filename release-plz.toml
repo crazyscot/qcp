@@ -70,7 +70,7 @@ commit_parsers = [
   { message = "^chore\\(release\\):", skip = true },
   { message = "^chore: release", skip = true },
   { message = "^chore\\(deps.*\\)", skip = true },
-  { message = "^chore\\(ci)", skip = true },
+  { message = "^chore\\(ci\\)", skip = true },
   { message = "^chore\\(pr\\)", skip = true },
   { message = "^chore\\(pull\\)", skip = true },
   { message = "^chore\\(skip", skip = true },
