@@ -62,7 +62,7 @@ pub(crate) fn print_udp_buffer_size_help_message(rmem: u64, wmem: u64) {
     println!(
         r"For best performance, it is necessary to set the kernel UDP buffer size limits.
 This program attempts to automatically set buffer sizes for itself,
-but doing so requires elevated privileges."
+but doing so requires the kernel limits to be set to permit this."
     );
 
     if bsdish() {

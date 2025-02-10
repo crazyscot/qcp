@@ -12,14 +12,20 @@ high-performance remote file copy utility for long-distance internet connections
 - 🔧 Drop-in replacement for `scp`
 - 🛡️ Similar security to `scp`, using existing, well-known mechanisms
 - 🚀 Better throughput on congested networks
+
+### News
+
+- **(New in 0.3)**
+  * Negotiate transport setting by combining configuration from both sides
+  * Protocol encoding changed to [BARE], removing the dependency on capnp.
 - **(New in 0.2)** Configuration file support
 
 For a full list of changes, see the [changelog](CHANGELOG.md).
 
 #### Platform support status
 
-- Well tested: Debian and Ubuntu on x86_64, using OpenSSH
-- Tested: Ubuntu on WSL; aarch64 (Raspbian)
+- Well tested: Debian and Ubuntu on x86_64 (amd64), using OpenSSH
+- Tested: Ubuntu on WSL on x86_64; Debian on aarch64 (Raspbian)
 - Untested: OSX/BSD family
 - Not currently supported: Windows
 
@@ -34,7 +40,7 @@ For a full list of changes, see the [changelog](CHANGELOG.md).
 
 ### Installing pre-built binaries
 
-These can be found on the [latest release](https://github.com/crazyscot/qcp/releases/latest).
+These can be found on the [latest release](https://github.com/crazyscot/qcp/releases/latest) page.
 
 * Debian/Ubuntu packages are provided.
 * For other Linux x86_64: Use x86_64-unknown-linux-musl.tar.gz
@@ -54,7 +60,7 @@ cargo install --locked qcp
 
 * Install the `rustup` tool via your package manager, or see [Rust installation](https://www.rust-lang.org/tools/install)
 * `rustup toolchain install stable`
-* Proceed as above
+* `cargo install --locked qcp`
 
 ## ⚙️ Usage
 
@@ -68,7 +74,7 @@ The program has a comprehensive help message, accessed via `qcp -h` (brief) or `
 
 For example:
 
-```bash
+```text
 $ qcp my-server:/tmp/testfile /tmp/
 ⠂ Transferring data                                                           2.1MB/s (last 1s)
 testfile ████████████████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░ 1s @ 6.71 MB/s [10.49 MB]
@@ -87,22 +93,33 @@ In that case, you can use `--ssh-config` to provide an alternative configuration
 
 #### Tuning
 
-By default qcp is tuned for a 100Mbit connection, with 300ms round-trip time to the target server.
+qcp's default configuration is for a **100Mbit symmetric connection**, with **300ms round-trip time** to the target server.
 
-Various network tuning options are available.
+Naturally, you will get better performance if you set things up for your actual network connection.
 
-For example, if you have 300Mbit/s (37.5MB/s) download and 100Mbit/s (12.5MB/s) upload, you might use these options:
+For example, if you have 300Mbit/s (37.5MB/s) download and 100Mbit/s (12.5MB/s) upload, you might try this on the command line:
 
 ```bash
-qcp my-server:/tmp/testfile /tmp/ --rx 37M --tx 12M
+qcp my-server:/tmp/testfile /tmp/ --rx 37.5M --tx 12.5M
 ```
 
-Performance tuning can be a tricky subject. See the [performance] documentation.
+
+Performance tuning can be a tricky subject. See the [performance] documentation, and our recommended approach to
+[building a configuration].
 
 #### Persistent configuration
 
 The useful options -- those you might want to use regularly including `rx`, `tx` and `rtt` -- can be specified
 in a configuration file. See [config] for details.
+
+For the example above, you might put this into `~/.qcp.conf` or `/etc/qcp.conf`:
+
+```text
+Host *
+Rx 37.5M
+Tx 12.5M
+```
+
 
 ## 📖 How qcp works
 
@@ -183,4 +200,6 @@ Some ideas for the future, in no particular order:
 [config]: https://docs.rs/qcp/latest/qcp/config/index.html
 [protocol]: https://docs.rs/qcp/latest/qcp/protocol/index.html
 [performance]: https://docs.rs/qcp/latest/qcp/doc/performance/index.html
+[building a configuration]: https://docs.rs/qcp/latest/qcp/doc/performance/index.html#building-a-configuration
 [Github sponsorship]: https://github.com/sponsors/crazyscot?frequency=recurring&sponsor=crazyscot
+[BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html

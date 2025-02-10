@@ -24,8 +24,20 @@ pub(crate) const MINIMUM_BANDWIDTH: u64 = 150;
 
 /// The set of configurable options supported by qcp.
 ///
-/// Options from the server and client are combined at runtime.
+/// **IMPORTANT:** The configurations of the server and client are combined at runtime.
 /// See [`combine_bandwidth_configurations`](crate::transport::combine_bandwidth_configurations) for details.
+///
+/// ### Configuration files
+///
+/// These fields may be specified in any order. In configuration files, the field names are case insensitive and we
+/// ignore hyphens or underscores.
+/// In other words, you can use upper case, lower case, camel case, mixed case, shouty snake case, kebab case, train case, whatever you like.
+///
+/// [More details about the configuration mechanism](crate::config).
+///
+/// ### Command line
+///
+/// All configurable options may be used on the command line. There, they must be specified in kebab-case.
 ///
 /// ### Developer notes
 /// There is no `default()`.
@@ -49,12 +61,13 @@ pub struct Configuration {
     /// The maximum network bandwidth we expect receiving data FROM the remote system.
     /// [default: 12.5M]
     ///
+    /// This parameter is always interpreted as the **local** bandwidth, whether operating in client or server mode.
+    ///
     /// This may be specified directly as a number, or as an SI quantity
     /// like `10M` or `256k`. **Note that this is described in BYTES, not bits**;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
     /// 125M might be a suitable setting.
     ///
-    /// This parameter is always interpreted as the **local** bandwidth, whether operating in client or server mode.
     #[arg(
         short('b'),
         long,

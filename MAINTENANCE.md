@@ -12,5 +12,8 @@
   * ```release-plz release --git-token $GITHUB_QCP_TOKEN```
   * Check the new Github release page; update notes as necessary. Publication of the github release triggers the artifact builds.
 * Merge `dev` into `main`, or whatever suits the current branching strategy
-  * main is set to require linear history, which will often mean a rebase-merge and a fresh `dev` branch.
+  * main is set to require linear history and is a protected branch. **Do not rebase-merge!**
+    * Create a PR for dev into main in the usual way.
+    * Locally make the fast-forward merge
+    * Push to main. Even though it is protected the PR is allowed.
 * Check the docs built, follow up on the release workflow, etc.

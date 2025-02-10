@@ -244,6 +244,7 @@ fn min_ignoring_zero(cli: u64, srv: u64) -> CombinationResponse<u64> {
 /// # Errors
 /// * If the input [`Manager`] is in the fused-error state
 /// * If the resultant [`Configuration`] fails validation checks
+/// * If the two configurations cannot be satisfactorily combined
 ///
 pub fn combine_bandwidth_configurations(
     manager: &mut Manager,

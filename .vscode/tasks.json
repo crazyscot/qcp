@@ -3,6 +3,19 @@
 	"tasks": [
 		{
 			"type": "cargo",
+			"command": "build",
+			"args": ["--locked"],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			},
+			"label": "rust: cargo build --locked"
+		},
+		{
+			"type": "cargo",
 			"command": "doc",
 			"args": ["--no-deps", "--locked"],
 			"problemMatcher": [

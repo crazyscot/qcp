@@ -55,12 +55,12 @@ pub(crate) struct CliArgs {
 
     // MODE SELECTION, part 2 ==============================================================
     // (These are down here to control clap's output ordering.)
-    /// Outputs the configuration, then exits.
+    /// Outputs the local configuration, then exits.
     ///
     /// If a remote `SOURCE` or `DESTINATION` argument is given, outputs the configuration we would use
     /// for operations to that host.
     ///
-    /// If not, outputs only global settings from configuration, which may be overridden in
+    /// If not, outputs only global settings from configuration, which may be overridden by
     /// `Host` blocks in configuration files.
     ///
     #[arg(long, help_heading("Configuration"), display_order(0))]

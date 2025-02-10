@@ -3,21 +3,25 @@
 //!
 //! qcp obtains run-time configuration from the following sources, in order:
 //! 1. Command-line options
-//! 2. The user's configuration file (typically `~/.qcp.conf`)
-//! 3. The system-wide configuration file (typically `/etc/qcp.conf`)
+//! 2. The user's configuration file (usually `~/.qcp.conf`) on either side of the connection (see [negotiation](#configuration-negotiation))
+//! 3. The system-wide configuration file (usually `/etc/qcp.conf`) on either side of the connection
 //! 4. Hard-wired defaults
 //!
 //! Each option may appear in multiple places, but only the first match is used.
 //!
 //! **Note** Configuration file locations are platform-dependent.
-//! To see what applies on the current platform, run `qcp --config-files`.
+//! To see what applies on the current platform, run `qcp --config-files` .
 //!
 //! ## File format
 //!
 //! qcp uses the same basic format as OpenSSH configuration files.
 //!
-//! Each line contains a keyword and one or more arguments.
-//! Keywords are single words and are case-insensitive.
+//! Options may be specified in any order.
+//!
+//! Each line contains a keyword (the option name) and one or more arguments.
+//!
+//! Option names are single words. They are case insensitive; hyphens and underscores are ignored.
+//! In other words, you can use UPPERCASE, lowercase, camelCase, mIxEDcAse, SHOUTY_SNAKE_CASE, kebab-case, Train-Case, whatever you like.
 //!
 //! Arguments are separated from keywords, and each other, by whitespace.
 //! (It is also possible to write `Key=Value` or `Key = Value`.)
@@ -60,7 +64,7 @@
 //!
 //! ## Configurable options
 //!
-//! The set of supported fields is defined by [Configuration].
+//! The set of supported fields is the [Configuration] structure.
 //!
 //! In configuration files, option keywords are case insensitive and ignore hyphens and underscores.
 //! (On the command line, they must be specified in kebab-case.)
@@ -68,6 +72,17 @@
 //! * `qcp --show-config` outputs a list of supported fields, their current values, and where each value came from.
 //! * For an explanation of each field, refer to `qcp --help` .
 //! * `qcp --config-files` outputs the list of configuration files for the current user and platform.
+//!
+//! ## Configuration negotiation
+//!
+//! The remote qcp ("server") process is on another machine, and can have its own set of user and system-wide configuration files.
+//! Options governing the transport configuration (bandwidth, round-trip time, UDP ports) may be specified by either side, and are
+//! combined at runtime.
+//!
+//! The idea is that you configure either side for the bandwidth available to it, and qcp then uses the lower of the two.
+//! If you're working from a laptop away from your usual connection, you might run a speed test and tell qcp the results.
+//!
+//! The logic used to combine configurations is described under [`combine_bandwidth_configurations`](crate::transport::combine_bandwidth_configurations).
 //!
 //! ## Example
 //!
@@ -108,12 +123,7 @@
 //! 1. The qcp client process does NOT resolve hostname to IP address when determining which `Host` block(s) to match.
 //!    This is consistent with OpenSSH.
 //!    * However, the qcp server process ONLY matches against the IP address passed to it by the OpenSSH server.
-//!    * Therefore, in an environment which may act as both qcp client and server, you may need to specify options by both name and netblock.
-//!
-//! If you have a complicated config file we recommend you structure it as follows:
-//! * Any global settings that are intended to apply to all hosts
-//! * `Host` blocks; if you use wildcards, from most-specific to least-specific
-//! * A `Host *` block to provide default settings to apply where no more specific value has been given
+//!    * Therefore, in an environment which may act as both qcp client and server, you may need to specify options by both hostname and netblock.
 //!
 //! ## Building a configuration
 //! We suggest the following approach to setting up a configuration file.
@@ -126,17 +136,18 @@
 //! 1. Make a best-guess to what the Round Trip Time might be in the default case, and add this to `Host *`.
 //!    If you mostly deal with servers on the same continent as you, this might be somewhere around 50 or 100ms.
 //!    If you mostly deal with servers on the other side of the planet, this might be 300s or even more.
-//! 1. Add any other global options to the `Host *` block.
+//! 1. Add any other global options to the `Host *` block
 //!    1. If this machine will act as a qcp server and has a firewall that limits incoming UDP traffic, set up a firewall exception on a range of ports and configure that as `port`.
 //!    1. Set up any non-standard `ssh`, `ssh_options` or `ssh_config` that may be needed.
 //!    1. If you want to use UTC when printing messages, set `TimeFormat`.
 //! 1. If there are any specific hosts or network blocks that merit different network settings, add `Host` block(s) for them as required.
+//!    Order these from most-specific to least-specific.
 //!    Be sure to place them _above_ `Host *` in the config file.
 //! 1. Try it out! Copy some files around and see what network performance is like.
-//!    Note that you need to copy large files (hundreds of MB or more) to reach peak performance.
+//!    Note that these files need to be large (hundreds of MB or more) to reach peak performance.
 //!    * Use `--dry-run` mode to preview the final network configuration for a proposed file transfer.
 //!      If the output isn't what you expected, use `--remote-config` to see where the various settings came from.
-//!    * See also the [performance notes](crate::doc::performance).
+//!    * See also the [performance notes](crate::doc::performance) and [troubleshooting](crate::doc::troubleshooting).
 //!
 
 mod structure;

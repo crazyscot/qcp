@@ -66,7 +66,10 @@ pub async fn cli() -> anyhow::Result<bool> {
         }
         MainMode::ShowConfig => {
             config_manager.apply_system_default();
-            println!("{}", config_manager.to_display_adapter::<Configuration>());
+            println!(
+                "Client configuration:\n{}",
+                config_manager.to_display_adapter::<Configuration>()
+            );
         }
         MainMode::Server => {
             return Ok(server_main().await.map_or_else(
