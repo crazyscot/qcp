@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.0](https://github.com/crazyscot/qcp/compare/v0.2.1...v0.3.0)
+
+### ⛰️ Features
+
+- [**breaking**] Compute a negotiated transport configuration based on optional preferences from either side (#32) - ([0af6eff](https://github.com/crazyscot/qcp/commit/0af6eff424adfc82d43ae37d0ea5f8ad3a84d284))
+- Server can send a failure message during control protocol - ([445ec4e](https://github.com/crazyscot/qcp/commit/445ec4ef71062118ec33e785070b8d14854512b3))
+- Add --remote-config mode - ([6de53e1](https://github.com/crazyscot/qcp/commit/6de53e157a2e37cef88c9b19c722f2d4fd363fa1))
+- Server uses the ssh remote client address to select configuration - ([b06475b](https://github.com/crazyscot/qcp/commit/b06475bf9f30da50251eea063076e3ff100a931e))
+- Add --dry-run mode - ([b74f080](https://github.com/crazyscot/qcp/commit/b74f08010bf254661ff77f742fcc80489a9ef271))
+
+### 🐛 Bug Fixes
+
+- Client correctly marshalls remote_port as None when not specified - ([d1b0054](https://github.com/crazyscot/qcp/commit/d1b0054492ffcf2260c6857b9270d19c5c38fb32))
+- Resolve --tx 0 correctly - ([573c9b4](https://github.com/crazyscot/qcp/commit/573c9b4fd115624df98ee905d92a779ec5acb5a6))
+- Always ssh to the entered ssh hostname, so we respect any aliasing in ssh_config - ([f9421a5](https://github.com/crazyscot/qcp/commit/f9421a55e95fadf47aa2a2643749fc85a41d3f7a))
+- Username is not part of the hostname when parsing config - ([3544219](https://github.com/crazyscot/qcp/commit/3544219fdae3f3f949a7ba06f8defad9ab993e73))
+
+### 🎨 Styling
+
+- Improve server error messages (show detail as well as context) - ([d010535](https://github.com/crazyscot/qcp/commit/d0105354a150f8ab292dd381fb293e78f4a766ff))
+- Improve tracing and debug output - ([663bc3e](https://github.com/crazyscot/qcp/commit/663bc3e6fc880c36d9c95d7cf9e02e0dae997293))
+
+### 🧪 Testing
+
+- Complete test coverage in protocol module - ([b3473b0](https://github.com/crazyscot/qcp/commit/b3473b099f4d954635d73b56a0a292cad38d3b11))
+- Add coveralls - ([abac087](https://github.com/crazyscot/qcp/commit/abac087bfe7b9ec2c6a1ded4d41095463b9313b3))
+- Add unit tests for client::options - ([bffba19](https://github.com/crazyscot/qcp/commit/bffba19eaf731e7cbff1faf3a7ac5f2c030b2dea))
+- Fill in job.rs unit tests - ([ae835bc](https://github.com/crazyscot/qcp/commit/ae835bceffbff1af930f826b0bbe61bbceff236f))
+- Add local coverage script - ([57f044a](https://github.com/crazyscot/qcp/commit/57f044a90b842b759014892e5b43935f89bd8027))
+
+### ⚙️ Miscellaneous Tasks
+
+- [**breaking**] Change protocol encoding from capnp to BARE - ([85a1243](https://github.com/crazyscot/qcp/commit/85a124339763431697bd56d3987e58f39da787d9))
+- Size limits for on-wire messages - ([9f6ef11](https://github.com/crazyscot/qcp/commit/9f6ef1163b6b109344dfd1c7e142ad77cc697035))
+- Improve error message when remote uses the old protocol - ([7cc27de](https://github.com/crazyscot/qcp/commit/7cc27de5496dd3378ca4be86636880a5179d5077))
+
+### 🚜 Refactor
+
+- Config combination produces a first-class Figment - ([8bdb623](https://github.com/crazyscot/qcp/commit/8bdb623d7e06faaebf3520b50e8e16a37d9568c3))
+- Deduplicate configuration validation logic - ([af320be](https://github.com/crazyscot/qcp/commit/af320be2e884383d33fbfbaf51207e0c8eb76226))
+- Tidyup config manager and client child process handling - ([e44a54f](https://github.com/crazyscot/qcp/commit/e44a54ffc97a6c660635deeda267e09327e4efc6))
+- Make PortRange.combine() more coherent - ([c2877e5](https://github.com/crazyscot/qcp/commit/c2877e5ffb417c29f84db9b3fb2526e824f34e36))
+- Various tidyups in support of transport negotiation - ([cd4a30a](https://github.com/crazyscot/qcp/commit/cd4a30a4a9f077307f1c8485c187aaa55eb19654))
+- Drop expanduser; do the work in-house instead - ([43cfbd3](https://github.com/crazyscot/qcp/commit/43cfbd34a88acb360592dd7326ac259e43344090))
+- Remove MODE_OPTIONS which wasn't used in a well-defined way - ([390ee6f](https://github.com/crazyscot/qcp/commit/390ee6fc4d8afc714e43c851d5a8b058828dd90c))
+
 ## [0.2.1](https://github.com/crazyscot/qcp/compare/v0.2.0...v0.2.1)
 
 ### ⛰️ Features
