@@ -29,4 +29,14 @@ rustPlatform.buildRustPackage rec {
     license = lib.licenses.agpl3Only;
     maintainers = with lib.maintainers; [ poptart ];
   };
+
+  postInstall = ''
+    mkdir -p $out/share/man/man{1,5} $out/share/doc/qcp $out/etc/systcl.d/
+    install -Dm644 $src/misc/qcp.1 $out/share/man/man1/qcp.1
+    install -Dm644 $src/misc/qcp_config.5 $out/share/man/man5/qcp_config.5
+    install -Dm644 $src/misc/20-qcp.conf $out/etc/sysctl.d/20-qcp.conf
+    install -Dm644 $src/misc/qcp.conf $out/etc/qcp.conf
+    install -Dm644 $src/README.md $out/share/doc/qcp/README.md
+    install -Dm644 $src/LICENSE $out/share/doc/qcp/LICENSE
+  '';
 }
