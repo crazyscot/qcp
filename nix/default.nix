@@ -16,7 +16,7 @@ rustPlatform.buildRustPackage rec {
     hash = "sha256-9nJ01OPAU60veLpL2BlSSUTMu/xdUBDVkV0YEFNQ3FU=";
   };
 
-  cargoHash = "sha256-Au8yTz4lelryGhq21dwq98HijImNahpmnEtKwEQF9jE=";
+  cargoHash = "sha256-7LfwJa64ZUE0i8/bMecMoxzykJvuINzXctopyh4Qlak=";
 
   checkFlags = [
     # SSH home directory tests will not work in nix sandbox
