@@ -24,7 +24,7 @@ For a full list of changes, see the [changelog](CHANGELOG.md).
 
 #### Platform support status
 
-- Well tested: Debian and Ubuntu on x86_64 (amd64), using OpenSSH
+- Well tested: Debian, NixOS, and Ubuntu on x86_64 (amd64), using OpenSSH
 - Tested: Ubuntu on WSL on x86_64; Debian on aarch64 (Raspbian)
 - Untested: OSX/BSD family
 - Not currently supported: Windows
@@ -43,6 +43,7 @@ For a full list of changes, see the [changelog](CHANGELOG.md).
 These can be found on the [latest release](https://github.com/crazyscot/qcp/releases/latest) page.
 
 * Debian/Ubuntu packages are provided.
+* Nix Flakes are provided: `nix shell 'github:crazyscot/qcp?dir=nix'`
 * For other Linux x86_64: Use x86_64-unknown-linux-musl.tar.gz
 * For other Linux aarch64: Use aarch64-unknown-linux-musl.tar.gz
 

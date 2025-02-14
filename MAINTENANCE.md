@@ -17,3 +17,8 @@
     * Locally make the fast-forward merge
     * Push to main. Even though it is protected the PR is allowed.
 * Check the docs built, follow up on the release workflow, etc.
+* Update the build support files.
+  * For Nix packages:
+    * Update tagged release version in `nix/default.nix`
+    * Pre-compute the release hash (v0.3.0 is the release in this example) and replace the `fetchFromGithub.hash` value to the output SRI: `nix hash to-sri --type sha256 "$(nix-prefetch-url --unpack 'https://github.com/crazyscot/qcp/archive/v0.3.0.tar.gz')"`.
+    * Run a test build with previous hashes or `lib.fakeHash` set for `cargoHash` and place the expected hash in place.
