@@ -5,7 +5,7 @@ use super::args::CliArgs;
 use crate::{
     client::{client_main, MAX_UPDATE_FPS},
     config::{Configuration, Manager},
-    os,
+    os::{self, AbstractPlatform as _},
     server::server_main,
     styles::{ERROR, RESET},
 };
@@ -56,7 +56,7 @@ pub async fn cli() -> anyhow::Result<bool> {
 
     match mode {
         MainMode::HelpBuffers => {
-            os::print_udp_buffer_size_help_message(
+            os::Platform::help_buffers_mode(
                 Configuration::recv_buffer(),
                 Configuration::send_buffer(),
             );
