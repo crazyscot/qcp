@@ -3,3 +3,4 @@
 .temp
 /target
 /target.*
+/nix/result
