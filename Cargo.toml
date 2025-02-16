@@ -31,7 +31,7 @@ anyhow = "1.0.94"
 bytes = "1.10.0"
 clap = { version = "4.5.28", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 console = "0.15.8"
-derive-deftly = "0.14.2"
+derive-deftly = "1.0.0"
 derive_more = { version = "2.0.1", features = ["constructor", "display"] }
 dirs = "6.0.0"
 dns-lookup = "2.0.4"
@@ -55,7 +55,7 @@ serde_bare = "0.5.0"
 serde_repr = "0.1.19"
 static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
-strum = { version = "0.26.3", features = ["derive"]}
+strum = { version = "0.27.0", features = ["derive"]}
 tabled = "0.17.0"
 thiserror = "2.0.11"
 tokio = { version = "1.43.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
