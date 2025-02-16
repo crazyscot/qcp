@@ -1,5 +1,6 @@
 ## Creating a release
 
+* Confirm docs have been updated for any changes since the last release.
 * Create PR:
   * _(Optional)_ `release-plz update` to preview updates to the changelog and version
   * ```release-plz release-pr --git-token $GITHUB_QCP_TOKEN```
