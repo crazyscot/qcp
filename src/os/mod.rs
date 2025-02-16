@@ -68,6 +68,14 @@ pub trait AbstractPlatform {
 
     /// The absolute path to the system configuration file, if one is defined on this platform.
     fn system_config_path() -> Option<PathBuf>;
+
+    /// Implementation of `--help-buffers` mode.
+    ///
+    /// This is a help mode for the sysadmin.
+    /// It outputs useful information and advice.
+    /// It may, if applicable, check the OS configuration to improve the quality of the advice
+    /// given.
+    fn help_buffers_mode(rmem: u64, wmem: u64);
 }
 
 #[cfg(any(unix, doc))]

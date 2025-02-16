@@ -64,7 +64,7 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
 wildmatch = "2.4.0"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.29.0", features = ["socket"] }
+nix = { version = "0.29.0", features = ["socket", "user"] }
 
 [target.'cfg(all(target_env = "musl", target_pointer_width = "64"))'.dependencies]
 jemallocator = "0.5.4"

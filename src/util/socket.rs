@@ -52,7 +52,6 @@ pub fn set_udp_buffer_sizes(
             wanted_recv.human_count_bytes(),
             recv.human_count_bytes(),
         );
-        warn!("{msg}");
         message = Some(msg);
         if let Some(e) = force_err {
             warn!("While attempting to set kernel buffer size, this happened: {e}");

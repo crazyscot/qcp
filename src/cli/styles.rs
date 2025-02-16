@@ -18,6 +18,8 @@ pub const WARNING: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(A
 /// Informational message styling. This can be Displayed directly.
 pub const INFO: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Cyan)));
 // pub(crate) const DEBUG: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Blue)));
+/// Success message style. This can be Displayed directly.
+pub const SUCCESS: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Green)));
 
 pub(crate) const HEADER: anstyle::Style = anstyle::Style::new()
     .underline()
