@@ -1,6 +1,10 @@
 ## Creating a release
 
 * Confirm docs have been updated for any changes since the last release.
+* Update man page if required:
+  * `cargo xtask man -o qcp/misc/qcp.1`
+    * _N.B. This isn't automated in CI to save repeating work across multiple builds._
+  * Commit it
 * Create PR:
   * _(Optional)_ `release-plz update` to preview updates to the changelog and version
   * ```release-plz release-pr --git-token $GITHUB_QCP_TOKEN```

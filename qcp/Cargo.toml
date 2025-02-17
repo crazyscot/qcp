@@ -19,9 +19,9 @@ rustls-log = ["quinn/rustls-log"]
 [dependencies]
 anstream = "0.6.18"
 anstyle = "1.0.10"
-anyhow = "1.0.94"
+anyhow = { workspace = true }
 bytes = "1.10.0"
-clap = { version = "4.5.28", features = ["wrap_help", "derive", "cargo", "help", "string"] }
+clap = { workspace = true }
 console = "0.15.8"
 derive-deftly = "1.0.0"
 derive_more = { version = "2.0.1", features = ["constructor", "display"] }
