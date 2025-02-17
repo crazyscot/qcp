@@ -22,7 +22,7 @@ esac
 set -x
 
 gzip -9n < CHANGELOG.md > qcp/misc/changelog.gz
-output=$(cargo deb --no-build --locked ${TARGETOPT} --deb-revision "${REVISION}")
+output=$(cargo deb -p qcp --no-build --locked ${TARGETOPT} --deb-revision "${REVISION}")
 : $output
 
 set +x

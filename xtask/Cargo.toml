@@ -1,0 +1,15 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+edition = "2021"
+authors = ["Ross Younger <qcp@crazyscot.com>"]
+license = "MIT" # Note this license applies only to xtask, not to qcp itself.
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+clap_mangen = "0.2.26"
+pico-args = "0.5.0"
+qcp = { path = "../qcp" }
+roff = "0.2.2"
