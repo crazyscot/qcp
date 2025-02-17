@@ -1,5 +1,6 @@
 #!/bin/sh -e
 # args: [--release|--no-release] [<rust-target>]
+# prerequisite: cargo build --release
 
 TARGET=$2
 if [ -z "$TARGET" ]; then
@@ -20,7 +21,7 @@ esac
 
 set -x
 
-gzip -9n < CHANGELOG.md > misc/changelog.gz
+gzip -9n < CHANGELOG.md > qcp/misc/changelog.gz
 output=$(cargo deb --no-build --locked ${TARGETOPT} --deb-revision "${REVISION}")
 : $output
 
