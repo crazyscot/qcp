@@ -27,5 +27,22 @@ pub(crate) fn licenses(mut args: Arguments) -> Result<()> {
         "{cargo} about generate qcp/misc/licenses.hbs -o {output}"
     )
     .run()?;
+
+    // TODO: currently available in nightly: pathbuf.add_extension(".gz");
+    let mut extension = output
+        .extension()
+        .unwrap_or_default()
+        .to_str()
+        .unwrap()
+        .to_string();
+    if !extension.is_empty() {
+        // Only push a '.' if there is already an extension (otherwise you get foo..gz)
+        extension.push('.');
+    }
+    extension.push_str("gz");
+    let mut output_gz = output.clone();
+    output_gz.set_extension(extension);
+    crate::gzip(output.clone(), output_gz.clone())?;
+    eprintln!("Wrote {} and {}", output.display(), output_gz.display());
     Ok(())
 }

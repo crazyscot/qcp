@@ -8,5 +8,6 @@ publish = false
 
 [dependencies]
 anyhow = { workspace = true }
+flate2 = "1.0.35"
 pico-args = "0.5.0"
 xshell = "0.2.7"
