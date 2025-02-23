@@ -6,6 +6,7 @@ use std::process::Command;
 use anyhow::{Context as _, Result};
 use pico_args::Arguments;
 
+mod licenses;
 mod manpage;
 
 // ---------------------------------------------------------------------------------------------
@@ -16,6 +17,11 @@ mod manpage;
 #[allow(clippy::type_complexity)]
 const TASKS: &[(&str, fn(Arguments) -> Result<()>, &str)] = &[
     ("man", manpage::manpage, "Build the qcp.1 man page"),
+    (
+        "licenses",
+        licenses::licenses,
+        "Generate licenses.html  (prerequisite: `cargo install about`)",
+    ),
     ("help", help, "Output help"),
 ];
 

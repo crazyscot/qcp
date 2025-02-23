@@ -1,0 +1,47 @@
+# configuration for `cargo about`
+# see https://embarkstudios.github.io/cargo-about/index.html
+
+accepted = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    "OpenSSL",
+    "CC-PDDC",
+    "Unicode-3.0",
+    "AGPL-3.0", # qcp
+]
+
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+]
+
+workarounds = [
+    "ring",
+]
+
+private = { ignore = true }
+
+[ring]
+accepted = ["OpenSSL"]
+
+[linux-raw-sys.clarify]
+license = "Apache-2.0 OR (Apache-2.0 WITH LLVM-exception) OR MIT"
+[[linux-raw-sys.clarify.files]]
+path = 'COPYRIGHT'
+checksum = '3290ae0fbc9ddb77d2239121d710f0bb9d31b3b4744e6d97fe01e652b4c1870b'
+
+[rustix.clarify]
+license = "Apache-2.0 OR (Apache-2.0 WITH LLVM-exception) OR MIT"
+[[rustix.clarify.files]]
+path = 'COPYRIGHT'
+checksum = '377c2e7c53250cc5905c0b0532d35973392af16ffb9596a41d99d202cf3617c9'
+
+[pwd.clarify]
+license = "CC-PDDC"
+[[pwd.clarify.files]]
+path = 'LICENSE'
+checksum = '88a49ec7b8c2a0ab11d597889a39e2bb631eee8c3b184d1d0dbd2ea15388bb9b'
