@@ -5,3 +5,6 @@
 /target
 /target.*
 /nix/result
+/qcp/qcp.cdx.xml
+/qcp/qcp.cdx.xml.gz
+/xtask/xtask.cdx.xml

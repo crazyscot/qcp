@@ -43,7 +43,7 @@ jobs:
     - name: Install tools
       uses: taiki-e/install-action@v2.48.1
       with:
-        tool: cross,cargo-deb,cargo-about
+        tool: cross,cargo-deb,cargo-about,cargo-cyclonedx
     #- name: Set minimal profile (Windows only)
     #  if: matrix.host == 'windows-latest'
     #  run: rustup set profile minimal
@@ -60,13 +60,15 @@ jobs:
     #  run: cross build --release --locked --target ${{ matrix.target }}
     - name: Generate licenses.html
       run: cargo xtask licenses -o qcp/misc/licenses.html
+    - name: Generate CycloneDX SBOM
+      run: cargo cyclonedx
     - uses: taiki-e/upload-rust-binary-action@v1.24.0
       id: build
       with:
         bin: qcp
         token: ${{ secrets.GITHUB_TOKEN }}
         target: ${{ matrix.target }}
-        include: README.md,LICENSE,CHANGELOG.md,qcp/misc/licenses.html
+        include: README.md,LICENSE,CHANGELOG.md,qcp/misc/licenses.html,qcp/qcp.cdx.xml
         leading-dir: true
         locked: true
         tar: unix

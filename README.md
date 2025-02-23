@@ -141,6 +141,13 @@ This project is released publicly under the [GNU Affero General Public License](
 
 Alternative license terms can be made available on request on a commercial basis (see below).
 
+### 📋 SBOM
+
+qcp draws on the Rust ecosystem. The various components used within the application are available under their own licenses.
+
+To help you understand the legals and provide data for analysis tools, we automatically generate a license report and Software Bill of Materials at build time.
+These are included in the build bundles as `licenses.html` (HTML report) and `qcp.cdx.xml` (CycloneDX BOM schema).
+
 ### 🧑‍🏭 Bugs, Features & Contributions
 
 Bug reports and feature requests are welcome, please use the [issue] tracker.
