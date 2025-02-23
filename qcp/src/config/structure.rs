@@ -53,7 +53,7 @@ pub(crate) const MINIMUM_BANDWIDTH: u64 = 150;
 // Maintainer note: None of the members of this struct should be Option<anything>. That leads to sunspots in the CLI and strange warts (Some(Some(foo))).
 #[derive(Deftly)]
 #[derive_deftly(Optionalify)]
-#[deftly(visibility = "pub")]
+#[deftly(visibility = "pub(crate)")]
 #[derive(Debug, Clone, PartialEq, Parser, Deserialize, Serialize, FieldNamesAsSlice)]
 pub struct Configuration {
     // TRANSPORT PARAMETERS ============================================================================

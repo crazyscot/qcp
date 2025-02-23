@@ -62,7 +62,7 @@ fn main_guts() -> Result<()> {
     Ok(())
 }
 
-fn ensure_top_level() -> Result<()> {
+fn top_level() -> Result<String> {
     let toplevel_path = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
         .output()
@@ -70,8 +70,13 @@ fn ensure_top_level() -> Result<()> {
     if !toplevel_path.status.success() {
         anyhow::bail!("Failed to invoke git rev-parse");
     }
-    let path = String::from_utf8(toplevel_path.stdout)?;
-    std::env::set_current_dir(path.trim()).context("Changing to toplevel")?;
+    Ok(String::from_utf8(
+        toplevel_path.stdout.trim_ascii().to_vec(),
+    )?)
+}
+
+fn ensure_top_level() -> Result<()> {
+    std::env::set_current_dir(top_level()?).context("Changing to toplevel")?;
     Ok(())
 }
 

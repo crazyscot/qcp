@@ -38,7 +38,7 @@ qcp will read your ssh config file to resolve any host name aliases you may have
 ))]
 #[command(styles=super::styles::CLAP_STYLES)]
 #[allow(clippy::struct_excessive_bools)]
-pub struct CliArgs {
+pub(crate) struct CliArgs {
     // MODE SELECTION ======================================================================
     /// Operate in server mode.
     ///
