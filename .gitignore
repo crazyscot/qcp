@@ -1,6 +1,7 @@
 *~
 *.swp
 .temp
+licenses.html
 /target
 /target.*
 /nix/result
