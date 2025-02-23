@@ -17,6 +17,7 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  ########################################################################################3
   # Build the app on all supported platforms, at least for the time being
   build:
     strategy:
@@ -47,6 +48,8 @@ jobs:
     #- name: Set minimal profile (Windows only)
     #  if: matrix.host == 'windows-latest'
     #  run: rustup set profile minimal
+
+    ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
     - uses: Swatinem/rust-cache@v2
       with:
         key: "${{ matrix.build }}"
@@ -90,21 +93,27 @@ jobs:
         # this env var is set by make-debian-package
         path: ${{ env.BUILT_DEB_FILE }}
 
+  ########################################################################################3
+  # Full test suite.
   # We only need to run the checks on a single platform
   checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
       ##- name: install packages
       ##  run: scripts/install-ubuntu-packages ${{ matrix.target }} # Not currently needed.
+
+      ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
       # Checks begin here!
       - run: cargo fmt --all --check
       #- run: cargo test --locked # replaced by cargo llvm-cov to run with coverage tests
