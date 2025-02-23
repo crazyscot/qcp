@@ -53,7 +53,7 @@ jobs:
         cache-on-failure: true
     - name: install packages (ubuntu builds only)
       if: startsWith(matrix.host, 'ubuntu')
-      run: scripts/install-ubuntu-packages
+      run: scripts/install-ubuntu-packages ${{ matrix.target }}
       # native builds need all of these; cross builds only need binutils-multiarch
 
     #- name: Build
@@ -103,8 +103,8 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-      - name: install packages
-        run: scripts/install-ubuntu-packages
+      ##- name: install packages
+      ##  run: scripts/install-ubuntu-packages ${{ matrix.target }} # Not currently needed.
       # Checks begin here!
       - run: cargo fmt --all --check
       #- run: cargo test --locked # replaced by cargo llvm-cov to run with coverage tests
