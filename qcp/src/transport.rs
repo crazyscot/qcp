@@ -303,7 +303,7 @@ pub fn combine_bandwidth_configurations(
     )?;
     negotiate!(
         client.port.map(PortRange::from),
-        server.port.map(PortRange::from),
+        server.port,
         |a, b| crate::util::PortRange::combine(a, b)
             .map_or_else(CombinationResponse::Failure, CombinationResponse::Combined),
         "port"

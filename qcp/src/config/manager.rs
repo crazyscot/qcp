@@ -325,7 +325,6 @@ impl Display for DisplayAdapter<'_> {
 
 #[cfg(test)]
 mod test {
-    use crate::config::ssh::SshConfigError;
     use crate::config::{Configuration, Configuration_Optional, Manager};
     use crate::util::{make_test_tempfile, PortRange};
     use engineering_repr::EngineeringQuantity;
@@ -541,7 +540,7 @@ mod test {
         let mut mgr = Manager::new(None);
         mgr.merge_ssh_config(&path, Some("foo"), false);
         //println!("{mgr:?}");
-        let err = mgr.get::<Test>().map_err(SshConfigError::from).unwrap_err();
+        let err = mgr.get::<Test>().unwrap_err();
         println!("{err}");
     }
 
