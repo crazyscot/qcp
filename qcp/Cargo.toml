@@ -63,9 +63,11 @@ jemallocator = "0.5.4"
 
 [dev-dependencies]
 assertables = "9.5.0"
+clap_mangen = "0.2.26"
 fastrand = "2.3.0"
 json = "0.12.4"
 rand = "0.9.0"
+roff = "0.2.2"
 rusty-fork = "0.3.0"
 serde_json = "1.0.138"
 serde_test = "1.0.177"

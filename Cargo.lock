@@ -1026,6 +1026,7 @@ dependencies = [
  "assertables",
  "bytes",
  "clap",
+ "clap_mangen",
  "console",
  "derive-deftly",
  "derive_more",
@@ -1050,6 +1051,7 @@ dependencies = [
  "quinn",
  "rand 0.9.0",
  "rcgen",
+ "roff",
  "rustls-pki-types",
  "rusty-fork",
  "serde",
@@ -2187,11 +2189,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "clap",
- "clap_mangen",
  "pico-args",
- "qcp",
- "roff",
  "xshell",
 ]
 

@@ -1,8 +1,8 @@
 ## Creating a release
 
-* Confirm docs have been updated for any changes since the last release.
+* Confirm top-level docs have been updated for any changes since the last release.
 * Update man page if required:
-  * `cargo xtask man -o qcp/misc/qcp.1`
+  * `cargo xtask man`
     * _N.B. This isn't automated in CI to save repeating work across multiple builds._
   * Commit it
 * Create PR:
