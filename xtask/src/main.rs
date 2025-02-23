@@ -7,6 +7,7 @@ use anyhow::{Context as _, Result};
 use flate2::{Compression, GzBuilder};
 use pico_args::Arguments;
 
+mod dch;
 mod licenses;
 mod manpage;
 
@@ -23,6 +24,7 @@ const TASKS: &[(&str, fn(Arguments) -> Result<()>, &str)] = &[
         licenses::licenses,
         "Generate licenses.html  (prerequisite: `cargo install about`)",
     ),
+    ("dch", dch::changelog, "Generate the dummy debian changelog"),
     ("help", help, "Output help"),
 ];
 
