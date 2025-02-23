@@ -39,13 +39,15 @@ jobs:
     - uses: taiki-e/install-action@v2.48.1
       with:
         tool: cross,cargo-deb,cargo-about,cargo-cyclonedx
-    - uses: Swatinem/rust-cache@v2
-      with:
-        key: "${{matrix.build}}"
     - name: install packages (ubuntu builds only)
       if: startsWith(matrix.host, 'ubuntu')
       run: scripts/install-ubuntu-packages ${{ matrix.target }}
       # native builds need all of these; cross builds only need binutils-multiarch
+
+    ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: "${{matrix.build}}"
 
     #- name: Build
     #  run: cross build --release --locked --target ${{ matrix.target }}
