@@ -1,9 +1,10 @@
 //! xtask?
 //! See <https://github.com/matklad/cargo-xtask>
 
-use std::process::Command;
+use std::{fs::File, io::BufReader, path::PathBuf, process::Command};
 
 use anyhow::{Context as _, Result};
+use flate2::{Compression, GzBuilder};
 use pico_args::Arguments;
 
 mod licenses;
@@ -86,5 +87,20 @@ pub(crate) fn ensure_all_args_used(args: Arguments) -> Result<()> {
         unused.is_empty(),
         format!("Unhandled arguments: {unused:?}"),
     );
+    Ok(())
+}
+
+/// This is essentially the `gzip` shell command
+fn gzip(from: PathBuf, to: PathBuf) -> Result<()> {
+    let filename = from.clone();
+    let filename = filename.file_name().unwrap().to_str().unwrap();
+    let infile = File::open(from)?;
+    let mut inbuffer = BufReader::new(infile);
+    let outfile = File::create(to)?;
+    let mut gz = GzBuilder::new()
+        .filename(filename)
+        .write(outfile, Compression::default());
+    std::io::copy(&mut inbuffer, &mut gz)?;
+    let _ = gz.finish()?;
     Ok(())
 }

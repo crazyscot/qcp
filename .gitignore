@@ -1,7 +1,7 @@
 *~
 *.swp
 .temp
-licenses.html
+/licenses.html
 /target
 /target.*
 /nix/result

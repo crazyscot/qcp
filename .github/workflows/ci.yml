@@ -43,7 +43,7 @@ jobs:
     - name: Install tools
       uses: taiki-e/install-action@v2.48.1
       with:
-        tool: cross,cargo-deb
+        tool: cross,cargo-deb,cargo-about
     #- name: Set minimal profile (Windows only)
     #  if: matrix.host == 'windows-latest'
     #  run: rustup set profile minimal
@@ -58,13 +58,15 @@ jobs:
 
     #- name: Build
     #  run: cross build --release --locked --target ${{ matrix.target }}
+    - name: Generate licenses.html
+      run: cargo xtask licenses -o qcp/misc/licenses.html
     - uses: taiki-e/upload-rust-binary-action@v1.24.0
       id: build
       with:
         bin: qcp
         token: ${{ secrets.GITHUB_TOKEN }}
         target: ${{ matrix.target }}
-        include: README.md,LICENSE,CHANGELOG.md
+        include: README.md,LICENSE,CHANGELOG.md,qcp/misc/licenses.html
         leading-dir: true
         locked: true
         tar: unix
