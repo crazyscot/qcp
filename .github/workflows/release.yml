@@ -3,86 +3,11 @@ name: release
 on:
   release:
     types: [published]
-  workflow_dispatch: # for testing
-
-env:
-  BUILT_DEB_FILE: "invalid.deb" # updated by make-debian-package script
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-
-permissions:
-  contents: write
 
 jobs:
-  binary:
-    strategy:
-      matrix:
-        include:
-        - build: x86_64-musl
-          host: ubuntu-latest
-          target: x86_64-unknown-linux-musl
-          rust: stable
-          build_deb: true
-        - build: aarch64-musl
-          host: ubuntu-latest
-          target: aarch64-unknown-linux-musl
-          rust: stable
-          build_deb: true
-    runs-on: ${{ matrix.host }}
-    steps:
-    - uses: actions/checkout@v4
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust }}
-        targets: ${{ matrix.target }}
-    - uses: taiki-e/install-action@v2.48.1
-      with:
-        tool: cross,cargo-deb,cargo-about,cargo-cyclonedx
-    - name: install packages (ubuntu builds only)
-      if: startsWith(matrix.host, 'ubuntu')
-      run: scripts/install-ubuntu-packages ${{ matrix.target }}
-      # native builds need all of these; cross builds only need binutils-multiarch
-
-    ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-    - uses: Swatinem/rust-cache@v2
-      with:
-        key: "${{matrix.build}}"
-
-    #- name: Build
-    #  run: cross build --release --locked --target ${{ matrix.target }}
-    - name: Generate licenses.html
-      run: cargo xtask licenses -o qcp/misc/licenses.html
-    - name: Generate CycloneDX SBOM
-      run: cargo cyclonedx
-    - uses: taiki-e/upload-rust-binary-action@v1.24.0
-      id: build
-      with:
-        bin: qcp
-        token: ${{ secrets.GITHUB_TOKEN }}
-        target: ${{ matrix.target }}
-        include: README.md,LICENSE,CHANGELOG.md,qcp/misc/licenses.html,qcp/qcp.cdx.xml
-        leading-dir: true
-        locked: true
-        tar: unix
-        zip: windows
-        dry_run: ${{ github.event_name != 'release' }}
-    - name: Make deb package
-      if: ${{ matrix.build_deb }}
-      run: scripts/make-debian-package --release ${{ matrix.target }}
-    - name: Upload binary artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: qcp-tarball-${{ matrix.target }}
-        path: ${{ steps.build.outputs.archive }}.tar.gz
-    - name: Upload deb artifact
-      if: ${{ matrix.build_deb }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: qcp-deb-${{ matrix.target }}
-        path: ${{ env.BUILT_DEB_FILE }}
-    - name: Publish deb package to release
-      if: ${{ matrix.build_deb }} && ${{ github.event_name == 'release' }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: gh release upload ${{ github.ref_name }} ${{ env.BUILT_DEB_FILE }}
+  build:
+    uses: ./.github/workflows/package.yml
+    with:
+      publish: true
+    permissions:
+      contents: write # necessary to publish to releases

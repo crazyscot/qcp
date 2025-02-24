@@ -1,102 +1,48 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - dev
-      - main
-  pull_request:
-    branches:
-      - dev
-      - main
-  workflow_dispatch:
-
-env:
-  BUILT_DEB_FILE: "invalid.deb" # updated by make-debian-package script
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
+    push:
+      branches:
+        - dev
+        - main
+    pull_request:
+      branches:
+        - dev
+        - main
+    workflow_dispatch:
 
 jobs:
-  ########################################################################################3
-  # Build the app on all supported platforms, at least for the time being
-  build:
-    strategy:
-      matrix:
-        include:
-        - build: x86_64-musl
-          host: ubuntu-latest
-          target: x86_64-unknown-linux-musl
-          rust: stable
-          build_deb: true
-        - build: aarch64-musl
-          host: ubuntu-latest
-          target: aarch64-unknown-linux-musl
-          rust: stable
-          build_deb: true
-    runs-on: ${{ matrix.host }}
-    steps:
-    - uses: actions/checkout@v4
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust }}
-        targets: ${{ matrix.target }}
-    - name: Install tools
-      uses: taiki-e/install-action@v2.48.1
-      with:
-        tool: cross,cargo-deb,cargo-about,cargo-cyclonedx
-    #- name: Set minimal profile (Windows only)
-    #  if: matrix.host == 'windows-latest'
-    #  run: rustup set profile minimal
-
-    ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-    - uses: Swatinem/rust-cache@v2
-      with:
-        key: "${{ matrix.build }}"
-        cache-on-failure: true
-    - name: install packages (ubuntu builds only)
-      if: startsWith(matrix.host, 'ubuntu')
-      run: scripts/install-ubuntu-packages ${{ matrix.target }}
-      # native builds need all of these; cross builds only need binutils-multiarch
-
-    #- name: Build
-    #  run: cross build --release --locked --target ${{ matrix.target }}
-    - name: Generate licenses.html
-      run: cargo xtask licenses -o qcp/misc/licenses.html
-    - name: Generate CycloneDX SBOM
-      run: cargo cyclonedx
-    - uses: taiki-e/upload-rust-binary-action@v1.24.0
-      id: build
-      with:
-        bin: qcp
-        token: ${{ secrets.GITHUB_TOKEN }}
-        target: ${{ matrix.target }}
-        include: README.md,LICENSE,CHANGELOG.md,qcp/misc/licenses.html,qcp/qcp.cdx.xml
-        leading-dir: true
-        locked: true
-        tar: unix
-        zip: windows
-        dry_run: true
-    - name: Make deb package
-      if: ${{ matrix.build_deb }}
-      run: scripts/make-debian-package --no-release ${{ matrix.target }}
-    - name: Upload binary artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: qcp-tarball-${{ matrix.target }}
-        path: ${{ steps.build.outputs.archive }}.tar.gz
-    - name: Upload deb artifact
-      if: ${{ matrix.build_deb }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: qcp-deb-${{ matrix.target }}
-        # this env var is set by make-debian-package
-        path: ${{ env.BUILT_DEB_FILE }}
-
-  ########################################################################################3
-  # Full test suite.
-  # We only need to run the checks on a single platform
   checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+
+      # Within this workflow we will continue on error, to give
+      # maximum information to the developer.
+      - run: cargo fmt --all --check
+        name: Code style
+        if: ${{ !cancelled() }}
+      - run: cargo build --locked
+        name: Build
+        if: ${{ !cancelled() }}
+      - run: cargo clippy --locked
+        name: Lint
+        if: ${{ !cancelled() }}
+      - run: cargo doc --no-deps --locked
+        name: Documentation
+        if: ${{ !cancelled() }}
+
+  coverage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,27 +52,21 @@ jobs:
           toolchain: stable
           components: llvm-tools-preview
       - uses: taiki-e/install-action@cargo-llvm-cov
-      ##- name: install packages
-      ##  run: scripts/install-ubuntu-packages ${{ matrix.target }} # Not currently needed.
-
-      ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-
-      # Checks begin here!
-      - run: cargo fmt --all --check
-      #- run: cargo test --locked # replaced by cargo llvm-cov to run with coverage tests
-      - run: cargo clippy --locked --all-targets
-      - run: cargo build --locked --all-targets
-      - run: cargo doc --no-deps --locked
-      - name: unit tests with coverage
+          cache-all-crates: true
+      - name: Run coverage tests
         run: cargo llvm-cov --all-features --workspace --exclude xtask@0.0.0 --lcov --output-path lcov.info --locked
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
+          name: lcov.info
           path: lcov.info
-      - name: Send to coveralls
+      - name: Send result to coveralls
         uses: coverallsapp/github-action@v2.3.6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    uses: ./.github/workflows/package.yml
+    with:
+      publish: false
