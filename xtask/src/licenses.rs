@@ -20,13 +20,20 @@ pub(crate) fn licenses(mut args: Arguments) -> Result<()> {
             .join("licenses.html"),
     };
 
-    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let sh = Shell::new()?;
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let target_str = sh.var("QCP_BUILD_TARGET").ok();
+    let target_opt = if target_str.is_some() {
+        Some("--target")
+    } else {
+        None
+    };
     cmd!(
         sh,
-        "{cargo} about generate qcp/misc/licenses.hbs -o {output}"
+        "{cargo} about generate qcp/misc/licenses.hbs -o {output} --fail --locked {target_opt...} {target_str...}"
     )
     .run()?;
+    // If about complains about licenses not being harvested, you can ask clearlydefined.io to harvest these - but it's not essential.
 
     // TODO: currently available in nightly: pathbuf.add_extension(".gz");
     let mut extension = output
