@@ -60,8 +60,10 @@ jobs:
     #  run: cross build --release --locked --target ${{ matrix.target }}
     - name: Generate licenses.html
       run: cargo xtask licenses -o qcp/misc/licenses.html
+      env:
+        QCP_BUILD_TARGET: ${{ matrix.target }}
     - name: Generate CycloneDX SBOM
-      run: cargo cyclonedx
+      run: cargo cyclonedx --target ${{ matrix.target }}
     - name: Build binary package with conditional publish
       uses: taiki-e/upload-rust-binary-action@v1.24.0
       id: build
