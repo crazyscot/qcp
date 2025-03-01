@@ -27,7 +27,7 @@ derive-deftly = "1.0.0"
 derive_more = { version = "2.0.1", features = ["constructor", "display"] }
 dirs = "6.0.0"
 dns-lookup = "2.0.4"
-document-features = "0.2.10"
+document-features = "0.2.11"
 engineering-repr = { version = "1.1.0", features = ["serde"] }
 figment = { version = "0.10.19" }
 futures-util = { version = "0.3.31", default-features = false }
@@ -42,13 +42,13 @@ pwd = "1.4.0"
 quinn = { version = "0.11.6", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
 rcgen = { version = "0.13.1" }
 rustls-pki-types = "1.11.0"
-serde = { version = "1.0.217", features = ["derive"] }
+serde = { version = "1.0.218", features = ["derive"] }
 serde_bare = "0.5.0"
 serde_repr = "0.1.19"
 static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
-strum = { version = "0.27.0", features = ["derive"]}
-tabled = "0.17.0"
+strum = { version = "0.27.1", features = ["derive"]}
+tabled = "0.18.0"
 thiserror = "2.0.11"
 tokio = { version = "1.43.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
 tracing = "0.1.41"
@@ -69,9 +69,9 @@ json = "0.12.4"
 rand = "0.9.0"
 roff = "0.2.2"
 rusty-fork = "0.3.0"
-serde_json = "1.0.138"
+serde_json = "1.0.139"
 serde_test = "1.0.177"
-tempfile = "3.16.0"
+tempfile = "3.17.1"
 
 [lints.rust]
 dead_code = "warn"

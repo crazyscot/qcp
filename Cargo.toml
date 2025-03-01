@@ -6,8 +6,8 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-anyhow = "1.0.94"
-clap = { version = "4.5.29", features = ["wrap_help", "derive", "cargo", "help", "string"] }
+anyhow = "1.0.96"
+clap = { version = "4.5.31", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 
 
 [profile.dev]

@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 anyhow = { workspace = true }
 cargo_toml = "0.21.0"
-chrono = { version = "0.4.39", default-features = false, features = ["now"] }
-flate2 = "1.0.35"
+chrono = { version = "0.4.40", default-features = false, features = ["now"] }
+flate2 = "1.1.0"
 pico-args = "0.5.0"
 xshell = "0.2.7"
