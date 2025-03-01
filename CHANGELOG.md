@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/crazyscot/qcp/compare/v0.3.0...v0.3.1)
+
+### ⛰️ Features
+
+- Add Nix flake (#63) - ([ef37a12](https://github.com/crazyscot/qcp/commit/ef37a128c1cfe561be9617e5fcee1de51840faf8))
+
+### 📚 Documentation
+
+- Generate man page - ([544b07a](https://github.com/crazyscot/qcp/commit/544b07a79bd38e091c1c7bcb778cdc389a16b353))
+- Updates for 0.3 series - ([1099e99](https://github.com/crazyscot/qcp/commit/1099e99a54087937841df2ec172bac7550504a68))
+
+### 🏗️ Build, packaging & CI
+
+- Generate CycloneDX SBOM files and include in release bundles - ([f2d4626](https://github.com/crazyscot/qcp/commit/f2d462607f035f317cb700ac3da9b7e9c9ef64e0))
+- Generate licenses.html, include in bundles - ([e3ce44f](https://github.com/crazyscot/qcp/commit/e3ce44f063fed012e1c6d87ccbaac15156badb40))
+- Set up xtasks for man page, licenses.html, dummy debian changelog
+- Rearrange source into a workspace - ([e4b05bf](https://github.com/crazyscot/qcp/commit/e4b05bf40c033ede1560d1dbf8c85ce9c20d6b6e))
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix clippy warnings for rust 1.85 - ([bfae2d5](https://github.com/crazyscot/qcp/commit/bfae2d5a65e6ba2b38c828d37ca2d53b8c920d07))
+- Lintian fix for qcp_config.5 - ([355c539](https://github.com/crazyscot/qcp/commit/355c539ae3a3c924b7be91abd54c9e1799ebeaa3))
+
+### 🚜 Refactor
+
+- Rework --help-buffers mode - ([d461eaf](https://github.com/crazyscot/qcp/commit/d461eaf50ef3d288d718817c9087b014b797caed))
+
 ## [0.3.0](https://github.com/crazyscot/qcp/compare/v0.2.1...v0.3.0)
 
 ### ⛰️ Features
