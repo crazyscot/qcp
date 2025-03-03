@@ -55,6 +55,8 @@ jobs:
         key: "${{ matrix.build }}"
         cache-on-failure: ${{ ! inputs.publish }}
         cache-all-crates: true
+        # don't bother to cache on tagged builds
+        save-if: ${{ !startsWith(github.ref, 'refs/tags') }}
 
     #- name: Build
     #  run: cross build --release --locked --target ${{ matrix.target }}
