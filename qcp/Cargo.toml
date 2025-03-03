@@ -10,6 +10,7 @@ repository = "https://github.com/crazyscot/qcp/"
 homepage = "https://github.com/crazyscot/qcp/"
 keywords = [ "networking", "file-transfer", "quic" ]
 categories = [ "command-line-utilities" ]
+readme = "../README.md"
 
 [features]
 default = ["rustls-log"]
