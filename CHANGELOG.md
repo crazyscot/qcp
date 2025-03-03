@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2](https://github.com/crazyscot/qcp/compare/v0.3.1...v0.3.2)
+
+### 🏗️ Build, packaging & CI
+
+- Fix readme in Cargo.toml - ([9e16c80](https://github.com/crazyscot/qcp/commit/9e16c80359b9508dd46651384971bb58b9acb210))
+
+
 ## [0.3.1](https://github.com/crazyscot/qcp/compare/v0.3.0...v0.3.1)
 
 ### ⛰️ Features
