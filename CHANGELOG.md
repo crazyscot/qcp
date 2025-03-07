@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3](https://github.com/crazyscot/qcp/compare/v0.3.2...v0.3.3)
+
+### 🛡️ Security
+
+- bump ring from 0.17.11 to 0.17.13 to address potential overflow panic - ([06cd47b](https://github.com/crazyscot/qcp/commit/06cd47b))
+
+
 ## [0.3.2](https://github.com/crazyscot/qcp/compare/v0.3.1...v0.3.2)
 
 ### 🏗️ Build, packaging & CI
