@@ -1,0 +1,3 @@
+[build.env]
+# these variables are set by github
+passthrough = ["GITHUB_REF_TYPE", "GITHUB_REF_NAME"]
