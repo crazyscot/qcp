@@ -49,13 +49,19 @@ These can be found on the [latest release](https://github.com/crazyscot/qcp/rele
 
 The binaries are statically linked. Linux builds should work on all recent distributions, as long as you have selected the correct CPU architecture.
 
-### Installation from source
+### Building from source
+
+Prerequisites:
+* Rust toolchain (see the next section if you don't know how to install this)
+* A C compiler that the [cc crate](https://docs.rs/cc/latest/cc/#compile-time-requirements) can use
 
 You can install the package from source using `cargo`:
 
 ```bash
 cargo install --locked qcp
 ```
+
+Or, if you prefer, clone the source repository in the usual way, then `cargo build --locked`.
 
 #### If you are new to Rust and don't have the tools installed
 
@@ -188,6 +194,7 @@ For this, and any other commercial enquiries please get in touch, to `qcp@crazys
 
 Some ideas for the future, in no particular order:
 
+* File checksum/hash checking/reporting
 * Support for copying multiple files (e.g. shell globs or `scp -r`)
 * Windows native support
 * Firewall/NAT traversal
@@ -196,6 +203,8 @@ Some ideas for the future, in no particular order:
 * Graphical interface for ftp mode
 * Bind a daemon to a fixed port, for better firewall/NAT traversal properties but at the cost of having to implement user authentication.
 * _The same thing we do every night, Pinky. We try to take over the world!_
+
+See also the [issues list].
 
 [issue]: https://github.com/crazyscot/qcp/issues/new/choose
 [issues list]: https://github.com/crazyscot/qcp/issues

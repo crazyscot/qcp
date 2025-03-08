@@ -4,9 +4,9 @@
 use qcp::styles::{ERROR, RESET};
 use std::process::ExitCode;
 
-#[cfg(all(target_env = "musl", target_pointer_width = "64"))]
+use mimalloc::MiMalloc;
 #[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() -> ExitCode {
     if qcp::cli().unwrap_or_else(|e| {

@@ -13,9 +13,13 @@ categories = [ "command-line-utilities" ]
 readme = "../README.md"
 
 [features]
-default = ["rustls-log"]
+default = ["rustls-log", "secure-alloc"]
 ## Enables rustls debug messages. You still have to request them using the environment variable, e.g. `RUST_LOG="rustls=debug"`.
 rustls-log = ["quinn/rustls-log"]
+## Selects secure mode for memory allocations.
+## This protects against various heap vulnerabilities, though comes at a performance cost.
+## Extremely high bandwidth environments may wish to experiment with this for performance.
+secure-alloc = ["mimalloc/secure"]
 
 [dependencies]
 anstream = "0.6.18"
@@ -38,6 +42,7 @@ heck = "0.5.0"
 human-repr = "1.1.0"
 indicatif = { version = "0.17.11", features = ["tokio"] }
 lazy_static = "1.5.0"
+mimalloc = "0.1.43"
 num-format = { version = "0.4.4" }
 pwd = "1.4.0"
 quinn = { version = "0.11.6", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
@@ -58,9 +63,6 @@ wildmatch = "2.4.0"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29.0", features = ["socket", "user"] }
-
-[target.'cfg(all(target_env = "musl", target_pointer_width = "64"))'.dependencies]
-jemallocator = "0.5.4"
 
 [dev-dependencies]
 assertables = "9.5.0"
