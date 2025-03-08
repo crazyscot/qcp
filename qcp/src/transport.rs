@@ -115,7 +115,7 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
         ThroughputMode::Tx => (),
     }
 
-    let window = params.initial_congestion_window;
+    let window = u64::from(params.initial_congestion_window);
     match params.congestion {
         CongestionControllerType::Cubic => {
             let mut cubic = CubicConfig::default();

@@ -86,7 +86,9 @@ bbr: (Use with caution!) An experimental algorithm created by Google, which incr
 .RE
 .TP
 \fB\-\-initial\-congestion\-window\fR=\fIbytes\fR
-_(Network wizards only!)_ The initial value for the sending congestion control window. If unspecified, the active congestion control algorithm decides.
+_(Network wizards only!)_ The initial value for the sending congestion control window, in bytes. If unspecified, the active congestion control algorithm decides.
+
+This may be specified directly as a number, or as an SI quantity like `10k`.
 
 _Setting this value too high reduces performance!_
 .SH CONNECTION

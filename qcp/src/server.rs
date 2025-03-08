@@ -165,7 +165,7 @@ pub async fn server_main() -> anyhow::Result<()> {
         bandwidth_to_client: Uint(config.tx()),
         rtt: config.rtt,
         congestion: config.congestion.into(),
-        initial_congestion_window: Uint(config.initial_congestion_window),
+        initial_congestion_window: Uint(config.initial_congestion_window.into()),
         timeout: config.timeout,
         warning,
         extension: 0,
