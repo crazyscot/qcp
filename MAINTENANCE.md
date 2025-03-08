@@ -1,6 +1,7 @@
 ## Creating a release
 
 * Confirm top-level docs have been updated for any changes since the last release.
+* Update SECURITY.md if this is a new major or minor release.
 * Update man page if required:
   * `cargo xtask man`
     * _N.B. This isn't automated in CI to save repeating work across multiple builds._
