@@ -1,8 +1,8 @@
 //! CLI argument helper type - a range of UDP port numnbers.
 // (c) 2024 Ross Younger
 use serde::{
-    de::{self, Error, Unexpected},
     Serialize,
+    de::{self, Error, Unexpected},
 };
 use std::{fmt::Display, str::FromStr};
 
@@ -70,7 +70,9 @@ impl FromStr for PortRange {
                         "invalid port range `{s}` (must be increasing)"
                     )));
                 } else if aa == 0 && bb != 0 {
-                    return Err(FigmentError::custom(format!("invalid port range `{s}` (port 0 means \"any\" so cannot be part of a range)")));
+                    return Err(FigmentError::custom(format!(
+                        "invalid port range `{s}` (port 0 means \"any\" so cannot be part of a range)"
+                    )));
                 }
                 return Ok(Self { begin: aa, end: bb });
             }

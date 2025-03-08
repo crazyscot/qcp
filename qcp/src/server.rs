@@ -7,13 +7,13 @@ use std::sync::Arc;
 
 use crate::config::{Configuration, Configuration_Optional, Manager};
 use crate::protocol::control::{
-    ClientGreeting, ClientMessage, ClosedownReport, ClosedownReportV1, ConnectionType,
-    ServerFailure, ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
+    BANNER, COMPATIBILITY_LEVEL, ClientGreeting, ClientMessage, ClosedownReport, ClosedownReportV1,
+    ConnectionType, ServerFailure, ServerGreeting, ServerMessage, ServerMessageV1,
 };
 use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, ResponseV1, Status};
 use crate::protocol::{common::ProtocolMessage as _, common::StreamPair};
-use crate::transport::{combine_bandwidth_configurations, ThroughputMode};
-use crate::util::{io, socket, Credentials, TimeFormat};
+use crate::transport::{ThroughputMode, combine_bandwidth_configurations};
+use crate::util::{Credentials, TimeFormat, io, socket};
 
 use anyhow::Context as _;
 use quinn::crypto::rustls::QuicServerConfig;
@@ -26,7 +26,7 @@ use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
-use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
+use tracing::{Instrument, debug, error, info, trace, trace_span, warn};
 
 fn setup_tracing(debug: bool, time_format: TimeFormat) -> anyhow::Result<()> {
     let level = if debug { "debug" } else { "info" };
@@ -509,6 +509,8 @@ fn ssh_remote_address() -> Option<String> {
             return Some(client.to_string());
         }
     }
-    warn!("no SSH_CONNECTION or SSH_CLIENT in environment; not attempting remote-specific configuration");
+    warn!(
+        "no SSH_CONNECTION or SSH_CLIENT in environment; not attempting remote-specific configuration"
+    );
     None
 }

@@ -6,7 +6,7 @@ use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::BufReader;
 
-use anyhow::{anyhow, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow};
 use indicatif::MultiProgress;
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt as _},
@@ -17,9 +17,8 @@ use tracing::{debug, trace, warn};
 use crate::config::{Configuration, Configuration_Optional, Manager};
 use crate::protocol::common::ProtocolMessage as _;
 use crate::protocol::control::{
-    ClientGreeting, ClientMessage, ClosedownReport, ClosedownReportV1, CompatibilityLevel,
-    ConnectionType, ServerGreeting, ServerMessage, ServerMessageV1, BANNER, COMPATIBILITY_LEVEL,
-    OLD_BANNER,
+    BANNER, COMPATIBILITY_LEVEL, ClientGreeting, ClientMessage, ClosedownReport, ClosedownReportV1,
+    CompatibilityLevel, ConnectionType, OLD_BANNER, ServerGreeting, ServerMessage, ServerMessageV1,
 };
 use crate::util::Credentials;
 
@@ -248,7 +247,7 @@ impl Channel {
             }
             b => anyhow::bail!(
                 "unsupported protocol version (unrecognised server banner `{}'; may be too new for me?)",
-                &b[0..b.len()-1]
+                &b[0..b.len() - 1]
             ),
         }
         Ok(())

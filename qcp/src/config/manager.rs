@@ -3,10 +3,10 @@
 
 use crate::os::{AbstractPlatform as _, Platform};
 
-use super::{ssh::SshConfigError, Configuration, Configuration_Optional};
+use super::{Configuration, Configuration_Optional, ssh::SshConfigError};
 
 use anyhow::Result;
-use figment::{providers::Serialized, value::Value, Figment, Metadata, Provider};
+use figment::{Figment, Metadata, Provider, providers::Serialized, value::Value};
 use heck::ToUpperCamelCase;
 use serde::Deserialize;
 use std::{
@@ -16,8 +16,8 @@ use std::{
 };
 use struct_field_names_as_array::FieldNamesAsSlice;
 use tabled::{
-    settings::{object::Rows, style::Style, Color},
     Table, Tabled,
+    settings::{Color, object::Rows, style::Style},
 };
 
 use tracing::{debug, warn};
@@ -326,7 +326,7 @@ impl Display for DisplayAdapter<'_> {
 #[cfg(test)]
 mod test {
     use crate::config::{Configuration, Configuration_Optional, Manager};
-    use crate::util::{make_test_tempfile, PortRange};
+    use crate::util::{PortRange, make_test_tempfile};
     use engineering_repr::EngineeringQuantity;
     use serde::Deserialize;
 

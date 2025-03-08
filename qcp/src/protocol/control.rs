@@ -39,8 +39,8 @@ use std::{fmt::Display, net::IpAddr};
 
 use anyhow::anyhow;
 use figment::{
-    value::{Dict, Map},
     Profile, Provider,
+    value::{Dict, Map},
 };
 use quinn::ConnectionStats;
 use serde::{Deserialize, Serialize};

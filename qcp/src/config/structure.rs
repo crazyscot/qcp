@@ -13,7 +13,7 @@ use struct_field_names_as_array::FieldNamesAsSlice;
 use crate::{
     cli::styles::{INFO, RESET},
     transport::CongestionControllerType,
-    util::{derive_deftly_template_Optionalify, AddressFamily, PortRange, TimeFormat},
+    util::{AddressFamily, PortRange, TimeFormat, derive_deftly_template_Optionalify},
 };
 
 use derive_deftly::Deftly;

@@ -3,7 +3,7 @@
 
 use super::args::CliArgs;
 use crate::{
-    client::{client_main, MAX_UPDATE_FPS},
+    client::{MAX_UPDATE_FPS, client_main},
     config::{Configuration, Manager},
     os::{self, AbstractPlatform as _},
     server::server_main,

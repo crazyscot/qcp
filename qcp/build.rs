@@ -38,11 +38,7 @@ fn git_short_hash() -> Option<String> {
     let args = &["rev-parse", "--short=8", "HEAD"];
     if let Ok(output) = Command::new("git").args(args).output() {
         let rev = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if rev.is_empty() {
-            None
-        } else {
-            Some(rev)
-        }
+        if rev.is_empty() { None } else { Some(rev) }
     } else {
         None
     }

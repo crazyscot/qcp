@@ -23,7 +23,7 @@ pub(super) fn evaluate_host_match(host: Option<&str>, args: &[String]) -> bool {
 #[cfg(test)]
 mod test {
     use super::evaluate_host_match;
-    use anyhow::{anyhow, Context, Result};
+    use anyhow::{Context, Result, anyhow};
     use assertables::assert_eq_as_result;
 
     /// helper macro: concise notation to create a Vec<String>

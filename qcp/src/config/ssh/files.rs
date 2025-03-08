@@ -14,7 +14,7 @@ use lazy_static::lazy_static;
 use struct_field_names_as_array::FieldNamesAsSlice as _;
 use tracing::warn;
 
-use super::{evaluate_host_match, find_include_files, split_args, Line, Setting, ValueProvider};
+use super::{Line, Setting, ValueProvider, evaluate_host_match, find_include_files, split_args};
 
 /// The result of parsing an ssh-style configuration file, with a particular host in mind.
 #[derive(Debug, Clone, PartialEq)]
@@ -273,7 +273,7 @@ impl<R: Read> Parser<R> {
 
 #[cfg(test)]
 mod test {
-    use anyhow::{anyhow, Context, Result};
+    use anyhow::{Context, Result, anyhow};
     use assertables::{assert_contains, assert_contains_as_result, assert_eq_as_result};
     use struct_field_names_as_array::FieldNamesAsSlice;
 

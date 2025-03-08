@@ -84,7 +84,7 @@ pub(super) fn split_args(input: &str) -> Result<Vec<String>> {
 
 #[cfg(test)]
 mod test {
-    use anyhow::{anyhow, Context, Result};
+    use anyhow::{Context, Result, anyhow};
     use assertables::{assert_contains_as_result, assert_eq_as_result};
 
     use crate::config::ssh::split_args;

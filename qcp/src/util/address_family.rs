@@ -4,7 +4,7 @@
 use std::str::FromStr;
 
 use figment::error::{Actual, OneOf};
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de};
 
 /// Representation of an IP address family
 ///
