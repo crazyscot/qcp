@@ -7,16 +7,16 @@
 
 rustPlatform.buildRustPackage rec {
   pname = "qcp";
-  version = "0.3.0";
+  version = "0.3.3";
 
   src = fetchFromGitHub {
     owner = "crazyscot";
     repo = pname;
     rev = "v${version}";
-    hash = "sha256-9nJ01OPAU60veLpL2BlSSUTMu/xdUBDVkV0YEFNQ3FU=";
+    hash = "sha256-NlRM8FGYBmvT7KDOYTyUWTeERa96UPebuyicncJ4ANY=";
   };
 
-  cargoHash = "sha256-7LfwJa64ZUE0i8/bMecMoxzykJvuINzXctopyh4Qlak=";
+  cargoHash = "sha256-KfsNfvCPpm/6oaUa+H4raIxou+udIuYEWhng2ddi68Y=";
 
   checkFlags = [
     # SSH home directory tests will not work in nix sandbox
@@ -31,10 +31,10 @@ rustPlatform.buildRustPackage rec {
   };
 
   postInstall = ''
-    install -Dm644 $src/misc/qcp.1 $out/share/man/man1/qcp.1
-    install -Dm644 $src/misc/qcp_config.5 $out/share/man/man5/qcp_config.5
-    install -Dm644 $src/misc/20-qcp.conf $out/etc/sysctl.d/20-qcp.conf
-    install -Dm644 $src/misc/qcp.conf $out/etc/qcp.conf
+    install -Dm644 $src/qcp/misc/qcp.1 $out/share/man/man1/qcp.1
+    install -Dm644 $src/qcp/misc/qcp_config.5 $out/share/man/man5/qcp_config.5
+    install -Dm644 $src/qcp/misc/20-qcp.conf $out/etc/sysctl.d/20-qcp.conf
+    install -Dm644 $src/qcp/misc/qcp.conf $out/etc/qcp.conf
     install -Dm644 $src/README.md $out/share/doc/qcp/README.md
     install -Dm644 $src/LICENSE $out/share/doc/qcp/LICENSE
   '';
