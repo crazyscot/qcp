@@ -25,7 +25,7 @@ use rustls_pki_types::CertificateDer;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::{AsyncWriteExt, BufReader};
+use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tokio::{self, io::AsyncReadExt, time::Duration, time::timeout};
 use tracing::{Instrument as _, Level, debug, error, info, span, trace, trace_span, warn};
@@ -442,7 +442,7 @@ async fn do_put(
     let dest_filename = &job.destination.filename;
 
     let path = PathBuf::from(src_filename);
-    let (file, meta) = match crate::util::io::open_file(src_filename).await {
+    let (mut file, meta) = match crate::util::io::open_file(src_filename).await {
         Ok(res) => res,
         Err((_, _, error)) => {
             return Err(error.into());
@@ -465,7 +465,6 @@ async fn do_put(
     meter.start().await;
 
     trace!("sending command");
-    let mut file = BufReader::with_capacity(Configuration::send_buffer().try_into()?, file);
 
     Command::Put(PutArgs {
         filename: dest_filename.to_string(),
@@ -491,7 +490,7 @@ async fn do_put(
 
     // A server-side abort might happen part-way through a large transfer.
     trace!("send payload");
-    let result = tokio::io::copy_buf(&mut file, &mut outbound).await;
+    let result = tokio::io::copy(&mut file, &mut outbound).await;
 
     match result {
         Ok(sent) if sent == meta.len() => (),

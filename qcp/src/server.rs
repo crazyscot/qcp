@@ -22,7 +22,7 @@ use quinn::rustls::{self, RootCertStore};
 use quinn::{ConnectionStats, EndpointConfig};
 use rustls_pki_types::CertificateDer;
 use serde_bare::Uint;
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
@@ -138,8 +138,6 @@ pub async fn server_main() -> anyhow::Result<()> {
         );
     }
 
-    let file_buffer_size = usize::try_from(Configuration::send_buffer())?;
-
     let credentials = Credentials::generate()?;
     let (endpoint, warning) = match create_endpoint(
         &credentials,
@@ -189,7 +187,7 @@ pub async fn server_main() -> anyhow::Result<()> {
         .context("Timed out waiting for QUIC connection")?
     {
         let _ = tasks.spawn(async move {
-            let result = handle_connection(conn, file_buffer_size).await;
+            let result = handle_connection(conn).await;
             match result {
                 Err(e) => error!("inward stream failed: {reason}", reason = e.to_string()),
                 Ok(conn_stats) => {
@@ -263,10 +261,7 @@ fn create_endpoint(
     ))
 }
 
-async fn handle_connection(
-    conn: quinn::Incoming,
-    file_buffer_size: usize,
-) -> anyhow::Result<ConnectionStats> {
+async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<ConnectionStats> {
     let connection = conn.await?;
     debug!(
         "accepted QUIC connection from {}",
@@ -294,7 +289,7 @@ async fn handle_connection(
             };
             trace!("opened stream");
             let _j = tokio::spawn(async move {
-                if let Err(e) = handle_stream(stream, file_buffer_size).await {
+                if let Err(e) = handle_stream(stream).await {
                     error!("stream failed: {e}",);
                 }
             });
@@ -304,12 +299,12 @@ async fn handle_connection(
     Ok(connection.stats())
 }
 
-async fn handle_stream(mut sp: StreamPair, file_buffer_size: usize) -> anyhow::Result<()> {
+async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
     trace!("reading command");
     let cmd = Command::from_reader_async_framed(&mut sp.recv).await?;
     match cmd {
         Command::Get(get) => {
-            handle_get(sp, get.filename.clone(), file_buffer_size)
+            handle_get(sp, get.filename.clone())
                 .instrument(trace_span!("SERVER:GET", filename = get.filename))
                 .await
         }
@@ -321,15 +316,11 @@ async fn handle_stream(mut sp: StreamPair, file_buffer_size: usize) -> anyhow::R
     }
 }
 
-async fn handle_get(
-    mut stream: StreamPair,
-    filename: String,
-    file_buffer_size: usize,
-) -> anyhow::Result<()> {
+async fn handle_get(mut stream: StreamPair, filename: String) -> anyhow::Result<()> {
     trace!("begin");
 
     let path = PathBuf::from(&filename);
-    let (file, meta) = match io::open_file(&filename).await {
+    let (mut file, meta) = match io::open_file(&filename).await {
         Ok(res) => res,
         Err((status, message, _)) => {
             return send_response(&mut stream.send, status, message.as_deref()).await;
@@ -338,7 +329,6 @@ async fn handle_get(
     if meta.is_dir() {
         return send_response(&mut stream.send, Status::ItIsADirectory, None).await;
     }
-    let mut file = BufReader::with_capacity(file_buffer_size, file);
 
     // We believe we can fulfil this request.
     trace!("responding OK");
@@ -351,7 +341,7 @@ async fn handle_get(
         .await?;
 
     trace!("sending file payload");
-    let result = tokio::io::copy_buf(&mut file, &mut stream.send).await;
+    let result = tokio::io::copy(&mut file, &mut stream.send).await;
     match result {
         Ok(sent) if sent == meta.len() => (),
         Ok(sent) => {
@@ -380,7 +370,7 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
     trace!("begin");
 
     // Initial checks. Is the destination valid?
-    let mut path = PathBuf::from(destination);
+    let mut path = PathBuf::from(destination.clone());
     // This is moderately tricky. It might validly be empty, a directory, a file, it might be a nonexistent file in an extant directory.
 
     if path.as_os_str().is_empty() {
@@ -427,13 +417,12 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
 
     // So far as we can tell, we believe we can fulfil this request.
     trace!("responding OK");
-    let ((), header) = tokio::try_join!(
-        send_response(&mut stream.send, Status::Ok, None),
-        FileHeader::from_reader_async_framed(&mut stream.recv)
-    )?;
+    send_response(&mut stream.send, Status::Ok, None).await?;
+    stream.send.flush().await?;
+    let header = FileHeader::from_reader_async_framed(&mut stream.recv).await?;
     let FileHeader::V1(header) = header;
 
-    debug!("PUT {} -> destination", &header.filename);
+    debug!("PUT {} -> {destination}", &header.filename);
     if append_filename {
         path.push(header.filename);
     }
@@ -468,9 +457,9 @@ async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Resu
     trace!("receiving trailer");
     let _trailer = FileTrailer::from_reader_async_framed(&mut stream.recv).await?;
 
-    let f = file.flush();
+    file.flush().await?;
     send_response(&mut stream.send, Status::Ok, None).await?;
-    tokio::try_join!(f, stream.send.flush())?;
+    stream.send.flush().await?;
     trace!("complete");
     Ok(())
 }

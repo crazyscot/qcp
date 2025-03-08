@@ -20,6 +20,23 @@
 //! But the cost of doing so isn't much in absolute terms (sometimes a few seconds),
 //! and this amortises nicely over a large file transfer.
 //!
+//! ### FAQs
+//!
+//! #### When sending data to a remote machine, why does performance start fast, stop and then resume?
+//! This is an illusion. The meters show the rate at which data is being accepted by the QUIC layer, which is
+//! not necessarily the rate at which it is actually going onto the network.
+//!
+//! When you initiate a file transfer, the initial congestion window is by default quite low.
+//! The qcp client reads a load of data from disk and passes it on to QUIC, which causes the meter to go high,
+//! but QUIC is only trickling it out onto the network.
+//! The QUIC send buffer quickly fills up and it stops accepting any more from qcp so performance
+//! appears to drop, sometimes to zero.
+//! Before long, QUIC has sent enough that it can accept more from qcp.
+//! It doesn't take long for the congestion algorithm to work and data transfer to accelerate.
+//!
+//! You can demonstrate this, in quiet network conditions, by setting the `--initial-congestion-window` option
+//! to something large like a megabyte.
+//!
 //! ### Tips
 //!
 //! * When qcp tells you to set up the kernel UDP buffers, do so; they really make a difference. **You need to do this on both machines.**
@@ -32,11 +49,17 @@
 //!   * Try out `--congestion bbr` if you like. Sometimes it helps.
 //!     But understand that it remains experimental, and it does send out a lot more packets.
 //!     _If you have a metered connection, this may be an issue!_
-//!     [More about BBR](https://github.com/google/bbr/blob/master/Documentation/bbr-faq.md).
-//!   * Mess with the initial congestion window if you like, but I didn't find it reliably useful.
-//! * Watch out for either end becoming CPU bound. One of my test machines on my local LAN was unable to move more than 7MB/s. It turned out that its CPU was so old it didn't have a useful crypto accelerator. If that applies to you, unfortunately you're not going to be able to move data any faster without a hardware upgrade.
+//!     * "[When to use and not use BBR](https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/)"
+//!     * [BBR FAQ](https://github.com/google/bbr/blob/master/Documentation/bbr-faq.md)
+//!   * Play with the initial congestion window if you like. Sometimes it helps, but it is very situation specific.
+//!     I have generally found it helps when the end-to-end network is quiet and there is little congestion,
+//!     but it hinders when the network is busy.
+//! * Watch out for either end becoming CPU bound. One of my test machines on my local LAN was unable to move more than 7MB/s. It turned out that its CPU was so old it didn't have on-silicon AES. If that applies to you, unfortunately you're not going to be able to move data any faster without a hardware upgrade.
+//!   (But [#14](https://github.com/crazyscot/qcp/issues/14) might help a bit.)
 //! * If you want to copy multiple files to/from the same remote machine, ssh connection multiplexing will save you a few seconds for each. (You can visualise the difference with the `--profile` option.)
 //! * The `--debug` option will report additional information that might help you diagnose configuration issues.
+//!
+//! ### Reporting
 //!
 //! qcp will report the number of congestion events it detected, unless you run in `-q` mode.
 //!
