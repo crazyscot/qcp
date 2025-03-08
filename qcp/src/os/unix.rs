@@ -9,7 +9,7 @@ use super::SocketOptions;
 use anyhow::Result;
 use human_repr::HumanCount as _;
 use nix::sys::socket::{self, sockopt};
-use nix::unistd::{geteuid, ROOT};
+use nix::unistd::{ROOT, geteuid};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::{net::UdpSocket, path::PathBuf};
 

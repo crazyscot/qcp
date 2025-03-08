@@ -141,7 +141,7 @@ pub fn process_statistics(
             "Measured path RTT {rtt_measured:?} was greater than configuration {rtt_arg}; for better performance, next time try --rtt {rtt_param}",
             rtt_measured = stats.path.rtt,
             rtt_arg = bandwidth.rtt,
-            rtt_param = stats.path.rtt.as_millis()+1, // round up
+            rtt_param = stats.path.rtt.as_millis() + 1, // round up
         );
     }
 }

@@ -11,15 +11,15 @@ use std::{
 use anstream::eprintln;
 use anyhow::Context;
 use indicatif::MultiProgress;
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de};
 use strum::VariantNames as _;
 use tracing_subscriber::{
+    EnvFilter,
     fmt::{
-        time::{ChronoLocal, ChronoUtc},
         MakeWriter,
+        time::{ChronoLocal, ChronoUtc},
     },
     prelude::*,
-    EnvFilter,
 };
 
 static TRACING_INITIALIZED: AtomicBool = AtomicBool::new(false);

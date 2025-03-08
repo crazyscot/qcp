@@ -34,8 +34,7 @@ const DATA_AND_PROGRESS: usize = 55;
 /// [==========================                                  ] 2m30s @ 123.4MB/s
 /// 11111111111111111111111111111111111111111111111111111111111111111111111111111111
 /// ```
-const PROGRESS_STYLE_OVERLONG: &str =
-    "{wide_msg:.dim} [{decimal_total_bytes:.dim}]\n{wide_bar:.cyan} {eta} @ {decimal_bytes_per_sec}";
+const PROGRESS_STYLE_OVERLONG: &str = "{wide_msg:.dim} [{decimal_total_bytes:.dim}]\n{wide_bar:.cyan} {eta} @ {decimal_bytes_per_sec}";
 
 /// Determine the appropriate progress style to use
 fn use_long_style(terminal: &Term, msg_size: usize) -> bool {

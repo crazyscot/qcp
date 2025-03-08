@@ -4,13 +4,13 @@
 use std::{str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::Result;
-use figment::{value::Dict, Provider};
+use figment::{Provider, value::Dict};
 use human_repr::HumanCount as _;
 use quinn::{
-    congestion::{BbrConfig, CubicConfig},
     TransportConfig,
+    congestion::{BbrConfig, CubicConfig},
 };
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de};
 use strum::VariantNames;
 use tracing::debug;
 

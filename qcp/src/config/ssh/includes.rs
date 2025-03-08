@@ -3,8 +3,8 @@
 
 use anyhow::{Context, Result};
 use dirs::home_dir;
-use glob::{glob_with, MatchOptions};
-use std::path::{PathBuf, MAIN_SEPARATOR};
+use glob::{MatchOptions, glob_with};
+use std::path::{MAIN_SEPARATOR, PathBuf};
 
 lazy_static::lazy_static! {
     static ref HOME_PREFIX: String = format!("~{}", MAIN_SEPARATOR);
@@ -97,7 +97,11 @@ mod test {
         std::fs::create_dir_all(&fake_ssh).unwrap();
 
         // Temporarily override HOME environment variable
-        std::env::set_var("HOME", fake_home);
+        // (this must only happen in single-threaded code)
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::set_var("HOME", fake_home);
+        };
 
         (tempdir, fake_ssh)
     }

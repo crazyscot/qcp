@@ -15,9 +15,9 @@ mod test {
 
     use crate::cli::args::CliArgs;
 
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
     use clap::CommandFactory as _;
-    use roff::{italic, roman, Roff};
+    use roff::{Roff, italic, roman};
     use std::io::Write;
     use std::path::PathBuf;
 

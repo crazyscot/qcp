@@ -132,7 +132,7 @@ pub use derive_deftly_template_Optionalify;
 mod test {
     use super::derive_deftly_template_Optionalify;
     use derive_deftly::Deftly;
-    use figment::{providers::Serialized, Figment};
+    use figment::{Figment, providers::Serialized};
 
     #[derive(Deftly)]
     #[derive_deftly(Optionalify)]

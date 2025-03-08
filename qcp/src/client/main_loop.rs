@@ -10,9 +10,8 @@ use crate::{
     },
     transport::ThroughputMode,
     util::{
-        self, lookup_host_by_family,
+        self, Credentials, TimeFormat, lookup_host_by_family,
         time::{Stopwatch, StopwatchChain},
-        Credentials, TimeFormat,
     },
 };
 
@@ -20,7 +19,7 @@ use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
 use quinn::crypto::rustls::QuicClientConfig;
-use quinn::{rustls, Connection, EndpointConfig};
+use quinn::{Connection, EndpointConfig, rustls};
 use rustls::RootCertStore;
 use rustls_pki_types::CertificateDer;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
@@ -28,11 +27,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::time::Instant;
-use tokio::{self, io::AsyncReadExt, time::timeout, time::Duration};
-use tracing::{debug, error, info, span, trace, trace_span, warn, Instrument as _, Level};
+use tokio::{self, io::AsyncReadExt, time::Duration, time::timeout};
+use tracing::{Instrument as _, Level, debug, error, info, span, trace, trace_span, warn};
 
-use super::job::CopyJobSpec;
 use super::Parameters as ClientParameters;
+use super::job::CopyJobSpec;
 
 /// a shared definition string used in a couple of places
 const SHOW_TIME: &str = "file transfer";
@@ -260,11 +259,9 @@ async fn manage_request(
                 if let Ok(reason) = err.try_into_panic() {
                     // Resume the panic on the main task
                     std::panic::resume_unwind(reason);
-                } else {
-                    // task cancellation (not currently in use, but might be later; this is conceptually benign)
-                    warn!("unexpected task join failure (shouldn't happen)");
-                    Ok(0)
                 }
+                warn!("unexpected task join failure (shouldn't happen)");
+                Ok(0)
             }
         };
 
