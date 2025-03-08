@@ -15,10 +15,11 @@ fn process_version_string() {
         println!("cargo:rustc-env=QCP_CI_TAG_VERSION={tag}");
         // Sanity check. We tag releases as "v1.2.3", so strip off the leading v before matching.
         let short_tag = tag.strip_prefix("v").unwrap_or(&tag);
-        assert_eq!(
-            cargo_version, short_tag,
-            "mismatched cargo and CI version tags"
-        );
+        if cargo_version != short_tag {
+            println!(
+                "cargo::error=mismatched version tags: cargo={cargo_version}, CI tag={short_tag}"
+            );
+        }
         tag
     } else {
         format!("{cargo_version}+g{hash}")
