@@ -562,6 +562,7 @@ impl From<&ConnectionStats> for ClosedownReportV1 {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use std::{
         io::Cursor,

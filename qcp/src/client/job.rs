@@ -102,6 +102,7 @@ impl CopyJobSpec {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     type Res = anyhow::Result<()>;
     use engineering_repr::EngineeringQuantity;

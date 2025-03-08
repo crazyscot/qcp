@@ -147,6 +147,7 @@ pub fn process_statistics(
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::DataRate;
     use std::time::Duration;

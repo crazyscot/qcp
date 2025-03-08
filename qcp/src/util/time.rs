@@ -147,6 +147,7 @@ impl std::fmt::Display for StopwatchChain {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::{Stopwatch, StopwatchChain};
     #[test]

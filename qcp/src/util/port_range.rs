@@ -127,6 +127,7 @@ impl From<PortRange> for figment::value::Value {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::PortRange as ConfigPortRange;
     use std::str::FromStr;

@@ -74,6 +74,7 @@
 //!
 //! ## Feature flags
 #![doc = document_features::document_features!()]
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
 pub mod cli;
 pub use cli::{cli, styles}; // DEPRECATED; will be removed in 0.4.0 (use qcp::cli directly)

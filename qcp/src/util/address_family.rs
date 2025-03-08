@@ -51,6 +51,7 @@ impl<'de> Deserialize<'de> for AddressFamily {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use std::str::FromStr;
 

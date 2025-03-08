@@ -21,6 +21,7 @@ pub(super) fn evaluate_host_match(host: Option<&str>, args: &[String]) -> bool {
 ///////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::evaluate_host_match;
     use anyhow::{Context, Result, anyhow};

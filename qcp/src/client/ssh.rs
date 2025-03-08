@@ -117,6 +117,7 @@ pub fn resolve_host_alias(host: &str, config_files: &[String]) -> Option<String>
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use std::path::Path;
 

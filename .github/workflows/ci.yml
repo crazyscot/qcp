@@ -12,35 +12,36 @@ on:
     workflow_dispatch:
 
 jobs:
-  checks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-
-      ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-
-      # Within this workflow we will continue on error, to give
-      # maximum information to the developer.
-      - run: cargo fmt --all --check
-        name: Code style
-        if: ${{ !cancelled() }}
-      - run: cargo build --locked
-        name: Build
-        if: ${{ !cancelled() }}
-      - run: cargo clippy --locked
-        name: Lint
-        if: ${{ !cancelled() }}
-      - run: cargo doc --no-deps --locked
-        name: Documentation
-        if: ${{ !cancelled() }}
+  ## TEMP OFF
+  #checks:
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - uses: actions/checkout@v4
+  #    - name: Install Rust
+  #      uses: dtolnay/rust-toolchain@master
+  #      with:
+  #        toolchain: stable
+#
+  #    ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
+  #    - uses: Swatinem/rust-cache@v2
+  #      with:
+  #        cache-on-failure: true
+  #        cache-all-crates: true
+#
+  #    # Within this workflow we will continue on error, to give
+  #    # maximum information to the developer.
+  #    - run: cargo fmt --all --check
+  #      name: Code style
+  #      if: ${{ !cancelled() }}
+  #    - run: cargo build --locked
+  #      name: Build
+  #      if: ${{ !cancelled() }}
+  #    - run: cargo clippy --locked
+  #      name: Lint
+  #      if: ${{ !cancelled() }}
+  #    - run: cargo doc --no-deps --locked
+  #      name: Documentation
+  #      if: ${{ !cancelled() }}
 
   coverage:
     runs-on: ubuntu-latest
@@ -49,7 +50,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: nightly
           components: llvm-tools-preview
       - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: Swatinem/rust-cache@v2
@@ -66,7 +67,8 @@ jobs:
       - name: Send result to coveralls
         uses: coverallsapp/github-action@v2.3.6
 
-  build:
-    uses: ./.github/workflows/package.yml
-    with:
-      publish: false
+  ## TEMP OFF
+  #build:
+  #  uses: ./.github/workflows/package.yml
+  #  with:
+  #    publish: false

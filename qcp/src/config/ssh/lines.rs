@@ -83,6 +83,7 @@ pub(super) fn split_args(input: &str) -> Result<Vec<String>> {
 ///////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use anyhow::{Context, Result, anyhow};
     use assertables::{assert_contains_as_result, assert_eq_as_result};

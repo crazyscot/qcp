@@ -324,6 +324,7 @@ impl Display for DisplayAdapter<'_> {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use crate::config::{Configuration, Configuration_Optional, Manager};
     use crate::util::{PortRange, make_test_tempfile};
