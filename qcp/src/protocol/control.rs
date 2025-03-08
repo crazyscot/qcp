@@ -360,7 +360,9 @@ impl ClientMessageV1 {
             bandwidth_to_client: working.rx.map(u64::from).map(Uint),
             rtt: working.rtt,
             congestion: working.congestion.map(CongestionController_OnWire),
-            initial_congestion_window: working.initial_congestion_window.map(Uint),
+            initial_congestion_window: working
+                .initial_congestion_window
+                .map(|u| Uint(u64::from(u))),
             timeout: working.timeout,
 
             extension: 0,
@@ -717,7 +719,7 @@ mod test {
             rx: Some(89u64.into()),
             rtt: Some(1234),
             congestion: Some(CongestionControllerType::Bbr),
-            initial_congestion_window: Some(12345),
+            initial_congestion_window: Some(12345u64.into()),
             port: Some(CliPortRange { begin: 17, end: 98 }),
             remote_port: Some(CliPortRange {
                 begin: 123,
@@ -818,7 +820,7 @@ mod test {
             tx: EQ::<u64>::from(v1.bandwidth_to_server.0),
             rtt: v1.rtt,
             congestion: v1.congestion.into(),
-            initial_congestion_window: v1.initial_congestion_window.0,
+            initial_congestion_window: v1.initial_congestion_window.0.into(),
             timeout: v1.timeout,
             ..Configuration::system_default().clone()
         };

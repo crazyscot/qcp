@@ -118,8 +118,10 @@ pub struct Configuration {
     pub congestion: CongestionControllerType,
 
     /// _(Network wizards only!)_
-    /// The initial value for the sending congestion control window.
+    /// The initial value for the sending congestion control window, in bytes.
     /// If unspecified, the active congestion control algorithm decides.
+    ///
+    /// This may be specified directly as a number, or as an SI quantity like `10k`.
     ///
     /// _Setting this value too high reduces performance!_
     #[arg(
@@ -129,7 +131,7 @@ pub struct Configuration {
         alias("cwnd"),
         display_order(0)
     )]
-    pub initial_congestion_window: u64,
+    pub initial_congestion_window: EngineeringQuantity<u64>,
 
     /// Uses the given UDP port or range on the **local** endpoint.
     /// This can be useful when there is a firewall between the endpoints.
@@ -236,7 +238,7 @@ lazy_static::lazy_static! {
             tx: 0u64.into(),
             rtt: 300,
             congestion: CongestionControllerType::Cubic,
-            initial_congestion_window: 0,
+            initial_congestion_window: 0u64.into(),
             port: PortRange::default(),
             timeout: 5,
 
@@ -318,7 +320,7 @@ impl Configuration {
     /// Formats the transport-related options for display
     #[must_use]
     pub fn format_transport_config(&self) -> String {
-        let iwind = match self.initial_congestion_window {
+        let iwind = match u64::from(self.initial_congestion_window) {
             0 => "<default>".to_string(),
             s => s.human_count_bytes().to_string(),
         };
