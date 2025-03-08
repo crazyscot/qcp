@@ -19,7 +19,8 @@ jobs:
         with:
           # Specify explicitly because the ref at the time of merging will be a branch name such as 'main', 'develop'
           ref: refs/pull/${{ github.event.number }}/merge
-        if: github.event_name == 'closed'
+        if: github.event_name == 'pull_request'
+        # and only when a PR is closed; that's done for us by the 'on' clause above
       - uses: snnaplab/delete-branch-cache-action@v1.0.0
         with:
           ref: refs/heads/${{ github.ref_name }}
