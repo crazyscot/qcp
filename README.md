@@ -20,7 +20,7 @@ high-performance remote file copy utility for long-distance internet connections
   * Protocol encoding changed to [BARE], removing the dependency on capnp.
 - **(New in 0.2)** Configuration file support
 
-For a full list of changes, see the [changelog](CHANGELOG.md).
+For a full list of changes, see the [changelog].
 
 #### Platform support status
 
@@ -155,7 +155,7 @@ Bug reports and feature requests are welcome, please use the [issue] tracker.
 - It may be useful to check the [issues list] and the [discussions] first in case somebody else has already raised it.
 - Please be aware that I mostly work on this project in my own time.
 
-🚧 If you're thinking of contributing code, please read [CONTRIBUTING.md](CONTRIBUTING.md).
+🚧 If you're thinking of contributing code, please read [CONTRIBUTING.md].
 
 #### Help wanted: MacOS/BSD
 
@@ -166,7 +166,7 @@ I'd particularly welcome performance reports from MacOS/BSD users as those are n
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 2.0.0.
 
 In its initial experimental phase, the major number will be kept at 0.
-Breaking changes will be noted in the [changelog](CHANGELOG.md) and will trigger a minor version bump.
+Breaking changes will be noted in the [changelog] and will trigger a minor version bump.
 
 The project will move to version 1.x when the protocol has stabilised. After 1.0, breaking changes will trigger a major version bump.
 
@@ -211,3 +211,5 @@ Some ideas for the future, in no particular order:
 [building a configuration]: https://docs.rs/qcp/latest/qcp/doc/performance/index.html#building-a-configuration
 [Github sponsorship]: https://github.com/sponsors/crazyscot?frequency=recurring&sponsor=crazyscot
 [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
+[changelog]: https://github.com/crazyscot/qcp/blob/HEAD/CHANGELOG.md
+[CONTRIBUTING.md]: https://github.com/crazyscot/qcp/blob/HEAD/CONTRIBUTING.md
