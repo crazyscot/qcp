@@ -1,7 +1,7 @@
 //! QUIC transport configuration
 // (c) 2024 Ross Younger
 
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use figment::{Provider, value::Dict};
@@ -10,13 +10,11 @@ use quinn::{
     TransportConfig,
     congestion::{BbrConfig, CubicConfig},
 };
-use serde::{Deserialize, Serialize, de};
-use strum::VariantNames;
 use tracing::debug;
 
 use crate::{
     config::{Configuration, Configuration_Optional, Manager},
-    protocol::control::ClientMessageV1,
+    protocol::control::{ClientMessageV1, CongestionController},
     util::PortRange,
 };
 
@@ -33,58 +31,6 @@ pub enum ThroughputMode {
     Rx,
     /// We expect to send and receive, or we don't know
     Both,
-}
-
-/// Selects the congestion control algorithm to use.
-/// On the wire, this is serialized as a standard BARE enum.
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    strum::Display,
-    strum::EnumString,
-    strum::FromRepr,
-    strum::VariantNames,
-    clap::ValueEnum,
-    Serialize,
-)]
-#[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
-#[repr(u8)]
-pub enum CongestionControllerType {
-    /// The congestion algorithm TCP uses. This is good for most cases.
-    #[default]
-    Cubic = 0,
-    /// (Use with caution!) An experimental algorithm created by Google,
-    /// which increases goodput in some situations
-    /// (particularly long and fat connections where the intervening
-    /// buffers are shallow). However this comes at the cost of having
-    /// more data in-flight, and much greater packet retransmission.
-    /// See
-    /// `https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/`
-    /// for more discussion.
-    Bbr = 1,
-}
-
-impl<'de> Deserialize<'de> for CongestionControllerType {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let lower = s.to_ascii_lowercase();
-        // requires strum::EnumString && strum::VariantNames && #[strum(serialize_all = "lowercase")]
-        FromStr::from_str(&lower)
-            .map_err(|_| de::Error::unknown_variant(&s, CongestionControllerType::VARIANTS))
-    }
-}
-
-impl From<CongestionControllerType> for figment::value::Value {
-    fn from(value: CongestionControllerType) -> Self {
-        value.to_string().into()
-    }
 }
 
 /// Creates a `quinn::TransportConfig` for the endpoint setup
@@ -116,15 +62,15 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
     }
 
     let window = u64::from(params.initial_congestion_window);
-    match params.congestion {
-        CongestionControllerType::Cubic => {
+    match params.congestion.0 {
+        CongestionController::Cubic => {
             let mut cubic = CubicConfig::default();
             if window != 0 {
                 let _ = cubic.initial_window(window);
             }
             let _ = config.congestion_controller_factory(Arc::new(cubic));
         }
-        CongestionControllerType::Bbr => {
+        CongestionController::Bbr => {
             let mut bbr = BbrConfig::default();
             if window != 0 {
                 let _ = bbr.initial_window(window);
@@ -288,9 +234,9 @@ pub fn combine_bandwidth_configurations(
         "rtt"
     )?;
     negotiate!(
-        client.congestion.map(CongestionControllerType::from),
+        client.congestion,
         server.congestion,
-        |_: CongestionControllerType, _| CombinationResponse::Failure(anyhow::anyhow!(
+        |_: CongestionController, _| CombinationResponse::Failure(anyhow::anyhow!(
             "server and client have incompatible congestion algorithm requirements"
         )),
         "congestion"

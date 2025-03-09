@@ -35,7 +35,7 @@
 //! [quic]: https://quicwg.github.io/
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 
-use std::{fmt::Display, net::IpAddr};
+use std::{fmt::Display, net::IpAddr, str::FromStr};
 
 use anyhow::anyhow;
 use figment::{
@@ -46,11 +46,11 @@ use quinn::ConnectionStats;
 use serde::{Deserialize, Serialize};
 use serde_bare::Uint;
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use strum::VariantNames as _;
 
 use super::common::ProtocolMessage;
 use crate::{
     config::{Configuration_Optional, Manager},
-    transport::CongestionControllerType,
     util::{Credentials, PortRange as CliPortRange},
 };
 
@@ -138,45 +138,112 @@ impl From<IpAddr> for ConnectionType {
 // CONGESTION CONTROLLER
 
 /// Selects the congestion control algorithm to use.
-/// This is a newtype for [crate::transport::CongestionControllerType]
-/// with different serialization.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone, Copy)]
+/// This structure is serialized as a standard BARE enum.
+/// To serialize it as a string, see [`CongestionControllerSerializingAsString`].
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    strum::Display,
+    strum::EnumString,
+    strum::FromRepr,
+    strum::VariantNames,
+    clap::ValueEnum,
+)]
+#[repr(u8)]
 #[serde(try_from = "Uint")]
 #[serde(into = "Uint")]
-#[allow(non_camel_case_types)]
-pub struct CongestionController_OnWire(pub CongestionControllerType);
-
-impl From<CongestionController_OnWire> for CongestionControllerType {
-    fn from(value: CongestionController_OnWire) -> Self {
-        value.0
-    }
-}
-impl From<CongestionControllerType> for CongestionController_OnWire {
-    fn from(value: CongestionControllerType) -> Self {
-        Self(value)
-    }
-}
-
-impl From<CongestionController_OnWire> for Uint {
-    fn from(value: CongestionController_OnWire) -> Self {
-        Self(value.0 as u64)
-    }
+#[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
+pub enum CongestionController {
+    /// The congestion algorithm TCP uses. This is good for most cases.
+    #[default]
+    Cubic = 0,
+    /// (Use with caution!) An experimental algorithm created by Google,
+    /// which increases goodput in some situations
+    /// (particularly long and fat connections where the intervening
+    /// buffers are shallow). However this comes at the cost of having
+    /// more data in-flight, and much greater packet retransmission.
+    /// See
+    /// `https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/`
+    /// for more discussion.
+    Bbr = 1,
 }
 
-impl TryFrom<Uint> for CongestionController_OnWire {
+impl From<CongestionController> for Uint {
+    fn from(value: CongestionController) -> Self {
+        Self(value as u64)
+    }
+}
+
+impl TryFrom<Uint> for CongestionController {
     type Error = anyhow::Error;
 
     fn try_from(value: Uint) -> anyhow::Result<Self> {
         let v = u8::try_from(value.0)?;
-        let t = CongestionControllerType::from_repr(v)
-            .ok_or(anyhow!("invalid congestioncontroller enum"))?;
-        Ok(Self(t))
+        CongestionController::from_repr(v).ok_or(anyhow!("invalid congestioncontroller enum"))
     }
 }
 
-impl Display for CongestionController_OnWire {
+impl From<CongestionController> for figment::value::Value {
+    fn from(value: CongestionController) -> Self {
+        value.to_string().into()
+    }
+}
+
+/// Selects the congestion control algorithm to use.
+/// This is a newtype wrapper to the enum defined in crate::protocol, but with
+/// different serialization semantics.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(into = "String")]
+pub struct CongestionControllerSerializingAsString(pub(crate) CongestionController);
+
+impl<'de> Deserialize<'de> for CongestionControllerSerializingAsString {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let lower = s.to_ascii_lowercase();
+        // requires strum::EnumString && strum::VariantNames && #[strum(serialize_all = "lowercase")]
+        Self::try_from(lower)
+            .map_err(|_| serde::de::Error::unknown_variant(&s, CongestionController::VARIANTS))
+    }
+}
+
+impl TryFrom<String> for CongestionControllerSerializingAsString {
+    type Error = strum::ParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        CongestionController::from_str(&value).map(CongestionControllerSerializingAsString)
+    }
+}
+
+impl Display for CongestionControllerSerializingAsString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl From<CongestionControllerSerializingAsString> for String {
+    fn from(value: CongestionControllerSerializingAsString) -> Self {
+        value.to_string()
+    }
+}
+
+impl From<CongestionControllerSerializingAsString> for CongestionController {
+    fn from(value: CongestionControllerSerializingAsString) -> Self {
+        value.0
+    }
+}
+
+impl From<CongestionController> for CongestionControllerSerializingAsString {
+    fn from(value: CongestionController) -> Self {
+        Self(value)
     }
 }
 
@@ -312,7 +379,7 @@ pub struct ClientMessageV1 {
     /// The network Round Trip Time, in milliseconds, to use in calculating the bandwidth delay product
     pub rtt: Option<u16>,
     /// The congestion control algorithm to use
-    pub congestion: Option<CongestionController_OnWire>,
+    pub congestion: Option<CongestionController>,
     /// The initial congestion window, if specified
     pub initial_congestion_window: Option<Uint>,
     /// Connection timeout for the QUIC endpoints, in seconds
@@ -359,7 +426,7 @@ impl ClientMessageV1 {
             },
             bandwidth_to_client: working.rx.map(u64::from).map(Uint),
             rtt: working.rtt,
-            congestion: working.congestion.map(CongestionController_OnWire),
+            congestion: working.congestion.map(Into::into),
             initial_congestion_window: working
                 .initial_congestion_window
                 .map(|u| Uint(u64::from(u))),
@@ -425,7 +492,7 @@ pub struct ServerMessageV1 {
     /// The final round-trip-time to use on the connection
     pub rtt: u16,
     /// The congestion control algorithm to use
-    pub congestion: CongestionController_OnWire,
+    pub congestion: CongestionController,
     /// The initial congestion window to use (0 means "use algorithm default")
     pub initial_congestion_window: Uint,
     /// Connection timeout for the QUIC endpoints, in seconds
@@ -456,7 +523,7 @@ impl Provider for ServerMessageV1 {
         insert("rx", self.bandwidth_to_client.0.into());
 
         insert("rtt", self.rtt.into());
-        insert("congestion", self.congestion.0.to_string().into());
+        insert("congestion", self.congestion.to_string().into());
         insert("timeout", self.timeout.into());
         insert(
             "initial_congestion_window",
@@ -578,11 +645,11 @@ mod test {
         protocol::{
             common::ProtocolMessage,
             control::{
-                ClientMessageV1, ClosedownReport, CompatibilityLevel, CongestionController_OnWire,
-                ConnectionType, ServerGreeting, ServerMessageV1,
+                ClientMessageV1, ClosedownReport, CompatibilityLevel, CongestionController,
+                CongestionControllerSerializingAsString, ConnectionType, ServerGreeting,
+                ServerMessageV1,
             },
         },
-        transport::CongestionControllerType,
         util::{Credentials, PortRange as CliPortRange},
     };
 
@@ -718,7 +785,7 @@ mod test {
             tx: Some(42u64.into()),
             rx: Some(89u64.into()),
             rtt: Some(1234),
-            congestion: Some(CongestionControllerType::Bbr),
+            congestion: Some(CongestionController::Bbr.into()),
             initial_congestion_window: Some(12345u64.into()),
             port: Some(CliPortRange { begin: 17, end: 98 }),
             remote_port: Some(CliPortRange {
@@ -763,7 +830,7 @@ mod test {
                 bandwidth_to_server: Some(Uint(42)),
                 bandwidth_to_client: Some(Uint(89)),
                 rtt: Some(1234),
-                congestion: Some(CongestionController_OnWire(CongestionControllerType::Bbr)),
+                congestion: Some(CongestionController::Bbr),
                 initial_congestion_window: Some(Uint(12345)),
                 timeout: Some(432),
                 extension: 0,
@@ -799,7 +866,7 @@ mod test {
             bandwidth_to_client: Uint(123),
             bandwidth_to_server: Uint(456),
             rtt: 789,
-            congestion: CongestionController_OnWire(CongestionControllerType::Bbr),
+            congestion: CongestionController::Bbr,
             initial_congestion_window: Uint(4321),
             timeout: 42,
             warning: String::from("this is a warning"),
@@ -852,10 +919,10 @@ mod test {
 
     #[test]
     fn type_conversions_congestion() {
-        let c = CongestionControllerType::Cubic;
-        let c2 = CongestionController_OnWire::from(c);
+        let c = CongestionController::Cubic;
+        let c2 = CongestionControllerSerializingAsString::from(c);
         println!("{c2}");
-        assert_eq!(CongestionControllerType::from(c2), c);
+        assert_eq!(CongestionController::from(c2), c);
     }
 
     #[test]
