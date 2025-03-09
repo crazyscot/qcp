@@ -2,18 +2,19 @@
 // (c) 2024 Ross Younger
 
 use std::cmp::min;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::config::{Configuration, Configuration_Optional, Manager};
+
+use crate::protocol::common::{ProtocolMessage as _, SendReceivePair};
 use crate::protocol::control::{
     BANNER, COMPATIBILITY_LEVEL, ClientGreeting, ClientMessage, ClosedownReport, ClosedownReportV1,
     ConnectionType, ServerFailure, ServerGreeting, ServerMessage, ServerMessageV1,
 };
-use crate::protocol::session::{Command, FileHeader, FileTrailer, Response, ResponseV1, Status};
-use crate::protocol::{common::ProtocolMessage as _, common::StreamPair};
+use crate::protocol::session::Command;
+
 use crate::transport::{ThroughputMode, combine_bandwidth_configurations};
-use crate::util::{Credentials, TimeFormat, io, socket};
+use crate::util::{Credentials, TimeFormat, socket};
 
 use anyhow::Context as _;
 use quinn::crypto::rustls::QuicServerConfig;
@@ -22,7 +23,7 @@ use quinn::rustls::{self, RootCertStore};
 use quinn::{ConnectionStats, EndpointConfig};
 use rustls_pki_types::CertificateDer;
 use serde_bare::Uint;
-use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+use tokio::io::AsyncWriteExt as _;
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
@@ -271,7 +272,7 @@ async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<ConnectionSt
     async {
         loop {
             let stream = connection.accept_bi().await;
-            let stream = match stream {
+            let sp = match stream {
                 Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
                     // we're closing down
                     debug!("application closing");
@@ -285,13 +286,11 @@ async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<ConnectionSt
                     error!("connection error: {e}");
                     return Err(e.into());
                 }
-                Ok(s) => StreamPair::from(s),
+                Ok(s) => SendReceivePair::from(s),
             };
             trace!("opened stream");
             let _j = tokio::spawn(async move {
-                if let Err(e) = handle_stream(stream).await {
-                    error!("stream failed: {e}",);
-                }
+                handle_stream(sp).await;
             });
         }
     }
@@ -299,182 +298,28 @@ async fn handle_connection(conn: quinn::Incoming) -> anyhow::Result<ConnectionSt
     Ok(connection.stats())
 }
 
-async fn handle_stream(mut sp: StreamPair) -> anyhow::Result<()> {
+async fn handle_stream(mut sp: SendReceivePair<quinn::SendStream, quinn::RecvStream>) {
+    use crate::session;
     trace!("reading command");
-    let cmd = Command::from_reader_async_framed(&mut sp.recv).await?;
-    match cmd {
-        Command::Get(get) => {
-            handle_get(sp, get.filename.clone())
-                .instrument(trace_span!("SERVER:GET", filename = get.filename))
-                .await
-        }
-        Command::Put(put) => {
-            handle_put(sp, put.filename.clone())
-                .instrument(trace_span!("SERVER:PUT", destination = put.filename))
-                .await
-        }
-    }
-}
-
-async fn handle_get(mut stream: StreamPair, filename: String) -> anyhow::Result<()> {
-    trace!("begin");
-
-    let path = PathBuf::from(&filename);
-    let (mut file, meta) = match io::open_file(&filename).await {
-        Ok(res) => res,
-        Err((status, message, _)) => {
-            return send_response(&mut stream.send, status, message.as_deref()).await;
-        }
-    };
-    if meta.is_dir() {
-        return send_response(&mut stream.send, Status::ItIsADirectory, None).await;
-    }
-
-    // We believe we can fulfil this request.
-    trace!("responding OK");
-    send_response(&mut stream.send, Status::Ok, None).await?;
-
-    let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
-
-    FileHeader::new_v1(meta.len(), protocol_filename)
-        .to_writer_async_framed(&mut stream.send)
-        .await?;
-
-    trace!("sending file payload");
-    let result = tokio::io::copy(&mut file, &mut stream.send).await;
-    match result {
-        Ok(sent) if sent == meta.len() => (),
-        Ok(sent) => {
-            error!(
-                "File sent size {sent} doesn't match its metadata {}",
-                meta.len()
-            );
-            return Ok(());
-        }
-        Err(e) => {
-            error!("Error during io::copy: {e}");
-            return Ok(());
-        }
-    }
-
-    trace!("sending trailer");
-    FileTrailer::V1
-        .to_writer_async_framed(&mut stream.send)
-        .await?;
-    stream.send.flush().await?;
-    trace!("complete");
-    Ok(())
-}
-
-async fn handle_put(mut stream: StreamPair, destination: String) -> anyhow::Result<()> {
-    trace!("begin");
-
-    // Initial checks. Is the destination valid?
-    let mut path = PathBuf::from(destination.clone());
-    // This is moderately tricky. It might validly be empty, a directory, a file, it might be a nonexistent file in an extant directory.
-
-    if path.as_os_str().is_empty() {
-        // This is the case "qcp some-file host:"
-        // Copy to the current working directory
-        path.push(".");
-    }
-    let append_filename = if path.is_dir() || path.is_file() {
-        // Destination exists
-        if !io::dest_is_writeable(&path).await {
-            return send_response(
-                &mut stream.send,
-                Status::IncorrectPermissions,
-                Some("cannot write to destination"),
-            )
-            .await;
-        }
-        // append filename only if it is a directory
-        path.is_dir()
-    } else {
-        // Is it a nonexistent file in a valid directory?
-        let mut path_test = path.clone();
-        let _ = path_test.pop();
-        if path_test.as_os_str().is_empty() {
-            // We're writing a file to the current working directory, so apply the is_dir writability check
-            path_test.push(".");
-        }
-        if path_test.is_dir() {
-            if !io::dest_is_writeable(&path_test).await {
-                return send_response(
-                    &mut stream.send,
-                    Status::IncorrectPermissions,
-                    Some("cannot write to destination"),
-                )
-                .await;
-            }
-            // Yes, we can write there; destination path is fully specified.
-            false
-        } else {
-            // No parent directory
-            return send_response(&mut stream.send, Status::DirectoryDoesNotExist, None).await;
-        }
+    let packet = Command::from_reader_async_framed(&mut sp.recv).await;
+    let Ok(cmd) = packet else {
+        error!("failed to read command");
+        return;
     };
 
-    // So far as we can tell, we believe we can fulfil this request.
-    trace!("responding OK");
-    send_response(&mut stream.send, Status::Ok, None).await?;
-    stream.send.flush().await?;
-    let header = FileHeader::from_reader_async_framed(&mut stream.recv).await?;
-    let FileHeader::V1(header) = header;
-
-    debug!("PUT {} -> {destination}", &header.filename);
-    if append_filename {
-        path.push(header.filename);
-    }
-    let mut file = match tokio::fs::File::create(path).await {
-        Ok(f) => f,
-        Err(e) => {
-            error!("Could not write to destination: {e}");
-            return Ok(());
-        }
+    let (span, mut handler) = match cmd {
+        Command::Get(args) => (
+            trace_span!("SERVER:GET", filename = args.filename.clone()),
+            session::Get::boxed(sp, Some(args)),
+        ),
+        Command::Put(args) => (
+            trace_span!("SERVER:PUT", filename = args.filename.clone()),
+            session::Put::boxed(sp, Some(args)),
+        ),
     };
-    if file
-        .set_len(header.size.0)
-        .await
-        .inspect_err(|e| error!("Could not set destination file length: {e}"))
-        .is_err()
-    {
-        return Ok(());
-    };
-
-    trace!("receiving file payload");
-    let mut limited_recv = stream.recv.take(header.size.0);
-    if tokio::io::copy(&mut limited_recv, &mut file)
-        .await
-        .inspect_err(|e| error!("Failed to write to destination: {e}"))
-        .is_err()
-    {
-        return Ok(());
+    if let Err(e) = handler.handle().instrument(span).await {
+        error!("stream handler failed: {e}");
     }
-    // recv_buf has been moved but we can get it back for further operations
-    stream.recv = limited_recv.into_inner();
-
-    trace!("receiving trailer");
-    let _trailer = FileTrailer::from_reader_async_framed(&mut stream.recv).await?;
-
-    file.flush().await?;
-    send_response(&mut stream.send, Status::Ok, None).await?;
-    stream.send.flush().await?;
-    trace!("complete");
-    Ok(())
-}
-
-async fn send_response(
-    send: &mut quinn::SendStream,
-    status: Status,
-    message: Option<&str>,
-) -> anyhow::Result<()> {
-    Response::V1(ResponseV1::new(
-        status,
-        message.map(std::string::ToString::to_string),
-    ))
-    .to_writer_async_framed(send)
-    .await
 }
 
 /// Attempts to read the ssh client's IP address.

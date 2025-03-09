@@ -11,7 +11,7 @@ fn hostname_of(user_at_host: &str) -> &str {
 }
 
 /// A file source or destination specified by the user
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct FileSpec {
     /// The remote `[user@]host` for the file. This may be a hostname or an IP address.
     /// It may also be a _hostname alias_ that matches a Host section in the user's ssh config file.
@@ -76,7 +76,7 @@ impl std::fmt::Display for FileSpec {
 }
 
 /// Details of a file copy job.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct CopyJobSpec {
     pub(crate) source: FileSpec,
     pub(crate) destination: FileSpec,
@@ -101,6 +101,13 @@ impl CopyJobSpec {
             destination,
             user_at_host,
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_parts(source: &str, destination: &str) -> anyhow::Result<Self> {
+        let source = FileSpec::from_str(source)?;
+        let destination = FileSpec::from_str(destination)?;
+        Self::try_new(source, destination)
     }
 
     /// What direction of data flow should we optimise for?

@@ -43,7 +43,7 @@ fn use_long_style(terminal: &Term, msg_size: usize) -> bool {
 }
 
 /// Determine and retrieve the appropriate progress style to use
-pub(crate) fn progress_style_for(terminal: &Term, msg_size: usize) -> &str {
+pub(crate) fn style_for(terminal: &Term, msg_size: usize) -> &str {
     if use_long_style(terminal, msg_size) {
         PROGRESS_STYLE_OVERLONG
     } else {
