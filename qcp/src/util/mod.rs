@@ -29,6 +29,9 @@ mod optionalify;
 pub use optionalify::{derive_deftly_template_Optionalify, insert_if_some};
 
 #[cfg(test)]
+pub(crate) mod test_protocol;
+
+#[cfg(test)]
 pub(crate) fn make_test_tempfile(
     data: &str,
     filename: &str,

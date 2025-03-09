@@ -44,7 +44,17 @@ use std::fmt::Display;
 use super::common::ProtocolMessage;
 
 /// Machine-readable codes advising of the status of an operation
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
+#[derive(
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Debug,
+    Clone,
+    Copy,
+    thiserror::Error,
+    strum_macros::Display,
+)]
 #[repr(u16)]
 #[allow(missing_docs)]
 pub enum Status {

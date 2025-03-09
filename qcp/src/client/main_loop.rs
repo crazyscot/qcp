@@ -4,10 +4,6 @@
 use crate::{
     client::{control::Channel, progress::spinner_style},
     config::{Configuration, Configuration_Optional, Manager},
-    protocol::{
-        common::{ProtocolMessage, StreamPair},
-        session::{Command, FileHeader, FileTrailer, GetArgs, PutArgs, Response, Status},
-    },
     transport::ThroughputMode,
     util::{
         self, Credentials, TimeFormat, lookup_host_by_family,
@@ -17,17 +13,14 @@ use crate::{
 
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
-use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
+use indicatif::{MultiProgress, ProgressBar};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{Connection, EndpointConfig, rustls};
 use rustls::RootCertStore;
 use rustls_pki_types::CertificateDer;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
-use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
-use tokio::time::Instant;
-use tokio::{self, io::AsyncReadExt, time::Duration, time::timeout};
+use tokio::{self, time::Duration, time::timeout};
 use tracing::{Instrument as _, Level, debug, error, info, span, trace, trace_span, warn};
 
 use super::Parameters as ClientParameters;
@@ -228,18 +221,21 @@ async fn manage_request(
     let connection = connection.clone();
     let config = config.clone();
     let _jh = tasks.spawn(async move {
+        use crate::session;
+
         // This async block returns a Result<u64>
         let sp = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
         // Called function returns its payload size.
         // This async block reports on errors.
+
         if copy_spec.source.user_at_host.is_some() {
-            // This is a Get
-            do_get(sp.into(), &copy_spec, display, spinner, &config, quiet)
+            let mut imp = session::Get::boxed(sp.into(), None);
+            imp.send(&copy_spec, display, spinner, &config, quiet)
                 .instrument(trace_span!("GET", filename = copy_spec.source.filename))
                 .await
         } else {
-            // This is a Put
-            do_put(sp.into(), &copy_spec, display, spinner, &config, quiet)
+            let mut imp = session::Put::boxed(sp.into(), None);
+            imp.send(&copy_spec, display, spinner, &config, quiet)
                 .instrument(trace_span!("PUT", filename = copy_spec.source.filename))
                 .await
         }
@@ -279,37 +275,6 @@ async fn manage_request(
     } else {
         Err(total_bytes)
     }
-}
-
-/// Adds a progress bar to the stack (in `MultiProgress`) for the current job
-fn progress_bar_for(
-    display: &MultiProgress,
-    job: &CopyJobSpec,
-    steps: u64,
-    quiet: bool,
-) -> Result<ProgressBar> {
-    if quiet {
-        return Ok(ProgressBar::hidden());
-    }
-    let display_filename = {
-        let component = PathBuf::from(&job.source.filename);
-        component
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string()
-    };
-    Ok(display.add(
-        ProgressBar::new(steps)
-            .with_style(indicatif::ProgressStyle::with_template(
-                super::progress::progress_style_for(
-                    &console::Term::stderr(),
-                    display_filename.len(),
-                ),
-            )?)
-            .with_message(display_filename)
-            .with_finish(ProgressFinish::Abandon),
-    ))
 }
 
 /// Creates the client endpoint:
@@ -359,186 +324,4 @@ pub(crate) fn create_endpoint(
     endpoint.set_default_client_config(config);
 
     Ok(endpoint)
-}
-
-/// Actions a GET command
-async fn do_get(
-    mut stream: StreamPair,
-    job: &CopyJobSpec,
-    display: MultiProgress,
-    spinner: ProgressBar,
-    config: &Configuration,
-    quiet: bool,
-) -> Result<u64> {
-    let filename = &job.source.filename;
-    let dest = &job.destination.filename;
-
-    let real_start = Instant::now();
-    trace!("send command");
-    Command::Get(GetArgs {
-        filename: filename.to_string(),
-    })
-    .to_writer_async_framed(&mut stream.send)
-    .await?;
-    stream.send.flush().await?;
-
-    // TODO protocol timeout?
-    trace!("await response");
-    let response = Response::from_reader_async_framed(&mut stream.recv).await?;
-    let Response::V1(response) = response;
-    if response.status != Status::Ok {
-        anyhow::bail!(format!("GET ({filename}) failed: {response}"));
-    }
-
-    let header = FileHeader::from_reader_async_framed(&mut stream.recv).await?;
-    trace!("{header:?}");
-    let FileHeader::V1(header) = header;
-
-    let mut file = crate::util::io::create_truncate_file(dest, &header).await?;
-
-    // Now we know how much we're receiving, update the chrome.
-    // File Trailers are currently 16 bytes on the wire.
-
-    // Unfortunately, the file data is already well in flight at this point, leading to a flood of packets
-    // that causes the estimated rate to spike unhelpfully at the beginning of the transfer.
-    // Therefore we incorporate time in flight so far to get the estimate closer to reality.
-    let progress_bar = progress_bar_for(&display, job, header.size.0 + 16, quiet)?
-        .with_elapsed(Instant::now().duration_since(real_start));
-
-    let mut meter =
-        crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, config.rx());
-    meter.start().await;
-
-    let inbound = progress_bar.wrap_async_read(stream.recv);
-
-    let mut inbound = inbound.take(header.size.0);
-    trace!("payload");
-    let _ = tokio::io::copy(&mut inbound, &mut file).await?;
-    // Retrieve the stream from within the Take wrapper for further operations
-    let mut inbound = inbound.into_inner();
-
-    trace!("trailer");
-    let _trailer = FileTrailer::from_reader_async_framed(&mut inbound).await?;
-    // Trailer is empty for now, but its existence means the server believes the file was sent correctly
-
-    // Note that the Quinn send stream automatically calls finish on drop.
-    meter.stop().await;
-    file.flush().await?;
-    trace!("complete");
-    progress_bar.finish_and_clear();
-    Ok(header.size.0)
-}
-
-/// Actions a PUT command
-async fn do_put(
-    mut stream: StreamPair,
-    job: &CopyJobSpec,
-    display: MultiProgress,
-    spinner: ProgressBar,
-    config: &Configuration,
-    quiet: bool,
-) -> Result<u64> {
-    let src_filename = &job.source.filename;
-    let dest_filename = &job.destination.filename;
-
-    let path = PathBuf::from(src_filename);
-    let (mut file, meta) = match crate::util::io::open_file(src_filename).await {
-        Ok(res) => res,
-        Err((_, _, error)) => {
-            return Err(error.into());
-        }
-    };
-    if meta.is_dir() {
-        anyhow::bail!("PUT: Source is a directory");
-    }
-
-    let payload_len = meta.len();
-
-    // Now we can compute how much we're going to send, update the chrome.
-    // Marshalled commands are currently 48 bytes + filename length
-    // File headers are currently 36 + filename length; Trailers are 16 bytes.
-    let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
-    let progress_bar = progress_bar_for(&display, job, steps, quiet)?;
-    let mut outbound = progress_bar.wrap_async_write(stream.send);
-    let mut meter =
-        crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, config.tx());
-    meter.start().await;
-
-    trace!("sending command");
-
-    Command::Put(PutArgs {
-        filename: dest_filename.to_string(),
-    })
-    .to_writer_async_framed(&mut outbound)
-    .await?;
-    outbound.flush().await?;
-
-    // TODO protocol timeout?
-    trace!("await response");
-    let response = Response::from_reader_async_framed(&mut stream.recv).await?;
-    let Response::V1(response) = response;
-    if response.status != Status::Ok {
-        anyhow::bail!(format!("PUT ({src_filename}) failed: {response}"));
-    }
-
-    // The filename in the protocol is the file part only of src_filename
-    trace!("send header");
-    let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
-    FileHeader::new_v1(payload_len, protocol_filename)
-        .to_writer_async_framed(&mut outbound)
-        .await?;
-
-    // A server-side abort might happen part-way through a large transfer.
-    trace!("send payload");
-    let result = tokio::io::copy(&mut file, &mut outbound).await;
-
-    match result {
-        Ok(sent) if sent == meta.len() => (),
-        Ok(sent) => {
-            anyhow::bail!(
-                "File sent size {sent} doesn't match its metadata {}",
-                meta.len()
-            );
-        }
-        Err(e) => {
-            if e.kind() == tokio::io::ErrorKind::ConnectionReset {
-                // Maybe the connection was cut, maybe the server sent something to help us inform the user.
-                let response = match Response::from_reader_async_framed(&mut stream.recv).await {
-                    Err(_) => anyhow::bail!("connection closed unexpectedly"),
-                    Ok(r) => r,
-                };
-                let Response::V1(response) = response;
-                anyhow::bail!(
-                    "remote closed connection: {:?}: {}",
-                    response.status,
-                    response.message.unwrap_or("(no message)".into())
-                );
-            }
-            anyhow::bail!(
-                "Unknown I/O error during PUT: {e}/{:?}/{:?}",
-                e.kind(),
-                e.raw_os_error()
-            );
-        }
-    }
-
-    trace!("send trailer");
-    FileTrailer::V1
-        .to_writer_async_framed(&mut outbound)
-        .await?;
-    outbound.flush().await?;
-    meter.stop().await;
-
-    let response = Response::from_reader_async_framed(&mut stream.recv).await?;
-    let Response::V1(response) = response;
-    if response.status != Status::Ok {
-        anyhow::bail!(format!(
-            "PUT ({src_filename}) failed on completion check: {response}"
-        ));
-    }
-
-    // Note that the Quinn sendstream calls finish() on drop.
-    trace!("complete");
-    progress_bar.finish_and_clear();
-    Ok(payload_len)
 }

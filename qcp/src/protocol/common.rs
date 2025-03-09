@@ -29,17 +29,23 @@
 use anyhow::Error;
 use bytes::BytesMut;
 use serde_bare::error::Error as sbError;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+pub(crate) trait SendingStream: AsyncWrite + Send + Unpin {}
+impl SendingStream for quinn::SendStream {}
+
+pub(crate) trait ReceivingStream: AsyncRead + Send + Unpin {}
+impl ReceivingStream for quinn::RecvStream {}
 
 /// Syntactic sugar helper type
-pub(crate) struct SendReceivePair<S, R> {
+pub(crate) struct SendReceivePair<S: SendingStream, R: ReceivingStream> {
     /// outbound data
     pub send: S,
     /// inbound data
     pub recv: R,
 }
 
-impl<S, R> From<(S, R)> for SendReceivePair<S, R> {
+impl<S: SendingStream, R: ReceivingStream> From<(S, R)> for SendReceivePair<S, R> {
     fn from(value: (S, R)) -> Self {
         Self {
             send: value.0,
@@ -47,9 +53,6 @@ impl<S, R> From<(S, R)> for SendReceivePair<S, R> {
         }
     }
 }
-
-/// Syntactic sugar helper type for working with Quinn
-pub(crate) type StreamPair = SendReceivePair<quinn::SendStream, quinn::RecvStream>;
 
 /// Framing header used on the wire for protocol messages
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Default, Clone, Copy)]
@@ -254,15 +257,6 @@ mod tests {
         let vec = msg.to_vec().unwrap();
         let decoded = TestMessage::from_slice(&vec).unwrap();
         assert_eq!(msg, decoded);
-    }
-
-    #[test]
-    fn test_stream_pair() {
-        type MyPair = super::SendReceivePair<i32, i32>;
-        let input = (12, 34);
-        let output = MyPair::from(input);
-        assert_eq!(output.send, 12);
-        assert_eq!(output.recv, 34);
     }
 
     #[test]

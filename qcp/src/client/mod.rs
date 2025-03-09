@@ -3,7 +3,7 @@
 mod options;
 pub use options::Parameters;
 
-mod control;
+pub(crate) mod control;
 pub use control::Channel;
 
 mod job;
@@ -11,8 +11,8 @@ pub use job::CopyJobSpec;
 pub use job::FileSpec;
 
 mod main_loop;
-mod meter;
-mod progress;
+pub(crate) mod meter;
+pub(crate) mod progress;
 pub mod ssh;
 
 #[allow(clippy::module_name_repetitions)]
