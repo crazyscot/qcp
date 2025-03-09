@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, builder::TypedValueParser as _};
 use engineering_repr::{EngineeringQuantity, EngineeringRepr};
 use human_repr::{HumanCount as _, HumanDuration as _};
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,8 @@ use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
     cli::styles::{INFO, RESET},
-    transport::CongestionControllerType,
+    protocol::control::CongestionController,
+    protocol::control::CongestionControllerSerializingAsString,
     util::{AddressFamily, PortRange, TimeFormat, derive_deftly_template_Optionalify},
 };
 
@@ -110,12 +111,12 @@ pub struct Configuration {
     #[arg(
         long,
         action,
-        value_name = "alg",
+        value_name = "algorithm",
+        value_parser(clap::builder::EnumValueParser::<CongestionController>::new().map(CongestionControllerSerializingAsString)), /* whee, this was fun to figure out :-) */
         help_heading("Advanced network tuning"),
         display_order(0)
     )]
-    #[clap(value_enum)]
-    pub congestion: CongestionControllerType,
+    pub congestion: CongestionControllerSerializingAsString,
 
     /// _(Network wizards only!)_
     /// The initial value for the sending congestion control window, in bytes.
@@ -237,7 +238,7 @@ lazy_static::lazy_static! {
             rx: 12_500_000u64.into(),
             tx: 0u64.into(),
             rtt: 300,
-            congestion: CongestionControllerType::Cubic,
+            congestion: CongestionController::Cubic.into(),
             initial_congestion_window: 0u64.into(),
             port: PortRange::default(),
             timeout: 5,

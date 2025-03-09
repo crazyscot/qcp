@@ -435,7 +435,9 @@ mod test {
 
     #[test]
     fn types() {
-        use crate::transport::CongestionControllerType;
+        use crate::protocol::control::{
+            CongestionController, CongestionControllerSerializingAsString,
+        };
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
@@ -443,7 +445,7 @@ mod test {
             s: String,
             i: u32,
             b: bool,
-            en: CongestionControllerType,
+            en: CongestionControllerSerializingAsString,
             pr: PortRange,
         }
 
@@ -469,7 +471,7 @@ mod test {
                 s: "foo".into(),
                 i: 42,
                 b: true,
-                en: CongestionControllerType::Bbr,
+                en: CongestionController::Bbr.into(),
                 pr: PortRange {
                     begin: 123,
                     end: 456
@@ -518,12 +520,12 @@ mod test {
 
     #[test]
     fn invalid_data() {
-        use crate::transport::CongestionControllerType;
+        use crate::protocol::control::CongestionControllerSerializingAsString;
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
             b: bool,
-            en: CongestionControllerType,
+            en: CongestionControllerSerializingAsString,
             i: u32,
             pr: PortRange,
         }
