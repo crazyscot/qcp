@@ -15,6 +15,9 @@ pub mod socket;
 pub mod stats;
 pub mod time;
 
+#[cfg(test)]
+pub mod littertray;
+
 mod tracing;
 pub(crate) use tracing::trace_level;
 pub use tracing::{TimeFormat, is_initialized as tracing_is_initialised, setup as setup_tracing};
