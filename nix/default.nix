@@ -9,6 +9,9 @@ rustPlatform.buildRustPackage rec {
   pname = "qcp";
   version = "0.3.3";
 
+  GITHUB_REF_TYPE = "tag";
+  GITHUB_REF_NAME = version;
+
   src = fetchFromGitHub {
     owner = "crazyscot";
     repo = pname;
