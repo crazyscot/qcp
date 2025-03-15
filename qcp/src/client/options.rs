@@ -96,20 +96,7 @@ impl TryFrom<&Parameters> for CopyJobSpec {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
             .clone();
-
-        if !(source.user_at_host.is_none() ^ destination.user_at_host.is_none()) {
-            anyhow::bail!("One file argument must be remote");
-        }
-        let user_at_host = source
-            .user_at_host
-            .clone()
-            .unwrap_or_else(|| destination.user_at_host.clone().unwrap_or_default());
-
-        Ok(Self {
-            source,
-            destination,
-            user_at_host,
-        })
+        CopyJobSpec::try_new(source, destination)
     }
 }
 
