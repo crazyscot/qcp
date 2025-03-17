@@ -25,10 +25,16 @@
 //! ### Put
 //!
 //! Sends a file to the remote.
-//! * C ➡️ S: [PutArgs] _(within [Command])_
-//! * S ➡️ C: [Response] to the command
-//! * C ➡️ S: [FileHeader], file data, [FileTrailer].
+//! * C ➡️ S: [PutArgs] _(within [Command])_, [FileHeader] _(see note!)_
+//! * S ➡️ C: [Response] to the command.
+//!   The server has already opened the destination file for writing, so has applied permission checks.
+//!   If the status is not OK, the command does not proceed.
+//! * C ➡️ S: file data, [FileTrailer].
 //! * S ➡️ C: [Response] indicating transfer status
+//!
+//! _N.B. In versions 0.3.0 through to 0.3.3, the server's [Response] was sent between [PutArgs] and [FileHeader].
+//!  This is a minor protocol refinement that improves reliability and testability without affecting compatibility._
+//!
 //!
 //! After transfer, close the stream.
 //!
