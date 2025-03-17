@@ -194,6 +194,8 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
                 error!("Could not write to destination: {str}");
                 let st = if str.contains("Permission denied") {
                     Status::IncorrectPermissions
+                } else if str.contains("Is a directory") {
+                    Status::ItIsADirectory
                 } else {
                     Status::IoError
                 };
@@ -208,12 +210,11 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         self.stream.send.flush().await?;
 
         trace!("receiving file payload");
-        if limited_copy(&mut self.stream.recv, header.size.0, &mut file)
-            .await
-            .inspect_err(|e| error!("Failed to write to destination: {e}"))
-            .is_err()
-        {
-            return Ok(());
+        let result = limited_copy(&mut self.stream.recv, header.size.0, &mut file).await;
+        if let Err(e) = result {
+            error!("Failed to write to destination: {e}");
+            return send_response(&mut self.stream.send, Status::IoError, Some(&e.to_string()))
+                .await;
         }
 
         trace!("receiving trailer");
