@@ -74,10 +74,6 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         outbound.flush().await?;
 
         // TODO protocol timeout?
-        trace!("await response");
-        let response = Response::from_reader_async_framed(&mut self.stream.recv).await?;
-        let Response::V1(response) = response;
-        check_response(response, || format!("PUT ({src_filename})"))?;
 
         // The filename in the protocol is the file part only of src_filename
         trace!("send header");
@@ -85,6 +81,11 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         FileHeader::new_v1(payload_len, protocol_filename)
             .to_writer_async_framed(&mut outbound)
             .await?;
+
+        trace!("await response");
+        let response = Response::from_reader_async_framed(&mut self.stream.recv).await?;
+        let Response::V1(response) = response;
+        check_response(response, || format!("PUT ({src_filename})"))?;
 
         // A server-side abort might happen part-way through a large transfer.
         trace!("send payload");
@@ -179,12 +180,6 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             }
         };
 
-        // So far as we can tell, we believe we can fulfil this request.
-        // We might still fail with a permissions error, but we can't really check ahead
-        // of time (that could give rise to a TOCTTOU bug).
-        trace!("responding OK");
-        send_response(&mut self.stream.send, Status::Ok, None).await?;
-        self.stream.send.flush().await?;
         let header = FileHeader::from_reader_async_framed(&mut self.stream.recv).await?;
         let FileHeader::V1(header) = header;
 
@@ -195,10 +190,22 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         let mut file = match tokio::fs::File::create(path).await {
             Ok(f) => f,
             Err(e) => {
-                error!("Could not write to destination: {e}");
-                return Ok(());
+                let str = e.to_string();
+                error!("Could not write to destination: {str}");
+                let st = if str.contains("Permission denied") {
+                    Status::IncorrectPermissions
+                } else {
+                    Status::IoError
+                };
+                return send_response(&mut self.stream.send, st, Some(&e.to_string())).await;
             }
         };
+
+        // So far as we can tell, we believe we will be able to fulfil this request.
+        // We might still fail with an I/O error.
+        trace!("responding OK");
+        send_response(&mut self.stream.send, Status::Ok, None).await?;
+        self.stream.send.flush().await?;
 
         trace!("receiving file payload");
         if limited_copy(&mut self.stream.recv, header.size.0, &mut file)
