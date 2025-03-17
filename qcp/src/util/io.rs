@@ -65,12 +65,3 @@ pub async fn create_truncate_file(
     file.set_len(header.size.0).await?;
     Ok(file)
 }
-
-/// Can we write to a given path?
-pub async fn dest_is_writeable(dest: &PathBuf) -> bool {
-    let meta = tokio::fs::metadata(dest).await;
-    match meta {
-        Ok(m) => !m.permissions().readonly(),
-        Err(_) => false,
-    }
-}

@@ -12,7 +12,6 @@ use super::SessionCommandImpl;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::{Command, FileHeader, FileTrailer, PutArgs, Response, Status};
 use crate::session::common::{check_response, progress_bar_for, send_response};
-use crate::util::io::dest_is_writeable;
 
 pub(crate) struct Put<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
@@ -159,17 +158,9 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             // Copy to the current working directory
             path.push(".");
         }
+
         let append_filename = if path.is_dir() || path.is_file() {
-            // Destination exists
-            if !dest_is_writeable(&path).await {
-                return send_response(
-                    &mut self.stream.send,
-                    Status::IncorrectPermissions,
-                    Some("cannot write to destination"),
-                )
-                .await;
-            }
-            // append filename only if it is a directory
+            // Destination exists: append filename only if it is a directory
             path.is_dir()
         } else {
             // Is it a nonexistent file in a valid directory?
@@ -180,16 +171,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
                 path_test.push(".");
             }
             if path_test.is_dir() {
-                if !dest_is_writeable(&path_test).await {
-                    return send_response(
-                        &mut self.stream.send,
-                        Status::IncorrectPermissions,
-                        Some("cannot write to destination"),
-                    )
-                    .await;
-                }
-                // Yes, we can write there; destination path is fully specified.
-                false
+                false // destination path is fully specified, do not append filename
             } else {
                 // No parent directory
                 return send_response(&mut self.stream.send, Status::DirectoryDoesNotExist, None)
@@ -198,6 +180,8 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         };
 
         // So far as we can tell, we believe we can fulfil this request.
+        // We might still fail with a permissions error, but we can't really check ahead
+        // of time (that could give rise to a TOCTTOU bug).
         trace!("responding OK");
         send_response(&mut self.stream.send, Status::Ok, None).await?;
         self.stream.send.flush().await?;
