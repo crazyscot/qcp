@@ -35,7 +35,11 @@
 //! [quic]: https://quicwg.github.io/
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 
-use std::{fmt::Display, net::IpAddr, str::FromStr};
+use std::{
+    fmt::Display,
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
 
 use anyhow::anyhow;
 use figment::{
@@ -130,6 +134,15 @@ impl From<IpAddr> for ConnectionType {
         match value {
             IpAddr::V4(_) => ConnectionType::Ipv4,
             IpAddr::V6(_) => ConnectionType::Ipv6,
+        }
+    }
+}
+
+impl From<SocketAddr> for ConnectionType {
+    fn from(value: SocketAddr) -> Self {
+        match value {
+            SocketAddr::V4(_) => ConnectionType::Ipv4,
+            SocketAddr::V6(_) => ConnectionType::Ipv6,
         }
     }
 }

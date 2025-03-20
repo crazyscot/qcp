@@ -3,9 +3,6 @@
 mod options;
 pub use options::Parameters;
 
-pub(crate) mod control;
-pub use control::Channel;
-
 mod job;
 pub use job::CopyJobSpec;
 pub use job::FileSpec;
