@@ -82,18 +82,6 @@ pub fn bind_unspecified_for(peer: &SocketAddr) -> anyhow::Result<std::net::UdpSo
     Ok(UdpSocket::bind(addr)?)
 }
 
-/// Creates and binds a UDP socket from a restricted range of local ports, using the address family necessary to reach the given peer address
-pub fn bind_range_for_peer(
-    peer: &SocketAddr,
-    range: PortRange,
-) -> anyhow::Result<std::net::UdpSocket> {
-    let addr: IpAddr = match peer {
-        SocketAddr::V4(_) => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-        SocketAddr::V6(_) => IpAddr::V6(Ipv6Addr::UNSPECIFIED),
-    };
-    bind_range_for_address(addr, range)
-}
-
 /// Creates and binds a UDP socket from a restricted range of local ports, for a given local address
 pub fn bind_range_for_address(
     addr: IpAddr,
@@ -127,16 +115,18 @@ pub fn bind_range_for_family(
 #[cfg(test)]
 mod test {
     use crate::util::tracing::setup_tracing_for_tests;
+    use rusty_fork::rusty_fork_test;
     use std::net::UdpSocket;
 
     // To see how this behaves with privileges, you might:
     //    sudo -E cargo test -- util::socket::test::set_socket_bufsize
     // The program executable name reported by info!() will not be very useful, but you could probably have guessed that :-)
-    #[test]
-    fn set_socket_bufsize() -> anyhow::Result<()> {
-        setup_tracing_for_tests();
-        let mut sock = UdpSocket::bind("0.0.0.0:0")?;
-        let _ = super::set_udp_buffer_sizes(&mut sock, Some(1_048_576), Some(10_485_760))?;
-        Ok(())
+    rusty_fork_test! {
+        #[test]
+        fn set_socket_bufsize() {
+            setup_tracing_for_tests(); // this modifies global state, so needs to be run in a fork
+            let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let _ = super::set_udp_buffer_sizes(&mut sock, Some(1_048_576), Some(10_485_760)).unwrap();
+        }
     }
 }

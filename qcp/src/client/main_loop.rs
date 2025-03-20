@@ -2,9 +2,9 @@
 // (c) 2024 Ross Younger
 
 use crate::{
-    client::{control::Channel, progress::spinner_style},
+    client::progress::spinner_style,
     config::{Configuration, Configuration_Optional, Manager},
-    transport::ThroughputMode,
+    control::{ClientSsh, ControlChannel, create_endpoint},
     util::{
         self, Credentials, TimeFormat, lookup_host_by_family,
         time::{Stopwatch, StopwatchChain},
@@ -14,14 +14,10 @@ use crate::{
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
 use indicatif::{MultiProgress, ProgressBar};
-use quinn::crypto::rustls::QuicClientConfig;
-use quinn::{Connection, EndpointConfig, rustls};
-use rustls::RootCertStore;
-use rustls_pki_types::CertificateDer;
+use quinn::Connection;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
-use std::sync::Arc;
 use tokio::{self, time::Duration, time::timeout};
-use tracing::{Instrument as _, Level, debug, error, info, span, trace, trace_span, warn};
+use tracing::{Instrument as _, debug, error, info, trace, trace_span, warn};
 
 use super::Parameters as ClientParameters;
 use super::job::CopyJobSpec;
@@ -101,16 +97,19 @@ pub async fn client_main(
     spinner.set_message("Opening control channel");
     spinner.disable_steady_tick(); // otherwise the spinner messes with ssh passphrase prompting; as we're using tokio spinner.suspend() isn't helpful
     timers.next("control channel");
-    let mut control = Channel::transact(
-        &credentials,
-        remote_ssh_hostname,
-        remote_address.into(),
+    let mut channel = ClientSsh::new(
         &display,
         manager,
         &parameters,
-    )
-    .await?;
-    let port = control.message.port;
+        remote_ssh_hostname,
+        remote_address.into(),
+    )?;
+    let mut control = ControlChannel::new(channel.stream_pair()?);
+    let server_message = control
+        .run_client(&credentials, remote_address.into(), manager, &parameters)
+        .await?;
+
+    let port = server_message.port;
     let config = manager
         .get::<Configuration>()
         .context("assembling final client configuration from server message")?;
@@ -126,7 +125,7 @@ pub async fn client_main(
     }
 
     // Data channel ------------------
-    let server_address_port = match remote_address {
+    let server_address_port: SocketAddr = match remote_address {
         std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, port).into(),
         std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, port, 0, 0).into(),
     };
@@ -134,19 +133,20 @@ pub async fn client_main(
     spinner.enable_steady_tick(Duration::from_millis(150));
     spinner.set_message("Establishing data channel");
     timers.next("data channel setup");
-    let endpoint = create_endpoint(
+    let (endpoint, _) = create_endpoint(
         &credentials,
-        control.message.cert.clone().into(),
-        &server_address_port,
+        &server_message.cert,
+        server_address_port.into(),
         &config,
         job_spec.throughput_mode(),
+        false,
     )?;
 
     debug!("Opening QUIC connection to {server_address_port:?}");
     debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
     let connection = timeout(
         config.timeout_duration(),
-        endpoint.connect(server_address_port, &control.message.name)?,
+        endpoint.connect(server_address_port, &server_message.name)?,
     )
     .await
     .context("UDP connection to QUIC endpoint timed out")??;
@@ -174,7 +174,7 @@ pub async fn client_main(
     endpoint.close(1u8.into(), "finished".as_bytes());
     let remote_stats = control.read_closedown_report().await?;
 
-    let control_fut = control.close();
+    let control_fut = channel.close();
     let _ = timeout(config.timeout_duration(), endpoint.wait_idle())
         .await
         .inspect_err(|_| warn!("QUIC shutdown timed out")); // otherwise ignore errors
@@ -275,53 +275,4 @@ async fn manage_request(
     } else {
         Err(total_bytes)
     }
-}
-
-/// Creates the client endpoint:
-/// `credentials` are generated locally.
-/// `server_cert` comes from the control channel server message.
-/// `destination` is the server's address (port from the control channel server message).
-pub(crate) fn create_endpoint(
-    credentials: &Credentials,
-    server_cert: CertificateDer<'_>,
-    server_addr: &SocketAddr,
-    options: &Configuration,
-    mode: ThroughputMode,
-) -> Result<quinn::Endpoint> {
-    let _ = span!(Level::TRACE, "create_endpoint").entered();
-    let mut root_store = RootCertStore::empty();
-    root_store.add(server_cert)?;
-
-    let tls_config = Arc::new(
-        rustls::ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_client_auth_cert(credentials.cert_chain(), credentials.keypair.clone_key())?,
-    );
-
-    let mut config = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
-    let _ = config.transport_config(crate::transport::create_config(options, mode)?);
-
-    trace!("bind & configure socket, port={:?}", options.port);
-    let mut socket = util::socket::bind_range_for_peer(server_addr, options.port)?;
-    let wanted_send = match mode {
-        ThroughputMode::Both | ThroughputMode::Tx => Some(Configuration::send_buffer().try_into()?),
-        ThroughputMode::Rx => None,
-    };
-    let wanted_recv = match mode {
-        ThroughputMode::Both | ThroughputMode::Rx => Some(Configuration::recv_buffer().try_into()?),
-        ThroughputMode::Tx => None,
-    };
-
-    if let Some(msg) = util::socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)? {
-        warn!("{msg}");
-    }
-
-    trace!("create endpoint");
-    // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
-    let runtime =
-        quinn::default_runtime().ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
-    let mut endpoint = quinn::Endpoint::new(EndpointConfig::default(), None, socket, runtime)?;
-    endpoint.set_default_client_config(config);
-
-    Ok(endpoint)
 }
