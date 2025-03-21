@@ -14,7 +14,7 @@ use tracing::{Instrument, debug, error, info, trace, trace_span, warn};
 
 /// Server event loop
 #[allow(clippy::module_name_repetitions)]
-pub async fn server_main() -> anyhow::Result<()> {
+pub(crate) async fn server_main() -> anyhow::Result<()> {
     let mut control = crate::control::stdio_channel();
     let remote_ip = ssh_remote_address();
     let mut manager = Manager::standard(remote_ip.as_deref());

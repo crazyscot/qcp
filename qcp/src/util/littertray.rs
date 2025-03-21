@@ -16,7 +16,7 @@ use tempfile::TempDir;
 ///
 /// This is a derivative work of `figment::Jail` but simpler (no environment variables) and supports async closures.
 #[derive(Debug)]
-pub struct LitterTray {
+pub(crate) struct LitterTray {
     canonical_dir: PathBuf,
     _dir: TempDir,
     saved_cwd: PathBuf,
@@ -29,7 +29,8 @@ static G_LOCK: Mutex<()> = Mutex::new(());
 impl LitterTray {
     /// Runs a closure in a new litter tray, passing the tray to the closure.
     /// The closure must return a Result<()>.
-    pub fn try_with<F: FnOnce(&mut LitterTray) -> Result<()>>(f: F) -> Result<()> {
+    #[allow(dead_code)]
+    pub(crate) fn try_with<F: FnOnce(&mut LitterTray) -> Result<()>>(f: F) -> Result<()> {
         let _guard = G_LOCK.lock();
         let dir = TempDir::new()?;
         let mut tray = LitterTray {
@@ -43,7 +44,9 @@ impl LitterTray {
 
     /// Runs an async closure in a new litter tray, passing the tray to the closure.
     /// The closure must return a Result<()>.
-    pub async fn try_with_async<F: AsyncFnOnce(&mut LitterTray) -> Result<()>>(f: F) -> Result<()> {
+    pub(crate) async fn try_with_async<F: AsyncFnOnce(&mut LitterTray) -> Result<()>>(
+        f: F,
+    ) -> Result<()> {
         let _guard = G_LOCK.lock();
         let dir = TempDir::new()?;
         let mut tray = LitterTray {
@@ -58,7 +61,7 @@ impl LitterTray {
     /// Returns the temporary directory that is this litter tray.
     /// This directory will be removed on drop.
     #[must_use]
-    pub fn directory(&self) -> &Path {
+    pub(crate) fn directory(&self) -> &Path {
         &self.canonical_dir
     }
 
@@ -75,7 +78,7 @@ impl LitterTray {
     }
 
     /// Creates a binary file within the tray
-    pub fn create_binary<P: AsRef<Path>>(&self, path: P, bytes: &[u8]) -> Result<File> {
+    pub(crate) fn create_binary<P: AsRef<Path>>(&self, path: P, bytes: &[u8]) -> Result<File> {
         let path = self.safe_path_within_tray(path.as_ref())?;
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
@@ -84,12 +87,12 @@ impl LitterTray {
     }
 
     /// Creates a text file within the tray
-    pub fn create_text<P: AsRef<Path>>(&self, path: P, contents: &str) -> Result<File> {
+    pub(crate) fn create_text<P: AsRef<Path>>(&self, path: P, contents: &str) -> Result<File> {
         self.create_binary(path, contents.as_bytes())
     }
 
     /// Creates a directory within the tray
-    pub fn make_dir<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
+    pub(crate) fn make_dir<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
         let path = self.safe_path_within_tray(path.as_ref())?;
         fs::create_dir_all(&path)?;
         Ok(path)

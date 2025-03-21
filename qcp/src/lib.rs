@@ -77,14 +77,18 @@
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
 pub mod cli;
-pub use cli::{cli, styles}; // DEPRECATED; will be removed in 0.4.0 (use qcp::cli directly)
+pub(crate) mod client;
+pub(crate) use client::client_main;
+pub use client::{CopyJobSpec, FileSpec, Parameters};
 
-pub mod client;
 pub mod config;
-pub mod control;
+pub use config::structure::Configuration;
+
+pub(crate) mod control;
 pub mod protocol;
-pub mod server;
-pub mod session;
+mod server;
+pub(crate) use server::server_main;
+pub(crate) mod session;
 pub mod transport;
 pub mod util;
 

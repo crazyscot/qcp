@@ -51,7 +51,7 @@ impl SocketOptions for UdpSocket {
     }
 }
 
-/// Concretions for Unix platforms
+/// Unix platform implementation
 #[derive(Debug, Clone, Copy)]
 pub struct Platform {}
 

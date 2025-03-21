@@ -1,27 +1,30 @@
 //! General utility code that didn't fit anywhere else
+//!
+//! Note that most of this module is not exported.
 // (c) 2024 Ross Younger
 
 mod address_family;
 pub use address_family::AddressFamily;
 
 mod dns;
-pub use dns::lookup_host_by_family;
+pub(crate) use dns::lookup_host_by_family;
 
 mod cert;
-pub use cert::Credentials;
+pub(crate) use cert::Credentials;
 
-pub mod io;
-pub mod socket;
-pub mod stats;
-pub mod time;
+pub(crate) mod io;
+pub(crate) mod socket;
+pub(crate) mod stats;
+pub(crate) mod time;
 
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
-pub mod littertray;
+pub(crate) mod littertray;
 
 mod tracing;
+pub use tracing::is_initialized as tracing_is_initialised;
 pub(crate) use tracing::trace_level;
-pub use tracing::{TimeFormat, is_initialized as tracing_is_initialised, setup as setup_tracing};
+pub(crate) use tracing::{TimeFormat, setup as setup_tracing};
 
 mod port_range;
 pub use port_range::PortRange;

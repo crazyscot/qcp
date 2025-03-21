@@ -3,14 +3,14 @@
 
 use crate::{os::SocketOptions as _, protocol::control::ConnectionType};
 use human_repr::HumanCount as _;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use tracing::{debug, info, warn};
 
 use super::PortRange;
 
 /// Set the buffer size options on a UDP socket.
 /// May return a warning message, if we weren't able to do so.
-pub fn set_udp_buffer_sizes(
+pub(crate) fn set_udp_buffer_sizes(
     socket: &mut UdpSocket,
     wanted_send: Option<usize>,
     wanted_recv: Option<usize>,
@@ -73,17 +73,8 @@ pub fn set_udp_buffer_sizes(
     Ok(message)
 }
 
-/// Creates and binds a UDP socket for the address family necessary to reach the given peer address
-pub fn bind_unspecified_for(peer: &SocketAddr) -> anyhow::Result<std::net::UdpSocket> {
-    let addr: SocketAddr = match peer {
-        SocketAddr::V4(_) => SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into(),
-        SocketAddr::V6(_) => SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0).into(),
-    };
-    Ok(UdpSocket::bind(addr)?)
-}
-
 /// Creates and binds a UDP socket from a restricted range of local ports, for a given local address
-pub fn bind_range_for_address(
+pub(crate) fn bind_range_for_address(
     addr: IpAddr,
     range: PortRange,
 ) -> anyhow::Result<std::net::UdpSocket> {
@@ -101,7 +92,7 @@ pub fn bind_range_for_address(
 }
 
 /// Creates and binds a UDP socket from a restricted range of local ports, for the unspecified address of the given address family
-pub fn bind_range_for_family(
+pub(crate) fn bind_range_for_family(
     family: ConnectionType,
     range: PortRange,
 ) -> anyhow::Result<std::net::UdpSocket> {

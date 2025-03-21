@@ -1,7 +1,7 @@
 //! qcp utility - main entrypoint
 // (c) 2024 Ross Younger
 
-use qcp::styles::{ERROR, RESET};
+use qcp::cli::styles::{ERROR, RESET};
 use std::process::ExitCode;
 
 use mimalloc::MiMalloc;
@@ -9,7 +9,7 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() -> ExitCode {
-    if qcp::cli().unwrap_or_else(|e| {
+    if qcp::cli::cli().unwrap_or_else(|e| {
         if qcp::util::tracing_is_initialised() {
             tracing::error!("{e}");
         } else {

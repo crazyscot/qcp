@@ -2,7 +2,7 @@
 // (c) 2024 Ross Younger
 
 /// Maximum update frequency we will use for the progress display
-pub const MAX_UPDATE_FPS: u8 = 20;
+pub(crate) const MAX_UPDATE_FPS: u8 = 20;
 
 use console::Term;
 use indicatif::ProgressStyle;

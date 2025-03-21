@@ -21,7 +21,7 @@ use crate::{
 
 /// A child process (usually ssh) that implements the connection to the remote
 #[derive(Debug)]
-pub struct Ssh {
+pub(crate) struct Ssh {
     process: tokio::process::Child,
 }
 

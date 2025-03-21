@@ -7,7 +7,7 @@ use std::{fs::Metadata, io::ErrorKind, path::Path, path::PathBuf, str::FromStr a
 
 /// Opens a local file for reading, returning a filehandle and metadata.
 /// Error type is a tuple ready to send as a Status response.
-pub async fn open_file(
+pub(crate) async fn open_file(
     filename: &str,
 ) -> anyhow::Result<(tokio::fs::File, Metadata), (Status, Option<String>, tokio::io::Error)> {
     let path = Path::new(&filename);
@@ -41,7 +41,7 @@ pub async fn open_file(
 
 /// Opens a local file for writing, from an incoming `FileHeader`
 #[allow(clippy::missing_panics_doc)]
-pub async fn create_truncate_file(
+pub(crate) async fn create_truncate_file(
     path: &str,
     header: &crate::protocol::session::FileHeaderV1,
 ) -> anyhow::Result<tokio::fs::File> {
