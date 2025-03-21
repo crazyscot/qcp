@@ -264,7 +264,14 @@ impl Write for ProgressWriter {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 pub(crate) fn setup_tracing_for_tests() {
+    if is_initialized() {
+        tracing::warn!("tracing::setup called a second time (ignoring)");
+        return;
+    }
+    TRACING_INITIALIZED.store(true, Ordering::Relaxed);
+
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_max_level(tracing::Level::DEBUG)
