@@ -44,6 +44,7 @@ impl Credentials {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     #[test]
     fn generate_works() {

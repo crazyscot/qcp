@@ -83,6 +83,7 @@ where
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use std::io::{self, Cursor};
     use std::pin::Pin;

@@ -113,6 +113,7 @@ pub fn bind_range_for_family(
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use crate::util::tracing::setup_tracing_for_tests;
     use rusty_fork::rusty_fork_test;

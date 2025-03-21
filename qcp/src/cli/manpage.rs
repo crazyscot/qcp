@@ -8,6 +8,7 @@
 /// - tests already do depend on qcp, so it's pretty cheap in terms of build time to do this here
 /// - either way, the mangen/roff machinery does not bloat the main binary
 /// - buildability of the man page is in fact a meaningful test
+#[cfg_attr(coverage_nightly, coverage(off))]
 #[cfg(test)]
 mod test {
 

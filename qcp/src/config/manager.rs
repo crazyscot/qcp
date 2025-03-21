@@ -89,6 +89,7 @@ impl Manager {
 
     /// Accessor (only used in tests at the moment)
     #[cfg(test)]
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn host(&self) -> Option<String> {
         self.host.clone()
     }
@@ -324,6 +325,7 @@ impl Display for DisplayAdapter<'_> {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use crate::config::{Configuration, Configuration_Optional, Manager};
     use crate::util::{PortRange, make_test_tempfile};

@@ -7,6 +7,7 @@ mod get;
 mod put;
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test;
 
 pub(crate) use {get::Get, put::Put};
@@ -38,6 +39,7 @@ pub(crate) trait SessionCommandImpl: Send {
     /// If the command has arguments, the object constructor is expected to set them up.
     async fn handle(&mut self) -> Result<()>;
 
+    #[cfg_attr(coverage_nightly, coverage(off))]
     #[cfg(test)]
     /// Syntactic sugar for unit tests.
     /// This is a wrapper to send() with some fixed arguments common to testing.
