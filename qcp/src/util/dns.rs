@@ -12,7 +12,7 @@ use super::AddressFamily;
 /// Results can be restricted to a given address family.
 /// Only the first matching result is returned.
 /// If there are no matching records of the required type, returns an error.
-pub fn lookup_host_by_family(host: &str, desired: AddressFamily) -> anyhow::Result<IpAddr> {
+pub(crate) fn lookup_host_by_family(host: &str, desired: AddressFamily) -> anyhow::Result<IpAddr> {
     let candidates = dns_lookup::lookup_host(host)
         .with_context(|| format!("host name lookup for {host} failed"))?;
     let mut it = candidates.iter();

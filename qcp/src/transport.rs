@@ -1,4 +1,4 @@
-//! QUIC transport configuration
+//! Configures the QUIC transport layer from user settings
 // (c) 2024 Ross Younger
 
 use std::{sync::Arc, time::Duration};
@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Keepalive interval for the QUIC connection
-pub const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
+pub(crate) const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
 
 /// Specifies whether to configure to maximise transmission throughput, receive throughput, or both.
 /// Specifying `Both` for a one-way data transfer will work, but wastes kernel memory.

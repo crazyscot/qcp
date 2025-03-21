@@ -334,7 +334,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
 
         // to provoke a config error here, set RUST_LOG=.
         let level = Self::server_trace_level(remote_greeting.debug);
-        crate::util::setup_tracing(level, None, &None, time_format)?;
+        crate::util::setup_tracing(level, None, None, time_format)?;
         // Now we can use the tracing system!
 
         let _span = tracing::error_span!("Server").entered();

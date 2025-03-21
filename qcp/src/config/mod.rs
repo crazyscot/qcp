@@ -150,8 +150,8 @@
 //!    * See also the [performance notes](crate::doc::performance) and [troubleshooting](crate::doc::troubleshooting).
 //!
 
-mod structure;
-pub use structure::Configuration;
+pub(crate) mod structure;
+pub(crate) use structure::Configuration;
 pub(crate) use structure::Configuration_Optional;
 
 mod manager;

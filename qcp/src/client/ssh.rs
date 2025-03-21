@@ -91,7 +91,7 @@ impl ConfigFile {
 /// * Match patterns
 /// * CanonicalizeHostname and friends
 #[must_use]
-pub fn resolve_host_alias(host: &str, config_files: &[String]) -> Option<String> {
+pub(crate) fn resolve_host_alias(host: &str, config_files: &[String]) -> Option<String> {
     let files = if config_files.is_empty() {
         let mut v = Vec::new();
         if let Ok(f) = Platform::user_ssh_config() {

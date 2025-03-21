@@ -30,12 +30,12 @@ pub trait SocketOptions {
     fn force_recvbuf(&mut self, size: usize) -> Result<()>;
 }
 
-/// General platform abstraction trait.
-/// The active implementation should be pulled into this crate
-/// Implementations should be called `Platform`, e.g. [unix::Platform].
+/// General platform abstraction trait
+///
+/// The active implementation (as configured by cargo) is re-exported by this crate as `Platform`.
 ///
 /// Usage:
-/// ```
+/// ```text
 ///    use qcp::os::Platform;
 ///    use qcp::os::AbstractPlatform as _;
 ///    println!("{}", Platform::system_ssh_config());
@@ -78,10 +78,11 @@ pub trait AbstractPlatform {
     fn help_buffers_mode(rmem: u64, wmem: u64);
 }
 
-#[cfg(any(unix, doc))]
 mod unix;
 
-#[cfg(any(unix, doc))]
-pub use unix::*;
+pub use unix::Platform as UnixPlatform;
+
+#[cfg(unix)]
+pub(crate) use UnixPlatform as Platform;
 
 static_assertions::assert_cfg!(unix, "This OS is not yet supported");

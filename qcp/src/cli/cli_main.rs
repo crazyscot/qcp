@@ -3,11 +3,10 @@
 
 use super::args::CliArgs;
 use crate::{
-    client::{MAX_UPDATE_FPS, client_main},
+    cli::styles::{ERROR, RESET},
+    client::MAX_UPDATE_FPS,
     config::{Configuration, Manager},
     os::{self, AbstractPlatform as _},
-    server::server_main,
-    styles::{ERROR, RESET},
 };
 
 use anstream::println;
@@ -72,7 +71,7 @@ pub async fn cli() -> anyhow::Result<bool> {
             );
         }
         MainMode::Server => {
-            return Ok(server_main().await.map_or_else(
+            return Ok(crate::server_main().await.map_or_else(
                 |e| {
                     eprintln!("{ERROR}ERROR{RESET} Server: {e:?}");
                     false
@@ -82,7 +81,7 @@ pub async fn cli() -> anyhow::Result<bool> {
         }
         MainMode::Client(progress) => {
             // this mode may return false
-            return client_main(
+            return crate::client_main(
                 &mut config_manager.validate_configuration()?,
                 progress,
                 args.client_params,

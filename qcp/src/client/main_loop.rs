@@ -33,7 +33,7 @@ fn setup_tracing(
     util::setup_tracing(
         util::trace_level(parameters),
         Some(display),
-        &parameters.log_file,
+        parameters.log_file.as_ref(),
         time_format,
     ) // to provoke error: set RUST_LOG=.
 }
@@ -46,7 +46,7 @@ fn setup_tracing(
 // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
 #[allow(clippy::module_name_repetitions)]
 #[allow(clippy::too_many_lines)]
-pub async fn client_main(
+pub(crate) async fn client_main(
     manager: &mut Manager,
     display: MultiProgress,
     parameters: ClientParameters,

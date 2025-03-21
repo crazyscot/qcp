@@ -163,10 +163,10 @@ where
 /// **CAUTION:** If this function fails, tracing won't be set up; callers must take extra care to report the error.
 ///
 /// **NOTE:** You can only run this once per process. A global bool prevents re-running.
-pub fn setup(
+pub(crate) fn setup(
     trace_level: &str,
     display: Option<&MultiProgress>,
-    filename: &Option<String>,
+    filename: Option<&String>,
     time_format: TimeFormat,
 ) -> anyhow::Result<()> {
     if is_initialized() {

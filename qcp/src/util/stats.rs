@@ -11,7 +11,7 @@ use crate::{config::Configuration, protocol::control::ClosedownReportV1};
 
 /// Human friendly output helper
 #[derive(Debug, Clone, Copy)]
-pub struct DataRate {
+pub(crate) struct DataRate {
     /// Bytes per second; if None, we were unable to compute a rate.
     rate: Option<f64>,
 }
@@ -19,7 +19,7 @@ pub struct DataRate {
 impl DataRate {
     /// Standard constructor
     #[must_use]
-    pub fn new(bytes: u64, time: Option<Duration>) -> Self {
+    pub(crate) fn new(bytes: u64, time: Option<Duration>) -> Self {
         match time {
             None => Self { rate: None },
             Some(time) if time.is_zero() => Self { rate: None }, // divide by zero is not meaningful
@@ -31,13 +31,8 @@ impl DataRate {
     }
     /// Accessor
     #[must_use]
-    pub fn byte_rate(&self) -> Option<f64> {
+    pub(crate) fn byte_rate(&self) -> Option<f64> {
         self.rate
-    }
-    /// Converting accessor
-    #[must_use]
-    pub fn bit_rate(&self) -> Option<f64> {
-        self.rate.map(|r| r * 8.)
     }
 }
 
@@ -51,7 +46,7 @@ impl Display for DataRate {
 }
 
 /// Output the end-of-game statistics
-pub fn process_statistics(
+pub(crate) fn process_statistics(
     stats: &ConnectionStats,
     payload_bytes: u64,
     transport_time: Option<Duration>,
