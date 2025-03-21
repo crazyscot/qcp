@@ -16,6 +16,7 @@ pub mod stats;
 pub mod time;
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 pub mod littertray;
 
 mod tracing;
@@ -29,9 +30,11 @@ mod optionalify;
 pub use optionalify::{derive_deftly_template_Optionalify, insert_if_some};
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 pub(crate) mod test_protocol;
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 pub(crate) fn make_test_tempfile(
     data: &str,
     filename: &str,

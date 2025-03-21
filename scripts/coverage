@@ -7,7 +7,15 @@
 
 COVERAGE_DIR=target/coverage
 
+if [ "$1" != "--stable" ]; then
+    NIGHTLY="+nightly";
+    echo "NOTE: Using nightly compiler. Run with --stable to use your default set in rustup."
+else
+    :
+fi
+
 mkdir -p $COVERAGE_DIR
-cargo llvm-cov --all-features --workspace --exclude xtask@0.0.0 --lcov --output-path $COVERAGE_DIR/lcov.info
+# shellcheck disable=SC2086
+cargo ${NIGHTLY} llvm-cov --all-features --workspace --exclude xtask@0.0.0 --lcov --output-path $COVERAGE_DIR/lcov.info
 genhtml $COVERAGE_DIR/lcov.info -o $COVERAGE_DIR/html
 echo Coverage written to $COVERAGE_DIR/html

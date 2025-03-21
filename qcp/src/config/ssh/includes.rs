@@ -83,6 +83,7 @@ pub(super) fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use std::{fs::File, io::Write as _, path::PathBuf};
 
