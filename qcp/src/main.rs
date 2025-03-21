@@ -1,24 +1,15 @@
 //! qcp utility - main entrypoint
 // (c) 2024 Ross Younger
 
-use qcp::cli::styles::{ERROR, RESET};
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
 use std::process::ExitCode;
 
 use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn main() -> ExitCode {
-    if qcp::cli::cli().unwrap_or_else(|e| {
-        if qcp::util::tracing_is_initialised() {
-            tracing::error!("{e}");
-        } else {
-            eprintln!("{ERROR}Error:{RESET} {e}");
-        }
-        false
-    }) {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    }
+    qcp::main()
 }

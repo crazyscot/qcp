@@ -76,7 +76,8 @@
 #![doc = document_features::document_features!()]
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 
-pub mod cli;
+pub(crate) mod cli;
+pub use cli::cli as main;
 pub(crate) mod client;
 pub(crate) use client::client_main;
 pub use client::{CopyJobSpec, FileSpec, Parameters};

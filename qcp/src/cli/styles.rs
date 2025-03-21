@@ -12,14 +12,15 @@ use anstyle::Color::Ansi;
 use clap::builder::styling::Styles;
 
 /// Error message styling. This can be Displayed directly.
-pub const ERROR: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Red)));
+pub(crate) const ERROR: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Red)));
 /// Warning message styling. This can be Displayed directly.
-pub const WARNING: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Yellow)));
+pub(crate) const WARNING: anstyle::Style =
+    anstyle::Style::new().bold().fg_color(Some(Ansi(Yellow)));
 /// Informational message styling. This can be Displayed directly.
-pub const INFO: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Cyan)));
+pub(crate) const INFO: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Cyan)));
 // pub(crate) const DEBUG: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Blue)));
 /// Success message style. This can be Displayed directly.
-pub const SUCCESS: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Green)));
+pub(crate) const SUCCESS: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Green)));
 
 pub(crate) const HEADER: anstyle::Style = anstyle::Style::new()
     .underline()
@@ -38,4 +39,4 @@ pub(crate) const CLAP_STYLES: Styles = Styles::styled()
 ///
 /// This is purely for convenience; you can also call `ERROR::render_reset()` (etc.)
 ///
-pub use anstyle::Reset as RESET;
+pub(crate) use anstyle::Reset as RESET;

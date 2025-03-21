@@ -233,7 +233,7 @@ pub(crate) fn setup(
 }
 
 /// Returns whether tracing has been initialized
-pub fn is_initialized() -> bool {
+pub(crate) fn is_initialized() -> bool {
     TRACING_INITIALIZED.load(Ordering::Relaxed)
 }
 

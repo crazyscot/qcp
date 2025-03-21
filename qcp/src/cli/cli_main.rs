@@ -1,6 +1,8 @@
 //! Main CLI for qcp
 // (c) 2024 Ross Younger
 
+use std::process::ExitCode;
+
 use super::args::CliArgs;
 use crate::{
     cli::styles::{ERROR, RESET},
@@ -42,10 +44,26 @@ impl From<&CliArgs> for MainMode {
 ///
 /// Call this from `main`. It reads argv.
 /// # Return
-/// true indicates success. false indicates a failure we have logged. An Error is a failure we have not output or logged.
+/// true indicates success. false indicates a failure (we have output to stderr).
+#[must_use]
+pub fn cli() -> ExitCode {
+    match cli_inner() {
+        Err(e) => {
+            if crate::util::tracing_is_initialised() {
+                tracing::error!("{e}");
+            } else {
+                eprintln!("{ERROR}Error:{RESET} {e}");
+            }
+            ExitCode::FAILURE
+        }
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::FAILURE,
+    }
+}
+
+/// Inner CLI entrypoint
 #[tokio::main(flavor = "current_thread")]
-#[allow(clippy::missing_panics_doc)]
-pub async fn cli() -> anyhow::Result<bool> {
+async fn cli_inner() -> anyhow::Result<bool> {
     let args = CliArgs::custom_parse();
     let mode = MainMode::from(&args); // side-effect: holds progress bar, if we need one
 
@@ -59,9 +77,11 @@ pub async fn cli() -> anyhow::Result<bool> {
                 Configuration::recv_buffer(),
                 Configuration::send_buffer(),
             );
+            Ok(true)
         }
         MainMode::ShowConfigFiles => {
             println!("{:?}", Manager::config_files());
+            Ok(true)
         }
         MainMode::ShowConfig => {
             config_manager.apply_system_default();
@@ -69,25 +89,23 @@ pub async fn cli() -> anyhow::Result<bool> {
                 "Client configuration:\n{}",
                 config_manager.to_display_adapter::<Configuration>()
             );
+            Ok(true)
         }
-        MainMode::Server => {
-            return Ok(crate::server_main().await.map_or_else(
-                |e| {
-                    eprintln!("{ERROR}ERROR{RESET} Server: {e:?}");
-                    false
-                },
-                |()| true,
-            ));
-        }
+        MainMode::Server => Ok(crate::server_main().await.map_or_else(
+            |e| {
+                eprintln!("{ERROR}ERROR{RESET} Server: {e:?}");
+                false
+            },
+            |()| true,
+        )),
         MainMode::Client(progress) => {
             // this mode may return false
-            return crate::client_main(
+            crate::client_main(
                 &mut config_manager.validate_configuration()?,
                 progress,
                 args.client_params,
             )
-            .await;
+            .await
         }
-    };
-    Ok(true)
+    }
 }

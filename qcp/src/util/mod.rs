@@ -22,9 +22,9 @@ pub(crate) mod time;
 pub(crate) mod littertray;
 
 mod tracing;
-pub use tracing::is_initialized as tracing_is_initialised;
-pub(crate) use tracing::trace_level;
-pub(crate) use tracing::{TimeFormat, setup as setup_tracing};
+pub(crate) use tracing::{
+    TimeFormat, is_initialized as tracing_is_initialised, setup as setup_tracing, trace_level,
+};
 
 mod port_range;
 pub use port_range::PortRange;
