@@ -161,10 +161,14 @@ mod tests {
         // Test quiet mode
         let pb = progress_bar_for(&display, &job, 100, true).unwrap();
         assert!(pb.is_hidden());
+        assert_eq!(pb.length(), None);
+        assert_eq!(pb.message(), "");
 
         // Test visible mode
         let pb = progress_bar_for(&display, &job, 100, false).unwrap();
-        assert!(!pb.is_hidden());
+        // Checking is_hidden() isn't sound in a CI environment; if stderr isn't to a terminal, is_hidden() always returns true.
+        // This can be provoked by rusty_fork_test.
+        // But we can still assert about the length and message, which do work as expected (cf. the hidden progress bar above)
         assert_eq!(pb.length(), Some(100));
         assert_eq!(pb.message(), "test_file.txt");
     }
