@@ -161,12 +161,20 @@ where
 /// For examples, see <https://docs.rs/tracing-subscriber/0.3.18/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables>
 ///
 /// **CAUTION:** If this function fails, tracing won't be set up; callers must take extra care to report the error.
+///
+/// **NOTE:** You can only run this once per process. A global bool prevents re-running.
 pub fn setup(
     trace_level: &str,
     display: Option<&MultiProgress>,
     filename: &Option<String>,
     time_format: TimeFormat,
 ) -> anyhow::Result<()> {
+    if is_initialized() {
+        tracing::warn!("tracing::setup called a second time (ignoring)");
+        return Ok(());
+    }
+    TRACING_INITIALIZED.store(true, Ordering::Relaxed);
+
     let mut layers = Vec::new();
 
     /////// Console output, via the MultiProgress if there is one
@@ -220,7 +228,6 @@ pub fn setup(
     ////////
 
     tracing_subscriber::registry().with(layers).init();
-    TRACING_INITIALIZED.store(true, Ordering::Relaxed);
 
     Ok(())
 }
