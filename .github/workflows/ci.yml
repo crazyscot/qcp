@@ -18,11 +18,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
+            # this action is used in multiple places
         with:
           toolchain: stable
 
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+            # this action is used in multiple places
         with:
           cache-on-failure: true
           cache-all-crates: true
@@ -48,11 +50,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
+            # this action is used in multiple places
         with:
           toolchain: nightly
           components: llvm-tools-preview
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@510b3ecd7915856b6909305605afa7a8a57c1b04 # v2.48.1
+            # this action is used in multiple places
+        with:
+          tool: cargo-llvm-cov
+          checksum: true
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+            # this action is used in multiple places
         with:
           cache-on-failure: true
           cache-all-crates: true
@@ -64,7 +72,7 @@ jobs:
           name: lcov.info
           path: lcov.info
       - name: Send result to coveralls
-        uses: coverallsapp/github-action@v2.3.6
+        uses: coverallsapp/github-action@648a8eb78e6d50909eff900e4ec85cab4524a45b # v2.3.6
 
   build:
     uses: ./.github/workflows/package.yml
