@@ -30,5 +30,5 @@ jobs:
       - name: Clean up on branch delete
         uses: snnaplab/delete-branch-cache-action@265e9b3b5659990e97d080edf523c755739aa938 # v1.0.0
         with:
-          ref: ${{ github.event.ref }}
+          ref: refs/heads/${{ github.event.ref }}
         if: github.event_name == 'delete' && github.ref_type == 'branch'
