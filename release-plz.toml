@@ -5,9 +5,16 @@ git_release_draft = false
 git_release_body = """
 {{ changelog }}
 
-## Download notes
-* Debian and Ubuntu users may find the .deb packages convenient.
-* The Linux binary builds `qcp-<ARCH>-unknown-linux-musl.tar.gz` are static musl binaries which should work on all distributions.
+### Download notes
+* Debian and Ubuntu users will likely find the .deb packages convenient.
+* Other Linux distributions, use `qcp-<ARCH>-unknown-linux-musl.tar.gz`. These are static musl binaries which should work on all distributions.
+
+{% if remote.contributors %}
+### Contributors
+{% for contributor in remote.contributors %}
+* @{{ contributor.username }}
+{% endfor %}
+{% endif %}
 """
 
 [[package]]
