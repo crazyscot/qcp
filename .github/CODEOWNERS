@@ -1,0 +1,14 @@
+# Order is important; the last matching pattern takes the most
+# precedence.
+
+# Default ownership - same as repository so not useful for now
+# * @crazyscot
+
+# (Maybe one day we'll have multiple contributors with their own defined ownerships.)
+
+
+# scripts are security sensitive (release build actions)
+/scripts/ @crazyscot
+
+# .github is security critical (codeowners, action settings), so should be the last match in this file
+/.github/ @crazyscot
