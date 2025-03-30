@@ -8,8 +8,10 @@ TARGET=$2
 if [ -z "$TARGET" ]; then
   echo NOTE: no target specified, assuming native build
   TARGETOPT=
+  TARGETOPT2=
 else
-  TARGETOPT="--target ${TARGET}"
+  TARGETOPT="--target"
+  TARGETOPT2="${TARGET}"
 fi
 
 RELEASE_TYPE=$1
@@ -29,16 +31,16 @@ cargo xtask dch -p qcp
 gzip -9n < qcp/debian/changelog > qcp/debian/changelog.Debian.gz
 gzip -9n < qcp/qcp.cdx.xml > qcp/qcp.cdx.xml.gz
 
-output=$(cargo deb -p qcp --no-build --locked ${TARGETOPT} --deb-revision "${REVISION}")
-: $output
+output=$(cargo deb -p qcp --no-build --locked ${TARGETOPT} "${TARGETOPT2}" --deb-revision "${REVISION}")
+: "$output"
 
 set +x
 
 # Strip warnings; the deb is the last "word" printed
-DEB=$(echo ${output} | sed 's/.* //g')
+DEB=$(echo "${output}" | sed 's/.* //g')
 
-if [ -z "$GITHUB_ENV" ]; then
-  echo "Would write to GITHUB_ENV: BUILT_DEB_FILE=${DEB}"
+if [ -z "$GITHUB_OUTPUT" ]; then
+  echo "Would write to GITHUB_OUTPUT: deb=${DEB}"
 else
-  echo "BUILT_DEB_FILE=${DEB}" >> "$GITHUB_ENV"
+  echo "deb=${DEB}" >> "$GITHUB_OUTPUT"
 fi

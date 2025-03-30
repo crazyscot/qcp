@@ -3,12 +3,11 @@ name: Packaging
 on:
   workflow_call:
     inputs:
-      publish:
+      release:
         required: true
         type: boolean
 
 env:
-  BUILT_DEB_FILE: "invalid.deb" # updated by make-debian-package script
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   CARGO_INCREMENTAL: 0
@@ -29,6 +28,9 @@ jobs:
           rust: stable
           build_deb: true
     runs-on: ${{ matrix.host }}
+    env:
+      TARBALL_ARTIFACT: ${{ format('qcp-tarball-{0}', matrix.target) }}
+      DEB_ARTIFACT: ${{ matrix.build_deb && format('qcp-deb-{0}', matrix.target) }}
     steps:
     - uses: actions/checkout@v4
     - name: Install Rust
@@ -57,7 +59,7 @@ jobs:
             # this action is used in multiple places
       with:
         key: "${{ matrix.build }}"
-        cache-on-failure: ${{ ! inputs.publish }}
+        cache-on-failure: ${{ ! inputs.release }}
         cache-all-crates: true
         # don't bother to cache on tagged builds
         save-if: ${{ !startsWith(github.ref, 'refs/tags') }}
@@ -70,12 +72,12 @@ jobs:
         QCP_BUILD_TARGET: ${{ matrix.target }}
     - name: Generate CycloneDX SBOM
       run: cargo cyclonedx --target ${{ matrix.target }}
-    - name: Build binary package with conditional publish
+    - name: Build binary package
       uses: taiki-e/upload-rust-binary-action@e7953b6078194a4ae5f5619632e3715db6275561 # v1.24.0
-      id: build
+      id: build-tarball
       with:
         bin: qcp
-        dry_run: ${{ ! inputs.publish }} # Only publish the artifact on release
+        dry_run: true
         token: ${{ secrets.GITHUB_TOKEN }} # Needs write permission on release
         target: ${{ matrix.target }}
         include: README.md,LICENSE,CHANGELOG.md,qcp/misc/licenses.html,qcp/qcp.cdx.xml
@@ -86,27 +88,21 @@ jobs:
     - name: Upload binary package to CI result
       # always try to do this, it allows the package to be checked
       if: success() || failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        name: qcp-tarball-${{ matrix.target }}
-        path: ${{ steps.build.outputs.archive }}.tar.gz
+        name: ${{ env.TARBALL_ARTIFACT }}
+        path: ${{ steps.build-tarball.outputs.archive }}.tar.gz
     - name: Make deb package
+      id: deb
       if: ${{ matrix.build_deb }}
       env:
         # Compute the flag to pass to the script
-        RELEASE_FLAG: ${{ inputs.publish && '--release' || '--no-release' }}
+        RELEASE_FLAG: ${{ inputs.release && '--release' || '--no-release' }}
       run: scripts/make-debian-package $RELEASE_FLAG ${{ matrix.target }}
+        # this script sets the output `deb`
     - name: Upload deb artifact to CI result
       if: ${{ matrix.build_deb }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        name: qcp-deb-${{ matrix.target }}
-        # this env var is set by make-debian-package
-        path: ${{ env.BUILT_DEB_FILE }}
-
-    - name: Publish deb package (release only)
-      if: ${{ matrix.build_deb && inputs.publish }}
-      # Needs write perms on release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: gh release upload ${{ github.ref_name }} ${{ env.BUILT_DEB_FILE }}
+        name: ${{ env.DEB_ARTIFACT }}
+        path: ${{ steps.deb.outputs.deb }}

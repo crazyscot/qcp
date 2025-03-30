@@ -8,6 +8,23 @@ jobs:
   build:
     uses: ./.github/workflows/package.yml
     with:
-      publish: true
+      release: true
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
     permissions:
       contents: write # necessary to publish to releases
+    steps:
+      - name: download artifacts
+        id: download1
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        with:
+          merge-multiple: true
+      - name: enumerate (debug)
+        run: tree "${{ steps.download1.outputs.download-path }}"
+        continue-on-error: true
+      - name: upload
+        run: bash -xc 'echo gh release upload "${{ github.ref_name }}" *'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Is there really no canned action I can pass a shell glob or list of files to?!
