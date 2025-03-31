@@ -40,7 +40,7 @@ At the time of writing, qcp has only been tested with the OpenSSH server and cli
 | FreeBSD          | x86_64 | Buildable as of 31/3/25, but untested |
 | NetBSD           | | Ought to be buildable* |
 | OpenBSD          | | Ought to be buildable* |
-| Windows          | | In Development |
+| Windows          | x86_64 | Tested |
 
 *_Note that the *BSD family are not tier 1 Rust platforms, so there is no guarantee that things will work properly. As of 31/3/25 some of these platforms have cross-compilation issues; I haven't tried native compilation._
 
@@ -68,7 +68,7 @@ These can be found on the [latest release](https://github.com/crazyscot/qcp/rele
 | Nix | * | Flakes are provided: `nix shell 'github:crazyscot/qcp?dir=nix'` |
 | NixOS | * | In progress; refer to [pr#361923](https://github.com/NixOS/nixpkgs/pull/361923) |
 | OSX  | x86_64, aarch64 | Tarball (code signing TBD) |
-<!--| Windows | | Watch this space :-) |-->
+| Windows | x86_64 | Zipfile (code signing TBD) |
 
 ### Building from source
 

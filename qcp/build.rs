@@ -14,6 +14,11 @@ fn main() {
             target_os = "netbsd",
             target_os = "macos"
         )},
+        // This alias is used in the os abstraction layer
+        windows_or_dev: { any(
+            target_os = "windows",
+            debug_assertions
+        ) },
     }
 }
 

@@ -5,8 +5,10 @@
 //! 1. Command-line options
 //! 2. The user's configuration file on either side of the connection (see [negotiation](#configuration-negotiation))
 //!    * On Unix, this is `~/.qcp.conf` or `~/.config/qcp/qcp.conf`
+//!    * On Windows, this is `%AppData%\Roaming\qcp\qcp.conf`
 //! 3. The system-wide configuration file on either side of the connection
 //!    * On Unix, this is `/etc/qcp.conf`
+//!    * On Windows, this is `%ProgramData%\qcp.conf`
 //! 4. Hard-wired defaults
 //!
 //! Each option may appear in multiple places, but only the first match is used.

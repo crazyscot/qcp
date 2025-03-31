@@ -12,8 +12,31 @@ use anyhow::Result;
 use cfg_if::cfg_if;
 use rustix::net::sockopt as RustixSO;
 
-#[cfg(unix)]
-use rustix::fd::AsFd as SocketType;
+static_assertions::assert_cfg!(any(unix, windows), "This OS is not currently supported");
+
+cfg_if! {
+    if #[cfg(unix)] {
+        use rustix::fd::AsFd as SocketType;
+        mod unix;
+        pub use unix::Platform as UnixPlatform;
+        pub(crate) use UnixPlatform as Platform;
+    }
+}
+
+// Include the windows layer in unix dev builds, so it's covered by CI.
+cfg_if! {
+    if #[cfg(windows_or_dev)] {
+        mod windows;
+        pub use windows::Platform as WindowsPlatform;
+    }
+}
+cfg_if! {
+    if #[cfg(windows)] {
+        use rustix::fd::AsSocket as SocketType;
+        pub(crate) use WindowsPlatform as Platform;
+
+    }
+}
 
 /// Platform-specific: Modify values returned from getsockopt(SndBuf | RcvBuf).
 const fn buffer_size_fix(s: usize) -> usize {
@@ -22,9 +45,18 @@ const fn buffer_size_fix(s: usize) -> usize {
 
 /// Platform initialisation hook.
 /// This must be called at least once before using platform features.
+/// # Panics
+/// On Windows, if wsa_startup() fails.
 pub fn initialise_platform() -> Result<()> {
     static ONCE: Once = Once::new();
-    ONCE.call_once(|| {});
+    ONCE.call_once(|| {
+        cfg_if! {
+            if #[cfg(windows)] {
+                let _ = rustix::net::wsa_startup().unwrap();
+                // We don't provide a hook calling wsa_cleanup; there's no point as process is exiting anyway.
+            }
+        }
+    });
     Ok(())
 }
 
@@ -37,7 +69,12 @@ mod private {
 ///
 /// **This is a sealed trait** : it only works for `UdpSocket` and
 /// ensures the platform initialisation hook is called.
-pub trait SocketOptions: private::SealedSocket {
+pub trait SocketOptions: private::SealedSocket
+where
+    Self: Sized,
+{
+    // Sized is needed by the Windows AsSocket polyfill
+
     /// Wrapper for `getsockopt SO_SNDBUF`.
     ///
     /// This function returns the actual socket buffer size, which works around
@@ -169,12 +206,3 @@ pub trait AbstractPlatform {
     /// given.
     fn help_buffers_mode(rmem: u64, wmem: u64);
 }
-
-mod unix;
-
-pub use unix::Platform as UnixPlatform;
-
-#[cfg(unix)]
-pub(crate) use UnixPlatform as Platform;
-
-static_assertions::assert_cfg!(unix, "This OS is not yet supported");
