@@ -25,10 +25,25 @@ For a full list of changes, see the [changelog].
 
 #### Platform support status
 
-- Well tested: Debian, NixOS, and Ubuntu on x86_64 (amd64), using OpenSSH
-- Tested: Ubuntu on WSL on x86_64; Debian on aarch64 (Raspbian)
-- Untested: OSX/BSD family
-- Not currently supported: Windows
+At the time of writing, qcp has only been tested with the OpenSSH server and client.
+
+| Platform         | CPU architecture | Status |
+| --------         | ------ | ----- |
+| Debian, Ubuntu   | x86_64, aarch64 | Well tested |
+|                  | Others | Untested, should work |
+| NixOS            | x86_64 | Well tested |
+|                  | aarch64 | Untested, should work |
+| Other Linux      | x86_64, aarch64 | Only indirectly tested** |
+| OSX              | x86_64 | Tested |
+|                  | aarch64 | Untested, should work |
+| FreeBSD          | x86_64 | Buildable as of 31/3/25, but untested |
+| NetBSD           | | Ought to be buildable* |
+| OpenBSD          | | Ought to be buildable* |
+| Windows          | | In Development |
+
+*_Note that the *BSD family are not tier 1 Rust platforms, so there is no guarantee that things will work properly. As of 31/3/25 some of these platforms have cross-compilation issues; I haven't tried native compilation._
+
+** _The binaries in the tarballs are the exact same binaries found in the Debian/Ubuntu packages. They are static-linked._
 
 ## 🧰 Getting Started
 
@@ -38,17 +53,21 @@ For a full list of changes, see the [changelog].
   - You can tell qcp to use a particular port range if you need to.
 * Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine.
 * Run `qcp --help-buffers` and follow its instructions.
+* Platform-specific notes exist for:
+  * [OSX](https://docs.rs/qcp/latest/qcp/doc/performance/osx.html)
 
 ### Installing pre-built binaries
 
 These can be found on the [latest release](https://github.com/crazyscot/qcp/releases/latest) page.
 
-* Debian/Ubuntu packages are provided.
-* Nix Flakes are provided: `nix shell 'github:crazyscot/qcp?dir=nix'`
-* For other Linux x86_64: Use x86_64-unknown-linux-musl.tar.gz
-* For other Linux aarch64: Use aarch64-unknown-linux-musl.tar.gz
-
-The binaries are statically linked. Linux builds should work on all recent distributions, as long as you have selected the correct CPU architecture.
+| Platform |  CPU  | Packaging   |
+| -------- | ----- | ------- |
+| Debian & Ubuntu | x86_64, aarch64 | Deb packages are provided |
+| Other Linux | x86_64, aarch64 | The unknown-linux-musl tarballs should work for you (they are cross-platform, static linked) |
+| Nix | * | Flakes are provided: `nix shell 'github:crazyscot/qcp?dir=nix'` |
+| NixOS | * | In progress; refer to [pr#361923](https://github.com/NixOS/nixpkgs/pull/361923) |
+| OSX  | x86_64, aarch64 | Tarball (code signing TBD) |
+<!--| Windows | | Watch this space :-) |-->
 
 ### Building from source
 

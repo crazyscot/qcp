@@ -1,7 +1,20 @@
 #![allow(missing_docs)]
 
+use cfg_aliases::cfg_aliases;
+
 fn main() {
     process_version_string();
+    cfg_aliases! {
+        linux: { target_os = "linux" },
+        bsdish: { any(
+            target_os = "netbsd",
+            target_os = "openbsd",
+            target_os = "freebsd",
+            target_os = "dragonfly",
+            target_os = "netbsd",
+            target_os = "macos"
+        )},
+    }
 }
 
 fn process_version_string() {

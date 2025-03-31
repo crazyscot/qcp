@@ -27,6 +27,7 @@ anstyle = "1.0.10"
 anyhow = { workspace = true }
 async-trait = "0.1.88"
 bytes = "1.10.1"
+cfg-if = "1.0.0"
 clap = { workspace = true }
 console = "0.15.11"
 derive-deftly = "1.0.1"
@@ -113,6 +114,9 @@ invalid_rust_codeblocks = "deny"
 missing_crate_level_docs = "deny"
 private_intra_doc_links = "deny"
 unescaped_backticks = "deny"
+
+[build-dependencies]
+cfg_aliases = "0.2.1"
 
 [package.metadata.cross.target.x86_64-unknown-linux-musl]
 #pre-build = [ "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install ..." ]
