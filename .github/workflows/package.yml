@@ -84,10 +84,8 @@ jobs:
             # this action is used in multiple places
       with:
         key: "${{ matrix.build }}"
-        cache-on-failure: ${{ ! inputs.release }}
         cache-all-crates: true
-        # don't bother to cache on tagged builds
-        save-if: ${{ !startsWith(github.ref, 'refs/tags') }}
+        cache-targets: false
 
     - name: Generate licenses.html
       run: cargo xtask licenses -o qcp/misc/licenses.html
