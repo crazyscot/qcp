@@ -72,10 +72,12 @@ jobs:
     #  if: matrix.host == 'windows-latest'
     #  run: rustup set profile minimal
 
-    - name: install packages (ubuntu builds only)
-      if: startsWith(matrix.host, 'ubuntu')
-      run: scripts/install-ubuntu-packages ${{ matrix.target }}
-      # native builds need all of these; cross builds only need binutils-multiarch
+    - name: install binutils-multiarch (cross builds only)
+      if: startsWith(matrix.host, 'ubuntu') && matrix.cross
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update
+        sudo apt-get -y --no-install-recommends install binutils-multiarch
 
     ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
     - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
