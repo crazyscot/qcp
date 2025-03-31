@@ -1,25 +1,32 @@
 //! OS concretions for Unix platforms
 // (c) 2024 Ross Younger
 
+use super::SocketOptions;
 use crate::cli::styles::{ERROR, HEADER, INFO, RESET, SUCCESS, WARNING};
 use crate::config::BASE_CONFIG_FILENAME;
 use crate::util::socket::set_udp_buffer_sizes;
 
-use super::SocketOptions;
 use anyhow::Result;
+use cfg_if::cfg_if;
 use human_repr::HumanCount as _;
 use nix::sys::socket::{self, sockopt};
 use nix::unistd::{ROOT, geteuid};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::{net::UdpSocket, path::PathBuf};
 
+/// Divisor to apply to values returned from getsockopt(SndBuf | RcvBuf).
+/// We silently apply these before returning.
+const fn divisor() -> usize {
+    if cfg!(linux) { 2 } else { 1 }
+}
+
 impl SocketOptions for UdpSocket {
+    fn has_force_sendrecvbuf(&self) -> bool {
+        cfg!(linux)
+    }
+
     fn get_sendbuf(&self) -> Result<usize> {
-        #[cfg(target_os = "linux")]
-        let divisor = 2;
-        #[cfg(not(target_os = "linux"))]
-        let divisor = 1;
-        Ok(socket::getsockopt(self, sockopt::SndBuf)? / divisor)
+        Ok(socket::getsockopt(self, sockopt::SndBuf)? / divisor())
     }
 
     fn set_sendbuf(&mut self, size: usize) -> Result<()> {
@@ -27,17 +34,19 @@ impl SocketOptions for UdpSocket {
         Ok(())
     }
 
-    fn force_sendbuf(&mut self, size: usize) -> Result<()> {
-        socket::setsockopt(self, sockopt::SndBufForce, &size)?;
+    #[allow(clippy::used_underscore_binding)]
+    #[cfg_attr(coverage_nightly, coverage(off))]
+    fn force_sendbuf(&mut self, _size: usize) -> Result<()> {
+        cfg_if! {
+            if #[cfg(linux)] {
+                socket::setsockopt(self, sockopt::SndBufForce, &_size)?;
+            }
+        }
         Ok(())
     }
 
     fn get_recvbuf(&self) -> Result<usize> {
-        #[cfg(target_os = "linux")]
-        let divisor = 2;
-        #[cfg(not(target_os = "linux"))]
-        let divisor = 1;
-        Ok(socket::getsockopt(self, sockopt::RcvBuf)? / divisor)
+        Ok(socket::getsockopt(self, sockopt::RcvBuf)? / divisor())
     }
 
     fn set_recvbuf(&mut self, size: usize) -> Result<()> {
@@ -45,8 +54,14 @@ impl SocketOptions for UdpSocket {
         Ok(())
     }
 
-    fn force_recvbuf(&mut self, size: usize) -> Result<()> {
-        socket::setsockopt(self, sockopt::RcvBufForce, &size)?;
+    #[allow(clippy::used_underscore_binding)]
+    #[cfg_attr(coverage_nightly, coverage(off))]
+    fn force_recvbuf(&mut self, _size: usize) -> Result<()> {
+        cfg_if! {
+            if #[cfg(linux)] {
+                socket::setsockopt(self, sockopt::RcvBufForce, &_size)?;
+            }
+        }
         Ok(())
     }
 }
@@ -88,6 +103,7 @@ impl super::AbstractPlatform for Platform {
         Some(p)
     }
 
+    #[cfg_attr(coverage_nightly, coverage(off))]
     fn help_buffers_mode(rmem: u64, wmem: u64) {
         help_buffers_unix(rmem, wmem);
     }
@@ -102,6 +118,7 @@ fn test_buffers(wanted_recv: u64, wanted_send: u64) -> anyhow::Result<Option<Str
     )
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
 fn help_buffers_unix(rmem: u64, wmem: u64) {
     println!(
         r"ℹ️  For best performance, it is necessary to set the kernel UDP buffer size limits.
@@ -158,7 +175,7 @@ For now, outputting general advice."
         );
     }
 
-    if cfg!(any(target_os = "linux",)) {
+    if cfg!(linux) {
         println!(
             r"
 🛠️  To set the kernel limits immediately, run the following command as root:
@@ -169,21 +186,15 @@ can create a file {HEADER}/etc/sysctl.d/20-qcp.conf{RESET} containing:
     {INFO}net.core.rmem_max={rmem}
     net.core.wmem_max={wmem}{RESET}"
         );
-    } else if cfg!(any(
-        target_os = "netbsd",
-        target_os = "openbsd",
-        target_os = "freebsd",
-        target_os = "dragonfly",
-        target_os = "netbsd",
-        target_os = "macos",
-    )) {
+    } else if cfg!(bsdish) {
         // Received wisdom about BSD kernels leads me to recommend 115% of the max. I'm not sure this is necessary.
         let size = std::cmp::max(rmem, wmem) * 115 / 100;
         println!(
             r"
 🛠️ To set the kernel limits immediately, run the following command as root:
     {INFO}sysctl -w kern.ipc.maxsockbuf={size}{RESET}
-To have this setting apply at boot, add this line to {HEADER}/etc/sysctl.conf{RESET}:
+To have this setting apply at boot, add this line to {HEADER}/etc/sysctl.conf{RESET}
+or {HEADER}/etc/sysctl.d/udp_buffer.conf{RESET}:
     {INFO}kern.ipc.maxsockbuf={size}{RESET}"
         );
     } else {
@@ -202,6 +213,38 @@ and {wmem} for writing.
 There might be a sysctl or similar mechanism you can set to enable this.
 Good luck!",
             std::env::consts::OS
+        );
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Platform;
+    use crate::os::AbstractPlatform;
+
+    #[test]
+    fn config_paths() {
+        assert!(Platform::system_ssh_config().contains("/etc/ssh/ssh_config"));
+        let s = Platform::user_ssh_config().unwrap();
+        assert!(s.to_string_lossy().contains("/home/"));
+        let d = Platform::user_config_dir().unwrap();
+        assert!(d.to_string_lossy().contains("/home/"));
+        let p = Platform::user_config_path().unwrap();
+        assert!(p.to_string_lossy().starts_with("/home/"));
+        let q = Platform::system_config_path().unwrap();
+        assert!(q.to_string_lossy().starts_with("/etc/"));
+    }
+
+    #[test]
+    fn test_buffers_small_ok() {
+        assert!(super::test_buffers(131_072, 131_072).unwrap().is_none());
+    }
+    #[test]
+    fn test_buffers_gigantic_err() {
+        assert!(
+            super::test_buffers(1_073_741_824, 1_073_741_824)
+                .unwrap()
+                .is_some()
         );
     }
 }

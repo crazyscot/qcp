@@ -106,7 +106,7 @@ pub(crate) fn bind_range_for_family(
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use crate::util::tracing::setup_tracing_for_tests;
+    use crate::{os::SocketOptions as _, util::tracing::setup_tracing_for_tests};
     use rusty_fork::rusty_fork_test;
     use std::net::UdpSocket;
 
@@ -115,10 +115,22 @@ mod test {
     // The program executable name reported by info!() will not be very useful, but you could probably have guessed that :-)
     rusty_fork_test! {
         #[test]
-        fn set_socket_bufsize() {
+        fn set_udp_buffer_sizes() {
             setup_tracing_for_tests(); // this modifies global state, so needs to be run in a fork
             let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let _ = super::set_udp_buffer_sizes(&mut sock, Some(1_048_576), Some(10_485_760)).unwrap();
+            let _ = super::set_udp_buffer_sizes(&mut sock, Some(4_194_304), Some(10_485_760)).unwrap();
+        }
+
+        #[test]
+        fn set_socket_bufsize_direct() {
+            let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
+            cfg_if::cfg_if! {
+                if #[cfg(linux)] {
+                    assert!(sock.has_force_sendrecvbuf());
+                    let _ = sock.force_sendbuf(128).unwrap_err();
+                    let _ = sock.force_recvbuf(128).unwrap_err();
+                }
+            }
         }
     }
 }

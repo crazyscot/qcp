@@ -8,26 +8,33 @@ use anyhow::Result;
 /// OS abstraction trait providing access to socket options
 pub trait SocketOptions {
     /// Wrapper for getsockopt `SO_SNDBUF`.
-    /// On Linux, this call halves the number returned from the kernel.
-    /// This takes account of kernel behaviour: the internal buffer
-    /// allocation is _double_ the size you set with setsockopt,
+    ///
+    /// This function returns the actual buffer size, which (on some platforms)
+    /// isn't the raw value returned by the syscall.
+    ///
+    /// On Linux, the internal buffer allocation is _double_ the size you set with setsockopt,
     /// and getsockopt returns the doubled value.
     fn get_sendbuf(&self) -> Result<usize>;
     /// Wrapper for setsockopt `SO_SNDBUF`
     fn set_sendbuf(&mut self, size: usize) -> Result<()>;
-    /// Wrapper for setsockopt `SO_SNDBUFFORCE` (where available; will error if not supported on system)
+    /// Wrapper for setsockopt `SO_SNDBUFFORCE` (where available; quietly returns Ok if not supported by platform)
     fn force_sendbuf(&mut self, size: usize) -> Result<()>;
 
     /// Wrapper for getsockopt `SO_RCVBUF`.
-    /// On Linux, this call halves the number returned from the kernel.
-    /// This takes account of kernel behaviour: the internal buffer
-    /// allocation is _double_ the size you set with setsockopt,
+    ///
+    /// This function returns the actual buffer size, which (on some platforms)
+    /// isn't the raw value returned by the syscall.
+    ///
+    /// On Linux, the internal buffer allocation is _double_ the size you set with setsockopt,
     /// and getsockopt returns the doubled value.
     fn get_recvbuf(&self) -> Result<usize>;
     /// Wrapper for setsockopt `SO_RCVBUF`
     fn set_recvbuf(&mut self, size: usize) -> Result<()>;
-    /// Wrapper for setsockopt `SO_RCVBUFFORCE` (where available; will error if not supported on system)
+    /// Wrapper for setsockopt `SO_RCVBUFFORCE` (where available; quietly returns Ok if not supported by platform)
     fn force_recvbuf(&mut self, size: usize) -> Result<()>;
+
+    /// Indicates whether `SO_SNDBUFFORCE` and `SO_RCVBUFFORCE` are available on this platform
+    fn has_force_sendrecvbuf(&self) -> bool;
 }
 
 /// General platform abstraction trait
