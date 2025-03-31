@@ -17,16 +17,39 @@ jobs:
     strategy:
       matrix:
         include:
-        - build: x86_64-musl
+        - build: linux-x86_64-musl
           host: ubuntu-latest
           target: x86_64-unknown-linux-musl
           rust: stable
           build_deb: true
-        - build: aarch64-musl
+          cross: true
+        - build: linux-aarch64-musl
           host: ubuntu-latest
           target: aarch64-unknown-linux-musl
           rust: stable
           build_deb: true
+          cross: true
+        - build: apple-x86_64
+          host: macos-latest
+          target: x86_64-apple-darwin
+          rust: stable
+          build_deb: false
+          cross: false
+        - build: apple-aarch64
+          host: macos-latest
+          target: aarch64-apple-darwin
+          rust: stable
+          build_deb: false
+          cross: false
+        # freebsd cross-builds as of 31 Mar 2025 but is untested.
+        #- build: freebsd-x86_64
+        #  host: ubuntu-latest
+        #  target: x86_64-unknown-freebsd
+        #  rust: stable
+        #  build_deb: false
+        #  cross: true
+        # netbsd rust support is tier 2; as of 31 Mar 2025 the crossbuild fails to link (cannot find -lexecinfo).
+        # openbsd rust support is tier 3; as of 31 Mar 2025 it has no stable or nightly build.
     runs-on: ${{ matrix.host }}
     env:
       TARBALL_ARTIFACT: ${{ format('qcp-tarball-{0}', matrix.target) }}
@@ -43,7 +66,7 @@ jobs:
       uses: taiki-e/install-action@daa3c1f1f9a9d46f686d9fc2f65773d0c293688b # v2.49.40
             # this action is used in multiple places
       with:
-        tool: cross,cargo-deb,cargo-about,cargo-cyclonedx
+        tool: cargo-about,cargo-cyclonedx${{ matrix.build_deb && ',cargo-deb' || ''}}${{ matrix.cross && ',cross' || ''}}
         checksum: true
     #- name: Set minimal profile (Windows only)
     #  if: matrix.host == 'windows-latest'
@@ -64,8 +87,6 @@ jobs:
         # don't bother to cache on tagged builds
         save-if: ${{ !startsWith(github.ref, 'refs/tags') }}
 
-    #- name: Build
-    #  run: cross build --release --locked --target ${{ matrix.target }}
     - name: Generate licenses.html
       run: cargo xtask licenses -o qcp/misc/licenses.html
       env:
