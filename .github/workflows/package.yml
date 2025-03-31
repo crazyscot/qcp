@@ -80,12 +80,9 @@ jobs:
         sudo apt-get -y --no-install-recommends install binutils-multiarch
 
     ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-    - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
-            # this action is used in multiple places
-      with:
-        key: "${{ matrix.build }}"
-        cache-all-crates: true
-        cache-targets: false
+    # 31 Mar 2025: Disabled cacheing.
+    # Full cacheing with `cache-targets` saves 30-40s per platform, but at a high space cost.
+    # Cacheing with cache-targets: false is a net slowdown.
 
     - name: Generate licenses.html
       run: cargo xtask licenses -o qcp/misc/licenses.html
