@@ -89,8 +89,13 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
 
     fn process_compatibility_levels(&mut self, theirs: u16) {
         // FUTURE: We may decide to deprecate older compatibility versions. Handle that here.
-        if theirs >= COMPATIBILITY_LEVEL.into() {
-            debug!("Remote compatibility level {theirs} is newer than ours {COMPATIBILITY_LEVEL}");
+        let d = match theirs.cmp(&COMPATIBILITY_LEVEL.into()) {
+            std::cmp::Ordering::Less => Some("older"),
+            std::cmp::Ordering::Equal => None,
+            std::cmp::Ordering::Greater => Some("newer"),
+        };
+        if let Some(d) = d {
+            debug!("Remote compatibility level {theirs} is {d} than ours {COMPATIBILITY_LEVEL}");
         }
         self.compat = min(theirs.into(), COMPATIBILITY_LEVEL);
         debug!("selected compatibility level {}", self.compat);
