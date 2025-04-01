@@ -40,7 +40,7 @@ jobs:
         toolchain: stable
         targets: ${{ matrix.target }}
     - name: Additional rust tools
-      uses: taiki-e/install-action@510b3ecd7915856b6909305605afa7a8a57c1b04 # v2.48.1
+      uses: taiki-e/install-action@daa3c1f1f9a9d46f686d9fc2f65773d0c293688b # v2.49.40
             # this action is used in multiple places
       with:
         tool: cross,cargo-deb,cargo-about,cargo-cyclonedx
