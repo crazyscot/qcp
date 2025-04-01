@@ -327,7 +327,7 @@ impl Configuration {
         };
         let (tx, rx) = (self.tx(), self.rx());
         format!(
-            "rx {rx} ({rxbits}), tx {tx} ({txbits}), rtt {rtt}, congestion algorithm {congestion:?} with initial window {iwind}",
+            "rx {rx} ({rxbits}), tx {tx} ({txbits}), rtt {rtt}, congestion algorithm {congestion} with initial window {iwind}",
             tx = tx.human_count_bytes(),
             txbits = (tx * 8).human_count("bit"),
             rx = rx.human_count_bytes(),
