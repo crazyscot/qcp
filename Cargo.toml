@@ -8,7 +8,8 @@ clap = { version = "4.5.34", features = ["wrap_help", "derive", "cargo", "help",
 
 
 [profile.dev]
-split-debuginfo="unpacked" # not supported on windows msvc; override in .cargo/config.toml or with CARGO_PROFILE_DEV_SPLIT_DEBUGINFO in environment
+#split-debuginfo="unpacked"
+# This is not supported on windows msvc; set CARGO_PROFILE_DEV_SPLIT_DEBUGINFO=unpacked in environment instead.
 
 [profile.release]
 lto = "thin"
