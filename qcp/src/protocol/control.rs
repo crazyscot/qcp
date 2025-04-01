@@ -605,7 +605,7 @@ impl ProtocolMessage for ClosedownReport {}
 
 /// Version 1 of the closedown report.
 /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Default, Copy, Clone)]
 pub struct ClosedownReportV1 {
     /// Final congestion window
     pub cwnd: Uint,
@@ -623,6 +623,22 @@ pub struct ClosedownReportV1 {
     pub sent_bytes: Uint,
     /// Extension field, reserved for future expansion; for now, must be set to 0
     pub extension: u8,
+}
+
+impl std::fmt::Debug for ClosedownReportV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "cwnd: {}, sent_packets: {}, lost_packets: {}, lost_bytes: {}, congestion_events: {}, black_holes: {}, sent_bytes: {}",
+            self.cwnd.0,
+            self.sent_packets.0,
+            self.lost_packets.0,
+            self.lost_bytes.0,
+            self.congestion_events.0,
+            self.black_holes.0,
+            self.sent_bytes.0
+        )
+    }
 }
 
 impl From<&ConnectionStats> for ClosedownReportV1 {
