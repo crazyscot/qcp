@@ -18,7 +18,9 @@ pub(crate) async fn server_main() -> anyhow::Result<()> {
     let mut control = crate::control::stdio_channel();
     let remote_ip = ssh_remote_address();
     let mut manager = Manager::standard(remote_ip.as_deref());
-    let result = control.run_server(remote_ip, &mut manager).await?;
+    let result = control
+        .run_server(remote_ip, &mut manager, crate::util::setup_tracing)
+        .await?;
     let endpoint = result.endpoint;
 
     let mut tasks = JoinSet::new();

@@ -8,6 +8,7 @@ use std::cmp::min;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
+use indicatif::MultiProgress;
 use quinn::{ConnectionStats, Endpoint};
 use serde_bare::Uint;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, Stdin, Stdout};
@@ -24,7 +25,7 @@ use crate::protocol::control::{
     ServerGreeting, ServerMessage, ServerMessageV1,
 };
 use crate::transport::combine_bandwidth_configurations;
-use crate::util::Credentials;
+use crate::util::{Credentials, TimeFormat};
 
 /// Control channel abstraction
 pub(crate) struct ControlChannel<S: SendingStream, R: ReceivingStream> {
@@ -315,10 +316,13 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         if debug { "debug" } else { "info" }
     }
 
-    pub(crate) async fn run_server(
+    pub(crate) async fn run_server<
+        F: FnOnce(&str, Option<&MultiProgress>, Option<&String>, TimeFormat) -> anyhow::Result<()>,
+    >(
         &mut self,
         remote_ip: Option<String>,
         manager: &mut Manager,
+        setup_tracing: F,
     ) -> anyhow::Result<ServerResult> {
         // PHASE 1: BANNER (checked by client)
         self.stream.send.write_all(BANNER.as_bytes()).await?;
@@ -334,7 +338,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
 
         // to provoke a config error here, set RUST_LOG=.
         let level = Self::server_trace_level(remote_greeting.debug);
-        crate::util::setup_tracing(level, None, None, time_format)?;
+        setup_tracing(level, None, None, time_format)?;
         // Now we can use the tracing system!
 
         let _span = tracing::error_span!("Server").entered();
@@ -433,11 +437,22 @@ mod test {
             },
             control::{ClosedownReportV1, ConnectionType, OLD_BANNER, ServerMessageV1},
         },
-        util::{Credentials, PortRange, test_protocol::test_plumbing},
+        util::{Credentials, PortRange, TimeFormat, test_protocol::test_plumbing},
     };
     use anyhow::Result;
+    use indicatif::MultiProgress;
     use quinn::ConnectionStats;
     use tokio::io::AsyncWriteExt;
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn mock_setup_tracing(
+        _trace_level: &str,
+        _display: Option<&MultiProgress>,
+        _filename: Option<&String>,
+        _time_format: TimeFormat,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 
     struct TestClient<S: SendingStream, R: ReceivingStream> {
         creds: Credentials,
@@ -483,7 +498,7 @@ mod test {
 
         let mut server = ControlChannel::new(pipe2);
         let mut manager = Manager::without_files(None);
-        let ser_fut = server.run_server(None, &mut manager);
+        let ser_fut = server.run_server(None, &mut manager, mock_setup_tracing);
 
         let (cli_res, ser_res) = tokio::join!(cli_fut, ser_fut);
         assert!(cli_res.is_ok());
@@ -544,7 +559,7 @@ mod test {
         let mut manager = Manager::without_files(None);
         // non-overlapping port range, will fail to negotiate
         manager.merge_provider(fake_cli_with_port(22222, 22222));
-        let ser_fut = server.run_server(None, &mut manager);
+        let ser_fut = server.run_server(None, &mut manager, mock_setup_tracing);
 
         let (cli_res, ser_res) = tokio::join!(cli_fut, ser_fut);
         assert!(cli_res.is_err_and(|e| e.to_string().contains("Negotiation Failed")));
@@ -613,7 +628,7 @@ mod test {
 
         let mut server = ControlChannel::new(pipe2);
         let mut manager = Manager::without_files(None);
-        let ser_fut = server.run_server(None, &mut manager);
+        let ser_fut = server.run_server(None, &mut manager, mock_setup_tracing);
 
         let (cli_res, _) = tokio::join!(cli_fut, ser_fut);
         let e = cli_res.unwrap_err();
