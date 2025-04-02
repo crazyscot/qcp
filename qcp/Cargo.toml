@@ -48,6 +48,7 @@ num-format = { version = "0.4.4" }
 pwd = "1.4.0"
 quinn = { version = "0.11.7", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
 rcgen = { version = "0.13.2" }
+rustix = { version = "1.0.3", features = ["net", "fs", "process"] }
 rustls-pki-types = "1.11.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_bare = "0.5.0"
@@ -64,7 +65,7 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
 wildmatch = "2.4.0"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.29.0", features = ["socket", "user"] }
+#nix = { version = "0.29.0", features = ["user"] }
 
 [dev-dependencies]
 assertables = "9.5.1"
