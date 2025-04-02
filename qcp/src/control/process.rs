@@ -93,7 +93,15 @@ impl Ssh {
                 .ssh_options
                 .unwrap_or_else(|| defaults.ssh_options.clone()),
         );
-        let _ = server.args([ssh_hostname, "qcp", "--server"]);
+
+        // hostname is sent here -------------------------
+        let _ = server.args([ssh_hostname]);
+        if working_config.ssh_subsystem.unwrap_or(false) {
+            let _ = server.args(["-s", "qcp"]);
+        } else {
+            let _ = server.args(["qcp", "--server"]);
+        }
+
         let _ = server
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use clap::{Parser, builder::TypedValueParser as _};
+use clap::{ArgAction::SetTrue, Parser, builder::TypedValueParser as _};
 use engineering_repr::{EngineeringQuantity, EngineeringRepr};
 use human_repr::{HumanCount as _, HumanDuration as _};
 use serde::{Deserialize, Serialize};
@@ -230,6 +230,24 @@ pub struct Configuration {
     /// On the command line, you can repeat `--ssh-config file` as many times as needed.
     #[arg(long, value_name("FILE"), help_heading("Connection"), display_order(0))]
     pub ssh_config: Vec<String>,
+
+    /// Ssh subsystem mode
+    ///
+    /// This mode causes qcp to run `ssh <host> -s qcp` instead of `ssh <host> qcp --server`.
+    ///
+    /// This is useful where the remote system has a locked-down `PATH` and the qcp binary
+    /// is not resident on that `PATH`.
+    /// The remote system sshd has to be configured with a line like this:
+    ///
+    /// `Subsystem qcp /usr/local/bin/qcp --server`
+    #[arg(
+        long,
+        alias("subsystem"),
+        action(SetTrue),
+        help_heading("Connection"),
+        display_order(0)
+    )]
+    pub ssh_subsystem: bool,
 }
 
 lazy_static::lazy_static! {
@@ -250,6 +268,7 @@ lazy_static::lazy_static! {
             remote_port: PortRange::default(),
             time_format: TimeFormat::Local,
             ssh_config: Vec::new(),
+            ssh_subsystem: false,
     };
 }
 

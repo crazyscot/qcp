@@ -829,6 +829,7 @@ mod test {
             ssh_options: None,
             time_format: None,
             ssh_config: None,
+            ssh_subsystem: None,
         };
 
         let cmsg = {
