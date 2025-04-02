@@ -8,7 +8,7 @@ qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH SYNOPSIS
-\fBqcp\fR [\fB\-b\fR|\fB\-\-rx\fR] [\fB\-B\fR|\fB\-\-tx\fR] [\fB\-r\fR|\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-T\fR|\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-d\fR|\fB\-\-debug\fR] [\fB\-l\fR|\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
+\fBqcp\fR [\fB\-b\fR|\fB\-\-rx\fR] [\fB\-B\fR|\fB\-\-tx\fR] [\fB\-r\fR|\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-T\fR|\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-d\fR|\fB\-\-debug\fR] [\fB\-l\fR|\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH DESCRIPTION
@@ -72,7 +72,7 @@ The expected network Round Trip time to the target system, in milliseconds. [def
 Outputs additional information about kernel UDP buffer sizes and platform\-specific tips
 .SH "ADVANCED NETWORK TUNING"
 .TP
-\fB\-\-congestion\fR=\fIalg\fR
+\fB\-\-congestion\fR=\fIalgorithm\fR
 Specifies the congestion control algorithm to use. [default: cubic]
 .br
 
@@ -141,6 +141,15 @@ Alternative ssh config file(s)
 By default, qcp reads your user and system ssh config files to look for Hostname aliases. In some cases the logic in qcp may not read them successfully; this is an escape hatch, allowing you to specify one or more alternative files to read instead (which may be empty, nonexistent or /dev/null).
 
 This option is really intended to be used in a qcp configuration file. On the command line, you can repeat `\-\-ssh\-config file` as many times as needed.
+.TP
+\fB\-\-ssh\-subsystem\fR
+Ssh subsystem mode
+
+This mode causes qcp to run `ssh <host> \-s qcp` instead of `ssh <host> qcp \-\-server`. This is useful where the remote system has a locked\-down `PATH` and the qcp binary is not resident on that `PATH`.
+
+The remote system sshd has to be configured with a line like this:
+
+`Subsystem qcp /usr/local/bin/qcp \-\-server`
 .TP
 \fB\-4\fR
 Forces use of IPv4

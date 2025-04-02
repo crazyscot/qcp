@@ -12,13 +12,13 @@
 //!
 //! Note that this variable setting applies to the local machine, not the remote. If you arrange to set it on the remote, the output will come back over the ssh channel; **this may impact performance**.
 //!
-//! ### You can't ssh to the remote machine
+//! #### You can't ssh to the remote machine
 //!
 //! Sorry, that's a prerequisite. Get that working first, then come back to qcp.
 //!
 //! qcp calls ssh directly; ssh will prompt you for a password and may invite you to verify the remote host key.
 //!
-//! ### The QUIC connection times out
+//! #### The QUIC connection times out
 //!
 //! * Does the remote host firewall inbound UDP connections?
 //!   If so, you will need to allocate and open up a small range of inbound ports for use by qcp.
@@ -29,11 +29,11 @@
 //! * Are outbound UDP packets from the initiator firewalled?
 //!   You will need to open up some outbound ports; use the `--port` option to tell qcp which.
 //!
-//! ### Performance is poor?
+//! #### Performance is poor?
 //!
 //! (This became a separate doc. See [performance](super::performance).)
 //!
-//! ### Excess bandwidth usage
+//! #### Excess bandwidth usage
 //!
 //! This utility is designed to soak up all the bandwidth it can.
 //!
@@ -41,7 +41,7 @@
 //!
 //! If you're on 95th percentile billing, you may need to take this into account. But if you are on that sort of deal, you are hopefully already spending time to understand and optimise your traffic profile.
 //!
-//! ### Using qcp interferes with video calls / Netflix / VOIP / etc
+//! #### Using qcp interferes with video calls / Netflix / VOIP / etc
 //!
 //! This utility is designed to soak up all the bandwidth it can.
 //!
@@ -52,7 +52,7 @@
 //!
 //! There might be some mileage in having qcp try to limit its bandwidth use or tune it to be less aggressive in the face of congestion, but that's not implemented at the moment.
 //!
-//! ### It takes a long time to set up the control channel
+//! #### It takes a long time to set up the control channel
 //!
 //! The control channel is an ordinary ssh connection, so you need to figure out how to make ssh faster.
 //! This is not within qcp's control.
@@ -61,7 +61,7 @@
 //! * There are a number of guides online purporting to advise you how to speed up ssh connections; I can't vouch for them.
 //! * You might also look into ssh connection multiplexing.
 //!
-//! ### qcp isn't using the network parameters you expected it to
+//! #### qcp isn't using the network parameters you expected it to
 //! * Parameters specified on the command line always override those in config files.
 //! * Settings in the user config file take precedence over those in the system config file.
 //! * For each setting, the first value found in a matching Host block wins.
@@ -69,7 +69,33 @@
 //!   [`combine_bandwidth_configurations`](crate::transport::combine_bandwidth_configurations).
 //! * See also [configuration debug tools](#configuration-debug-tools).
 //!
-//! ## Debug tools
+//! #### "command not found" error
+//! One of these, perhaps?
+//! ```text
+//! bash: line 1: qcp: command not found
+//! zsh:1: command not found: qcp
+//! ```
+//!
+//! Either the server doesn't have qcp installed, or it is not in your PATH.
+//!
+//! Be aware that some ssh installations lock down your PATH so that you cannot run arbitrary programs --
+//! especially in noninteractive mode, which qcp uses.
+//!
+//! This will need co-operation from the server's administrator. The options are:
+//! 1. Add qcp to a directory that is on the sshd's PATH (e.g. /usr/bin/)
+//! 2. Reconfigure sshd to set `PermitUserEnvironment PATH`
+//!
+//!    Then set PATH in your `~/.bashrc` (or equivalent) to include wherever qcp has been installed.
+//!
+//! 3. Install qcp in a known location, then reconfigure sshd with
+//!
+//!    `Subsystem qcp /full/path/toqcp --server`
+//!
+//!    This is known as [subsystem mode](crate::Configuration#structfield.ssh_subsystem). You will then need to
+//!    use `--ssh-subsystem` when connecting to this server, or set it in your local configuration file
+//!    on the client machine.
+//!
+//! ## 🔧 Debug tools
 //! * `--debug` enables various debug chatter.
 //! * You can also set RUST_LOG in the environment. For example, `RUST_LOG=qcp=trace`.
 //! * `--remote-debug` asks the server to send its debug output back over the ssh connection.
@@ -77,7 +103,7 @@
 //! * If you particularly want to set RUST_LOG on the server process, you'll need to configure
 //!   the ssh client to send this (`SendEnv`) and the server to allow it (`SetEnv`).
 //!
-//! ### Configuration debug
+//! #### Configuration debug
 //! * `--config-files` will tell you where, on the current platform, qcp is looking for configuration files.
 //! * The `--dry-run` mode reports the negotiated network configuration that we would have used for a given proposed transfer.
 //! ```text

@@ -23,6 +23,8 @@ use crate::{config::Manager, util::AddressFamily};
 
 Exactly one of source and destination must be remote.
 
+Long options may be abbreviated where unambiguous.
+
 qcp will read your ssh config file to resolve any host name aliases you may have defined. The idea is, if you can ssh directly to a given host, you should be able to qcp to it by the same name. However, some particularly complicated ssh config files may be too much for qcp to understand. (In particular, Match directives are not currently supported.) In that case, you can use --ssh-config to provide an alternative configuration (or set it in your qcp configuration file).
     ",
     infer_long_args(true)
