@@ -58,6 +58,9 @@
 //!   (But [#14](https://github.com/crazyscot/qcp/issues/14) might help a bit.)
 //! * If you want to copy multiple files to/from the same remote machine, ssh connection multiplexing will save you a few seconds for each. (You can visualise the difference with the `--profile` option.)
 //! * The `--debug` option will report additional information that might help you diagnose configuration issues.
+//! * If you build qcp yourself, make sure to build in release mode (`cargo build --release --locked`).
+//!   I found unoptimised builds tend to max out around 320MB/s on my desktop PC, but release builds can sustain 1Gbit
+//!   if the network supports it.
 //!
 //! ### Reporting
 //!

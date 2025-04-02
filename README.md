@@ -81,7 +81,7 @@ You can install the package from source using `cargo`:
 cargo install --locked qcp
 ```
 
-Or, if you prefer, clone the source repository in the usual way, then `cargo build --locked`.
+Or, if you prefer, clone the source repository in the usual way, then `cargo build --release --locked`.
 
 #### If you are new to Rust and don't have the tools installed
 
