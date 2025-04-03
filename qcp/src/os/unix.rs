@@ -5,7 +5,6 @@ use crate::cli::styles::{ERROR, HEADER, INFO, RESET, SUCCESS, WARNING};
 use crate::config::BASE_CONFIG_FILENAME;
 use crate::util::socket::set_udp_buffer_sizes;
 
-use anyhow::Result;
 use human_repr::HumanCount as _;
 use rustix::process::{Uid, geteuid};
 
@@ -17,17 +16,15 @@ use std::{net::UdpSocket, path::PathBuf};
 pub struct Platform {}
 
 impl super::AbstractPlatform for Platform {
-    fn system_ssh_config() -> &'static str {
-        "/etc/ssh/ssh_config"
+    fn system_ssh_config() -> Option<PathBuf> {
+        Some("/etc/ssh/ssh_config".into())
     }
 
-    fn user_ssh_config() -> Result<PathBuf> {
-        let Some(mut pb) = dirs::home_dir() else {
-            anyhow::bail!("could not determine home directory");
-        };
+    fn user_ssh_config() -> Option<PathBuf> {
+        let mut pb = dirs::home_dir()?;
         pb.push(".ssh");
         pb.push("config");
-        Ok(pb)
+        Some(pb)
     }
 
     fn user_config_dir() -> Option<PathBuf> {
@@ -170,7 +167,12 @@ mod test {
 
     #[test]
     fn config_paths() {
-        assert!(Platform::system_ssh_config().contains("/etc/ssh/ssh_config"));
+        assert!(
+            Platform::system_ssh_config()
+                .unwrap()
+                .to_string_lossy()
+                .contains("/etc/ssh/ssh_config")
+        );
         let s = Platform::user_ssh_config().unwrap();
         assert!(s.to_string_lossy().contains("/home/"));
         let d = Platform::user_config_dir().unwrap();

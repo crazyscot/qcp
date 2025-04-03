@@ -94,11 +94,13 @@ impl ConfigFile {
 pub(crate) fn resolve_host_alias(host: &str, config_files: &[String]) -> Option<String> {
     let files = if config_files.is_empty() {
         let mut v = Vec::new();
-        if let Ok(f) = Platform::user_ssh_config() {
+        if let Some(f) = Platform::user_ssh_config() {
             v.push(ConfigFile::for_path(f, true));
         }
-        if let Ok(f) = ConfigFile::for_str(Platform::system_ssh_config(), false, false) {
-            v.push(f);
+        if let Some(p) = Platform::system_ssh_config() {
+            if let Ok(f) = ConfigFile::for_str(&p.to_string_lossy(), false, false) {
+                v.push(f);
+            }
         }
         v
     } else {
