@@ -6,11 +6,11 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use anyhow::{Context, Result};
 use figment::Figment;
-use lazy_static::lazy_static;
 use struct_field_names_as_array::FieldNamesAsSlice as _;
 use tracing::warn;
 
@@ -38,10 +38,8 @@ fn create_field_name_map(fields: &'_ [&'_ str]) -> BTreeMap<CanonicalIntermediat
     )
 }
 
-lazy_static! {
-    static ref CONFIGURATION_FIELDS_MAP: BTreeMap<CanonicalIntermediate, String> =
-        create_field_name_map(crate::config::Configuration::FIELD_NAMES_AS_SLICE);
-}
+static CONFIGURATION_FIELDS_MAP: LazyLock<BTreeMap<CanonicalIntermediate, String>> =
+    LazyLock::new(|| create_field_name_map(crate::config::Configuration::FIELD_NAMES_AS_SLICE));
 
 impl HostConfiguration {
     fn new(host: Option<&str>, source: Option<PathBuf>) -> Self {

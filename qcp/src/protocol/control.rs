@@ -14,13 +14,13 @@
 //!   * The client MUST NOT send its Message until it has received the `ServerGreeting`,
 //!     and it MUST NOT send a newer version of the `ClientMessage` than the server understands.
 //! * S: ⚙️ Parses client message, applies parameter negotiation rules
-//!     (see [`combine_bandwidth_configurations`](crate::transport::combine_bandwidth_configurations)),
-//!     binds to a UDP port for the session protocol.
+//!   (see [`combine_bandwidth_configurations`](crate::transport::combine_bandwidth_configurations)),
+//!   binds to a UDP port for the session protocol.
 //! * S ➡️ C: [`ServerMessage`]
 //!   * The server MUST NOT send a newer version of the `ServerMessage` than the client understands.
 //! * Client establishes a QUIC connection to the server, on the port given in the [`ServerMessage`].
 //! * Client then opens one or more bidirectional QUIC streams ('sessions') on that connection.
-//!    (See the [session protocol](crate::protocol::session) for what happens there.)
+//!   (See the [session protocol](crate::protocol::session) for what happens there.)
 //!
 //! When transfer is complete and all QUIC streams are closed:
 //! * S ➡️ C: [`ClosedownReport`]
