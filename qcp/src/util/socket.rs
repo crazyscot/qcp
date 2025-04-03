@@ -54,7 +54,7 @@ pub(crate) fn set_udp_buffer_sizes(
         );
         message = Some(msg);
         if let Some(e) = force_err {
-            warn!("While attempting to set kernel buffer size, this happened: {e}");
+            warn!("While attempting to set kernel buffer size, this happened: {e:?}");
         }
         info!(
             "For more information, run: `{ego} --help-buffers`",

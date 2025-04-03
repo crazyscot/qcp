@@ -45,17 +45,17 @@ impl SshConfigFile {
             Ok(p) => p,
             Err(e) => {
                 // file permissions issue?
-                warn!("failed to open {path:?}: {e}");
+                warn!("failed to open {path:?}: {e:?}");
                 return None;
             }
         };
         let data = match parser
             .parse_file_for(Some(host))
-            .with_context(|| format!("reading configuration file {path:?}"))
+            .with_context(|| format!("error reading configuration file {path:?}"))
         {
             Ok(data) => data,
             Err(e) => {
-                warn!("{e}");
+                warn!("{e:?}");
                 return None;
             }
         };

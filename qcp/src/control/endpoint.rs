@@ -68,7 +68,7 @@ pub(crate) fn create_endpoint(
     };
 
     let warning = util::socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)?
-        .inspect(|s| warn!("{s}"));
+        .inspect(|s| warn!("{s:?}"));
 
     trace!("create endpoint");
     // SOMEDAY: allow user to specify max_udp_payload_size in endpoint config, to support jumbo frames
