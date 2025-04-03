@@ -177,7 +177,7 @@ impl Manager {
             .and_then(|p| p.parse_file_for(host))
             .map(|hc| self.merge_provider(hc.as_figment()));
         if let Err(e) = p {
-            warn!("parsing {ff}: {e}", ff = path.to_string_lossy());
+            warn!("parsing {ff}: {e:?}", ff = path.to_string_lossy());
         }
     }
 
