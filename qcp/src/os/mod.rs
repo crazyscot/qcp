@@ -1,7 +1,7 @@
 //! OS abstraction layer
 // (c) 2024 Ross Younger
 
-use std::{net::UdpSocket, path::PathBuf};
+use std::{net::UdpSocket, path::PathBuf, sync::Once};
 
 use anyhow::Result;
 use cfg_if::cfg_if;
@@ -14,8 +14,25 @@ use rustix::fd::AsFd as SocketType;
 const fn buffer_size_fix(s: usize) -> usize {
     if cfg!(linux) { s / 2 } else { s }
 }
-/// OS abstraction trait providing access to socket options.
-pub trait SocketOptions: SocketType {
+
+/// Platform initialisation hook.
+/// This must be called at least once before using platform features.
+pub fn initialise_platform() -> Result<()> {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {});
+    Ok(())
+}
+
+mod private {
+    pub trait SealedSocket: super::SocketType {}
+    impl SealedSocket for super::UdpSocket {}
+}
+
+/// OS abstraction trait providing access to socket options
+///
+/// **This is a sealed trait** : it only works for `UdpSocket` and
+/// ensures the platform initialisation hook is called.
+pub trait SocketOptions: private::SealedSocket {
     /// Wrapper for `getsockopt SO_SNDBUF`.
     ///
     /// This function returns the actual socket buffer size, which works around
@@ -23,16 +40,19 @@ pub trait SocketOptions: SocketType {
     /// (For example: On Linux, the internal buffer allocation is _double_ the size
     /// set with setsockopt, yet getsockopt returns the doubled value.)
     fn get_sendbuf(&self) -> Result<usize> {
+        initialise_platform()?;
         Ok(buffer_size_fix(RustixSO::socket_send_buffer_size(self)?))
     }
     /// Wrapper for setsockopt `SO_SNDBUF`
     fn set_sendbuf(&mut self, size: usize) -> Result<()> {
+        initialise_platform()?;
         RustixSO::set_socket_send_buffer_size(self, size)?;
         Ok(())
     }
     /// Wrapper for setsockopt `SO_SNDBUFFORCE` (where available; quietly returns Ok if not supported by platform)
     #[allow(clippy::used_underscore_binding)]
     fn force_sendbuf(&mut self, _size: usize) -> Result<()> {
+        initialise_platform()?;
         cfg_if! {
             if #[cfg(linux)] {
                 RustixSO::set_socket_send_buffer_size_force(self, _size)?;
@@ -48,17 +68,20 @@ pub trait SocketOptions: SocketType {
     /// (For example: On Linux, the internal buffer allocation is _double_ the size
     /// set with setsockopt, yet getsockopt returns the doubled value.)
     fn get_recvbuf(&self) -> Result<usize> {
+        initialise_platform()?;
         Ok(buffer_size_fix(RustixSO::socket_recv_buffer_size(self)?))
     }
 
     /// Wrapper for setsockopt `SO_RCVBUF`
     fn set_recvbuf(&mut self, size: usize) -> Result<()> {
+        initialise_platform()?;
         RustixSO::set_socket_recv_buffer_size(self, size)?;
         Ok(())
     }
     /// Wrapper for setsockopt `SO_RCVBUFFORCE` (where available; quietly returns Ok if not supported by platform)
     #[allow(clippy::used_underscore_binding)]
     fn force_recvbuf(&mut self, _size: usize) -> Result<()> {
+        initialise_platform()?;
         cfg_if! {
             if #[cfg(linux)] {
                 RustixSO::set_socket_recv_buffer_size_force(self, _size)?;
