@@ -33,9 +33,9 @@ pub(crate) fn manpage(mut args: Arguments) -> Result<()> {
     if let Some(profile) = profile {
         cmd = cmd.args(["--profile", &profile]);
     }
-    cmd.arg("cli::manpage::test::manpage")
+    cmd.arg("cli::manpage::test::manpages")
         .env("QCP_MANPAGE_OUT_DIR", outdir.clone())
         .run()?;
-    println!("Man page written to {outdir}/qcp.1");
+    println!("Man pages written to {outdir}/");
     Ok(())
 }
