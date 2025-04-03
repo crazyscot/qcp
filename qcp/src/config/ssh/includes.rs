@@ -2,7 +2,6 @@
 // (c) 2024 Ross Younger
 
 use anyhow::{Context, Result};
-use dirs::home_dir;
 use glob::{MatchOptions, glob_with};
 use std::path::{MAIN_SEPARATOR, PathBuf};
 use std::sync::LazyLock;
@@ -12,10 +11,11 @@ static HOME_PREFIX: LazyLock<String> = LazyLock::new(|| format!("~{MAIN_SEPARATO
 fn expand_home_directory(path: &str) -> Result<PathBuf> {
     Ok(match path {
         // bare "~"
-        "~" => home_dir().ok_or_else(|| anyhow::anyhow!("could not determine home directory"))?,
+        "~" => homedir::my_home()?
+            .ok_or_else(|| anyhow::anyhow!("could not determine home directory"))?,
         s if s.starts_with(&*HOME_PREFIX) => {
             // "~/..."
-            let Some(home) = home_dir() else {
+            let Ok(Some(home)) = homedir::my_home() else {
                 anyhow::bail!("could not determine home directory")
             };
             home.join(&s[2..])
@@ -26,13 +26,12 @@ fn expand_home_directory(path: &str) -> Result<PathBuf> {
             let Some(username) = parts.next() else {
                 anyhow::bail!("could not extract username from path")
             };
-            let Ok(Some(user)) = pwd::Passwd::from_name(username) else {
-                anyhow::bail!("could not find user {username}");
-            };
+            let pb = homedir::home(username)?
+                .ok_or_else(|| anyhow::anyhow!("could not determine other home directory"))?;
             if let Some(path) = parts.next() {
-                PathBuf::from(user.dir).join(path)
+                pb.join(path)
             } else {
-                PathBuf::from(user.dir)
+                pb
             }
         }
         // default: no modification
