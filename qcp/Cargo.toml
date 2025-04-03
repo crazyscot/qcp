@@ -146,6 +146,7 @@ assets = [
     [ "misc/qcp.1", "usr/share/man/man1/", "644" ],
     [ "misc/qcp_config.5", "usr/share/man/man5/", "644" ],
     [ "misc/qcp.conf", "etc/", "644" ], # this is automatically recognised as a conffile
+    [ "misc/qcp_sshd.conf", "etc/ssh/sshd_config.d/", "644" ], # this is automatically recognised as a conffile
     # licenses.html.gz is created by cargo xtask licenses
     [ "misc/licenses.html.gz", "usr/share/doc/qcp/", "644" ],
     # gzip -9n < qcp/qcp.cdx.xml > qcp/qcp.cdx.xml.gz # done by make-debian-package

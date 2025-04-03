@@ -72,3 +72,7 @@ else
     # No clashes; proceed quietly.
     activate_our_sysctls
 fi
+
+# We just dropped a config fragment into /etc/ssh/sshd_config.d.
+# Reload the ssh service, if it's present.
+[ ! -f /lib/systemd/system/ssh.service ] || systemctl reload ssh

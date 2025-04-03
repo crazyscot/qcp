@@ -104,6 +104,7 @@ jobs:
           README.md,LICENSE,CHANGELOG.md,\
           qcp/misc/licenses.html,qcp/qcp.cdx.xml,\
           qcp/misc/qcp.conf,\
+          qcp/misc/qcp_sshd.conf,\
           qcp/misc/qcp.1,qcp/misc/qcp_config.5\
           ${{ matrix.pack_extra }}"
         # NOTE: No trailing comma before pack_extra
