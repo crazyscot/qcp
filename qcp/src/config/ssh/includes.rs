@@ -5,10 +5,9 @@ use anyhow::{Context, Result};
 use dirs::home_dir;
 use glob::{MatchOptions, glob_with};
 use std::path::{MAIN_SEPARATOR, PathBuf};
+use std::sync::LazyLock;
 
-lazy_static::lazy_static! {
-    static ref HOME_PREFIX: String = format!("~{}", MAIN_SEPARATOR);
-}
+static HOME_PREFIX: LazyLock<String> = LazyLock::new(|| format!("~{MAIN_SEPARATOR}"));
 
 fn expand_home_directory(path: &str) -> Result<PathBuf> {
     Ok(match path {

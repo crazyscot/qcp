@@ -201,7 +201,7 @@ pub(crate) fn setup(
                 true,
             ));
         }
-    };
+    }
 
     //////// File output
 

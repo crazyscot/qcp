@@ -1,6 +1,7 @@
 //! Configuration structure
 // (c) 2024 Ross Younger
 
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -250,27 +251,24 @@ pub struct Configuration {
     pub ssh_subsystem: bool,
 }
 
-lazy_static::lazy_static! {
-    static ref SYSTEM_DEFAULT_CONFIG: Configuration = Configuration {
-            // Transport
-            rx: 12_500_000u64.into(),
-            tx: 0u64.into(),
-            rtt: 300,
-            congestion: CongestionController::Cubic.into(),
-            initial_congestion_window: 0u64.into(),
-            port: PortRange::default(),
-            timeout: 5,
-
-            // Client
-            address_family: AddressFamily::Any,
-            ssh: "ssh".into(),
-            ssh_options: vec![],
-            remote_port: PortRange::default(),
-            time_format: TimeFormat::Local,
-            ssh_config: Vec::new(),
-            ssh_subsystem: false,
-    };
-}
+static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
+    // Transport
+    rx: 12_500_000u64.into(),
+    tx: 0u64.into(),
+    rtt: 300,
+    congestion: CongestionController::Cubic.into(),
+    initial_congestion_window: 0u64.into(),
+    port: PortRange::default(),
+    timeout: 5,
+    // Client
+    address_family: AddressFamily::Any,
+    ssh: "ssh".into(),
+    ssh_options: vec![],
+    remote_port: PortRange::default(),
+    time_format: TimeFormat::Local,
+    ssh_config: Vec::new(),
+    ssh_subsystem: false,
+});
 
 impl Configuration {
     /// Computes the theoretical bandwidth-delay product for outbound data

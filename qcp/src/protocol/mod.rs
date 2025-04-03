@@ -87,7 +87,7 @@
 //! ## Prior Art
 //!
 //! * [FASP](https://en.wikipedia.org/wiki/Fast_and_Secure_Protocol) is a high-speed data transfer protocol that runs on UDP.
-//!    It is proprietary and patented; the patents are held by [Aspera](http://ibm.com/aspera/) which was acquired by IBM.
+//!   It is proprietary and patented; the patents are held by [Aspera](http://ibm.com/aspera/) which was acquired by IBM.
 //! * [QUIC] was invented by a team at Google in 2012, and adopted as a standard by the IETF in 2016.
 //!   The idea is simple: your data travels over UDP instead of TCP.
 //!   * Obviously, you lose the benefits of TCP (reliability, packet sequencing, flow control), so you have to reimplement those.

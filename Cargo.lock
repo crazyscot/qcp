@@ -1075,7 +1075,6 @@ dependencies = [
  "human-repr",
  "indicatif",
  "json",
- "lazy_static",
  "mimalloc",
  "nix",
  "num-format",
