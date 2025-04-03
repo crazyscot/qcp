@@ -1,4 +1,4 @@
-name: Packaging
+name: Packaging (called by CI and release)
 
 on:
   workflow_call:
@@ -23,12 +23,14 @@ jobs:
           rust: stable
           build_deb: true
           cross: true
+          pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
         - build: linux-aarch64-musl
           host: ubuntu-latest
           target: aarch64-unknown-linux-musl
           rust: stable
           build_deb: true
           cross: true
+          pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
         - build: apple-x86_64
           host: macos-latest
           target: x86_64-apple-darwin
@@ -98,7 +100,14 @@ jobs:
         dry_run: true
         token: ${{ secrets.GITHUB_TOKEN }} # Needs write permission on release
         target: ${{ matrix.target }}
-        include: README.md,LICENSE,CHANGELOG.md,qcp/misc/licenses.html,qcp/qcp.cdx.xml
+        include: "\
+          README.md,LICENSE,CHANGELOG.md,\
+          qcp/misc/licenses.html,qcp/qcp.cdx.xml,\
+          qcp/misc/qcp.conf,\
+          qcp/misc/qcp.1,qcp/misc/qcp_config.5\
+          ${{ matrix.pack_extra }}"
+        # NOTE: No trailing comma before pack_extra
+        # (Not all platforms have any pack_extra files)
         leading-dir: true
         locked: true
         tar: unix
