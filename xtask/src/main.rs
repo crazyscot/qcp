@@ -18,7 +18,7 @@ mod manpage;
 
 #[allow(clippy::type_complexity)]
 const TASKS: &[(&str, fn(Arguments) -> Result<()>, &str)] = &[
-    ("man", manpage::manpage, "Build the qcp.1 man page"),
+    ("man", manpage::manpage, "Build the qcp manual pages"),
     (
         "licenses",
         licenses::licenses,

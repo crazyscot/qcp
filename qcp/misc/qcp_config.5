@@ -1,8 +1,9 @@
-.ie \n(.g .ds Aq \(aq
+
+    .ie \n(.g .ds Aq \\(aq
 .el .ds Aq '
-.TH qcp_config 5  "December 2024"
+.TH QCP_CONFIG 5
 .SH NAME
-qcp_config \- Configuration options for qcp
+qcp_config \\- Configuration options for qcp
 .SH DESCRIPTION
 \fBqcp\fR(1) obtains run-time configuration from the following sources, in order:
 
@@ -33,8 +34,8 @@ In other words, you can use UPPERCASE, lowercase, CamelCase, mIxEDcAse, SHOUTY_S
 Arguments are separated from keywords, and each other, by whitespace.
 (It is also possible to write \fIKey=Value\fR or \fIKey = Value\fR.)
 
-Arguments may be surrounded by double quotes ("); this allows you to set an argument containing spaces.
-If a backslash, double or single quote forms part of an argument it must be backslash-escaped i.e. \\" or \\\\
+Arguments may be surrounded by double quotes (\\\"); this allows you to set an argument containing spaces.
+If a backslash, double or single quote forms part of an argument it must be backslash-escaped i.e. \\\" or \\\\
 
 Comments are supported; # introduces a comment (up to the end of the line).
 
@@ -48,7 +49,7 @@ This allows you to tune your configuration for a range of network hosts.
  # This is an old server with a very limited CPU which we do not want to overstress.
  # old-faithful isn't its DNS name; it's a hostname aliased in ssh_config.
  rx 125k  # 1 Mbit limit. Yes, it's a really old server.
- tx 0     # tx 0 means "same as rx"
+ tx 0     # tx 0 means \"same as rx\"
  # This server runs a tight firewall; inbound UDP is only allowed on certain ports.
  RemotePort 65400-65500
  
@@ -63,10 +64,10 @@ This allows you to tune your configuration for a range of network hosts.
  tx 0
  rtt 10
  
- # For all other hosts, try to maximise our VDSL
+ # For all other hosts, try to maximise our 400Mbit fibre
  Host *
- rx 5M          # we have 40Mbit download
- tx 1000000     # we have 8Mbit upload; we could also have written this as "1M"
+ rx 50M         # we have 400Mbit download
+ tx 12.5M       # we have 100Mbit upload; we could also have written this out in full, or as \"12M5\"
  rtt 150        # most servers we care about are an ocean away
  congestion bbr # this works well for us
 
@@ -107,8 +108,9 @@ It is possible for included files to themselves include additional files; there 
 .SH CONFIGURABLE OPTIONS
 
 The following options from the CLI are supported in configuration files:
-
-\fIrx, tx, rtt, congestion, initial_congestion_window, port, timeout, address_family, ssh, ssh_options, remote_port, time_format, ssh_config, ssh_subsystem\fR
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+\fIrx\fR, \fItx\fR, \fIrtt\fR, \fIcongestion\fR, \fIinitial_congestion_window\fR, \fIport\fR, \fItimeout\fR, \fIaddress_family\fR, \fIssh\fR, \fIssh_options\fR, \fIremote_port\fR, \fItime_format\fR, \fIssh_config\fR, \fIssh_subsystem\fR
 
 Refer to \fBqcp\fR(1) for details.
 
@@ -248,7 +250,8 @@ Be sure to place them \fIabove\fR `Host *` in the config file.
 .RE
 
 5. Try it out! Copy some files around and see what network performance is like.
-\fINote that these files need to be large (hundreds of MB or more) to reach peak performance.\fR
+\fINote that these files need to be large (hundreds of MB or more) to really see the effect,
+and you need to go into gigabytes to see it do well on a good fibre connection.\fR
 
 You might like to use `--dry-run` mode to preview the final network configuration for a proposed file transfer.
 If the output isn't what you expected, use `--show-config` and `--remote-config` to see where the various settings came from.

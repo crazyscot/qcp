@@ -24,6 +24,8 @@ e.g.   qcp some/file my\-server:some\-directory/
 .PP
 Exactly one of source and destination must be remote.
 .PP
+Long options may be abbreviated where unambiguous.
+.PP
 qcp will read your ssh config file to resolve any host name aliases you may have defined. The idea is, if you can ssh directly to a given host, you should be able to qcp to it by the same name. However, some particularly complicated ssh config files may be too much for qcp to understand. (In particular, Match directives are not currently supported.) In that case, you can use \-\-ssh\-config to provide an alternative configuration (or set it in your qcp configuration file).
 .PP
 .SS LIMITATIONS
@@ -145,9 +147,9 @@ This option is really intended to be used in a qcp configuration file. On the co
 \fB\-\-ssh\-subsystem\fR
 Ssh subsystem mode
 
-This mode causes qcp to run `ssh <host> \-s qcp` instead of `ssh <host> qcp \-\-server`. This is useful where the remote system has a locked\-down `PATH` and the qcp binary is not resident on that `PATH`.
+This mode causes qcp to run `ssh <host> \-s qcp` instead of `ssh <host> qcp \-\-server`.
 
-The remote system sshd has to be configured with a line like this:
+This is useful where the remote system has a locked\-down `PATH` and the qcp binary is not resident on that `PATH`. The remote system sshd has to be configured with a line like this:
 
 `Subsystem qcp /usr/local/bin/qcp \-\-server`
 .TP
