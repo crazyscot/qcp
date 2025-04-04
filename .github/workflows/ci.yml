@@ -11,21 +11,39 @@ on:
         - main
     workflow_dispatch:
 
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+
 jobs:
   checks:
+    name: checks @${{ matrix.rust-version}}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+        # MSRV must pass all checks
+        - rust-version: 1.85.0 # MSRV
+          may-fail: false
+        # Latest stable is allowed to fail, this gives us a heads up
+        - rust-version: stable
+          may-fail: true
+    continue-on-error: ${{ matrix.may-fail }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
+      - name: Install Rust ${{ matrix.rust-version }}
         uses: dtolnay/rust-toolchain@master
             # this action is used in multiple places
         with:
-          toolchain: stable
+          toolchain: ${{ matrix.rust-version }}
+          components: rustfmt,clippy
 
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
             # this action is used in multiple places
         with:
+          key: ${{ matrix.rust-version }}
           cache-on-failure: true
           cache-all-crates: true
 
@@ -52,7 +70,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
             # this action is used in multiple places
         with:
-          toolchain: nightly
+          toolchain: nightly-2025-03-31
           components: llvm-tools-preview
       - uses: taiki-e/install-action@daa3c1f1f9a9d46f686d9fc2f65773d0c293688b # v2.49.40
             # this action is used in multiple places
