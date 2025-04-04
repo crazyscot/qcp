@@ -11,6 +11,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
   CARGO_INCREMENTAL: 0
+  _QCP_RUST_PACKAGING_VERSION: 1.86.0
 
 jobs:
   package:
@@ -20,34 +21,34 @@ jobs:
         - build: linux-x86_64-musl
           host: ubuntu-latest
           target: x86_64-unknown-linux-musl
-          rust: stable
+          rust: $_QCP_RUST_PACKAGING_VERSION
           build_deb: true
           cross: true
           pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
         - build: linux-aarch64-musl
           host: ubuntu-latest
           target: aarch64-unknown-linux-musl
-          rust: stable
+          rust: $_QCP_RUST_PACKAGING_VERSION
           build_deb: true
           cross: true
           pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
         - build: apple-x86_64
           host: macos-latest
           target: x86_64-apple-darwin
-          rust: stable
+          rust: $_QCP_RUST_PACKAGING_VERSION
           build_deb: false
           cross: false
         - build: apple-aarch64
           host: macos-latest
           target: aarch64-apple-darwin
-          rust: stable
+          rust: $_QCP_RUST_PACKAGING_VERSION
           build_deb: false
           cross: false
         # freebsd cross-builds as of 31 Mar 2025 but is untested.
         #- build: freebsd-x86_64
         #  host: ubuntu-latest
         #  target: x86_64-unknown-freebsd
-        #  rust: stable
+        #  rust: $_QCP_RUST_PACKAGING_VERSION
         #  build_deb: false
         #  cross: true
         # netbsd rust support is tier 2; as of 31 Mar 2025 the crossbuild fails to link (cannot find -lexecinfo).
@@ -62,7 +63,7 @@ jobs:
       uses: dtolnay/rust-toolchain@master
             # this action is used in multiple places
       with:
-        toolchain: stable
+        toolchain: ${{ matrix.rust }}
         targets: ${{ matrix.target }}
     - name: Additional rust tools
       uses: taiki-e/install-action@daa3c1f1f9a9d46f686d9fc2f65773d0c293688b # v2.49.40
