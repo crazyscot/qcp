@@ -70,6 +70,50 @@ impl Ssh {
         Ok(sp)
     }
 
+    fn ssh_cli_args(
+        connection_type: ConnectionType,
+        ssh_hostname: &str,
+        config: &Configuration_Optional,
+    ) -> Vec<String> {
+        let mut args = Vec::new();
+        let defaults = Configuration::system_default();
+
+        // Connection type
+        args.push(
+            match connection_type {
+                ConnectionType::Ipv4 => "-4",
+                ConnectionType::Ipv6 => "-6",
+            }
+            .to_owned(),
+        );
+
+        // Remote user
+        if let Some(username) = &config.remote_user {
+            if !username.is_empty() {
+                args.push("-l".to_owned());
+                args.push(username.clone());
+            }
+        }
+
+        // Other SSH options
+        args.extend_from_slice(config.ssh_options.as_ref().unwrap_or(&defaults.ssh_options));
+
+        // Hostname
+        args.push(ssh_hostname.to_owned());
+
+        // Subsystem or process (must appear after hostname!)
+        args.extend_from_slice(
+            &if config.ssh_subsystem.unwrap_or(false) {
+                ["-s", "qcp"]
+            } else {
+                ["qcp", "--server"]
+            }
+            .map(String::from),
+        );
+
+        args
+    }
+
     /// Constructor
     pub(crate) fn new(
         display: &MultiProgress,
@@ -82,32 +126,18 @@ impl Ssh {
         let defaults = Configuration::system_default();
 
         let mut server = tokio::process::Command::new(
-            working_config.ssh.unwrap_or_else(|| defaults.ssh.clone()),
-        );
-        let _ = match connection_type {
-            ConnectionType::Ipv4 => server.arg("-4"),
-            ConnectionType::Ipv6 => server.arg("-6"),
-        };
-        if let Some(username) = working_config.remote_user {
-            if !username.is_empty() {
-                let _ = server.args(["-l", &username]);
-            }
-        }
-        let _ = server.args(
             working_config
-                .ssh_options
-                .unwrap_or_else(|| defaults.ssh_options.clone()),
+                .ssh
+                .as_deref()
+                .unwrap_or_else(|| &defaults.ssh),
         );
-
-        // hostname is sent here -------------------------
-        let _ = server.args([ssh_hostname]);
-        if working_config.ssh_subsystem.unwrap_or(false) {
-            let _ = server.args(["-s", "qcp"]);
-        } else {
-            let _ = server.args(["qcp", "--server"]);
-        }
 
         let _ = server
+            .args(Self::ssh_cli_args(
+                connection_type,
+                ssh_hostname,
+                &working_config,
+            ))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true);
@@ -147,7 +177,31 @@ mod test {
     use crate::control::ControlChannel;
     use crate::{client::Parameters, config::Manager};
 
-    use super::Ssh;
+    use super::{Configuration_Optional, ConnectionType, Ssh};
+
+    fn vec_contains(v: &[String], s: &str) -> bool {
+        v.iter().any(|x| x == s)
+    }
+
+    // this is O(n^2) but that doesn't matter as we're only using it for short slices
+    fn vec_subslice<T: PartialEq>(mut haystack: &[T], needle: &[T]) -> bool {
+        if needle.is_empty() {
+            return true;
+        }
+        while !haystack.is_empty() {
+            if haystack.starts_with(needle) {
+                return true;
+            }
+            haystack = &haystack[1..];
+        }
+        false
+    }
+
+    // this is O(n^2) but that doesn't matter as we're only using it for short slices
+    fn vec_subslice_strings(haystack: &[String], needle1: &[&str]) -> bool {
+        let needle = needle1.iter().map(|s| String::from(*s)).collect::<Vec<_>>();
+        vec_subslice(haystack, &needle)
+    }
 
     #[tokio::test]
     async fn ssh_no_such_host() {
@@ -169,5 +223,63 @@ mod test {
         assert!(e.to_string().contains("failed to connect"));
         child.close().await.unwrap();
         drop(child);
+    }
+
+    #[test]
+    fn connection_type() {
+        let cfg = Configuration_Optional::default();
+        // ipv4
+        let args = Ssh::ssh_cli_args(ConnectionType::Ipv4, "", &cfg);
+        assert!(vec_contains(&args, "-4"));
+        assert!(!vec_contains(&args, "-6"));
+        // ipv6
+        let args = Ssh::ssh_cli_args(ConnectionType::Ipv6, "", &cfg);
+        assert!(vec_contains(&args, "-6"));
+        assert!(!vec_contains(&args, "-4"));
+    }
+
+    #[test]
+    fn username() {
+        // negative case
+        let args = Ssh::ssh_cli_args(ConnectionType::Ipv4, "", &Configuration_Optional::default());
+        assert!(!vec_contains(&args, "-l"));
+
+        // positive case
+        let cfg1 = Configuration_Optional {
+            remote_user: Some("xyzy".to_owned()),
+            ..Default::default()
+        };
+        let args = Ssh::ssh_cli_args(ConnectionType::Ipv4, "", &cfg1);
+        assert!(vec_subslice_strings(&args, &["-l", "xyzy"]));
+    }
+
+    #[test]
+    fn hostname_ssh_opts() {
+        let xopts = ["--abc", "def", "--ghi", "jkl"];
+        let cfg1 = Configuration_Optional {
+            ssh_options: Some(xopts.map(String::from).to_vec()),
+            ..Default::default()
+        };
+        let args = Ssh::ssh_cli_args(ConnectionType::Ipv4, "my_host", &cfg1);
+        assert!(vec_contains(&args, "my_host"));
+        assert!(vec_subslice_strings(&args, &xopts));
+    }
+
+    #[test]
+    fn subsystem_mode() {
+        let host = "myserver";
+        let args = Ssh::ssh_cli_args(
+            ConnectionType::Ipv4,
+            host,
+            &Configuration_Optional::default(),
+        );
+        assert!(vec_subslice_strings(&args, &["qcp", "--server"]));
+
+        let cfg1 = Configuration_Optional {
+            ssh_subsystem: Some(true),
+            ..Default::default()
+        };
+        let args1 = Ssh::ssh_cli_args(ConnectionType::Ipv4, host, &cfg1);
+        assert!(vec_subslice_strings(&args1, &["-s", "qcp"]));
     }
 }
