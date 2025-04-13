@@ -89,6 +89,8 @@ impl Ssh {
 
         // Remote user
         if let Some(username) = &config.remote_user {
+            // N.B. remote_user in config may be populated as a result of user@host syntax on the command line.
+            // That takes priority over any value in config (hence, also over the --remote-user option, which would arguably be an error if it was inconsistent).
             if !username.is_empty() {
                 args.push("-l".to_owned());
                 args.push(username.clone());

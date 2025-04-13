@@ -2,7 +2,10 @@
 // (c) 2024 Ross Younger
 
 use super::{CopyJobSpec, FileSpec};
+use crate::config::Source as ConfigSource;
 use clap::Parser;
+
+const META_JOBSPEC: &str = "command-line (user@host)";
 
 #[derive(Debug, Parser, Clone, Default)]
 #[allow(clippy::struct_excessive_bools)]
@@ -103,30 +106,36 @@ impl TryFrom<&Parameters> for CopyJobSpec {
 impl Parameters {
     /// A best-effort attempt to extract a single remote host string from the parameters.
     ///
-    /// # Output
+    /// # Returns
     /// If neither source nor dest are present, `Ok("")`
     /// If at most one of source and dest contains a remote host, `Ok(<host>)`
     ///
     /// # Errors
     /// If both source and dest contain a remote host, Err("Only one remote file argument is supported")
     pub(crate) fn remote_host_lossy(&self) -> anyhow::Result<Option<&str>> {
-        let src_host = self
-            .source
-            .as_ref()
-            .and_then(super::job::FileSpec::hostname);
-        let dst_host = self
-            .destination
-            .as_ref()
-            .and_then(super::job::FileSpec::hostname);
-        Ok(if let Some(src_host) = src_host {
-            if dst_host.is_some() {
-                anyhow::bail!("Only one remote file argument is supported");
-            }
-            Some(src_host)
-        } else {
-            // Destination without source would be an exotic situation, but do our best anyway:
-            dst_host
-        })
+        let src_host = self.source.as_ref().and_then(FileSpec::hostname);
+        let dst_host = self.destination.as_ref().and_then(FileSpec::hostname);
+        anyhow::ensure!(
+            src_host.is_none() || dst_host.is_none(),
+            "Only one remote file argument is supported"
+        );
+        Ok(src_host.or(dst_host))
+    }
+
+    /// Extracts the remote username from the jobspec, if there was one.
+    /// We do this as a configuration because we allow it to be specified in multiple ways:
+    /// * -l username  # same as for ssh/scp
+    /// * `user@host:file`
+    /// * our configuration file
+    pub(crate) fn remote_user_as_config(&self) -> impl figment::Provider {
+        let mut cfg = ConfigSource::new(META_JOBSPEC);
+        let src = self.source.as_ref().and_then(FileSpec::remote_user);
+        let dest = self.destination.as_ref().and_then(FileSpec::remote_user);
+        let either = src.or(dest);
+        if let Some(u) = either {
+            cfg.add("remote_user", u.into());
+        }
+        cfg
     }
 }
 
@@ -198,6 +207,7 @@ mod tests {
         assert_eq!(copy_job_spec.source.to_string(), "user@host:source.txt");
         assert_eq!(copy_job_spec.destination.to_string(), "destination.txt");
         assert_eq!(copy_job_spec.remote_host(), "host");
+        assert_eq!(copy_job_spec.remote_user().unwrap(), "user");
         assert_eq!(copy_job_spec.user_at_host, "user@host");
     }
 

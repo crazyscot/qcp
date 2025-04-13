@@ -10,6 +10,11 @@ fn hostname_of(user_at_host: &str) -> &str {
     user_at_host.split_once('@').unwrap_or(("", user_at_host)).1
 }
 
+/// Returns the username from a user@host, if one was specified
+fn username_of(user_at_host: &str) -> Option<&str> {
+    user_at_host.split_once('@').map(|tup| tup.0)
+}
+
 /// A file source or destination specified by the user
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct FileSpec {
@@ -29,6 +34,11 @@ impl FileSpec {
     /// Returns only the hostname part of the file, if any; the username is stripped.
     pub(crate) fn hostname(&self) -> Option<&str> {
         self.user_at_host.as_ref().map(|s| hostname_of(s))
+    }
+    /// Returns the username part of the filespec, if this is a remote filespec and a username was given.
+    /// Otherwise, returns None.
+    pub(crate) fn remote_user(&self) -> Option<&str> {
+        self.user_at_host.as_ref().and_then(|s| username_of(s))
     }
 }
 
@@ -122,6 +132,13 @@ impl CopyJobSpec {
     /// The hostname portion of whichever of the arguments contained one.
     pub(crate) fn remote_host(&self) -> &str {
         hostname_of(&self.user_at_host)
+    }
+
+    /// The username portion of whichever of the arguments was remote, if one contained a username.
+    #[cfg(test)]
+    #[cfg_attr(coverage_nightly, coverage(off))]
+    pub(crate) fn remote_user(&self) -> Option<&str> {
+        username_of(&self.user_at_host)
     }
 }
 
