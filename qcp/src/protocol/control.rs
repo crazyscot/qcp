@@ -822,6 +822,7 @@ mod test {
                 begin: 123,
                 end: 456,
             }),
+            remote_user: None,
             timeout: Some(432),
             // other client options are irrelevant to this test but we'll specify them anyway so we can rely on the compiler to catch any missing fields
             address_family: None,

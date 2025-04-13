@@ -176,7 +176,12 @@ pub struct Configuration {
     pub address_family: AddressFamily,
 
     /// Specifies the ssh client program to use [default: `ssh`]
-    #[arg(long, help_heading("Connection"), display_order(0))]
+    #[arg(
+        long,
+        help_heading("Connection"),
+        display_order(0),
+        value_name("ssh-client")
+    )]
     pub ssh: String,
 
     /// Provides an additional option or argument to pass to the ssh client. [default: none]
@@ -207,6 +212,19 @@ pub struct Configuration {
         display_order(0)
     )]
     pub remote_port: PortRange,
+
+    /// Specifies the user on the remote machine to connect as.
+    ///
+    /// This is functionally the same as specifying a remote filename `user@host:file`.
+    /// If unspecified, we leave it up to ssh to determine.
+    #[arg(
+        short = 'l',
+        long,
+        value_name("login_name"),
+        help_heading("Connection"),
+        display_order(0)
+    )]
+    pub remote_user: String,
 
     /// Specifies the time format to use when printing messages to the console or to file
     /// [default: local]
@@ -265,6 +283,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     ssh: "ssh".into(),
     ssh_options: vec![],
     remote_port: PortRange::default(),
+    remote_user: String::new(),
     time_format: TimeFormat::Local,
     ssh_config: Vec::new(),
     ssh_subsystem: false,

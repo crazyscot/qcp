@@ -88,6 +88,11 @@ impl Ssh {
             ConnectionType::Ipv4 => server.arg("-4"),
             ConnectionType::Ipv6 => server.arg("-6"),
         };
+        if let Some(username) = working_config.remote_user {
+            if !username.is_empty() {
+                let _ = server.args(["-l", &username]);
+            }
+        }
         let _ = server.args(
             working_config
                 .ssh_options

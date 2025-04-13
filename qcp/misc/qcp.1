@@ -8,7 +8,7 @@ qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH SYNOPSIS
-\fBqcp\fR [\fB\-b\fR|\fB\-\-rx\fR] [\fB\-B\fR|\fB\-\-tx\fR] [\fB\-r\fR|\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-T\fR|\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-d\fR|\fB\-\-debug\fR] [\fB\-l\fR|\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
+\fBqcp\fR [\fB\-b\fR|\fB\-\-rx\fR] [\fB\-B\fR|\fB\-\-tx\fR] [\fB\-r\fR|\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-T\fR|\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-d\fR|\fB\-\-debug\fR] [\fB\-L\fR|\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH DESCRIPTION
@@ -122,7 +122,7 @@ inet6: IPv6
 any: Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup
 .RE
 .TP
-\fB\-\-ssh\fR=\fISSH\fR
+\fB\-\-ssh\fR=\fIssh\-client\fR
 Specifies the ssh client program to use [default: `ssh`]
 .TP
 \fB\-S\fR=\fIssh\-option\fR
@@ -136,6 +136,11 @@ Uses the given UDP port or range on the **remote** endpoint. This can be useful 
 For example: `12345`, `20000\-20100`
 
 If unspecified, uses any available UDP port.
+.TP
+\fB\-l\fR, \fB\-\-remote\-user\fR=\fIlogin_name\fR
+Specifies the user on the remote machine to connect as.
+
+This is functionally the same as specifying a remote filename `user@host:file`. If unspecified, we leave it up to ssh to determine.
 .TP
 \fB\-\-ssh\-config\fR=\fIFILE\fR
 Alternative ssh config file(s)
@@ -179,7 +184,7 @@ utc: UTC time, as "year\-month\-day HH:MM:SS"
 rfc3339: UTC time, in the format described in [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
 .RE
 .TP
-\fB\-l\fR, \fB\-\-log\-file\fR=\fIFILE\fR
+\fB\-L\fR, \fB\-\-log\-file\fR=\fIFILE\fR
 Log to a file
 
 By default the log receives everything printed to stderr. To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).

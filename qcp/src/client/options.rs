@@ -20,7 +20,7 @@ pub struct Parameters {
     /// By default the log receives everything printed to stderr.
     /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
     #[arg(
-        short('l'),
+        short('L'),
         long,
         action,
         value_name("FILE"),
