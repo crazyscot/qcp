@@ -103,6 +103,30 @@ impl From<&str> for CanonicalIntermediate {
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ValueSource {
+    /// This value came from a string
+    String,
+    /// This value came from a file
+    File(PathBuf),
+}
+
+impl ValueSource {
+    pub(crate) fn filename(&self) -> Option<&PathBuf> {
+        match self {
+            ValueSource::String => None,
+            ValueSource::File(pb) => Some(pb),
+        }
+    }
+    pub(crate) fn filename_lossy(&self) -> PathBuf {
+        self.filename()
+            .map_or_else(PathBuf::new, std::clone::Clone::clone)
+    }
+    pub(crate) fn filename_string_lossy(&self) -> String {
+        self.filename_lossy().to_string_lossy().into_owned()
+    }
+}
+
 /// The business end of reading a config file.
 ///
 /// # Note
@@ -114,8 +138,7 @@ where
 {
     line_number: usize,
     reader: BufReader<R>,
-    source: String,
-    path: Option<PathBuf>,
+    source: ValueSource,
     is_user: bool,
 }
 
@@ -125,8 +148,7 @@ impl Parser<File> {
         let reader = BufReader::new(file);
         Ok(Self::for_reader(
             reader,
-            path.as_ref().to_string_lossy().to_string(),
-            Some(path.into()),
+            ValueSource::File(path.as_ref().into()),
             is_user,
         ))
     }
@@ -134,12 +156,7 @@ impl Parser<File> {
 
 impl<'a> Parser<&'a [u8]> {
     fn for_str(s: &'a str, is_user: bool) -> Self {
-        Self::for_reader(
-            BufReader::new(s.as_bytes()),
-            "<string>".into(),
-            None,
-            is_user,
-        )
+        Self::for_reader(BufReader::new(s.as_bytes()), ValueSource::String, is_user)
     }
 }
 
@@ -150,17 +167,11 @@ impl Default for Parser<&[u8]> {
 }
 
 impl<R: Read> Parser<R> {
-    fn for_reader(
-        reader: BufReader<R>,
-        source: String,
-        path: Option<PathBuf>,
-        is_user: bool,
-    ) -> Self {
+    fn for_reader(reader: BufReader<R>, source: ValueSource, is_user: bool) -> Self {
         Self {
             line_number: 0,
             reader,
             source,
-            path,
             is_user,
         }
     }
@@ -232,7 +243,8 @@ impl<R: Read> Parser<R> {
                                 Parser::for_path(&f, self.is_user).with_context(|| {
                                     format!(
                                         "Include directive at {} line {}",
-                                        self.source, self.line_number
+                                        self.source.filename_string_lossy(),
+                                        self.line_number
                                     )
                                 })?;
                             subparser.parse_file_inner(accepting, depth + 1, output)?;
@@ -243,7 +255,7 @@ impl<R: Read> Parser<R> {
                     if *accepting {
                         // per ssh_config(5), the first matching entry for a given key wins.
                         let _ = output.data.entry(keyword).or_insert_with(|| Setting {
-                            source: self.source.clone(),
+                            source: self.source.filename_string_lossy(),
                             line_number: self.line_number,
                             args,
                         });
@@ -257,7 +269,7 @@ impl<R: Read> Parser<R> {
     /// Interprets the source with a given hostname in mind.
     /// This consumes the `Parser`.
     pub(crate) fn parse_file_for(mut self, host: Option<&str>) -> Result<HostConfiguration> {
-        let mut output = HostConfiguration::new(host, self.path.take());
+        let mut output = HostConfiguration::new(host, self.source.filename().cloned());
         let mut accepting = true;
         self.parse_file_inner(&mut accepting, 0, &mut output)?;
         Ok(output)
