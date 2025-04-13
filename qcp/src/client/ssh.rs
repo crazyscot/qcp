@@ -1,10 +1,10 @@
 //! Interaction with ssh configuration
 // (c) 2024 Ross Younger
 
-use std::{path::PathBuf, str::FromStr};
+use std::{ffi::OsStr, path::PathBuf};
 
 use crate::config::ssh::Parser;
-use anyhow::{Context, Result};
+use anyhow::Context;
 use tracing::{debug, warn};
 
 use crate::os::{AbstractPlatform as _, Platform};
@@ -20,19 +20,12 @@ struct ConfigFile {
 }
 
 impl ConfigFile {
-    fn for_path(path: PathBuf, user: bool) -> Self {
+    fn new<S: AsRef<OsStr> + ?Sized>(s: &S, user: bool, warn_on_error: bool) -> Self {
         Self {
-            path,
-            user,
-            warn_on_error: false,
-        }
-    }
-    fn for_str(path: &str, user: bool, warn_on_error: bool) -> Result<Self> {
-        Ok(Self {
-            path: PathBuf::from_str(path)?,
+            path: s.into(),
             user,
             warn_on_error,
-        })
+        }
     }
 
     /// Attempts to resolve a hostname from a single OpenSSH-style config file
@@ -95,18 +88,17 @@ pub(crate) fn resolve_host_alias(host: &str, config_files: &[String]) -> Option<
     let files = if config_files.is_empty() {
         let mut v = Vec::new();
         if let Some(f) = Platform::user_ssh_config() {
-            v.push(ConfigFile::for_path(f, true));
+            v.push(ConfigFile::new(&f, true, false));
         }
         if let Some(p) = Platform::system_ssh_config() {
-            if let Ok(f) = ConfigFile::for_str(&p.to_string_lossy(), false, false) {
-                v.push(f);
-            }
+            let f = ConfigFile::new(&p, false, false);
+            v.push(f);
         }
         v
     } else {
         config_files
             .iter()
-            .flat_map(|s| ConfigFile::for_str(s, true, true))
+            .map(|s| ConfigFile::new(s, true, true))
             .collect()
     };
     for cfg in files {
@@ -127,7 +119,7 @@ mod test {
     use crate::util::make_test_tempfile;
 
     fn resolve_one(path: &Path, user: bool, host: &str) -> Option<String> {
-        ConfigFile::for_path(path.to_path_buf(), user).resolve_one(host)
+        ConfigFile::new(&path.to_path_buf(), user, false).resolve_one(host)
     }
 
     #[test]
