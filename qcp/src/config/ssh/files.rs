@@ -3,9 +3,10 @@
 
 use std::{
     collections::BTreeMap,
+    ffi::OsStr,
     fs::File,
     io::{BufRead, BufReader, Read},
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::LazyLock,
 };
 
@@ -119,17 +120,13 @@ where
 }
 
 impl Parser<File> {
-    pub(crate) fn for_path<P>(path: P, is_user: bool) -> Result<Self>
-    where
-        P: AsRef<Path>,
-    {
-        let path = path.as_ref();
-        let file = File::open(path)?;
+    pub(crate) fn for_path<P: AsRef<OsStr> + ?Sized>(path: &P, is_user: bool) -> Result<Self> {
+        let file = File::open(path.as_ref())?;
         let reader = BufReader::new(file);
         Ok(Self::for_reader(
             reader,
-            path.to_string_lossy().to_string(),
-            Some(path.to_path_buf()),
+            path.as_ref().to_string_lossy().to_string(),
+            Some(path.into()),
             is_user,
         ))
     }
@@ -232,7 +229,7 @@ impl<R: Read> Parser<R> {
                         let files = find_include_files(&arg, self.is_user)?;
                         for f in files {
                             let mut subparser =
-                                Parser::for_path(f, self.is_user).with_context(|| {
+                                Parser::for_path(&f, self.is_user).with_context(|| {
                                     format!(
                                         "Include directive at {} line {}",
                                         self.source, self.line_number
@@ -447,7 +444,7 @@ mod test {
         ",
             "test.conf",
         );
-        let output = Parser::for_path(path, true)
+        let output = Parser::for_path(&path, true)
             .unwrap()
             .parse_file_for(None)
             .unwrap();
@@ -464,7 +461,7 @@ mod test {
         "
         );
         std::fs::write(&path, contents).unwrap();
-        let err = Parser::for_path(path, true)
+        let err = Parser::for_path(&path, true)
             .unwrap()
             .parse_file_for(None)
             .unwrap_err();
@@ -481,7 +478,7 @@ mod test {
         std::fs::write(&path1, format!("include {glob:?}")).unwrap();
         std::fs::write(&path2, "hi there").unwrap();
         std::fs::write(&path3, "green cheese").unwrap();
-        let output = Parser::for_path(path1, true)
+        let output = Parser::for_path(&path1, true)
             .unwrap()
             .parse_file_for(None)
             .unwrap();
@@ -493,7 +490,7 @@ mod test {
     #[ignore]
     fn dump_local_config() {
         let path = Platform::user_ssh_config().unwrap();
-        let parser = Parser::for_path(path, true).unwrap();
+        let parser = Parser::for_path(&path, true).unwrap();
         let data = parser.parse_file_for(Some("lapis")).unwrap();
         println!("{data:#?}");
     }
