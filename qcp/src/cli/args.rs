@@ -1,6 +1,7 @@
 //! Command-line argument definition and processing
 // (c) 2024 Ross Younger
 
+use anyhow::Result;
 use clap::{ArgAction::SetTrue, Args as _, FromArgMatches as _, Parser};
 
 use crate::{config::Manager, util::AddressFamily};
@@ -131,6 +132,11 @@ impl CliArgs {
         }
         args
     }
+
+    /// Applies any options derived from the jobspec to this configuration
+    fn apply_jobspec_to(&self, mgr: &mut Manager) {
+        mgr.merge_provider(self.client_params.remote_user_as_config());
+    }
 }
 
 impl TryFrom<&CliArgs> for Manager {
@@ -141,6 +147,109 @@ impl TryFrom<&CliArgs> for Manager {
 
         let mut mgr = Manager::standard(host);
         mgr.merge_provider(&value.config);
+
+        value.apply_jobspec_to(&mut mgr);
         Ok(mgr)
+    }
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod test {
+    use std::str::FromStr;
+
+    use figment::Provider;
+
+    use crate::{
+        FileSpec, Parameters,
+        config::{Configuration_Optional, Manager, Source},
+    };
+
+    use super::CliArgs;
+
+    fn get_cli_args(src: bool, dst: bool) -> CliArgs {
+        CliArgs {
+            client_params: Parameters {
+                source: if src {
+                    Some(FileSpec::from_str("myuser@myhost:myfile").unwrap())
+                } else {
+                    None
+                },
+                destination: if dst {
+                    Some(FileSpec::from_str("myuser@myhost:myfile").unwrap())
+                } else {
+                    None
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn config_user(user: &str) -> impl Provider {
+        let mut prov = Source::new("test");
+        prov.add("remote_user", user.into());
+        prov
+    }
+
+    #[test]
+    fn src_has_user() {
+        let args = get_cli_args(true, false);
+
+        let mut mgr = Manager::without_default(None);
+        args.apply_jobspec_to(&mut mgr);
+        let cfg = mgr.get::<Configuration_Optional>().unwrap();
+        assert_eq!(cfg.remote_user, Some("myuser".to_owned()));
+    }
+
+    #[test]
+    fn dest_has_user() {
+        let args = get_cli_args(false, true);
+
+        let mut mgr = Manager::without_default(None);
+        args.apply_jobspec_to(&mut mgr);
+        let cfg = mgr.get::<Configuration_Optional>().unwrap();
+        assert_eq!(cfg.remote_user, Some("myuser".to_owned()));
+    }
+
+    #[test]
+    fn neither_has_user() {
+        let args = get_cli_args(false, false);
+
+        let mut mgr = Manager::without_default(None);
+        args.apply_jobspec_to(&mut mgr);
+        let cfg = mgr.get::<Configuration_Optional>().unwrap();
+        assert_eq!(cfg.remote_user, None);
+    }
+
+    #[test]
+    fn config_has_user() {
+        let args = get_cli_args(false, false);
+
+        let mut mgr = Manager::without_default(None);
+        mgr.merge_provider(config_user("user1"));
+        args.apply_jobspec_to(&mut mgr);
+        let cfg = mgr.get::<Configuration_Optional>().unwrap();
+        assert_eq!(cfg.remote_user, Some("user1".into()));
+    }
+
+    #[test]
+    fn there_can_be_only_one_remote() {
+        let args = get_cli_args(true, true);
+        let mgr = Manager::try_from(&args);
+        assert!(mgr.is_err());
+    }
+
+    #[test]
+    fn priority() {
+        let args = get_cli_args(true, false);
+
+        // a configuration with a remote_user set:
+        let mut mgr = Manager::without_default(None);
+        mgr.merge_provider(config_user("user2"));
+        // now apply a job with a remote user:
+        args.apply_jobspec_to(&mut mgr);
+        let cfg = mgr.get::<Configuration_Optional>().unwrap();
+        assert_eq!(cfg.remote_user, Some("myuser".to_owned()));
     }
 }
