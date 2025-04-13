@@ -159,4 +159,6 @@ pub use manager::Manager;
 
 pub(crate) const BASE_CONFIG_FILENAME: &str = "qcp.conf";
 
+mod source;
+pub(crate) use source::LocalConfigSource as Source;
 pub(crate) mod ssh;
