@@ -4,7 +4,6 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
-use figment::{Provider, value::Dict};
 use human_repr::HumanCount as _;
 use quinn::{
     TransportConfig,
@@ -13,13 +12,16 @@ use quinn::{
 use tracing::debug;
 
 use crate::{
-    config::{Configuration, Configuration_Optional, Manager},
+    config::{self, Configuration, Configuration_Optional, Manager},
     protocol::control::{ClientMessageV1, CongestionController},
     util::PortRange,
 };
 
 /// Keepalive interval for the QUIC connection
 pub(crate) const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
+
+const META_CLIENT: &str = "requested by client";
+const META_NEGOTIATED: &str = "config resolution logic";
 
 /// Specifies whether to configure to maximise transmission throughput, receive throughput, or both.
 /// Specifying `Both` for a one-way data transfer will work, but wastes kernel memory.
@@ -115,8 +117,8 @@ fn negotiate_v3<ClientType, ServerType, BaseType>(
     client: Option<ClientType>,
     server: Option<ServerType>,
     resolve_conflict: fn(BaseType, BaseType) -> CombinationResponse<BaseType>,
-    client_out: &mut ConfigBucket,
-    resolved_out: &mut ConfigBucket,
+    client_out: &mut config::Source,
+    resolved_out: &mut config::Source,
     key: &str,
 ) -> Result<()>
 where
@@ -197,8 +199,8 @@ pub fn combine_bandwidth_configurations(
     client: &ClientMessageV1,
 ) -> Result<Configuration> {
     let server: Configuration_Optional = manager.get::<Configuration_Optional>()?;
-    let mut client_picks = ConfigBucket::new(ConfigBucket::META_CLIENT);
-    let mut negotiated = ConfigBucket::new(ConfigBucket::META_NEGOTIATED);
+    let mut client_picks = config::Source::new(META_CLIENT);
+    let mut negotiated = config::Source::new(META_NEGOTIATED);
 
     // a little syntactic sugar to reduce repetitions
     macro_rules! negotiate {
@@ -291,42 +293,4 @@ fn make_entry_human_friendly(
 fn make_dict_human_friendly(dict: &mut figment::value::Dict) {
     make_entry_human_friendly(dict.entry("rx".into()));
     make_entry_human_friendly(dict.entry("tx".into()));
-}
-
-struct ConfigBucket {
-    source: String,
-    data: figment::value::Dict,
-}
-
-impl ConfigBucket {
-    const META_CLIENT: &str = "requested by client";
-    const META_NEGOTIATED: &str = "config resolution logic";
-
-    fn new(source: &str) -> Self {
-        Self {
-            source: source.to_string(),
-            data: Dict::new(),
-        }
-    }
-
-    fn add(&mut self, key: &str, val: figment::value::Value) {
-        let _ = self.data.insert(key.into(), val);
-    }
-
-    fn borrow(&mut self) -> &mut figment::value::Dict {
-        &mut self.data
-    }
-}
-
-impl Provider for ConfigBucket {
-    fn metadata(&self) -> figment::Metadata {
-        figment::Metadata::named(self.source.clone())
-    }
-    fn data(
-        &self,
-    ) -> Result<figment::value::Map<figment::Profile, figment::value::Dict>, figment::Error> {
-        let mut profile_map = figment::value::Map::new();
-        let _ = profile_map.insert(figment::Profile::Global, self.data.clone());
-        Ok(profile_map)
-    }
 }
