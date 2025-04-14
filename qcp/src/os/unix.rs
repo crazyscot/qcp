@@ -27,13 +27,9 @@ impl super::AbstractPlatform for Platform {
         Some(pb)
     }
 
-    fn user_config_dir() -> Option<PathBuf> {
-        dirs::home_dir()
-    }
-
     fn user_config_path() -> Option<PathBuf> {
         // ~/.<filename> for now
-        let mut d: PathBuf = Self::user_config_dir()?;
+        let mut d: PathBuf = dirs::home_dir()?;
         d.push(format!(".{BASE_CONFIG_FILENAME}"));
         Some(d)
     }
@@ -175,10 +171,8 @@ mod test {
         );
         let s = Platform::user_ssh_config().unwrap();
         assert!(s.to_string_lossy().contains("/home/"));
-        let d = Platform::user_config_dir().unwrap();
-        assert!(d.to_string_lossy().contains("/home/"));
         let p = Platform::user_config_path().unwrap();
-        assert!(p.to_string_lossy().starts_with("/home/"));
+        assert!(p.to_string_lossy().contains("/home/"));
         let q = Platform::system_config_path().unwrap();
         assert!(q.to_string_lossy().starts_with("/etc/"));
     }
