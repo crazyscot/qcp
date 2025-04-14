@@ -99,13 +99,6 @@ pub trait AbstractPlatform {
     /// That is up to the caller to determine and reason about.
     fn user_ssh_config() -> Option<PathBuf>;
 
-    /// The directory to store user configuration files in.
-    ///
-    /// On Unix platforms this is the traditional home directory.
-    ///
-    /// If somehow we could not determine the directory to use, returns None (and may emit a warning).
-    fn user_config_dir() -> Option<PathBuf>;
-
     /// The absolute path to the user configuration file, if one is defined on this platform.
     ///
     /// If somehow we could not determine the path to use, returns None (and may emit a warning).
