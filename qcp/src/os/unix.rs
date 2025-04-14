@@ -3,13 +3,11 @@
 
 use crate::cli::styles::{ERROR, HEADER, INFO, RESET, SUCCESS, WARNING};
 use crate::config::BASE_CONFIG_FILENAME;
-use crate::util::socket::set_udp_buffer_sizes;
 
 use human_repr::HumanCount as _;
 use rustix::process::{Uid, geteuid};
 
-use std::net::{Ipv4Addr, SocketAddrV4};
-use std::{net::UdpSocket, path::PathBuf};
+use std::path::PathBuf;
 
 /// Unix platform implementation
 #[derive(Debug, Clone, Copy)]
@@ -48,15 +46,6 @@ impl super::AbstractPlatform for Platform {
     }
 }
 
-fn test_buffers(wanted_recv: u64, wanted_send: u64) -> anyhow::Result<Option<String>> {
-    let mut socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0))?;
-    set_udp_buffer_sizes(
-        &mut socket,
-        Some(wanted_send.try_into()?),
-        Some(wanted_recv.try_into()?),
-    )
-}
-
 #[cfg_attr(coverage_nightly, coverage(off))]
 fn help_buffers_unix(rmem: u64, wmem: u64) {
     println!(
@@ -67,7 +56,7 @@ but this usually requires the kernel limits to be configured appropriately.
 Testing this system..."
     );
 
-    let result = test_buffers(rmem, wmem);
+    let result = super::test_buffers(rmem, wmem);
     let tested_ok = match result {
         Err(e) => {
             println!(
@@ -77,25 +66,28 @@ Outputting general advice..."
             );
             false
         }
-        Ok(Some(s)) => {
+        Ok(r) => {
             println!(
-                r"
-😞 {INFO}Test result:{RESET} {s}"
+                "{INFO}Test result:{RESET} {rx} (read) / {tx} (write)",
+                rx = r.recv.human_count_bytes(),
+                tx = r.send.human_count_bytes()
             );
-            false
+            if let Some(warning) = r.warning {
+                println!(
+                    r"
+😞 {INFO}{warning}{RESET}"
+                );
+            } else {
+                println!(
+                    r"
+🚀 {SUCCESS}Great!{RESET}"
+                );
+            }
+            r.ok
         }
-        Ok(None) => true,
     };
 
     if tested_ok {
-        println!(
-            r"
-🚀 {SUCCESS}Test result: Success{RESET}: {} (read) / {} (write).
-Great!{RESET}",
-            rmem.human_count_bytes(),
-            wmem.human_count_bytes()
-        );
-
         // root can usually override resource limits, so beware of false negatives
         if geteuid() != Uid::ROOT {
             println!(
@@ -157,7 +149,9 @@ Good luck!",
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
+    use super::super::test_buffers;
     use super::Platform;
     use crate::os::AbstractPlatform;
 
@@ -184,13 +178,14 @@ mod test {
 
     #[test]
     fn test_buffers_small_ok() {
-        assert!(super::test_buffers(131_072, 131_072).unwrap().is_none());
+        assert!(test_buffers(131_072, 131_072).unwrap().warning.is_none());
     }
     #[test]
     fn test_buffers_gigantic_err() {
         assert!(
-            super::test_buffers(1_073_741_824, 1_073_741_824)
+            test_buffers(1_073_741_824, 1_073_741_824)
                 .unwrap()
+                .warning
                 .is_some()
         );
     }
