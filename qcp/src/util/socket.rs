@@ -8,13 +8,21 @@ use tracing::{debug, info, warn};
 
 use super::PortRange;
 
+#[derive(Debug, Clone)]
+pub(crate) struct UdpBufferSizeData {
+    pub(crate) ok: bool,
+    pub(crate) send: usize,
+    pub(crate) recv: usize,
+    pub(crate) warning: Option<String>,
+}
+
 /// Set the buffer size options on a UDP socket.
 /// May return a warning message, if we weren't able to do so.
 pub(crate) fn set_udp_buffer_sizes(
     socket: &mut UdpSocket,
     wanted_send: Option<usize>,
     wanted_recv: Option<usize>,
-) -> anyhow::Result<Option<String>> {
+) -> anyhow::Result<UdpBufferSizeData> {
     let mut send = socket.get_sendbuf()?;
     let mut recv = socket.get_recvbuf()?;
     debug!(
@@ -44,7 +52,7 @@ pub(crate) fn set_udp_buffer_sizes(
     send = socket.get_sendbuf()?;
     recv = socket.get_recvbuf()?;
     let mut message: Option<String> = None;
-    if send < wanted_send || recv < wanted_recv {
+    let ok = if send < wanted_send || recv < wanted_recv {
         let msg = format!(
             "Unable to set UDP buffer sizes (send wanted {}, got {}; receive wanted {}, got {}). This may affect performance.",
             wanted_send.human_count_bytes(),
@@ -62,6 +70,7 @@ pub(crate) fn set_udp_buffer_sizes(
                 .next()
                 .unwrap_or("<this program>".to_string()),
         );
+        false
         // SOMEDAY: We might offer to set sysctl, write sysctl files, etc. if run as root.
     } else {
         debug!(
@@ -69,8 +78,14 @@ pub(crate) fn set_udp_buffer_sizes(
             send.human_count_bare(),
             recv.human_count_bare()
         );
-    }
-    Ok(message)
+        true
+    };
+    Ok(UdpBufferSizeData {
+        ok,
+        send,
+        recv,
+        warning: message,
+    })
 }
 
 /// Creates and binds a UDP socket from a restricted range of local ports, for a given local address

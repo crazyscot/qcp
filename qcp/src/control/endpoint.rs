@@ -68,6 +68,7 @@ pub(crate) fn create_endpoint(
     };
 
     let warning = util::socket::set_udp_buffer_sizes(&mut socket, wanted_send, wanted_recv)?
+        .warning
         .inspect(|s| warn!("{s:?}"));
 
     trace!("create endpoint");

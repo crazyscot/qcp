@@ -1,8 +1,13 @@
 //! OS abstraction layer
 // (c) 2024 Ross Younger
 
-use std::{net::UdpSocket, path::PathBuf, sync::Once};
+use std::{
+    net::{Ipv4Addr, SocketAddrV4, UdpSocket},
+    path::PathBuf,
+    sync::Once,
+};
 
+use crate::util::socket::UdpBufferSizeData;
 use anyhow::Result;
 use cfg_if::cfg_if;
 use rustix::net::sockopt as RustixSO;
@@ -97,6 +102,16 @@ pub trait SocketOptions: private::SealedSocket {
 }
 
 impl SocketOptions for UdpSocket {}
+
+/// Can we set the kernel buffer sizes we want to?
+fn test_buffers(wanted_recv: u64, wanted_send: u64) -> anyhow::Result<UdpBufferSizeData> {
+    let mut socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0))?;
+    crate::util::socket::set_udp_buffer_sizes(
+        &mut socket,
+        Some(wanted_send.try_into()?),
+        Some(wanted_recv.try_into()?),
+    )
+}
 
 /// General platform abstraction trait
 ///
