@@ -27,8 +27,8 @@ impl super::AbstractPlatform for Platform {
         Some(pb)
     }
 
-    fn user_config_path() -> Option<PathBuf> {
-        // ~/.<filename> for now
+    fn user_config_path_extra() -> Option<PathBuf> {
+        // ~/.qcp.conf for now
         let mut d: PathBuf = dirs::home_dir()?;
         d.push(format!(".{BASE_CONFIG_FILENAME}"));
         Some(d)
@@ -171,10 +171,15 @@ mod test {
         );
         let s = Platform::user_ssh_config().unwrap();
         assert!(s.to_string_lossy().contains("/home/"));
-        let p = Platform::user_config_path().unwrap();
-        assert!(p.to_string_lossy().contains("/home/"));
         let q = Platform::system_config_path().unwrap();
         assert!(q.to_string_lossy().starts_with("/etc/"));
+
+        let pv = Platform::user_config_paths();
+        assert!(pv.len() == 2);
+        assert!(pv[0].to_string_lossy().contains("/home/"));
+        assert!(pv[0].to_string_lossy().contains("/qcp/qcp.conf"));
+        assert!(pv[1].to_string_lossy().contains("/home/"));
+        assert!(pv[1].to_string_lossy().contains("/.qcp.conf"));
     }
 
     #[test]

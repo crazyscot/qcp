@@ -82,8 +82,16 @@ impl Manager {
     pub fn standard(for_host: Option<&str>) -> Self {
         let mut new1 = Self::new(for_host);
         // N.B. This may leave data in a fused-error state, if a config file isn't parseable.
-        new1.add_config(false, "system", Platform::system_config_path(), for_host);
-        new1.add_config(true, "user", Platform::user_config_path(), for_host);
+        new1.add_config(
+            false,
+            "system",
+            Platform::system_config_path().as_ref(),
+            for_host,
+        );
+
+        for p in &Platform::user_config_paths() {
+            new1.add_config(true, "user", Some(p), for_host);
+        }
         new1
     }
 
@@ -98,7 +106,7 @@ impl Manager {
         &mut self,
         is_user: bool,
         what: &str,
-        path: Option<PathBuf>,
+        path: Option<&PathBuf>,
         for_host: Option<&str>,
     ) {
         let Some(path) = path else {
@@ -117,11 +125,14 @@ impl Manager {
     /// This is a function of platform and the current user id.
     #[must_use]
     pub fn config_files() -> Vec<String> {
-        let inputs = vec![Platform::system_config_path(), Platform::user_config_path()];
-
+        let mut inputs = Vec::new();
+        if let Some(p) = Platform::system_config_path() {
+            inputs.push(p);
+        }
+        inputs.extend_from_slice(&Platform::user_config_paths());
         inputs
-            .into_iter()
-            .filter_map(|p| Some(p?.into_os_string().to_string_lossy().to_string()))
+            .iter()
+            .map(|p| p.as_os_str().to_string_lossy().to_string())
             .collect()
     }
 
