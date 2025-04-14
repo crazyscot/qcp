@@ -3,8 +3,10 @@
 //!
 //! qcp obtains run-time configuration from the following sources, in order:
 //! 1. Command-line options
-//! 2. The user's configuration file (usually `~/.qcp.conf`) on either side of the connection (see [negotiation](#configuration-negotiation))
-//! 3. The system-wide configuration file (usually `/etc/qcp.conf`) on either side of the connection
+//! 2. The user's configuration file on either side of the connection (see [negotiation](#configuration-negotiation))
+//!    * On Unix, this is `~/.qcp.conf` or `~/.config/qcp/qcp.conf`
+//! 3. The system-wide configuration file on either side of the connection
+//!    * On Unix, this is `/etc/qcp.conf`
 //! 4. Hard-wired defaults
 //!
 //! Each option may appear in multiple places, but only the first match is used.

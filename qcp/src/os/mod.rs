@@ -99,10 +99,26 @@ pub trait AbstractPlatform {
     /// That is up to the caller to determine and reason about.
     fn user_ssh_config() -> Option<PathBuf>;
 
-    /// The absolute path to the user configuration file, if one is defined on this platform.
-    ///
-    /// If somehow we could not determine the path to use, returns None (and may emit a warning).
-    fn user_config_path() -> Option<PathBuf>;
+    /// The absolute path to an extra user configuration file, if one is defined on this platform.
+    fn user_config_path_extra() -> Option<PathBuf>;
+
+    /// The list of absolute paths to possible user configuration files.
+    /// This always includes `dirs::config_dir()/qcp/qcp.conf`, and may include others
+    /// depending on the platform.
+    /// The order of the paths is significant; settings are applied in the order they are found.
+    #[must_use]
+    fn user_config_paths() -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        if let Some(mut pb) = dirs::config_dir() {
+            pb.push("qcp");
+            pb.push(crate::config::BASE_CONFIG_FILENAME);
+            paths.push(pb);
+        }
+        if let Some(path) = Self::user_config_path_extra() {
+            paths.push(path);
+        }
+        paths
+    }
 
     /// The absolute path to the system configuration file, if one is defined on this platform.
     fn system_config_path() -> Option<PathBuf>;
