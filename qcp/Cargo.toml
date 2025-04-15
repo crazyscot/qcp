@@ -8,8 +8,8 @@ authors = ["Ross Younger <qcp@crazyscot.com>"]
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/crazyscot/qcp/"
 homepage = "https://github.com/crazyscot/qcp/"
-keywords = [ "networking", "file-transfer", "quic" ]
-categories = [ "command-line-utilities" ]
+keywords = ["networking", "file-transfer", "quic"]
+categories = ["command-line-utilities"]
 readme = "../README.md"
 
 [features]
@@ -46,7 +46,11 @@ human-repr = "1.1.0"
 indicatif = { version = "0.17.11", features = ["tokio"] }
 mimalloc = "0.1.44"
 num-format = { version = "0.4.4" }
-quinn = { version = "0.11.7", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
+quinn = { version = "0.11.7", default-features = false, features = [
+    "runtime-tokio",
+    "rustls",
+    "ring",
+] }
 rcgen = { version = "0.13.2" }
 rustix = { version = "1.0.3", features = ["net", "fs", "process"] }
 rustls-pki-types = "1.11.0"
@@ -55,11 +59,19 @@ serde_bare = "0.5.0"
 serde_repr = "0.1.20"
 static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
-strum = { version = "0.27.1", features = ["derive"]}
+strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
 tabled = "0.18.0"
 thiserror = "2.0.12"
-tokio = { version = "1.44.2", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
+tokio = { version = "1.44.2", default-features = true, features = [
+    "fs",
+    "io-std",
+    "macros",
+    "process",
+    "rt",
+    "time",
+    "sync",
+] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
 wildmatch = "2.4.0"
@@ -134,23 +146,71 @@ security properties but better throughput on congested networks.
 section = "contrib/net"
 assets = [
     # sneaky; this seems to automagically pick up the correct binary when cross building:
-    [ "target/release/qcp", "usr/bin/", "755" ],
+    [
+        "target/release/qcp",
+        "usr/bin/",
+        "755",
+    ],
 
-    [ "../README.md", "usr/share/doc/qcp/", "644" ],
-    [ "../LICENSE", "usr/share/doc/qcp/", "644" ],
+    [
+        "../README.md",
+        "usr/share/doc/qcp/",
+        "644",
+    ],
+    [
+        "../LICENSE",
+        "usr/share/doc/qcp/",
+        "644",
+    ],
     # gzip -9n < CHANGELOG.md > misc/changelog.gz # done by make-debian-package
-    [ "misc/changelog.gz", "usr/share/doc/qcp/", "644" ],
+    [
+        "misc/changelog.gz",
+        "usr/share/doc/qcp/",
+        "644",
+    ],
     # gzip -9n < debian/changelog > debian/changelog.Debian.gz # done by make-debian-package
-    [ "debian/changelog.Debian.gz", "usr/share/doc/qcp/", "644" ],
-    [ "misc/20-qcp.conf", "etc/sysctl.d/", "644" ], # this is automatically recognised as a conffile
-    [ "misc/qcp.1", "usr/share/man/man1/", "644" ],
-    [ "misc/qcp_config.5", "usr/share/man/man5/", "644" ],
-    [ "misc/qcp.conf", "etc/", "644" ], # this is automatically recognised as a conffile
-    [ "misc/qcp_sshd.conf", "etc/ssh/sshd_config.d/", "644" ], # this is automatically recognised as a conffile
+    [
+        "debian/changelog.Debian.gz",
+        "usr/share/doc/qcp/",
+        "644",
+    ],
+    [
+        "misc/20-qcp.conf",
+        "etc/sysctl.d/",
+        "644",
+    ], # this is automatically recognised as a conffile
+    [
+        "misc/qcp.1",
+        "usr/share/man/man1/",
+        "644",
+    ],
+    [
+        "misc/qcp_config.5",
+        "usr/share/man/man5/",
+        "644",
+    ],
+    [
+        "misc/qcp.conf",
+        "etc/",
+        "644",
+    ], # this is automatically recognised as a conffile
+    [
+        "misc/qcp_sshd.conf",
+        "etc/ssh/sshd_config.d/",
+        "644",
+    ], # this is automatically recognised as a conffile
     # licenses.html.gz is created by cargo xtask licenses
-    [ "misc/licenses.html.gz", "usr/share/doc/qcp/", "644" ],
+    [
+        "misc/licenses.html.gz",
+        "usr/share/doc/qcp/",
+        "644",
+    ],
     # gzip -9n < qcp/qcp.cdx.xml > qcp/qcp.cdx.xml.gz # done by make-debian-package
-    [ "qcp.cdx.xml.gz", "usr/share/doc/qcp/", "644" ],
+    [
+        "qcp.cdx.xml.gz",
+        "usr/share/doc/qcp/",
+        "644",
+    ],
 ]
-maintainer-scripts="debian"
+maintainer-scripts = "debian"
 depends = "$auto,debconf"

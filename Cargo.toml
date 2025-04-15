@@ -1,8 +1,5 @@
 [workspace]
-members = [
-    "qcp",
-    "xtask",
-]
+members = ["qcp", "xtask"]
 resolver = "2"
 
 [workspace.dependencies]
