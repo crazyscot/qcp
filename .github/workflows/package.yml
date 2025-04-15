@@ -53,16 +53,23 @@ jobs:
         #  cross: true
         # netbsd rust support is tier 2; as of 31 Mar 2025 the crossbuild fails to link (cannot find -lexecinfo).
         # openbsd rust support is tier 3; as of 31 Mar 2025 it has no stable or nightly build.
-        - build: windows-x86_64
-          host: windows-latest
-          target: x86_64-pc-windows-msvc
+        #- build: windows-x86_64
+        #  host: windows-latest
+        #  target: x86_64-pc-windows-msvc
+        #  rust: stable
+        #  build_deb: false
+        #  cross: false
+        - build: windows-x86_64-mingw
+          host: ubuntu-latest
+          target: x86_64-pc-windows-gnu
           rust: stable
           build_deb: false
-          cross: false
+          cross: true
     runs-on: ${{ matrix.host }}
     env:
       TARBALL_ARTIFACT: ${{ format('qcp-binary-{0}', matrix.target) }}
       DEB_ARTIFACT: ${{ matrix.build_deb && format('qcp-deb-{0}', matrix.target) }}
+      PACKAGE_ZIP: ${{ matrix.target == 'x86_64-pc-windows-gnu' }}
     steps:
     - uses: actions/checkout@v4
     - name: Install Rust
@@ -115,15 +122,15 @@ jobs:
         # (Not all platforms have any pack_extra files)
         leading-dir: true
         locked: true
-        tar: unix
-        zip: windows
+        tar: ${{ env.PACKAGE_ZIP && 'none' || 'all' }}
+        zip: ${{ env.PACKAGE_ZIP && 'all' || 'none' }}
     - name: Upload binary package to CI result
       # always try to do this, it allows the package to be checked
       if: success() || failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: ${{ env.TARBALL_ARTIFACT }}
-        path: ${{ steps.build-tarball.outputs.archive }}.${{ matrix.host == 'windows-latest' && 'zip' || 'tar.gz' }}
+        path: ${{ steps.build-tarball.outputs.archive }}.${{ env.PACKAGE_ZIP && 'zip' || 'tar.gz' }}
     - name: Make deb package
       id: deb
       if: ${{ matrix.build_deb }}
