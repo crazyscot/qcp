@@ -44,7 +44,6 @@ heck = "0.5.0"
 homedir = "0.3.4"
 human-repr = "1.1.0"
 indicatif = { version = "0.17.11", features = ["tokio"] }
-mimalloc = "0.1.44"
 num-format = { version = "0.4.4" }
 quinn = { version = "0.11.7", default-features = false, features = [
     "runtime-tokio",
@@ -77,7 +76,12 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
 wildmatch = "2.4.0"
 
 [target.'cfg(unix)'.dependencies]
-#nix = { version = "0.29.0", features = ["user"] }
+mimalloc = "0.1.42" # see windows dependency on 0.1.42
+
+[target.'cfg(windows)'.dependencies]
+# cross-rs can't currently cross-compile libmimalloc-sys 0.1.39 or later (needs mingw 10)
+mimalloc = "=0.1.42"
+libmimalloc-sys = "=0.1.38"
 
 [dev-dependencies]
 assertables = "9.5.1"
