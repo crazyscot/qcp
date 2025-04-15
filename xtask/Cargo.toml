@@ -3,7 +3,7 @@ name = "xtask"
 version = "0.0.0"
 edition = "2021"
 authors = ["Ross Younger <qcp@crazyscot.com>"]
-license = "MIT" # Note this license applies only to xtask, not to qcp itself.
+license = "MIT"                                # Note this license applies only to xtask, not to qcp itself.
 publish = false
 
 [dependencies]
