@@ -80,11 +80,15 @@ jobs:
       with:
         toolchain: ${{ matrix.rust }}
         targets: ${{ matrix.target }}
+    - name: Set up rust cross toolchain
+      uses: taiki-e/setup-cross-toolchain-action@0123528f956f923e7a476f4cc04882bc005e7c89 # v1.29.1
+      with:
+        target: ${{ matrix.target }}
     - name: Additional rust tools
       uses: taiki-e/install-action@daa3c1f1f9a9d46f686d9fc2f65773d0c293688b # v2.49.40
             # this action is used in multiple places
       with:
-        tool: cargo-cyclonedx${{ matrix.build_deb && ',cargo-deb' || ''}}${{ matrix.cross && ',cross' || ''}}
+        tool: cargo-cyclonedx${{ matrix.build_deb && ',cargo-deb' || ''}}
         checksum: true
     - name: Install binutils-multiarch (cross builds only)
       if: startsWith(matrix.host, 'ubuntu') && matrix.cross
