@@ -84,7 +84,7 @@ jobs:
       uses: taiki-e/install-action@daa3c1f1f9a9d46f686d9fc2f65773d0c293688b # v2.49.40
             # this action is used in multiple places
       with:
-        tool: cargo-about,cargo-cyclonedx${{ matrix.build_deb && ',cargo-deb' || ''}}${{ matrix.cross && ',cross' || ''}}
+        tool: cargo-cyclonedx${{ matrix.build_deb && ',cargo-deb' || ''}}${{ matrix.cross && ',cross' || ''}}
         checksum: true
     - name: Install binutils-multiarch (cross builds only)
       if: startsWith(matrix.host, 'ubuntu') && matrix.cross
@@ -98,10 +98,6 @@ jobs:
     # Full cacheing with `cache-targets` saves 30-40s per platform, but at a high space cost.
     # Cacheing with cache-targets: false is a net slowdown.
 
-    - name: Generate licenses.html
-      run: cargo xtask licenses -o qcp/misc/licenses.html
-      env:
-        QCP_BUILD_TARGET: ${{ matrix.target }}
     - name: Generate CycloneDX SBOM
       run: cargo cyclonedx --target ${{ matrix.target }}
     - name: Build binary package
@@ -115,7 +111,7 @@ jobs:
         target: ${{ matrix.target }}
         include: "\
           README.md,LICENSE,CHANGELOG.md,\
-          qcp/misc/licenses.html,qcp/qcp.cdx.xml,\
+          qcp/qcp.cdx.xml,\
           qcp/misc/qcp.conf,\
           qcp/misc/qcp_sshd.conf,\
           qcp/misc/qcp.1,qcp/misc/qcp_config.5\

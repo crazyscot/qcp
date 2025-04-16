@@ -2,7 +2,6 @@
 # args: [--release|--no-release] [<rust-target>]
 # prerequisites:
 #   cargo build --release
-#   cargo xtask licenses -o qcp/misc/licenses.html
 
 TARGET=$2
 if [ -z "$TARGET" ]; then

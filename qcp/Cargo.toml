@@ -203,12 +203,6 @@ assets = [
         "etc/ssh/sshd_config.d/",
         "644",
     ], # this is automatically recognised as a conffile
-    # licenses.html.gz is created by cargo xtask licenses
-    [
-        "misc/licenses.html.gz",
-        "usr/share/doc/qcp/",
-        "644",
-    ],
     # gzip -9n < qcp/qcp.cdx.xml > qcp/qcp.cdx.xml.gz # done by make-debian-package
     [
         "qcp.cdx.xml.gz",

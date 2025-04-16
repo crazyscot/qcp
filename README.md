@@ -172,8 +172,8 @@ Alternative license terms can be made available on request on a commercial basis
 
 qcp draws on the Rust ecosystem. The various components used within the application are available under their own licenses.
 
-To help you understand the legals and provide data for analysis tools, we automatically generate a license report and Software Bill of Materials at build time.
-These are included in the build bundles as `licenses.html` (HTML report) and `qcp.cdx.xml` (CycloneDX BOM schema).
+To help you understand the legals and provide data for analysis tools, we automatically generate a Software Bill of Materials at build time.
+This is included in the build bundles as `qcp.cdx.xml`. It's a CycloneDX BOM; for tools to process this information, see [CycloneDX Tool Center](https://cyclonedx.org/tool-center/).
 
 ### 🧑‍🏭 Bugs, Features & Contributions
 
