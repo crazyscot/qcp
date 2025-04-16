@@ -71,6 +71,8 @@ jobs:
       DEB_ARTIFACT: ${{ matrix.build_deb && format('qcp-deb-{0}', matrix.target) }}
       PACKAGE_ZIP: ${{ matrix.target == 'x86_64-pc-windows-gnu' }}
     steps:
+    - name: Debug temp
+      run: echo "PACKAGE_ZIP = $PACKAGE_ZIP"
     - uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
@@ -122,15 +124,15 @@ jobs:
         # (Not all platforms have any pack_extra files)
         leading-dir: true
         locked: true
-        tar: ${{ env.PACKAGE_ZIP && 'none' || 'all' }}
-        zip: ${{ env.PACKAGE_ZIP && 'all' || 'none' }}
+        tar: ${{ env.PACKAGE_ZIP == true && 'none' || 'all' }}
+        zip: ${{ env.PACKAGE_ZIP == true && 'all' || 'none' }}
     - name: Upload binary package to CI result
       # always try to do this, it allows the package to be checked
       if: success() || failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: ${{ env.TARBALL_ARTIFACT }}
-        path: ${{ steps.build-tarball.outputs.archive }}.${{ env.PACKAGE_ZIP && 'zip' || 'tar.gz' }}
+        path: ${{ steps.build-tarball.outputs.archive }}.${{ env.PACKAGE_ZIP == true && 'zip' || 'tar.gz' }}
     - name: Make deb package
       id: deb
       if: ${{ matrix.build_deb }}
