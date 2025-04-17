@@ -106,8 +106,9 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         let path = PathBuf::from(&args.filename);
         let (mut file, meta) = match open_file(&args.filename).await {
             Ok(res) => res,
-            Err((status, message, _)) => {
-                return send_response(&mut self.stream.send, status, message.as_deref()).await;
+            Err(e) => {
+                let (status, message) = crate::util::io::status_from_error(&e);
+                return send_response(&mut self.stream.send, status, Some(&message)).await;
             }
         };
         if meta.is_dir() {
