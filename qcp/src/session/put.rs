@@ -42,12 +42,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         let dest_filename = &job.destination.filename;
 
         let path = PathBuf::from(src_filename);
-        let (mut file, meta) = match crate::util::io::open_file(src_filename).await {
-            Ok(res) => res,
-            Err((_, _, error)) => {
-                return Err(error.into());
-            }
-        };
+        let (mut file, meta) = crate::util::io::open_file(src_filename).await?;
         if meta.is_dir() {
             anyhow::bail!("PUT: Source is a directory");
         }

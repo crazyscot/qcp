@@ -2,39 +2,23 @@
 // (c) 2024 Ross Younger
 
 use crate::protocol::session::Status;
-use futures_util::TryFutureExt as _;
 use std::{fs::Metadata, io::ErrorKind, path::Path, path::PathBuf, str::FromStr as _};
 
+pub(crate) fn status_from_error(e: &tokio::io::Error) -> (Status, String) {
+    match e.kind() {
+        ErrorKind::NotFound => (Status::FileNotFound, e.to_string()),
+        ErrorKind::PermissionDenied => (Status::IncorrectPermissions, e.to_string()),
+        _ => (Status::IoError, e.to_string()),
+    }
+}
+
 /// Opens a local file for reading, returning a filehandle and metadata.
-/// Error type is a tuple ready to send as a Status response.
 pub(crate) async fn open_file(
     filename: &str,
-) -> anyhow::Result<(tokio::fs::File, Metadata), (Status, Option<String>, tokio::io::Error)> {
+) -> anyhow::Result<(tokio::fs::File, Metadata), tokio::io::Error> {
     let path = Path::new(&filename);
-
-    let fh: tokio::fs::File = tokio::fs::File::open(path)
-        .await
-        .map_err(|e| match e.kind() {
-            ErrorKind::NotFound => (Status::FileNotFound, Some(e.to_string()), e),
-            ErrorKind::PermissionDenied => (Status::IncorrectPermissions, Some(e.to_string()), e),
-            _ => (
-                Status::IoError,
-                Some(format!("unknown error from File::open: {e}")),
-                e,
-            ),
-        })?;
-
-    let meta = fh
-        .metadata()
-        .map_err(|e| {
-            (
-                Status::IoError,
-                Some(format!("unable to determine file size: {e}")),
-                e,
-            )
-        })
-        .await?;
-
+    let fh: tokio::fs::File = tokio::fs::File::open(path).await?;
+    let meta = fh.metadata().await?;
     Ok((fh, meta))
 }
 
