@@ -121,19 +121,36 @@ pub(crate) fn bind_range_for_family(
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use crate::{os::SocketOptions as _, util::tracing::setup_tracing_for_tests};
+    use crate::{
+        os::SocketOptions as _,
+        protocol::control::ConnectionType,
+        util::{PortRange, tracing::setup_tracing_for_tests},
+    };
     use rusty_fork::rusty_fork_test;
-    use std::net::UdpSocket;
+    use std::net::{IpAddr, Ipv4Addr, UdpSocket};
+
+    use super::{bind_range_for_address, bind_range_for_family};
+
+    const UNSPECIFIED: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 
     // To see how this behaves with privileges, you might:
     //    sudo -E cargo test -- util::socket::test::set_socket_bufsize
     // The program executable name reported by info!() will not be very useful, but you could probably have guessed that :-)
     rusty_fork_test! {
         #[test]
-        fn set_udp_buffer_sizes() {
+        fn set_udp_buffer_sizes_large_fails() {
             setup_tracing_for_tests(); // this modifies global state, so needs to be run in a fork
             let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let _ = super::set_udp_buffer_sizes(&mut sock, Some(4_194_304), Some(10_485_760)).unwrap();
+            let result = super::set_udp_buffer_sizes(&mut sock, Some(4_194_304), Some(10_485_760)).unwrap();
+            assert!(!result.ok);
+        }
+
+        #[test]
+        fn set_udp_buffer_sizes_small_succeeds() {
+            setup_tracing_for_tests(); // this modifies global state, so needs to be run in a fork
+            let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let result = super::set_udp_buffer_sizes(&mut sock, Some(123_456), Some(123_456)).unwrap();
+            assert!(result.ok);
         }
 
         #[test]
@@ -147,5 +164,28 @@ mod test {
                 }
             }
         }
+    }
+
+    #[test]
+    fn bind_range() {
+        let range = PortRange {
+            begin: 1,
+            end: 65535,
+        };
+        let _s = bind_range_for_address(UNSPECIFIED, range).unwrap();
+    }
+
+    #[test]
+    fn bind_range_fails_non_root() {
+        let range = PortRange { begin: 1, end: 2 };
+        let _e = bind_range_for_address(UNSPECIFIED, range).unwrap_err();
+    }
+
+    #[test]
+    fn bind_ipv6() {
+        let range = PortRange::default();
+        let s = bind_range_for_family(ConnectionType::Ipv6, range).unwrap();
+        let a = s.local_addr().unwrap();
+        assert!(a.is_ipv6());
     }
 }

@@ -97,6 +97,20 @@ impl LitterTray {
         fs::create_dir_all(&path)?;
         Ok(path)
     }
+
+    #[cfg(unix)]
+    /// Creates a symbolic link within the tray.
+    /// Returns the path to the new symlink.
+    pub(crate) fn make_symlink<P: AsRef<Path>, Q: AsRef<Path>>(
+        &self,
+        original: P,
+        link: Q,
+    ) -> Result<PathBuf> {
+        let path_orig = self.safe_path_within_tray(original.as_ref())?;
+        let path_link = self.safe_path_within_tray(link.as_ref())?;
+        std::os::unix::fs::symlink(path_orig, &path_link)?;
+        Ok(path_link)
+    }
 }
 
 impl Drop for LitterTray {

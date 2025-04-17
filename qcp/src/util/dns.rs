@@ -26,3 +26,27 @@ pub(crate) fn lookup_host_by_family(host: &str, desired: AddressFamily) -> anyho
         .map(std::borrow::ToOwned::to_owned)
         .ok_or(anyhow::anyhow!("host {host} found, but not as {desired:?}"))
 }
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::AddressFamily;
+    use super::lookup_host_by_family;
+
+    #[test]
+    fn ipv4() {
+        let result = lookup_host_by_family("dns.google", AddressFamily::Inet).unwrap();
+        assert!(result.is_ipv4());
+    }
+    #[test]
+    fn ipv6() {
+        let result = lookup_host_by_family("dns.google", AddressFamily::Inet6).unwrap();
+        assert!(result.is_ipv6());
+    }
+
+    #[test]
+    fn failure() {
+        let result = lookup_host_by_family("no.such.host.invalid", AddressFamily::Any);
+        assert!(result.is_err());
+    }
+}
