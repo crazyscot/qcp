@@ -161,6 +161,9 @@ mod tests {
         let uut = Uut::from_str("1234-2345").unwrap();
         assert_eq!(uut.begin, 1234);
         assert_eq!(uut.end, 2345);
+        // and convert to a value
+        let v = figment::value::Value::from(uut);
+        assert_eq!(v.as_str(), Some("1234-2345"));
     }
     #[test]
     fn invalid_range() {
@@ -169,6 +172,14 @@ mod tests {
     #[test]
     fn invalid_negative() {
         let _ = Uut::from_str("-500").expect_err("should have failed");
+    }
+    #[test]
+    fn invalid_out_of_range() {
+        let _ = Uut::from_str("65537").expect_err("should have failed");
+    }
+    #[test]
+    fn invalid_unparseable() {
+        let _ = Uut::from_str("fdsfdsfds").expect_err("should have failed");
     }
     #[test]
     fn port_range_not_zero() {

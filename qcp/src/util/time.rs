@@ -190,4 +190,10 @@ mod tests {
         c.stop();
         c.next("b");
     }
+
+    #[test]
+    fn new_running() {
+        let c = StopwatchChain::new_running("timer1");
+        assert!(c.find("timer1").is_some());
+    }
 }

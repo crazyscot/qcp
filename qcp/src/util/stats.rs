@@ -46,6 +46,8 @@ impl Display for DataRate {
 }
 
 /// Output the end-of-game statistics
+#[cfg_attr(coverage_nightly, coverage(off))]
+// this is a cosmetic function, it is not practical to test in its current form
 pub(crate) fn process_statistics(
     stats: &ConnectionStats,
     payload_bytes: u64,

@@ -107,7 +107,7 @@ fn filter_for(trace_level: &str, key: &str) -> anyhow::Result<FilterResult> {
             }
             // It was unset. Fall back.
             Ok(FilterResult {
-                filter: EnvFilter::new(format!("qcp={trace_level}")),
+                filter: EnvFilter::try_new(format!("qcp={trace_level}"))?,
                 used_env: false,
             })
         })
@@ -144,7 +144,6 @@ where
             .with_writer(writer)
             .with_filter(filter)
             .boxed(),
-
         TimeFormat::Rfc3339 => layer
             .with_timer(ChronoLocal::rfc_3339())
             .with_writer(writer)
@@ -175,6 +174,20 @@ pub(crate) fn setup(
     }
     TRACING_INITIALIZED.store(true, Ordering::Relaxed);
 
+    let layers = create_layers(trace_level, display, filename, time_format)?;
+    tracing_subscriber::registry().with(layers).init();
+
+    Ok(())
+}
+
+fn create_layers(
+    trace_level: &str,
+    display: Option<&MultiProgress>,
+    filename: Option<&String>,
+    time_format: TimeFormat,
+) -> anyhow::Result<
+    Vec<Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>>,
+> {
     let mut layers = Vec::new();
 
     /////// Console output, via the MultiProgress if there is one
@@ -227,9 +240,7 @@ pub(crate) fn setup(
 
     ////////
 
-    tracing_subscriber::registry().with(layers).init();
-
-    Ok(())
+    Ok(layers)
 }
 
 /// Returns whether tracing has been initialized
@@ -265,6 +276,7 @@ impl Write for ProgressWriter {
 
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
+// this is a utility function
 pub(crate) fn setup_tracing_for_tests() {
     if is_initialized() {
         tracing::warn!("tracing::setup called a second time (ignoring)");
@@ -276,4 +288,97 @@ pub(crate) fn setup_tracing_for_tests() {
         .with_writer(std::io::stderr)
         .with_max_level(tracing::Level::DEBUG)
         .init();
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod test {
+    use indicatif::{MultiProgress, ProgressDrawTarget};
+    use rusty_fork::rusty_fork_test;
+    use tracing_subscriber::EnvFilter;
+
+    use super::{create_layers, setup};
+    use crate::{Parameters, util::TimeFormat};
+
+    #[test]
+    fn trace_levels() {
+        use super::trace_level;
+        let p = Parameters {
+            debug: true,
+            quiet: true,
+            ..Default::default()
+        };
+        assert_eq!(trace_level(&p), "debug");
+        let p = Parameters {
+            quiet: true,
+            ..Default::default()
+        };
+        assert_eq!(trace_level(&p), "error");
+        let p = Parameters::default();
+        assert_eq!(trace_level(&p), "info");
+    }
+
+    #[test]
+    fn test_create_layers_with_console_output() {
+        let mp = MultiProgress::new();
+        let layers = create_layers("info", Some(&mp), None, TimeFormat::Local).unwrap();
+        assert_eq!(layers.len(), 1); // Only one layer for console output
+    }
+
+    #[test]
+    fn test_create_layers_with_file_output() {
+        let filename = String::from("test.log");
+        let layers = create_layers("info", None, Some(&filename), TimeFormat::Utc).unwrap();
+        assert_eq!(layers.len(), 2); // One for console, one for file
+    }
+
+    #[test]
+    fn test_create_layers_with_invalid_level() {
+        let result = create_layers("invalid_level", None, None, TimeFormat::Utc);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tracing_layer_rfc3339() {
+        let f = EnvFilter::new("");
+        let _result: Box<
+            dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync,
+        > = super::make_tracing_layer(std::io::stderr, f, TimeFormat::Rfc3339, false, false);
+        // it doesn't seem possible to usefully test the created layer at the moment
+    }
+
+    #[test]
+    fn test_progress_writer() {
+        use std::io::Write as _;
+        let mp = MultiProgress::new();
+        let mux = super::ProgressWriter::wrap(&mp);
+        let mut writer = mux.lock().unwrap();
+        let msg = "Test message";
+        let bytes_written = writer.write(msg.as_bytes()).unwrap();
+        assert_eq!(bytes_written, msg.len());
+        writer.flush().unwrap();
+    }
+    #[test]
+    fn test_progress_writer_hidden() {
+        use std::io::Write as _;
+        let mp = MultiProgress::with_draw_target(ProgressDrawTarget::hidden());
+        let mux = super::ProgressWriter::wrap(&mp);
+        let mut writer = mux.lock().unwrap();
+        let msg = "Test message";
+        let bytes_written = writer.write(msg.as_bytes()).unwrap();
+        assert_eq!(bytes_written, msg.len());
+        writer.flush().unwrap();
+    }
+
+    // these tests affect global state, so need to run in forks
+    rusty_fork_test! {
+        #[test]
+        fn test_setup_initialization() {
+            let result1 = setup("info", None, None, TimeFormat::Utc);
+            assert!(result1.is_ok());
+
+            let result2 = setup("info", None, None, TimeFormat::Utc);
+            assert!(result2.is_ok()); // Second call should succeed but be ignored
+        }
+    }
 }
