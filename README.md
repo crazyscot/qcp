@@ -33,16 +33,16 @@ At the time of writing, qcp has only been tested with the OpenSSH server and cli
 | Platform         | CPU architecture | Status |
 | --------         | ------ | ----- |
 | Debian, Ubuntu   | x86_64, aarch64 | Well tested |
-|                  | Others | Untested, should work |
+| Debian, Ubuntu   | Others | Untested, should work |
 | NixOS            | x86_64 | Well tested |
-|                  | aarch64 | Untested, should work |
+| NixOS            | aarch64 | Untested, should work |
 | Other Linux      | x86_64, aarch64 | Only indirectly tested** |
 | OSX              | x86_64 | Tested |
-|                  | aarch64 | Untested, should work |
+| OSX              | aarch64 | Untested, should work |
 | FreeBSD          | x86_64 | Buildable as of 31/3/25, but untested |
 | NetBSD           | | Ought to be buildable* |
 | OpenBSD          | | Ought to be buildable* |
-| Windows          | x86_64 | Tested |
+| Windows 11       | x86_64 | Tested |
 
 *_Note that the *BSD family are not tier 1 Rust platforms, so there is no guarantee that things will work properly. As of 31/3/25 some of these platforms have cross-compilation issues; I haven't tried native compilation._
 
