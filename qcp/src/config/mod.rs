@@ -11,10 +11,9 @@
 //!    * On Windows, this is `%ProgramData%\qcp.conf`
 //! 4. Hard-wired defaults
 //!
-//! Each option may appear in multiple places, but only the first match is used.
+//! Run `qcp --config-files` for a list of which files we read.
 //!
-//! **Note** Configuration file locations are platform-dependent.
-//! To see what applies on the current platform, run `qcp --config-files` .
+//! Each option may appear in multiple places, but only the first match is used.
 //!
 //! ## File format
 //!

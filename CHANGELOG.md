@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/crazyscot/qcp/compare/v0.3.3...v0.4.0)
+
+### ⛰️ Features
+
+- *(config)* Support ~/.config/qcp/qcp.conf on unix - ([799d2ba](https://github.com/crazyscot/qcp/commit/799d2bae647510b2d79f10ccef538505429da600))
+- Add Windows build - ([b4af92a](https://github.com/crazyscot/qcp/commit/b4af92a573237a1e7cbbb18c771ea84a5172df10))
+- [**breaking**] Add -l login-name (same short-option as ssh) - ([d7fd7d0](https://github.com/crazyscot/qcp/commit/d7fd7d06de4c584589ba6a0c245a5d843c837062))
+- Platform support for OSX and BSD family ([#71](https://github.com/crazyscot/qcp/pull/71)) - ([3302685](https://github.com/crazyscot/qcp/commit/3302685d91515bf4fcdf0ca9e28c860d7ff2a125))
+- Introduce --ssh-subsystem mode - ([3faabc5](https://github.com/crazyscot/qcp/commit/3faabc50da159c8a25fdb4a4944a2241c499d7a2))
+- Initial-congestion-window can now be specified as an SI quantity (10k, etc) - ([73e085e](https://github.com/crazyscot/qcp/commit/73e085e2a4e2d52a59e16fba4b74a671e4206770))
+- Use mimalloc as memory allocator on all builds, in secure mode by default - ([6ec2f99](https://github.com/crazyscot/qcp/commit/6ec2f99e3a0bd474a86afb771e054016e1cc5971))
+
+### 🐛 Bug Fixes
+
+- *(cosmetic)* Remove struct verbiage from debug output - ([dcfe102](https://github.com/crazyscot/qcp/commit/dcfe10212af093ed22fbd1bb7438287eff56c51c))
+- *(cosmetic)* When compatibility levels are equal, don't say that one is newer - ([5312a3a](https://github.com/crazyscot/qcp/commit/5312a3a75f7d29a36d5f7649c1332df54a41b68f))
+- *(protocol)* Improve reliability of Put pre-transfer check - ([acc3d1a](https://github.com/crazyscot/qcp/commit/acc3d1aa6b4c19722ad66dac59a71d4033c93a7c))
+- *(test)* Occasional random test failure - ([28663a3](https://github.com/crazyscot/qcp/commit/28663a3a5b86c61f1eab538095732c1fa8282c0e))
+- *(test)* Make tracing::setup idempotent - ([92afb90](https://github.com/crazyscot/qcp/commit/92afb9043cccd15655203485f76f421e78341dbb))
+- User@host syntax on command line - ([fa0eecd](https://github.com/crazyscot/qcp/commit/fa0eecd0130393d708fb8c646526f4c273dee13c))
+- Report i/o errors from Put more reliably - ([783e0d5](https://github.com/crazyscot/qcp/commit/783e0d55dcfcac6a6992832f0dd7cfe4f9b1c954))
+- Remove TOCTTOU bug in Put destination checks - ([90977f3](https://github.com/crazyscot/qcp/commit/90977f3eb796d4de8d7c2fc2567bf6e3a86a93f7))
+
+### 📚 Documentation
+
+- Autogenerate part of qcp_config.5; add to xtask man; tweak wording - ([8077399](https://github.com/crazyscot/qcp/commit/80773990884740cc0e8525226237ecb489a32e0f))
+- Add note to build in release mode for best performance - ([41ba6d9](https://github.com/crazyscot/qcp/commit/41ba6d977f70cf38966ad051ba07ab580d28aeac))
+- Fix broken links in readme on crates.io - ([064a67d](https://github.com/crazyscot/qcp/commit/064a67d5ab1c432f79f4b48dece355330363ecf8))
+
+### ⚡ Performance
+
+- Slight performance improvements to PUT - ([19cfcf9](https://github.com/crazyscot/qcp/commit/19cfcf91432d933329856c15bc1d0c10a0678dbd))
+
+### 🧪 Testing
+
+- *(fix)* Make test_progress_bar_for() CI-proof - ([e5b3dde](https://github.com/crazyscot/qcp/commit/e5b3ddea3db7c2e3462f4e3be8a6770b81c89ce7))
+- Improve unit test coverage in utils - ([3f40c8f](https://github.com/crazyscot/qcp/commit/3f40c8f99d4b7c55ad19077a93101a33f5e6e025))
+- Refactor control/process.rs for testability - ([f74870b](https://github.com/crazyscot/qcp/commit/f74870b360e4a8647a702150d52e10eddaf74217))
+- Use nightly toolchain for coverage; exclude test modules from analysis ([#43](https://github.com/crazyscot/qcp/pull/43)) - ([ee40c66](https://github.com/crazyscot/qcp/commit/ee40c663af74c1512e6c603c5b1e00bc7a9aebec))
+- Introduce LitterTray utility - ([42eec69](https://github.com/crazyscot/qcp/commit/42eec69103332cb7b70fc7ef12b5d783867e985a))
+
+### 🏗️ Build, packaging & CI
+
+- Stop shipping licenses.html - ([c4a62d4](https://github.com/crazyscot/qcp/commit/c4a62d4e461961c699adf772f42c3e8219a42754))
+- Pivot windows builds to mingw - ([237ad81](https://github.com/crazyscot/qcp/commit/237ad81da9cfdbd37d82dd3c27918478b2a31942))
+- Add codecov reporting - ([935f125](https://github.com/crazyscot/qcp/commit/935f125da218dbb35c07d29adc488530e59f98c7))
+- Include a subsystem config for /etc/ssh/sshd_config.d - ([e2780a8](https://github.com/crazyscot/qcp/commit/e2780a880a632274ee4ae8bcba6cad67f5f09b51))
+- Improve comments in the default system qcp.conf; add SshSubsystem - ([923af7d](https://github.com/crazyscot/qcp/commit/923af7d527e24d8f3cb8491a2264be834f3a9176))
+- Include additional files in the tarballs - ([9ae6bb3](https://github.com/crazyscot/qcp/commit/9ae6bb3836aa54336ef0c4bdd0013bc030b6f6a3))
+- Tweak build-time tag version check - ([0bb779f](https://github.com/crazyscot/qcp/commit/0bb779f0bc1f396701a9b434c523690dede68532))
+
+### ⚙️ Miscellaneous Tasks
+
+- Util::open_file returns a less complex error type - ([22f7d07](https://github.com/crazyscot/qcp/commit/22f7d07f61ff0a42d375bcfd1f67a7fa316cb427))
+- Autoformat cargo.toml x3 - ([f308eb0](https://github.com/crazyscot/qcp/commit/f308eb01c94269056ee677d628479efdb48b7f02))
+- Return type of set_udp_buffer_sizes - ([1358232](https://github.com/crazyscot/qcp/commit/13582325c486e38dcb49e221b816029b67b9d87f))
+- Output full error context when we might have one - ([fe875af](https://github.com/crazyscot/qcp/commit/fe875aff918a5f8554caedeefcd07ab26d4262d3))
+- Add platform initialiser, seal SocketOptions to ensure it is always called - ([ccf3b49](https://github.com/crazyscot/qcp/commit/ccf3b497f6e89d94c830581c3a8d150904c29e1b))
+- Remove user_config_dir from AbstractPlatform - ([f75e199](https://github.com/crazyscot/qcp/commit/f75e199ce9415123a14e5db2d4d81dae420c8895))
+- Promote transport::ConfigBucket to crate visibility as config::ConfigProvider - ([232fb75](https://github.com/crazyscot/qcp/commit/232fb75452b413d21efbc05345e1d6cbd0c5a26f))
+- Linter fixes for rust 1.86 - ([2dd28cc](https://github.com/crazyscot/qcp/commit/2dd28cc6047c369e1e51b341919b9ceda2d0fcfd))
+- Tweak badge config in readme - ([3542a67](https://github.com/crazyscot/qcp/commit/3542a676d2c0b9fd46173cf3e17e593599fd41aa))
+- Tidy up crate exports - ([248242e](https://github.com/crazyscot/qcp/commit/248242ed7e738a999d16eb88b3a38eaad6edc7e8))
+- Update to rust 2024 / MSRV 1.85 - ([cc6f3e7](https://github.com/crazyscot/qcp/commit/cc6f3e73b0b37f052906e04fbe3d1adea4b2a046))
+
+### 🚜 Refactor
+
+- Use homedir (cross-platform) instead of pwd (works on unix only) - ([b44929f](https://github.com/crazyscot/qcp/commit/b44929f4abe6a7ae0bc2447215bc4b09693ba95e))
+- Ssh config file parsing, to allow retrieval of arbitrary keys - ([429a64d](https://github.com/crazyscot/qcp/commit/429a64de225f1b051bdf7bfeb279d610287a7f52))
+- Ssh::files::Parser: deduplicate value sources - ([aaf4dc1](https://github.com/crazyscot/qcp/commit/aaf4dc1052d444fd61403f4d160aa8c11e71070e))
+- Ssh::files::Parser construction - ([7eb1c74](https://github.com/crazyscot/qcp/commit/7eb1c744dd8aeb4eade551b85a6fdace503b1d94))
+- Merge ssh::ConfigFile constructors - ([30dbcef](https://github.com/crazyscot/qcp/commit/30dbcefd32399227790d304c7467caca13c829cd))
+- Align Platform return types - ([de7e611](https://github.com/crazyscot/qcp/commit/de7e611aef98fa733286ae6c88634d7c20c3411b))
+- Pivot socket back-end to use rustix - ([58d813b](https://github.com/crazyscot/qcp/commit/58d813b4c09b738d7d96b3618ba7410c9c26077f))
+- Explicitly pass setup_tracing function to run_server - ([1c12702](https://github.com/crazyscot/qcp/commit/1c12702f8e81343f187d7ba52c692474b940ec23))
+- Minimise binary crate main function - ([8a72cf8](https://github.com/crazyscot/qcp/commit/8a72cf8b236b9ad674fa9dc8a5dc5a929b74ded9))
+- Consolidate control channel functionality module; add unit tests - ([2a9a356](https://github.com/crazyscot/qcp/commit/2a9a3562f9c4ff2a8a2263ccf465601b5a32a93c))
+- Consolidate session protocol implementations; add unit tests - ([71169cc](https://github.com/crazyscot/qcp/commit/71169ccd20b13b781b6930794728001f2b70012f))
+- Move CopyJobSpec sharable construction logic into a constructor - ([9535e49](https://github.com/crazyscot/qcp/commit/9535e492ca487e1bbff145842ba3fc5d74b7f5df))
+- Move CongestionController(Type) into protocol - ([73b46ec](https://github.com/crazyscot/qcp/commit/73b46ecfcd46b29b676344779a238eee11be71fe))
+
+
 ## [0.3.3](https://github.com/crazyscot/qcp/compare/v0.3.2...v0.3.3)
 
 ### 🛡️ Security

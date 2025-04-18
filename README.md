@@ -17,10 +17,12 @@ high-performance remote file copy utility for long-distance internet connections
 
 ### News
 
+- **(New in 0.4)**
+  * Added builds for OSX, Windows and BSD
+  * New features: Explicit username with `-l <login-name>`; ssh subsystem mode
 - **(New in 0.3)**
   * Negotiate transport setting by combining configuration from both sides
   * Protocol encoding changed to [BARE], removing the dependency on capnp.
-- **(New in 0.2)** Configuration file support
 
 For a full list of changes, see the [changelog].
 
@@ -44,7 +46,7 @@ At the time of writing, qcp has only been tested with the OpenSSH server and cli
 
 *_Note that the *BSD family are not tier 1 Rust platforms, so there is no guarantee that things will work properly. As of 31/3/25 some of these platforms have cross-compilation issues; I haven't tried native compilation._
 
-** _The binaries in the tarballs are the exact same binaries found in the Debian/Ubuntu packages. They are static-linked._
+** _The binaries in the tarballs are the exact same binaries found in the Debian/Ubuntu packages. They are static-linked, independent of kernel and libc._
 
 ## 🧰 Getting Started
 
@@ -57,14 +59,14 @@ At the time of writing, qcp has only been tested with the OpenSSH server and cli
 * Platform-specific notes exist for:
   * [OSX](https://docs.rs/qcp/latest/qcp/doc/performance/osx.html)
 
-### Installing pre-built binaries
+### Installing by package
 
 These can be found on the [latest release](https://github.com/crazyscot/qcp/releases/latest) page.
 
 | Platform |  CPU  | Packaging   |
 | -------- | ----- | ------- |
-| Debian & Ubuntu | x86_64, aarch64 | Deb packages are provided |
-| Other Linux | x86_64, aarch64 | The unknown-linux-musl tarballs should work for you (they are cross-platform, static linked) |
+| Debian & Ubuntu | x86_64, aarch64 | Deb packages |
+| Other Linux | x86_64, aarch64 | Use the unknown-linux-musl tarballs (they are cross-platform, static linked) |
 | Nix | * | Flakes are provided: `nix shell 'github:crazyscot/qcp?dir=nix'` |
 | NixOS | * | In progress; refer to [pr#361923](https://github.com/NixOS/nixpkgs/pull/361923) |
 | OSX  | x86_64, aarch64 | Tarball (code signing TBD) |
@@ -76,7 +78,7 @@ Prerequisites:
 * Rust toolchain (see the next section if you don't know how to install this)
 * A C compiler that the [cc crate](https://docs.rs/cc/latest/cc/#compile-time-requirements) can use
 
-You can install the package from source using `cargo`:
+You can install the package from source in one step using `cargo`:
 
 ```bash
 cargo install --locked qcp
@@ -154,6 +156,7 @@ Tx 12.5M
 The brief version:
 
 1. We ssh to the remote machine and run `qcp --server` there (with no further args, i.e. you can use `command="qcp --server"` in your authorized_keys file)
+   * there is also an option to use ssh subsystem mode, if you prefer to set that up
 1. Both sides generate a TLS key and exchange self-signed certs over the ssh pipe between them
 1. We use those certs to set up a QUIC session between the two
 1. We transfer files over QUIC
@@ -184,9 +187,9 @@ Bug reports and feature requests are welcome, please use the [issue] tracker.
 
 🚧 If you're thinking of contributing code, please read [CONTRIBUTING.md].
 
-#### Help wanted: MacOS/BSD
+#### Help wanted: MacOS/BSD/Windows
 
-I'd particularly welcome performance reports from MacOS/BSD users as those are not platforms I use regularly.
+I'd particularly welcome performance reports here, as they are not platforms I use regularly.
 
 ### 📑 Version number and compatibility
 
