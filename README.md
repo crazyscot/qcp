@@ -1,7 +1,6 @@
 [![Crates.io](https://img.shields.io/crates/v/qcp.svg)](https://crates.io/crates/qcp)
 [![Build status](https://github.com/crazyscot/qcp/actions/workflows/ci.yml/badge.svg)](https://github.com/crazyscot/qcp/actions/workflows/ci.yml)
 [![Documentation](https://docs.rs/qcp/badge.svg)](https://docs.rs/qcp/)
-[![Coverage Status](https://coveralls.io/repos/github/crazyscot/qcp/badge.svg)](https://coveralls.io/github/crazyscot/qcp)
 [![codecov](https://codecov.io/gh/crazyscot/qcp/graph/badge.svg?token=RNYUNDHTQI)](https://codecov.io/gh/crazyscot/qcp)
 [![License](https://img.shields.io/badge/License-AGPL_v3-orange.svg)](LICENSE)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/crazyscot/qcp)
