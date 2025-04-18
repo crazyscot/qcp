@@ -1,4 +1,6 @@
 //! OS abstraction layer
+//!
+//! See also the [Windows](crate::doc::windows) and [OSX](crate::doc::osx) end-user notes.
 // (c) 2024 Ross Younger
 
 use std::{

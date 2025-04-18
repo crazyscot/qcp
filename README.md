@@ -18,7 +18,7 @@ high-performance remote file copy utility for long-distance internet connections
 ### News
 
 - **(New in 0.4)**
-  * Added builds for OSX, Windows and BSD
+  * Added builds for [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html), [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html) and BSD
   * New features: Explicit username with `-l <login-name>`; ssh subsystem mode
 - **(New in 0.3)**
   * Negotiate transport setting by combining configuration from both sides
