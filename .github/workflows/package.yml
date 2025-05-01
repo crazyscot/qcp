@@ -85,7 +85,7 @@ jobs:
       with:
         target: ${{ matrix.target }}
     - name: Additional rust tools
-      uses: taiki-e/install-action@daa3c1f1f9a9d46f686d9fc2f65773d0c293688b # v2.49.40
+      uses: taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
             # this action is used in multiple places
       with:
         tool: cargo-cyclonedx${{ matrix.build_deb && ',cargo-deb' || ''}}
