@@ -51,7 +51,7 @@ quinn = { version = "0.11.7", default-features = false, features = [
     "ring",
 ] }
 rcgen = { version = "0.13.2" }
-rustix = { version = "1.0.3", features = ["net", "fs", "process"] }
+rustix = { version = "1.0.7", features = ["net", "fs", "process"] }
 rustls-pki-types = "1.11.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_bare = "0.5.0"
@@ -60,7 +60,7 @@ static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
 strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
-tabled = "0.18.0"
+tabled = "0.19.0"
 thiserror = "2.0.12"
 tokio = { version = "1.44.2", default-features = true, features = [
     "fs",
@@ -81,10 +81,10 @@ mimalloc = "0.1.42" # see windows dependency on 0.1.42
 [target.'cfg(windows)'.dependencies]
 # cross-rs can't currently cross-compile libmimalloc-sys 0.1.39 or later (needs mingw 10)
 mimalloc = "=0.1.42"
-libmimalloc-sys = "=0.1.38"
+libmimalloc-sys = "=0.1.42"
 
 [dev-dependencies]
-assertables = "9.5.1"
+assertables = "9.5.2"
 clap_mangen = "0.2.26"
 either = "1.15.0"
 json = "0.12.4"
