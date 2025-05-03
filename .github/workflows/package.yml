@@ -71,8 +71,6 @@ jobs:
       DEB_ARTIFACT: ${{ matrix.build_deb && format('qcp-deb-{0}', matrix.target) }}
       PACKAGE_ZIP: ${{ matrix.target == 'x86_64-pc-windows-gnu' }}
     steps:
-    - name: Debug temp
-      run: echo "PACKAGE_ZIP = $PACKAGE_ZIP"
     - uses: actions/checkout@v4
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
