@@ -1,6 +1,7 @@
 //! server-side _(remote)_ event loop
 // (c) 2024 Ross Younger
 
+use crate::cli::styles::use_colours;
 use crate::config::Manager;
 use crate::protocol::common::{ProtocolMessage as _, SendReceivePair};
 use crate::protocol::session::Command;
@@ -19,7 +20,12 @@ pub(crate) async fn server_main() -> anyhow::Result<()> {
     let remote_ip = ssh_remote_address();
     let mut manager = Manager::standard(remote_ip.as_deref());
     let result = control
-        .run_server(remote_ip, &mut manager, crate::util::setup_tracing)
+        .run_server(
+            remote_ip,
+            &mut manager,
+            crate::util::setup_tracing,
+            use_colours(),
+        )
         .await?;
     let endpoint = result.endpoint;
 

@@ -831,6 +831,7 @@ mod test {
             time_format: None,
             ssh_config: None,
             ssh_subsystem: None,
+            color: None,
         };
 
         let cmsg = {

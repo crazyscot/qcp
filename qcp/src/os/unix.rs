@@ -1,7 +1,7 @@
 //! OS concretions for Unix platforms
 // (c) 2024 Ross Younger
 
-use crate::cli::styles::{ERROR, HEADER, INFO, RESET, SUCCESS, WARNING};
+use crate::cli::styles::{RESET, error, header, info, success, warning};
 use crate::config::BASE_CONFIG_FILENAME;
 
 use human_repr::HumanCount as _;
@@ -48,6 +48,13 @@ impl super::AbstractPlatform for Platform {
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 fn help_buffers_unix(rmem: u64, wmem: u64) {
+    #![allow(non_snake_case)]
+    let INFO = info();
+    let WARNING = warning();
+    let SUCCESS = success();
+    let ERROR = error();
+    let HEADER = header();
+
     println!(
         r"ℹ️  For best performance, it is necessary to set the kernel UDP buffer size limits.
 This program attempts to automatically set buffer sizes for itself,
@@ -133,7 +140,7 @@ or {HEADER}/etc/sysctl.d/udp_buffer.conf{RESET}:
             r"
 {ERROR}Unknown unix build type!{RESET}
 
-This build of qcp is configured for OS type '{}',
+This build of qcp is configured for OS type '{os}',
 which is not covered by any of the current help messages.
 Sorry about that! If you can fill in the details, please get in touch with
 the developers.
@@ -143,7 +150,7 @@ and {wmem} for writing.
 
 There might be a sysctl or similar mechanism you can set to enable this.
 Good luck!",
-            std::env::consts::OS
+            os = std::env::consts::OS,
         );
     }
 }

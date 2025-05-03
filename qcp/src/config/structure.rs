@@ -12,9 +12,8 @@ use serde::{Deserialize, Serialize};
 use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
-    cli::styles::{INFO, RESET},
-    protocol::control::CongestionController,
-    protocol::control::CongestionControllerSerializingAsString,
+    cli::styles::{ColourMode, RESET, info},
+    protocol::control::{CongestionController, CongestionControllerSerializingAsString},
     util::{AddressFamily, PortRange, TimeFormat, derive_deftly_template_Optionalify},
 };
 
@@ -267,6 +266,25 @@ pub struct Configuration {
         display_order(0)
     )]
     pub ssh_subsystem: bool,
+
+    /// Colour mode for console output (default: auto)
+    ///
+    /// Passing `--color` without a value is equivalent to `--color always`.
+    ///
+    /// Note that color output is not shared with the remote system, so the color output
+    /// from the remote system (log messages, remote-config) will be coloured per the
+    /// config file on the remote system.
+    ///
+    /// qcp also supports the `CLICOLOR`, `CLICOLOR_FORCE` and `NO_COLOR` environment variables.
+    /// See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more details.
+    #[arg(
+        long,
+        alias("colour"),
+        default_missing_value("always"), // to support `--color`
+        num_args(0..=1),
+        value_name("mode")
+    )]
+    pub color: ColourMode,
 }
 
 static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
@@ -287,6 +305,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     time_format: TimeFormat::Local,
     ssh_config: Vec::new(),
     ssh_subsystem: false,
+    color: ColourMode::Auto,
 });
 
 impl Configuration {
@@ -393,16 +412,17 @@ impl Configuration_Optional {
             let rx = u64::from(rx);
             if rx < MINIMUM_BANDWIDTH {
                 anyhow::bail!(
-                    "The receive bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
-                    rx.to_eng(0),
-                    MINIMUM_BANDWIDTH.to_eng(3)
+                    "The receive bandwidth ({INFO}rx {val}{RESET}B) is too small; it must be at least {min}",
+                    val = rx.to_eng(0),
+                    min = MINIMUM_BANDWIDTH.to_eng(3),
+                    INFO = info()
                 );
             }
             if rx.checked_mul(rtt.into()).is_none() {
                 anyhow::bail!(
-                    "The receive bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
-                    rx.to_eng(0),
-                    rtt
+                    "The receive bandwidth delay product calculation ({INFO}rx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
+                    val = rx.to_eng(0),
+                    INFO = info()
                 );
             }
         }
@@ -410,16 +430,17 @@ impl Configuration_Optional {
             let tx = u64::from(tx);
             if tx != 0 && tx < MINIMUM_BANDWIDTH {
                 anyhow::bail!(
-                    "The transmit bandwidth ({INFO}rx {}{RESET}B) is too small; it must be at least {}",
-                    tx.to_eng(0),
-                    MINIMUM_BANDWIDTH.to_eng(3)
+                    "The transmit bandwidth ({INFO}rx {val}{RESET}B) is too small; it must be at least {min}",
+                    val = tx.to_eng(0),
+                    min = MINIMUM_BANDWIDTH.to_eng(3),
+                    INFO = info(),
                 );
             }
             if tx.checked_mul(rtt.into()).is_none() {
                 anyhow::bail!(
-                    "The transmit bandwidth delay product calculation ({INFO}rx {}{RESET}B x {INFO}rtt {}{RESET}ms) overflowed",
-                    tx.to_eng(0),
-                    rtt
+                    "The transmit bandwidth delay product calculation ({INFO}rx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
+                    val = tx.to_eng(0),
+                    INFO = info(),
                 );
             }
         }

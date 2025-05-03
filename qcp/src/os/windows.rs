@@ -1,7 +1,7 @@
 //! OS concretions for Windows
 // (c) 2025 Ross Younger
 
-use crate::cli::styles::{INFO, RESET, SUCCESS, WARNING};
+use crate::cli::styles::{RESET, info, success, warning};
 use crate::config::BASE_CONFIG_FILENAME;
 
 use human_repr::HumanCount as _;
@@ -59,7 +59,11 @@ impl super::AbstractPlatform for Platform {
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 fn help_buffers_win(rmem: u64, wmem: u64) {
+    #![allow(non_snake_case)]
     let result = super::test_buffers(rmem, wmem);
+    let INFO = info();
+    let WARNING = warning();
+    let SUCCESS = success();
     let _tested_ok = match result {
         Err(e) => {
             println!(
@@ -73,12 +77,12 @@ fn help_buffers_win(rmem: u64, wmem: u64) {
             println!(
                 "{INFO}Test result:{RESET} {rx} (read) / {tx} (write)",
                 rx = r.recv.human_count_bytes(),
-                tx = r.send.human_count_bytes()
+                tx = r.send.human_count_bytes(),
             );
             if let Some(warning) = r.warning {
                 println!(
                     r"
-😞 {INFO}{warning}{RESET}"
+😞 {INFO}{warning}{RESET}",
                 );
             } else {
                 println!(

@@ -1,7 +1,10 @@
 //! Configuration file wrangling
 // (c) 2024 Ross Younger
 
-use crate::os::{AbstractPlatform as _, Platform};
+use crate::{
+    cli::styles::use_colours,
+    os::{AbstractPlatform as _, Platform},
+};
 
 use super::{Configuration, Configuration_Optional, ssh::SshConfigError};
 
@@ -47,6 +50,45 @@ impl Provider for SystemDefault {
     }
 }
 
+// CLICOLOR SPECIAL HANDLING //////////////////////////////////////////////////////////////////////////////////
+
+struct ClicolorEnv {}
+impl ClicolorEnv {
+    const META_NAME: &str = "environment variable(s)";
+}
+
+impl Provider for ClicolorEnv {
+    fn metadata(&self) -> Metadata {
+        figment::Metadata::named(Self::META_NAME)
+    }
+
+    fn data(
+        &self,
+    ) -> std::result::Result<
+        figment::value::Map<figment::Profile, figment::value::Dict>,
+        figment::Error,
+    > {
+        let mut dict = figment::value::Dict::new();
+        let value = if std::env::var("NO_COLOR").is_ok() {
+            Some("never")
+        } else if std::env::var("CLICOLOR_FORCE").is_ok() {
+            Some("always")
+        } else if let Ok(v) = std::env::var("CLICOLOR") {
+            if v.is_empty() || v == "0" {
+                Some("never")
+            } else {
+                Some("auto")
+            }
+        } else {
+            None
+        };
+        if let Some(v) = value {
+            let _ = dict.insert("color".into(), v.into());
+        }
+        Ok(figment::Profile::Default.collect(dict))
+    }
+}
+
 // CONFIG MANAGER /////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Processes and merges all possible configuration sources.
@@ -81,6 +123,10 @@ impl Manager {
     #[must_use]
     pub fn standard(for_host: Option<&str>) -> Self {
         let mut new1 = Self::new(for_host);
+
+        // Make CLICOLOR and CLICOLOR_FORCE appear as quasi-config (before config/CLI are added)
+        new1.merge_provider(ClicolorEnv {});
+
         // N.B. This may leave data in a fused-error state, if a config file isn't parseable.
         new1.add_config(
             false,
@@ -325,13 +371,12 @@ impl Display for DisplayAdapter<'_> {
                 output.push(PrettyConfig::new(field.to_upper_camel_case(), &value, meta));
             }
         }
-        write!(
-            f,
-            "{}",
-            Table::new(output)
-                .modify(Rows::single(1), host_colour)
-                .with(Style::sharp())
-        )
+        let mut writable = Table::new(output);
+        let _ = writable.with(Style::sharp());
+        if use_colours() {
+            let _ = writable.modify(Rows::single(1), host_colour);
+        }
+        write!(f, "{writable}")
     }
 }
 

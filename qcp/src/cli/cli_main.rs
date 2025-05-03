@@ -5,9 +5,9 @@ use std::process::ExitCode;
 
 use super::args::CliArgs;
 use crate::{
-    cli::styles::{ERROR, RESET},
+    cli::styles::{RESET, configure_colours, error},
     client::MAX_UPDATE_FPS,
-    config::{Configuration, Manager},
+    config::{Configuration, Configuration_Optional, Manager},
     os::{self, AbstractPlatform as _},
 };
 
@@ -52,7 +52,7 @@ pub fn cli() -> ExitCode {
             if crate::util::tracing_is_initialised() {
                 tracing::error!("{e}");
             } else {
-                eprintln!("{ERROR}Error:{RESET} {e}");
+                eprintln!("{ERROR}Error:{RESET} {e}", ERROR = error());
             }
             ExitCode::FAILURE
         }
@@ -70,6 +70,15 @@ async fn cli_inner() -> anyhow::Result<bool> {
     // Now fold the arguments in with the CLI config (which may fail)
     // (to provoke an error here: `qcp host: host2:`)
     let mut config_manager = Manager::try_from(&args)?;
+    let colours = config_manager
+        .get::<Configuration_Optional>()
+        .map_or_else(|_| None, |c| c.color);
+
+    #[allow(unsafe_code)]
+    unsafe {
+        // SAFETY: this is safe as we are only single threaded at this point
+        configure_colours(colours);
+    }
 
     match mode {
         MainMode::HelpBuffers => {
@@ -93,7 +102,7 @@ async fn cli_inner() -> anyhow::Result<bool> {
         }
         MainMode::Server => Ok(crate::server_main().await.map_or_else(
             |e| {
-                eprintln!("{ERROR}ERROR{RESET} Server: {e:?}");
+                eprintln!("{ERROR}ERROR{RESET} Server: {e:?}", ERROR = error());
                 false
             },
             |()| true,

@@ -2,6 +2,7 @@
 // (c) 2024 Ross Younger
 
 use crate::{
+    cli::styles::use_colours,
     client::progress::spinner_style,
     config::{Configuration, Configuration_Optional, Manager},
     control::{ClientSsh, ControlChannel, create_endpoint},
@@ -29,12 +30,14 @@ fn setup_tracing(
     display: &MultiProgress,
     parameters: &ClientParameters,
     time_format: TimeFormat,
+    colours: bool,
 ) -> anyhow::Result<()> {
     util::setup_tracing(
         util::trace_level(parameters),
         Some(display),
         parameters.log_file.as_ref(),
         time_format,
+        colours,
     ) // to provoke error: set RUST_LOG=.
 }
 
@@ -56,6 +59,7 @@ pub(crate) async fn client_main(
         &display,
         &parameters,
         working_config.time_format.unwrap_or_default(),
+        use_colours(),
     )?;
     let default_config = Configuration::system_default();
 

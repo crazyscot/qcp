@@ -322,12 +322,19 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     }
 
     pub(crate) async fn run_server<
-        F: FnOnce(&str, Option<&MultiProgress>, Option<&String>, TimeFormat) -> anyhow::Result<()>,
+        F: FnOnce(
+            &str,
+            Option<&MultiProgress>,
+            Option<&String>,
+            TimeFormat,
+            bool,
+        ) -> anyhow::Result<()>,
     >(
         &mut self,
         remote_ip: Option<String>,
         manager: &mut Manager,
         setup_tracing: F,
+        colours: bool,
     ) -> anyhow::Result<ServerResult> {
         // PHASE 1: BANNER (checked by client)
         self.stream.send.write_all(BANNER.as_bytes()).await?;
@@ -343,7 +350,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
 
         // to provoke a config error here, set RUST_LOG=.
         let level = Self::server_trace_level(remote_greeting.debug);
-        setup_tracing(level, None, None, time_format)?;
+        setup_tracing(level, None, None, time_format, colours)?;
         // Now we can use the tracing system!
 
         let _span = tracing::error_span!("Server").entered();
@@ -455,6 +462,7 @@ mod test {
         _display: Option<&MultiProgress>,
         _filename: Option<&String>,
         _time_format: TimeFormat,
+        _colour: bool,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -503,7 +511,7 @@ mod test {
 
         let mut server = ControlChannel::new(pipe2);
         let mut manager = Manager::without_files(None);
-        let ser_fut = server.run_server(None, &mut manager, mock_setup_tracing);
+        let ser_fut = server.run_server(None, &mut manager, mock_setup_tracing, false);
 
         let (cli_res, ser_res) = tokio::join!(cli_fut, ser_fut);
         assert!(cli_res.is_ok());
@@ -564,7 +572,7 @@ mod test {
         let mut manager = Manager::without_files(None);
         // non-overlapping port range, will fail to negotiate
         manager.merge_provider(fake_cli_with_port(22222, 22222));
-        let ser_fut = server.run_server(None, &mut manager, mock_setup_tracing);
+        let ser_fut = server.run_server(None, &mut manager, mock_setup_tracing, false);
 
         let (cli_res, ser_res) = tokio::join!(cli_fut, ser_fut);
         assert!(cli_res.is_err_and(|e| e.to_string().contains("Negotiation Failed")));
@@ -633,7 +641,7 @@ mod test {
 
         let mut server = ControlChannel::new(pipe2);
         let mut manager = Manager::without_files(None);
-        let ser_fut = server.run_server(None, &mut manager, mock_setup_tracing);
+        let ser_fut = server.run_server(None, &mut manager, mock_setup_tracing, false);
 
         let (cli_res, _) = tokio::join!(cli_fut, ser_fut);
         let e = cli_res.unwrap_err();
