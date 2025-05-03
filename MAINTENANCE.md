@@ -1,3 +1,10 @@
+
+## Prerequisites
+
+* `git config tag.gpgsign true`
+* Consider setting this `--global`
+* Consider also `git config commit.gpgsign true`
+
 ## Creating a release
 
 * Check and update dependencies as required.
