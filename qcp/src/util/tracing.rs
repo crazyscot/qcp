@@ -167,6 +167,7 @@ pub(crate) fn setup(
     display: Option<&MultiProgress>,
     filename: Option<&String>,
     time_format: TimeFormat,
+    colours: bool,
 ) -> anyhow::Result<()> {
     if is_initialized() {
         tracing::warn!("tracing::setup called a second time (ignoring)");
@@ -174,7 +175,7 @@ pub(crate) fn setup(
     }
     TRACING_INITIALIZED.store(true, Ordering::Relaxed);
 
-    let layers = create_layers(trace_level, display, filename, time_format)?;
+    let layers = create_layers(trace_level, display, filename, time_format, colours)?;
     tracing_subscriber::registry().with(layers).init();
 
     Ok(())
@@ -185,6 +186,7 @@ fn create_layers(
     display: Option<&MultiProgress>,
     filename: Option<&String>,
     time_format: TimeFormat,
+    colours: bool,
 ) -> anyhow::Result<
     Vec<Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>>,
 > {
@@ -202,7 +204,7 @@ fn create_layers(
                 filter.filter,
                 time_format,
                 filter.used_env,
-                true,
+                colours,
             ));
         }
         Some(mp) => {
@@ -211,7 +213,7 @@ fn create_layers(
                 filter.filter,
                 time_format,
                 filter.used_env,
-                true,
+                colours,
             ));
         }
     }
@@ -324,7 +326,7 @@ mod test {
     #[test]
     fn test_create_layers_with_console_output() {
         let mp = MultiProgress::new();
-        let layers = create_layers("info", Some(&mp), None, TimeFormat::Local).unwrap();
+        let layers = create_layers("info", Some(&mp), None, TimeFormat::Local, false).unwrap();
         assert_eq!(layers.len(), 1); // Only one layer for console output
     }
 
@@ -332,14 +334,15 @@ mod test {
     fn test_create_layers_with_file_output() {
         LitterTray::run(|_| {
             let filename = String::from("test.log");
-            let layers = create_layers("info", None, Some(&filename), TimeFormat::Utc).unwrap();
+            let layers =
+                create_layers("info", None, Some(&filename), TimeFormat::Utc, false).unwrap();
             assert_eq!(layers.len(), 2); // One for console, one for file
         });
     }
 
     #[test]
     fn test_create_layers_with_invalid_level() {
-        let result = create_layers("invalid_level", None, None, TimeFormat::Utc);
+        let result = create_layers("invalid_level", None, None, TimeFormat::Utc, false);
         assert!(result.is_err());
     }
 
@@ -379,10 +382,10 @@ mod test {
     rusty_fork_test! {
         #[test]
         fn test_setup_initialization() {
-            let result1 = setup("info", None, None, TimeFormat::Utc);
+            let result1 = setup("info", None, None, TimeFormat::Utc, false);
             assert!(result1.is_ok());
 
-            let result2 = setup("info", None, None, TimeFormat::Utc);
+            let result2 = setup("info", None, None, TimeFormat::Utc, false);
             assert!(result2.is_ok()); // Second call should succeed but be ignored
         }
     }

@@ -1,7 +1,7 @@
 //! Individual configured values
 // (c) 2024 Ross Younger
 
-use crate::cli::styles::{INFO, RESET};
+use crate::cli::styles::{RESET, info};
 use figment::{Metadata, Profile, Source};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,7 +54,8 @@ impl figment::Provider for ValueProvider<'_> {
             let key = path.to_vec();
             format!(
                 "key `{INFO}{key}{RESET}` of host `{INFO}{profile}{RESET}`",
-                key = key.join(".")
+                key = key.join("."),
+                INFO = info(),
             )
         })
     }

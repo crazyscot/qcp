@@ -10,33 +10,175 @@
 use anstyle::AnsiColor::*;
 use anstyle::Color::Ansi;
 use clap::builder::styling::Styles;
+use figment::error::{Actual, OneOf};
+use serde::{Deserialize, Serialize};
+use std::{
+    str::FromStr,
+    sync::{LazyLock, atomic::AtomicBool},
+};
+
+// RAW STYLE DEFINITIONS //////////////////////////////////////////////////////////////////
 
 /// Error message styling. This can be Displayed directly.
-pub(crate) const ERROR: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Red)));
-/// Warning message styling. This can be Displayed directly.
-pub(crate) const WARNING: anstyle::Style =
-    anstyle::Style::new().bold().fg_color(Some(Ansi(Yellow)));
-/// Informational message styling. This can be Displayed directly.
-pub(crate) const INFO: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Cyan)));
-// pub(crate) const DEBUG: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Blue)));
-/// Success message style. This can be Displayed directly.
-pub(crate) const SUCCESS: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Green)));
+const _ERROR: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Red)));
 
-pub(crate) const HEADER: anstyle::Style = anstyle::Style::new()
+/// Warning message styling. This can be Displayed directly.
+const _WARNING: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Yellow)));
+
+/// Informational message styling. This can be Displayed directly.
+const _INFO: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Cyan)));
+
+// pub(crate) const DEBUG: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Blue)));
+
+/// Success message style. This can be Displayed directly.
+const _SUCCESS: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Green)));
+
+const _HEADER: anstyle::Style = anstyle::Style::new()
     .underline()
     .fg_color(Some(Ansi(Yellow)));
 
-pub(crate) const CLAP_STYLES: Styles = Styles::styled()
-    .usage(HEADER)
-    .header(HEADER)
-    .literal(anstyle::Style::new().bold())
-    .invalid(WARNING)
-    .error(ERROR)
-    .valid(INFO.bold().underline())
-    .placeholder(INFO);
-
 /// Resets styling to default.
 ///
-/// This is purely for convenience; you can also call `ERROR::render_reset()` (etc.)
+/// This is purely for convenience; you can also call `error()::render_reset()` (etc.)
 ///
 pub(crate) use anstyle::Reset as RESET;
+
+// COMPOSITE STYLES //////////////////////////////////////////////////////////////////////
+
+// We don't need to make this conditional, as clap already reads the CLICOLOR environment variables.
+pub(crate) const CLAP_STYLES: Styles = Styles::styled()
+    .usage(_HEADER)
+    .header(_HEADER)
+    .literal(anstyle::Style::new().bold())
+    .invalid(_WARNING)
+    .error(_ERROR)
+    .valid(_INFO.bold().underline())
+    .placeholder(_INFO);
+
+// CONDITIONAL STYLES ////////////////////////////////////////////////////////////////////
+
+/// Wrap a constant in a function that returns the style if colours are enabled.
+macro_rules! wrap {
+    ($func:ident, $def:ident) => {
+        #[allow(clippy::missing_const_for_fn)]
+        pub(crate) fn $func() -> anstyle::Style {
+            if use_colours() {
+                $def
+            } else {
+                anstyle::Style::new()
+            }
+        }
+    };
+}
+
+wrap!(error, _ERROR);
+wrap!(warning, _WARNING);
+wrap!(info, _INFO);
+wrap!(success, _SUCCESS);
+wrap!(header, _HEADER);
+
+// CONDITIONALITY & CLI //////////////////////////////////////////////////////////
+
+static COLOURS_ENABLED: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
+
+pub(crate) fn use_colours() -> bool {
+    COLOURS_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The available terminal colour modes
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Serialize)]
+#[serde(rename_all = "kebab-case")] // to match clap::ValueEnum
+pub enum ColourMode {
+    #[value(alias = "on", alias = "yes")]
+    /// Forces colours on, whatever is happening
+    /// (aliases: `on`, `yes`)
+    Always,
+    #[value(alias = "off", alias = "no", alias = "none")]
+    /// (aliases: `off`, `no`, `none`)
+    Never,
+    /// Use colours only when writing to a terminal
+    Auto,
+}
+
+impl FromStr for ColourMode {
+    type Err = figment::Error;
+    // TODO: Can we derive this? Can it be unified with AddressFamily?
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let lc = s.to_ascii_lowercase();
+        match lc.as_str() {
+            "always" | "on" | "yes" => Ok(ColourMode::Always),
+            "never" | "off" | "no" | "none" => Ok(ColourMode::Never),
+            "auto" => Ok(ColourMode::Auto),
+            _ => Err(figment::error::Kind::InvalidType(
+                Actual::Str(s.into()),
+                OneOf(&["always", "on", "yes", "never", "off", "no", "none"]).to_string(),
+            )
+            .into()),
+        }
+    }
+}
+
+// TODO: this is the same as AddressFamily; can we unify?
+impl<'de> Deserialize<'de> for ColourMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Set up the terminal colour mode.
+/// If `mode` is `None`, we will use the standard `CLICOLOR` environment variables to determine the mode.
+/// See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more information.
+///
+/// This function should only be called once, at the start of the program.
+///
+/// SAFETY: This function sets environment variables, which is not thread-safe on all platforms.
+/// Justification: There is no way to tell all the downstream crates to use colours (or not) other than the environment.
+#[allow(unsafe_code)]
+pub(crate) unsafe fn configure_colours(mode: Option<ColourMode>) {
+    let mode = match mode {
+        Some(m) => m,
+        None => {
+            // fall back to env vars & autodetection
+            if clicolors_control::colors_enabled() {
+                ColourMode::Always
+            } else {
+                ColourMode::Never
+            }
+        }
+    };
+
+    match mode {
+        ColourMode::Always => {
+            clicolors_control::set_colors_enabled(true);
+            #[allow(unsafe_code)]
+            unsafe {
+                std::env::set_var("CLICOLOR_FORCE", "1");
+            }
+            COLOURS_ENABLED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        ColourMode::Never => {
+            clicolors_control::set_colors_enabled(false);
+            #[allow(unsafe_code)]
+            unsafe {
+                std::env::remove_var("CLICOLOR_FORCE");
+                std::env::set_var("CLICOLOR", "0");
+            }
+            COLOURS_ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
+        }
+        ColourMode::Auto => {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::env::remove_var("CLICOLOR_FORCE");
+                std::env::set_var("CLICOLOR", "1");
+            }
+            COLOURS_ENABLED.store(
+                clicolors_control::colors_enabled(),
+                std::sync::atomic::Ordering::Relaxed,
+            );
+        }
+    }
+}
