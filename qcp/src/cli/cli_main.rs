@@ -99,13 +99,9 @@ async fn cli_inner() -> anyhow::Result<bool> {
             |()| true,
         )),
         MainMode::Client(progress) => {
+            config_manager.validate_configuration()?;
             // this mode may return false
-            crate::client_main(
-                &mut config_manager.validate_configuration()?,
-                progress,
-                args.client_params,
-            )
-            .await
+            crate::client_main(&mut config_manager, progress, args.client_params).await
         }
     }
 }
