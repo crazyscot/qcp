@@ -6,9 +6,9 @@ use thiserror::Error;
 
 /// A newtype wrapper implementing `Display` for errors originating from this module
 #[derive(Debug, Error)]
-pub(crate) struct SshConfigError(#[from] figment::Error);
+pub(crate) struct ConfigFileError(#[from] figment::Error);
 
-impl SshConfigError {
+impl ConfigFileError {
     fn rewrite_expected_type(s: &str) -> String {
         match s {
             "a boolean" => format!(
@@ -34,7 +34,7 @@ impl SshConfigError {
     }
 }
 
-impl std::fmt::Display for SshConfigError {
+impl std::fmt::Display for ConfigFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let e = &self.0;
         Self::fmt_kind(&e.kind, f)?;
@@ -60,15 +60,15 @@ impl std::fmt::Display for SshConfigError {
 /// An iterator over all errors in an [`SshConfigError`]
 pub(crate) struct IntoIter(<figment::Error as std::iter::IntoIterator>::IntoIter);
 impl Iterator for IntoIter {
-    type Item = SshConfigError;
+    type Item = ConfigFileError;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().map(std::convert::Into::into)
     }
 }
 
-impl IntoIterator for SshConfigError {
-    type Item = SshConfigError;
+impl IntoIterator for ConfigFileError {
+    type Item = ConfigFileError;
     type IntoIter = IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {

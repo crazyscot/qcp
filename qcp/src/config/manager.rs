@@ -6,7 +6,7 @@ use crate::{
     os::{AbstractPlatform as _, Platform},
 };
 
-use super::{Configuration, Configuration_Optional, ssh::SshConfigError};
+use super::{Configuration, Configuration_Optional, ssh::ConfigFileError};
 
 use anyhow::Result;
 use figment::{Figment, Metadata, Provider, providers::Serialized, value::Value};
@@ -237,11 +237,13 @@ impl Manager {
     ///
     /// Within qcp, `T` is usually [Configuration], but it isn't intrinsically required to be.
     /// (This is useful for unit testing.)
-    pub(crate) fn get<'de, T>(&self) -> anyhow::Result<T, SshConfigError>
+    pub(crate) fn get<'de, T>(&self) -> anyhow::Result<T, ConfigFileError>
     where
         T: Deserialize<'de>,
     {
-        self.data.extract_lossy::<T>().map_err(SshConfigError::from)
+        self.data
+            .extract_lossy::<T>()
+            .map_err(ConfigFileError::from)
     }
 
     /// Performs additional validation checks on the fields present in the configuration, as far as possible.
