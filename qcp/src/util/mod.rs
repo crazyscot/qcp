@@ -12,6 +12,7 @@ pub(crate) use dns::lookup_host_by_family;
 mod cert;
 pub(crate) use cert::Credentials;
 
+pub(crate) mod enums;
 pub(crate) mod io;
 pub(crate) mod socket;
 pub(crate) mod stats;

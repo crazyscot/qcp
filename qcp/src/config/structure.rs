@@ -14,7 +14,10 @@ use struct_field_names_as_array::FieldNamesAsSlice;
 use crate::{
     cli::styles::{ColourMode, RESET, info},
     protocol::control::{CongestionController, CongestionControllerSerializingAsString},
-    util::{AddressFamily, PortRange, TimeFormat, derive_deftly_template_Optionalify},
+    util::{
+        AddressFamily, PortRange, TimeFormat, derive_deftly_template_Optionalify,
+        enums::DeserializableEnum,
+    },
 };
 
 use derive_deftly::Deftly;
@@ -172,7 +175,7 @@ pub struct Configuration {
         group("ip address"),
         display_order(0)
     )]
-    pub address_family: AddressFamily,
+    pub address_family: DeserializableEnum<AddressFamily>,
 
     /// Specifies the ssh client program to use [default: `ssh`]
     #[arg(
@@ -284,7 +287,7 @@ pub struct Configuration {
         num_args(0..=1),
         value_name("mode")
     )]
-    pub color: ColourMode,
+    pub color: DeserializableEnum<ColourMode>,
 }
 
 static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
@@ -297,7 +300,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     port: PortRange::default(),
     timeout: 5,
     // Client
-    address_family: AddressFamily::Any,
+    address_family: AddressFamily::Any.into(),
     ssh: "ssh".into(),
     ssh_options: vec![],
     remote_port: PortRange::default(),
@@ -305,7 +308,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     time_format: TimeFormat::Local,
     ssh_config: Vec::new(),
     ssh_subsystem: false,
-    color: ColourMode::Auto,
+    color: ColourMode::Auto.into(),
 });
 
 impl Configuration {
