@@ -42,6 +42,14 @@ impl LitterTray {
         f(&mut tray)
     }
 
+    /// Runs a closure in a new litter tray, passing the tray to the closure.
+    pub(crate) fn run<F: FnOnce(&mut LitterTray)>(f: F) {
+        let _ = Self::try_with(|tray| {
+            f(tray);
+            Ok(())
+        });
+    }
+
     /// Runs an async closure in a new litter tray, passing the tray to the closure.
     /// The closure must return a Result<()>.
     pub(crate) async fn try_with_async<F: AsyncFnOnce(&mut LitterTray) -> Result<()>>(

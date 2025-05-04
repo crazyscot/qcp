@@ -298,7 +298,10 @@ mod test {
     use tracing_subscriber::EnvFilter;
 
     use super::{create_layers, setup};
-    use crate::{Parameters, util::TimeFormat};
+    use crate::{
+        Parameters,
+        util::{TimeFormat, littertray::LitterTray},
+    };
 
     #[test]
     fn trace_levels() {
@@ -327,9 +330,11 @@ mod test {
 
     #[test]
     fn test_create_layers_with_file_output() {
-        let filename = String::from("test.log");
-        let layers = create_layers("info", None, Some(&filename), TimeFormat::Utc).unwrap();
-        assert_eq!(layers.len(), 2); // One for console, one for file
+        LitterTray::run(|_| {
+            let filename = String::from("test.log");
+            let layers = create_layers("info", None, Some(&filename), TimeFormat::Utc).unwrap();
+            assert_eq!(layers.len(), 2); // One for console, one for file
+        });
     }
 
     #[test]
