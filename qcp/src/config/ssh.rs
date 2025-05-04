@@ -2,7 +2,7 @@
 // (c) 2024 Ross Younger
 
 mod errors;
-pub(crate) use errors::SshConfigError;
+pub(crate) use errors::ConfigFileError;
 
 mod files;
 mod includes;
