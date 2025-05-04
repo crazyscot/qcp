@@ -98,6 +98,22 @@ pub enum ColourMode {
     Auto,
 }
 
+/// Set up the terminal colour mode for this crate only, without setting environment variables.
+///
+/// This allows us to respect the settings as far as possible, before we have parsed
+/// the configuration file and CLI arguments.
+///
+/// This function may safely be called multiple times but should not be called after calling
+/// `configure_colours()`.
+pub(crate) fn configure_colours_preliminary(mode: Option<ColourMode>) {
+    let enable = match mode {
+        Some(ColourMode::Always) => true,
+        Some(ColourMode::Never) => false,
+        Some(ColourMode::Auto) | None => clicolors_control::colors_enabled(),
+    };
+    COLOURS_ENABLED.store(enable, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Set up the terminal colour mode.
 /// If `mode` is `None`, we will use the standard `CLICOLOR` environment variables to determine the mode.
 /// See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more information.
