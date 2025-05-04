@@ -644,4 +644,24 @@ mod test {
         let result = mgr.get::<Configuration>().unwrap();
         assert_eq!(10_500_000, result.rx());
     }
+
+    #[test]
+    fn invalid_enum() {
+        let (path, _tempdir) = make_test_tempfile(
+            r"
+           color wombat
+        ",
+            "test.conf",
+        );
+        let mut mgr = Manager::new(None);
+        mgr.merge_ssh_config(&path, Some("foo"), false);
+        //println!("{mgr:?}");
+        let err = mgr.get::<Configuration_Optional>().unwrap_err();
+        println!("{err}");
+        assert!(err.to_string().contains("expected one of"));
+        assert!(err.to_string().contains("auto"));
+        assert!(err.to_string().contains("on"));
+        assert!(err.to_string().contains("always"));
+        assert!(err.to_string().contains("color"));
+    }
 }
