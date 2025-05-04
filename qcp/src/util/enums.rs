@@ -10,6 +10,9 @@ use serde::Deserialize;
 ///
 /// This type supports construction via `Into` but not deconstruction;
 /// to extract, look at `ConvertibleTo`.
+///
+/// To use on a clap argument, you may want to set
+///    `#[arg(value_parser = clap::builder::EnumValueParser::<YourType>::new().map(DeserializableEnum::<YourType>::from))]`
 #[derive(
     Clone,
     Copy,

@@ -173,6 +173,7 @@ pub struct Configuration {
         long,
         help_heading("Connection"),
         group("ip address"),
+        value_parser(clap::builder::EnumValueParser::<AddressFamily>::new().map(DeserializableEnum::<AddressFamily>::from)),
         display_order(0)
     )]
     pub address_family: DeserializableEnum<AddressFamily>,
@@ -285,6 +286,8 @@ pub struct Configuration {
         alias("colour"),
         default_missing_value("always"), // to support `--color`
         num_args(0..=1),
+        // hacky: apply the value as soon as we see it, in case a later CLI argument fails to parse
+        value_parser(clap::builder::EnumValueParser::<ColourMode>::new().map(|cm| { crate::cli::styles::configure_colours_preliminary(Some(cm)); DeserializableEnum::<ColourMode>::from(cm) })),
         value_name("mode")
     )]
     pub color: DeserializableEnum<ColourMode>,
