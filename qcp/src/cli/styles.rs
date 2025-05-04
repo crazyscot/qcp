@@ -125,7 +125,7 @@ pub(crate) fn configure_colours_preliminary(mode: Option<ColourMode>) {
 #[allow(unsafe_code)]
 pub(crate) unsafe fn configure_colours<CM>(mode: CM)
 where
-    CM: ConvertibleTo<Option<ColourMode>>,
+    CM: ConvertibleTo<Option<ColourMode>> + std::fmt::Debug,
 {
     let mode = match mode.convert() {
         Some(m) => m,
@@ -145,6 +145,7 @@ where
             #[allow(unsafe_code)]
             unsafe {
                 std::env::set_var("CLICOLOR_FORCE", "1");
+                std::env::remove_var("NO_COLOR");
             }
             COLOURS_ENABLED.store(true, std::sync::atomic::Ordering::Relaxed);
         }
@@ -154,19 +155,107 @@ where
             unsafe {
                 std::env::remove_var("CLICOLOR_FORCE");
                 std::env::set_var("CLICOLOR", "0");
+                std::env::set_var("NO_COLOR", "1");
             }
             COLOURS_ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
         }
         ColourMode::Auto => {
+            let enable = clicolors_control::colors_enabled();
             #[allow(unsafe_code)]
             unsafe {
-                std::env::remove_var("CLICOLOR_FORCE");
-                std::env::set_var("CLICOLOR", "1");
+                if enable {
+                    std::env::set_var("CLICOLOR_FORCE", "1");
+                    std::env::remove_var("NO_COLOR");
+                } else {
+                    std::env::remove_var("CLICOLOR_FORCE");
+                    std::env::set_var("CLICOLOR", "0");
+                    std::env::set_var("NO_COLOR", "1");
+                }
             }
-            COLOURS_ENABLED.store(
-                clicolors_control::colors_enabled(),
-                std::sync::atomic::Ordering::Relaxed,
-            );
+            COLOURS_ENABLED.store(enable, std::sync::atomic::Ordering::Relaxed);
         }
+    }
+}
+
+// ///////////////////////////////////////////////////////////////////////////////
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod test {
+    use super::{ColourMode, configure_colours, use_colours};
+    use rusty_fork::rusty_fork_test;
+    use std::{collections::HashMap, env};
+
+    const VARS_TO_CLEAN: &[&str] = &["CLICOLOR", "CLICOLOR_FORCE", "NO_COLOR"];
+
+    fn test_case(map: &HashMap<&str, &str>, setting: Option<ColourMode>, enabled: bool) {
+        #[allow(unsafe_code)]
+        unsafe {
+            VARS_TO_CLEAN.iter().for_each(|v| env::remove_var(v));
+            for (var, value) in map {
+                if value.is_empty() {
+                    env::remove_var(var);
+                } else {
+                    env::set_var(var, value);
+                }
+            }
+            configure_colours(setting);
+        }
+        assert!(use_colours() == enabled);
+        if enabled {
+            assert_eq!(super::error(), super::_ERROR);
+            assert_eq!(env::var("CLICOLOR_FORCE").unwrap_or_default(), "1");
+            assert_eq!(
+                env::var("NO_COLOR").unwrap_err().to_string(),
+                "environment variable not found"
+            );
+        } else {
+            assert_eq!(super::error(), anstyle::Style::new());
+            assert_eq!(env::var("CLICOLOR").unwrap_or_default(), "0");
+            assert_eq!(
+                env::var("CLICOLOR_FORCE").unwrap_err().to_string(),
+                "environment variable not found"
+            );
+            assert!(env::var("NO_COLOR").is_ok());
+        }
+    }
+
+    // TODO: I haven't yet figured out how to make rstest play nicely with rusty_fork
+    macro_rules! test_case {
+        ($name:ident, $env_vars:expr, $setting:expr, $expected:expr) => {
+            // these tests affect global state, so need to run in forks
+            rusty_fork_test! {
+                #[test]
+                fn $name() {
+                    let map = HashMap::from($env_vars);
+                    test_case(&map, $setting, $expected);
+                }
+            }
+        };
+    }
+
+    test_case!(off, [], Some(ColourMode::Never), false);
+    test_case!(on, [], Some(ColourMode::Always), true);
+    test_case!(
+        auto_on,
+        [("CLICOLOR_FORCE", "1")],
+        Some(ColourMode::Auto),
+        true
+    );
+    test_case!(none_on, [("CLICOLOR_FORCE", "1")], None, true);
+    test_case!(auto_off, [("CLICOLOR", "0")], Some(ColourMode::Auto), false);
+    test_case!(none_off, [("CLICOLOR", "0")], None, false);
+
+    #[test]
+    fn configure_preliminary() {
+        use super::configure_colours_preliminary;
+        configure_colours_preliminary(None);
+        let auto = use_colours();
+        configure_colours_preliminary(Some(ColourMode::Auto));
+        assert_eq!(use_colours(), auto);
+        configure_colours_preliminary(Some(ColourMode::Always));
+        assert!(use_colours());
+        configure_colours_preliminary(Some(ColourMode::Never));
+        assert!(!use_colours());
     }
 }
