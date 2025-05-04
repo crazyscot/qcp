@@ -65,7 +65,22 @@ pub fn cli() -> ExitCode {
 /// Inner CLI entrypoint
 #[tokio::main(flavor = "current_thread")]
 async fn cli_inner() -> anyhow::Result<bool> {
-    let args = CliArgs::custom_parse();
+    let args = match CliArgs::custom_parse() {
+        Ok(args) => args,
+        Err(e) => {
+            match e.kind() {
+                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion => {
+                    // this is a normal exit
+                    e.print()?;
+                    return Ok(true);
+                }
+                _ => (),
+            }
+            // this is an error
+            anyhow::bail!(e);
+        }
+    };
+
     let mode = MainMode::from(&args); // side-effect: holds progress bar, if we need one
 
     // Now fold the arguments in with the CLI config (which may fail)

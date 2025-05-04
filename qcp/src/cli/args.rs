@@ -119,18 +119,17 @@ pub(crate) struct CliArgs {
 
 impl CliArgs {
     /// Sets up and executes our parser
-    pub(crate) fn custom_parse() -> Self {
+    pub(crate) fn custom_parse() -> Result<Self, clap::Error> {
         let cli = clap::Command::new(clap::crate_name!());
         let cli = CliArgs::augment_args(cli).version(crate::version::short());
-        let mut args =
-            CliArgs::from_arg_matches(&cli.get_matches_from(std::env::args_os())).unwrap();
+        let mut args = CliArgs::from_arg_matches(&cli.try_get_matches_from(std::env::args_os())?)?;
         // Custom logic: '-4' and '-6' convenience aliases
         if args.ipv4_alias__ {
             args.config.address_family = Some(AddressFamily::Inet.into());
         } else if args.ipv6_alias__ {
             args.config.address_family = Some(AddressFamily::Inet6.into());
         }
-        args
+        Ok(args)
     }
 
     /// Applies any options derived from the jobspec to this configuration
