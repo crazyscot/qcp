@@ -105,40 +105,59 @@ pub struct Manager {
 
 impl Manager {
     /// Constructor. The structure is set up to extract data for the given `host`, if any.
-    fn new(host: Option<&str>) -> Self {
+    fn new(host: Option<&str>, apply_env: bool, apply_config_files: bool) -> Self {
         let profile = if let Some(host) = host {
             figment::Profile::new(host)
         } else {
             figment::Profile::Default
         };
 
-        Self {
+        let mut new1 = Self {
             data: Figment::new().select(profile),
             host: host.map(std::borrow::ToOwned::to_owned),
+        };
+        if apply_env {
+            new1.merge_provider(ClicolorEnv {});
         }
+        if apply_config_files {
+            // N.B. This may leave data in a fused-error state, if a config file isn't parseable.
+            new1.add_config(
+                false,
+                "system",
+                Platform::system_config_path().as_ref(),
+                host,
+            );
+
+            for p in &Platform::user_config_paths() {
+                new1.add_config(true, "user", Some(p), host);
+            }
+        }
+        new1
     }
 
+    /// General constructor for production use
+    ///
     /// Initialises this structure, reading the set of config files appropriate to the platform
     /// and the current user.
     #[must_use]
     pub fn standard(for_host: Option<&str>) -> Self {
-        let mut new1 = Self::new(for_host);
+        Self::new(for_host, true, true)
+    }
 
-        // Make CLICOLOR and CLICOLOR_FORCE appear as quasi-config (before config/CLI are added)
-        new1.merge_provider(ClicolorEnv {});
-
-        // N.B. This may leave data in a fused-error state, if a config file isn't parseable.
-        new1.add_config(
-            false,
-            "system",
-            Platform::system_config_path().as_ref(),
-            for_host,
-        );
-
-        for p in &Platform::user_config_paths() {
-            new1.add_config(true, "user", Some(p), for_host);
-        }
+    /// Testing/internal constructor, does not read files from system or apply environment; DOES apply system default.
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) fn without_files(host: Option<&str>) -> Self {
+        let mut new1 = Self::new(host, false, false);
+        new1.apply_system_default();
         new1
+    }
+
+    /// Testing/internal constructor, does not read files from system, apply environment, or apply system default
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) fn without_default(host: Option<&str>) -> Self {
+        Self::new(host, false, false)
     }
 
     /// Accessor (only used in tests at the moment)
@@ -180,22 +199,6 @@ impl Manager {
             .iter()
             .map(|p| p.as_os_str().to_string_lossy().to_string())
             .collect()
-    }
-
-    /// Testing/internal constructor, does not read files from system
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) fn without_files(host: Option<&str>) -> Self {
-        let mut result = Self::new(host);
-        result.merge_provider(SystemDefault {});
-        result
-    }
-
-    /// Testing/internal constructor, does not read files from system or apply system default
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) fn without_default(host: Option<&str>) -> Self {
-        Self::new(host)
     }
 
     /// Merges in a data set, which is some sort of [figment::Provider](https://docs.rs/figment/latest/figment/trait.Provider.html).
@@ -599,7 +602,7 @@ mod test {
         ",
             "test.conf",
         );
-        let mut mgr = Manager::new(None);
+        let mut mgr = Manager::new(None, false, false);
         mgr.merge_ssh_config(&path, Some("foo"), false);
         //println!("{mgr:?}");
         let err = mgr.get::<Test>().unwrap_err();
@@ -655,7 +658,7 @@ mod test {
         ",
             "test.conf",
         );
-        let mut mgr = Manager::new(None);
+        let mut mgr = Manager::new(None, false, false);
         mgr.merge_ssh_config(&path, Some("foo"), false);
         //println!("{mgr:?}");
         let err = mgr.get::<Configuration_Optional>().unwrap_err();
