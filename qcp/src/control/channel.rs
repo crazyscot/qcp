@@ -128,14 +128,14 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         credentials: &Credentials,
         connection_type: ConnectionType,
         parameters: &Parameters,
-        manager: &Manager,
+        config: &Configuration_Optional,
     ) -> Result<()> {
         // FUTURE: Select the client message version to send based on server's compatibility level.
         let message = ClientMessage::new(
             credentials,
             connection_type,
             parameters.remote_config,
-            manager,
+            config,
         );
         debug!("Our client message: {message}");
         self.send(message, "client message").await
@@ -179,7 +179,8 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         debug!("got server greeting {remote_greeting:?}");
 
         // PHASE 3: EXCHANGE OF MESSAGES
-        self.client_send_message(credentials, connection_type, parameters, manager)
+        let working = manager.get::<Configuration_Optional>().unwrap_or_default();
+        self.client_send_message(credentials, connection_type, parameters, &working)
             .await?;
 
         trace!("waiting for server message");
@@ -623,12 +624,14 @@ mod test {
             bad_creds.certificate = vec![1u8; 256].into();
             cli.client.wait_for_banner().await?;
             let _ = cli.client.client_exchange_greetings(false).await?;
+            let manager = Manager::without_files(None);
+            let cfg = manager.get::<Configuration_Optional>().unwrap();
             cli.client
                 .client_send_message(
                     &bad_creds,
                     ConnectionType::Ipv4,
                     &Parameters::default(),
-                    &Manager::without_files(None),
+                    &cfg,
                 )
                 .await?;
             cli.client.client_read_server_message().await

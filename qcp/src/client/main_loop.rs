@@ -80,10 +80,13 @@ pub(crate) async fn client_main(
     let job_spec = crate::client::CopyJobSpec::try_from(&parameters)?;
     let credentials = Credentials::generate()?;
     let remote_ssh_hostname = job_spec.remote_host();
+
     let ssh_config_files = super::ssh::SshConfigFiles::new(
         &working_config
             .ssh_config
-            .unwrap_or(default_config.ssh_config.clone()),
+            .as_ref()
+            .unwrap_or(&default_config.ssh_config)
+            .to_owned(),
     );
     let remote_dns_name = ssh_config_files
         .resolve_host_alias(remote_ssh_hostname)
@@ -104,7 +107,7 @@ pub(crate) async fn client_main(
     timers.next("control channel");
     let mut channel = ClientSsh::new(
         &display,
-        manager,
+        &working_config,
         &parameters,
         remote_ssh_hostname,
         remote_address.into(),
