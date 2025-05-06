@@ -15,7 +15,7 @@ use tracing::{debug, warn};
 use crate::protocol::control::ConnectionType;
 use crate::{client::Parameters, protocol::common::SendReceivePair};
 use crate::{
-    config::{Configuration, Configuration_Optional, Manager},
+    config::{Configuration, Configuration_Optional},
     protocol::common::{ReceivingStream, SendingStream},
 };
 
@@ -119,12 +119,11 @@ impl Ssh {
     /// Constructor
     pub(crate) fn new(
         display: &MultiProgress,
-        manager: &Manager,
+        working_config: &Configuration_Optional,
         parameters: &Parameters,
         ssh_hostname: &str,
         connection_type: ConnectionType,
     ) -> Result<Self> {
-        let working_config = manager.get::<Configuration_Optional>().unwrap_or_default();
         let defaults = Configuration::system_default();
 
         let mut server = tokio::process::Command::new(
@@ -138,7 +137,7 @@ impl Ssh {
             .args(Self::ssh_cli_args(
                 connection_type,
                 ssh_hostname,
-                &working_config,
+                working_config,
             ))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -210,9 +209,10 @@ mod test {
         let mp = MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden());
         let manager = Manager::without_files(None);
         let params = Parameters::default();
+        let cfg = manager.get::<Configuration_Optional>().unwrap_or_default();
         let mut child = Ssh::new(
             &mp,
-            &manager,
+            &cfg,
             &params,
             "no-such-host.invalid",
             crate::protocol::control::ConnectionType::Ipv4,

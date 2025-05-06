@@ -54,7 +54,7 @@ use strum::VariantNames as _;
 
 use super::common::ProtocolMessage;
 use crate::{
-    config::{Configuration_Optional, Manager},
+    config::Configuration_Optional,
     util::{Credentials, PortRange as CliPortRange},
 };
 
@@ -407,13 +407,13 @@ impl ClientMessage {
         credentials: &Credentials,
         connection_type: ConnectionType,
         remote_config: bool,
-        manager: &Manager,
+        my_config: &Configuration_Optional,
     ) -> Self {
         ClientMessage::V1(ClientMessageV1::new(
             credentials,
             connection_type,
             remote_config,
-            manager,
+            my_config,
         ))
     }
 }
@@ -423,27 +423,25 @@ impl ClientMessageV1 {
         credentials: &Credentials,
         connection_type: ConnectionType,
         remote_config: bool,
-        manager: &Manager,
+        my_config: &Configuration_Optional,
     ) -> Self {
-        let working = manager.get::<Configuration_Optional>().unwrap_or_default();
-
         Self {
             cert: credentials.certificate.to_vec(),
             connection_type,
-            port: working.remote_port.map(std::convert::Into::into),
+            port: my_config.remote_port.map(std::convert::Into::into),
             show_config: remote_config,
 
-            bandwidth_to_server: match working.tx.map(u64::from) {
+            bandwidth_to_server: match my_config.tx.map(u64::from) {
                 None | Some(0) => None,
                 Some(v) => Some(Uint(v)),
             },
-            bandwidth_to_client: working.rx.map(u64::from).map(Uint),
-            rtt: working.rtt,
-            congestion: working.congestion.map(Into::into),
-            initial_congestion_window: working
+            bandwidth_to_client: my_config.rx.map(u64::from).map(Uint),
+            rtt: my_config.rtt,
+            congestion: my_config.congestion.map(Into::into),
+            initial_congestion_window: my_config
                 .initial_congestion_window
                 .map(|u| Uint(u64::from(u))),
-            timeout: working.timeout,
+            timeout: my_config.timeout,
 
             extension: 0,
         }
@@ -838,7 +836,8 @@ mod test {
             let creds = dummy_credentials();
             let mut manager = Manager::without_default(None);
             manager.merge_provider(&config);
-            ClientMessage::new(&creds, ConnectionType::Ipv4, false, &manager)
+            let cfg = manager.get::<Configuration_Optional>().unwrap();
+            ClientMessage::new(&creds, ConnectionType::Ipv4, false, &cfg)
         };
         let ser = cmsg.to_vec().unwrap();
         //println!("{cmsg:#?}");
@@ -878,7 +877,8 @@ mod test {
         let mut manager = Manager::without_default(None);
         let config = Configuration_Optional::default();
         manager.merge_provider(&config);
-        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, false, &manager);
+        let cfg = manager.get::<Configuration_Optional>().unwrap();
+        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, false, &cfg);
         assert_matches!(
             cmsg,
             ClientMessage::V1(ClientMessageV1 {
