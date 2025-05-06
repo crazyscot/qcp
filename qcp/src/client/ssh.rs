@@ -147,40 +147,45 @@ impl SshConfigFiles {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use std::path::{Path, PathBuf};
+    use std::{ffi::OsStr, path::PathBuf};
 
     use super::SshConfigFiles;
-    use crate::{
-        client::ssh::SshConfigFile,
-        util::{littertray::LitterTray, make_test_tempfile},
-    };
+    use crate::{client::ssh::SshConfigFile, util::littertray::LitterTray};
 
-    fn resolve_one(path: &Path, host: &str) -> Option<String> {
-        let files = SshConfigFiles::new(&[path.to_path_buf()]);
+    fn resolve_one<P: AsRef<OsStr>>(path: P, host: &str) -> Option<String> {
+        let files = SshConfigFiles::new(&[path.as_ref()]);
         files.resolve_host_alias(host)
     }
 
     #[test]
     fn hosts_resolve() {
-        let (path, _dir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test_ssh_config";
+            let _ = tray.create_text(
+                path,
+                r"
         Host aaa
             HostName zzz
         Host bbb ccc.ddd
             HostName yyy
-        ",
-            "test_ssh_config",
-        );
-        assert!(resolve_one(&path, "nope").is_none());
-        assert_eq!(resolve_one(&path, "aaa").unwrap(), "zzz");
-        assert_eq!(resolve_one(&path, "bbb").unwrap(), "yyy");
-        assert_eq!(resolve_one(&path, "ccc.ddd").unwrap(), "yyy");
+            ",
+            )?;
+            assert!(resolve_one(path, "nope").is_none());
+            assert_eq!(resolve_one(path, "aaa").unwrap(), "zzz");
+            assert_eq!(resolve_one(path, "bbb").unwrap(), "yyy");
+            assert_eq!(resolve_one(path, "ccc.ddd").unwrap(), "yyy");
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn wildcards_match() {
-        let (path, _dir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test_ssh_config";
+            let _ = tray.create_text(
+                path,
+                r"
         Host *.bar
             HostName baz
         Host 10.11.*.13
@@ -189,20 +194,22 @@ mod test {
         Host fr?d
             hostname barney
         ",
-            "test_ssh_config",
-        );
-        assert_eq!(resolve_one(&path, "foo.bar").unwrap(), "baz");
-        assert_eq!(resolve_one(&path, "qux.qix.bar").unwrap(), "baz");
-        assert!(resolve_one(&path, "qux.qix").is_none());
-        assert_eq!(resolve_one(&path, "10.11.12.13").unwrap(), "wibble");
-        assert_eq!(resolve_one(&path, "10.11.0.13").unwrap(), "wibble");
-        assert_eq!(resolve_one(&path, "10.11.256.13").unwrap(), "wibble"); // yes I know this isn't a real IP address
-        assert!(resolve_one(&path, "10.11.0.130").is_none());
+            )?;
+            assert_eq!(resolve_one(path, "foo.bar").unwrap(), "baz");
+            assert_eq!(resolve_one(path, "qux.qix.bar").unwrap(), "baz");
+            assert!(resolve_one(path, "qux.qix").is_none());
+            assert_eq!(resolve_one(path, "10.11.12.13").unwrap(), "wibble");
+            assert_eq!(resolve_one(path, "10.11.0.13").unwrap(), "wibble");
+            assert_eq!(resolve_one(path, "10.11.256.13").unwrap(), "wibble"); // yes I know this isn't a real IP address
+            assert!(resolve_one(path, "10.11.0.130").is_none());
 
-        assert_eq!(resolve_one(&path, "fred").unwrap(), "barney");
-        assert_eq!(resolve_one(&path, "frid").unwrap(), "barney");
-        assert!(resolve_one(&path, "freed").is_none());
-        assert!(resolve_one(&path, "fredd").is_none());
+            assert_eq!(resolve_one(path, "fred").unwrap(), "barney");
+            assert_eq!(resolve_one(path, "frid").unwrap(), "barney");
+            assert!(resolve_one(path, "freed").is_none());
+            assert!(resolve_one(path, "fredd").is_none());
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
