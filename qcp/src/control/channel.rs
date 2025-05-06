@@ -342,12 +342,10 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
 
         // PHASE 2: GREETINGS
         let remote_greeting = self.server_exchange_greetings().await?;
-
-        let time_format = manager
-            .get::<Configuration_Optional>()
-            .unwrap_or_default()
-            .time_format
-            .unwrap_or_default();
+        let time_format = manager.get_config_field::<TimeFormat>(
+            "time_format",
+            Some(Configuration::system_default().time_format),
+        )?;
 
         // to provoke a config error here, set RUST_LOG=.
         let level = Self::server_trace_level(remote_greeting.debug);
