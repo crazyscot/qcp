@@ -29,6 +29,16 @@ static G_LOCK: Mutex<()> = Mutex::new(());
 impl LitterTray {
     /// Runs a closure in a new litter tray, passing the tray to the closure.
     /// The closure must return a Result<()>.
+    ///
+    /// ```
+    /// use qcp::util::littertray::LitterTray;
+    ///
+    /// let result = LitterTray::try_with(|tray| {
+    ///   let _ = tray.create_text("test.txt", "Hello, world!")?;
+    ///   assert_eq!(std::fs::read_to_string("test.txt")?, "Hello, world!");
+    ///   Ok(())
+    /// }).unwrap();
+    /// ```
     #[allow(dead_code)]
     pub(crate) fn try_with<F: FnOnce(&mut LitterTray) -> Result<()>>(f: F) -> Result<()> {
         let _guard = G_LOCK.lock();
@@ -43,6 +53,17 @@ impl LitterTray {
     }
 
     /// Runs a closure in a new litter tray, passing the tray to the closure.
+    ///
+    /// This is a convenience function that does not return a Result.
+    ///
+    /// ```
+    /// use qcp::util::littertray::LitterTray;
+    ///
+    /// let result = LitterTray::run(|tray| {
+    ///   tray.create_text("test.txt", "Hello, world!").unwrap();
+    ///   assert_eq!(std::fs::read_to_string("test.txt").unwrap(), "Hello, world!");
+    /// });
+    /// ```
     pub(crate) fn run<F: FnOnce(&mut LitterTray)>(f: F) {
         let _ = Self::try_with(|tray| {
             f(tray);

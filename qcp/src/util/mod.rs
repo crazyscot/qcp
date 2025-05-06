@@ -36,15 +36,3 @@ pub use optionalify::{derive_deftly_template_Optionalify, insert_if_some};
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 pub(crate) mod test_protocol;
-
-#[cfg(test)]
-#[cfg_attr(coverage_nightly, coverage(off))]
-pub(crate) fn make_test_tempfile(
-    data: &str,
-    filename: &str,
-) -> (std::path::PathBuf, tempfile::TempDir) {
-    let tempdir = tempfile::tempdir().unwrap();
-    let path = tempdir.path().join(filename);
-    std::fs::write(&path, data).expect("Unable to write tempfile");
-    (path, tempdir)
-}

@@ -437,7 +437,8 @@ impl Display for DisplayAdapter<'_> {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use crate::config::{Configuration, Configuration_Optional, Manager};
-    use crate::util::{PortRange, TimeFormat, make_test_tempfile};
+    use crate::util::littertray::LitterTray;
+    use crate::util::{PortRange, TimeFormat};
     use engineering_repr::EngineeringQuantity;
     use serde::Deserialize;
 
@@ -475,24 +476,28 @@ mod test {
         struct Test {
             magic: i32,
         }
-
-        let (path, _tempdir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
             rx true # invalid
             rtt 3.14159 # also invalid
             magic 42
         ",
-            "test.conf",
-        );
-        let mut mgr = Manager::without_files(None);
-        mgr.merge_ssh_config(path, None, false);
-        // This file successfully merges into the config, but you can't extract the struct.
-        let err = mgr.get::<Configuration>().unwrap_err();
-        println!("Error: {err}");
+            )?;
+            let mut mgr = Manager::without_files(None);
+            mgr.merge_ssh_config(path, None, false);
+            // This file successfully merges into the config, but you can't extract the struct.
+            let err = mgr.get::<Configuration>().unwrap_err();
+            println!("Error: {err}");
 
-        // But the config as a whole is not broken and other things can be extracted:
-        let other_struct = mgr.get::<Test>().unwrap();
-        assert_eq!(other_struct.magic, 42);
+            // But the config as a whole is not broken and other things can be extracted:
+            let other_struct = mgr.get::<Test>().unwrap();
+            assert_eq!(other_struct.magic, 42);
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -503,17 +508,22 @@ mod test {
             p: PortRange,
         }
 
-        let (path, _tempdir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
             p 234-123
         ",
-            "test.conf",
-        );
-        let mut mgr = Manager::without_files(None);
-        mgr.merge_ssh_config(path, None, true);
-        let result = mgr.get::<Test>().unwrap_err();
-        println!("{result}");
-        assert!(result.to_string().contains("must be increasing"));
+            )?;
+            let mut mgr = Manager::without_files(None);
+            mgr.merge_ssh_config(path, None, true);
+            let result = mgr.get::<Test>().unwrap_err();
+            println!("{result}");
+            assert!(result.to_string().contains("must be increasing"));
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -522,26 +532,31 @@ mod test {
         struct Test {
             ssh_options: Vec<String>,
         }
-        // Bear in mind: in an ssh style config file, the first match for a particular keyword wins.
-        let (path, _tempdir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
            host bar
            ssh_options d e f
            host *
            ssh_options a b c
         ",
-            "test.conf",
-        );
-        let mut mgr = Manager::without_files(Some("foo"));
-        mgr.merge_ssh_config(&path, Some("foo"), false);
-        //println!("{}", mgr.to_display_adapter::<Configuration>(false));
-        let result = mgr.get::<Test>().unwrap();
-        assert_eq!(result.ssh_options, vec!["a", "b", "c"]);
+            )?;
+            // Bear in mind: in an ssh style config file, the first match for a particular keyword wins.
+            let mut mgr = Manager::without_files(Some("foo"));
+            mgr.merge_ssh_config(path, Some("foo"), false);
+            //println!("{}", mgr.to_display_adapter::<Configuration>(false));
+            let result = mgr.get::<Test>().unwrap();
+            assert_eq!(result.ssh_options, vec!["a", "b", "c"]);
 
-        let mut mgr = Manager::without_files(Some("bar"));
-        mgr.merge_ssh_config(&path, Some("bar"), false);
-        let result = mgr.get::<Test>().unwrap();
-        assert_eq!(result.ssh_options, vec!["d", "e", "f"]);
+            let mut mgr = Manager::without_files(Some("bar"));
+            mgr.merge_ssh_config(path, Some("bar"), false);
+            let result = mgr.get::<Test>().unwrap();
+            assert_eq!(result.ssh_options, vec!["d", "e", "f"]);
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -560,8 +575,11 @@ mod test {
             pr: PortRange,
         }
 
-        let (path, _tempdir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
            vecs a b c
            s foo
            i 42
@@ -569,26 +587,28 @@ mod test {
            en bbr
            pr 123-456
         ",
-            "test.conf",
-        );
-        let mut mgr = Manager::without_files(Some("foo"));
-        mgr.merge_ssh_config(&path, Some("foo"), false);
-        // println!("{mgr}");
-        let result = mgr.get::<Test>().unwrap();
-        assert_eq!(
-            result,
-            Test {
-                vecs: vec!["a".into(), "b".into(), "c".into()],
-                s: "foo".into(),
-                i: 42,
-                b: true,
-                en: CongestionController::Bbr.into(),
-                pr: PortRange {
-                    begin: 123,
-                    end: 456
+            );
+            let mut mgr = Manager::without_files(Some("foo"));
+            mgr.merge_ssh_config(path, Some("foo"), false);
+            // println!("{mgr}");
+            let result = mgr.get::<Test>().unwrap();
+            assert_eq!(
+                result,
+                Test {
+                    vecs: vec!["a".into(), "b".into(), "c".into()],
+                    s: "foo".into(),
+                    i: 42,
+                    b: true,
+                    en: CongestionController::Bbr.into(),
+                    pr: PortRange {
+                        begin: 123,
+                        end: 456
+                    }
                 }
-            }
-        );
+            );
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -598,35 +618,32 @@ mod test {
             b: bool,
         }
 
-        let tempdir = tempfile::tempdir().unwrap();
-        let path = tempdir.path().join("testfile");
+        LitterTray::try_with(|tray| {
+            let path = "testfile";
 
-        for (s, expected) in [
-            ("yes", true),
-            ("true", true),
-            ("1", true),
-            ("no", false),
-            ("false", false),
-            ("0", false),
-        ] {
-            std::fs::write(
-                &path,
-                format!(
-                    r"
-                        b {s}
-                    "
-                ),
-            )
-            .expect("Unable to write tempfile");
-            // ... test it
-            let mut mgr = Manager::without_files(Some("foo"));
-            mgr.merge_ssh_config(&path, Some("foo"), false);
-            let result = mgr
-                .get::<Test>()
-                .inspect_err(|e| println!("ERROR: {e}"))
-                .unwrap();
-            assert_eq!(result.b, expected);
-        }
+            for (s, expected) in [
+                ("yes", true),
+                ("true", true),
+                ("1", true),
+                ("no", false),
+                ("false", false),
+                ("0", false),
+            ] {
+                let _ = tray
+                    .create_text(path, &format!("b {s}"))
+                    .expect("Unable to write tempfile");
+                // ... test it
+                let mut mgr = Manager::without_files(Some("foo"));
+                mgr.merge_ssh_config(path, Some("foo"), false);
+                let result = mgr
+                    .get::<Test>()
+                    .inspect_err(|e| println!("ERROR: {e}"))
+                    .unwrap();
+                assert_eq!(result.b, expected);
+            }
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -640,21 +657,25 @@ mod test {
             i: u32,
             pr: PortRange,
         }
-
-        let (path, _tempdir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
            i wombat
            b wombat
            en wombat
            pr wombat
         ",
-            "test.conf",
-        );
-        let mut mgr = Manager::new(None, false, false);
-        mgr.merge_ssh_config(&path, Some("foo"), false);
-        //println!("{mgr:?}");
-        let err = mgr.get::<Test>().unwrap_err();
-        println!("{err}");
+            );
+            let mut mgr = Manager::new(None, false, false);
+            mgr.merge_ssh_config(path, Some("foo"), false);
+            //println!("{mgr:?}");
+            let err = mgr.get::<Test>().unwrap_err();
+            println!("{err}");
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -665,57 +686,72 @@ mod test {
             rx: Some(12345u64.into()),
             ..Default::default()
         };
-        let (path, _tempdir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
             Host foo
             rx 66666
         ",
-            "test.conf",
-        );
+            );
 
-        let mut mgr = Manager::without_files(Some("foo"));
-        mgr.merge_ssh_config(&path, Some("foo"), false);
-        // The order of merging mirrors what happens in Manager::try_from(&CliArgs)
-        mgr.merge_provider(entered);
-        assert_eq!(mgr.host(), Some("foo".to_string()));
-        let result = mgr.get::<Configuration>().unwrap();
-        assert_eq!(12345, result.rx());
+            let mut mgr = Manager::without_files(Some("foo"));
+            mgr.merge_ssh_config(path, Some("foo"), false);
+            // The order of merging mirrors what happens in Manager::try_from(&CliArgs)
+            mgr.merge_provider(entered);
+            assert_eq!(mgr.host(), Some("foo".to_string()));
+            let result = mgr.get::<Configuration>().unwrap();
+            assert_eq!(12345, result.rx());
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn parse_eng_quantity() {
-        let (path, _tempdir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
             Host foo
             rx 10M5
         ",
-            "test.conf",
-        );
-        let mut mgr = Manager::without_files(Some("foo"));
-        mgr.merge_ssh_config(&path, Some("foo"), false);
-        //println!("{mgr:?}");
-        let result = mgr.get::<Configuration>().unwrap();
-        assert_eq!(10_500_000, result.rx());
+            )?;
+            let mut mgr = Manager::without_files(Some("foo"));
+            mgr.merge_ssh_config(path, Some("foo"), false);
+            //println!("{mgr:?}");
+            let result = mgr.get::<Configuration>().unwrap();
+            assert_eq!(10_500_000, result.rx());
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn invalid_enum() {
-        let (path, _tempdir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
            color wombat
         ",
-            "test.conf",
-        );
-        let mut mgr = Manager::new(None, false, false);
-        mgr.merge_ssh_config(&path, Some("foo"), false);
-        //println!("{mgr:?}");
-        let err = mgr.get::<Configuration_Optional>().unwrap_err();
-        println!("{err}");
-        assert!(err.to_string().contains("expected one of"));
-        assert!(err.to_string().contains("auto"));
-        assert!(err.to_string().contains("on"));
-        assert!(err.to_string().contains("always"));
-        assert!(err.to_string().contains("color"));
+            );
+            let mut mgr = Manager::new(None, false, false);
+            mgr.merge_ssh_config(path, Some("foo"), false);
+            //println!("{mgr:?}");
+            let err = mgr.get::<Configuration_Optional>().unwrap_err();
+            println!("{err}");
+            assert!(err.to_string().contains("expected one of"));
+            assert!(err.to_string().contains("auto"));
+            assert!(err.to_string().contains("on"));
+            assert!(err.to_string().contains("always"));
+            assert!(err.to_string().contains("color"));
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]

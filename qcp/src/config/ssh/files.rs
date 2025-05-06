@@ -291,7 +291,7 @@ mod test {
     use crate::{
         config::Configuration,
         os::{AbstractPlatform, Platform},
-        util::make_test_tempfile,
+        util::littertray::LitterTray,
     };
 
     macro_rules! assert_1_arg {
@@ -450,17 +450,22 @@ mod test {
 
     #[test]
     fn read_real_file() {
-        let (path, _dir) = make_test_tempfile(
-            r"
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
             hi there
         ",
-            "test.conf",
-        );
-        let output = Parser::for_path(&path, true)
-            .unwrap()
-            .parse_file_for(None)
-            .unwrap();
-        assert_1_arg!(output.get("hi"), "there");
+            )?;
+            let output = Parser::for_path(&path, true)
+                .unwrap()
+                .parse_file_for(None)
+                .unwrap();
+            assert_1_arg!(output.get("hi"), "there");
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
