@@ -7,7 +7,7 @@ use super::{args::CliArgs, styles::configure_colours_preliminary};
 use crate::{
     cli::styles::{RESET, configure_colours, error},
     client::MAX_UPDATE_FPS,
-    config::{Configuration, Configuration_Optional, Manager},
+    config::{Configuration, Manager},
     os::{self, AbstractPlatform as _},
 };
 
@@ -86,14 +86,11 @@ async fn cli_inner() -> anyhow::Result<bool> {
     // Now fold the arguments in with the CLI config (which may fail)
     // (to provoke an error here: `qcp host: host2:`)
     let mut config_manager = Manager::try_from(&args)?;
-    let colours = config_manager
-        .get::<Configuration_Optional>()
-        .map_or_else(|_| None, |c| c.color);
-
+    let colours = config_manager.get_color(Some(Configuration::system_default().color))?;
     #[allow(unsafe_code)]
     unsafe {
         // SAFETY: this is safe as we are only single threaded at this point
-        configure_colours(colours);
+        configure_colours(Some(colours));
     }
 
     match mode {

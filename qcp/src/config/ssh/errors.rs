@@ -5,7 +5,7 @@ use figment::error::{Kind, OneOf};
 use thiserror::Error;
 
 /// A newtype wrapper implementing `Display` for errors originating from this module
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub(crate) struct ConfigFileError(#[from] figment::Error);
 
 impl ConfigFileError {

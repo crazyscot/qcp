@@ -2,8 +2,9 @@
 // (c) 2024 Ross Younger
 
 use crate::{
-    cli::styles::use_colours,
+    cli::styles::{ColourMode, use_colours},
     os::{AbstractPlatform as _, Platform},
+    util::enums::DeserializableEnum,
 };
 
 use super::{Configuration, Configuration_Optional, ssh::ConfigFileError};
@@ -11,7 +12,7 @@ use super::{Configuration, Configuration_Optional, ssh::ConfigFileError};
 use anyhow::Result;
 use figment::{Figment, Metadata, Provider, providers::Serialized, value::Value};
 use heck::ToUpperCamelCase;
-use serde::Deserialize;
+use serde::{Deserialize, de::Error};
 use std::{
     collections::HashSet,
     fmt::{Debug, Display},
@@ -249,6 +250,53 @@ impl Manager {
             .map_err(ConfigFileError::from)
     }
 
+    /// Attempts to extract a single field from the data.
+    ///
+    /// Possible outcomes:
+    /// - The field is present and has the correct type. Returns the value.
+    /// - The field is present but has the wrong type. Returns InvalidType.
+    /// - The field is not present. If `allow_missing` is given, that value is returned; otherwise, returns MissingField.
+    /// - The field name is not valid. Returns UnknownField.
+    pub(crate) fn get_config_field<'de, T>(
+        &self,
+        field: &str,
+        default: Option<T>,
+    ) -> anyhow::Result<T, ConfigFileError>
+    where
+        T: Deserialize<'de>,
+    {
+        if !Configuration::FIELD_NAMES_AS_SLICE.contains(&field) {
+            return Err(ConfigFileError::from(figment::Error::unknown_field(
+                field,
+                Configuration::FIELD_NAMES_AS_SLICE,
+            )));
+        }
+        if !self.data.contains(field) {
+            if let Some(d) = default {
+                return Ok(d);
+            }
+            // we need a static string for the error message, *sigh*
+            let f = Configuration::FIELD_NAMES_AS_SLICE
+                .iter()
+                .find(|s| **s == field)
+                .unwrap();
+            return Err(ConfigFileError::from(figment::Error::missing_field(f)));
+        }
+        self.data
+            .extract_inner_lossy::<T>(field)
+            .map_err(ConfigFileError::from)
+    }
+
+    /// Syntactic sugar for extracting a field of type [`ColourMode`].
+    /// See [`get_config`] for details.
+    pub(crate) fn get_color(
+        &self,
+        default: Option<DeserializableEnum<ColourMode>>,
+    ) -> anyhow::Result<ColourMode, ConfigFileError> {
+        self.get_config_field::<DeserializableEnum<ColourMode>>("color", default)
+            .map(|c| *c)
+    }
+
     /// Performs additional validation checks on the fields present in the configuration, as far as possible.
     /// This is only useful when the [`Manager`] holds a [`Configuration`].
     pub fn validate_configuration(&self) -> Result<()> {
@@ -389,7 +437,7 @@ impl Display for DisplayAdapter<'_> {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use crate::config::{Configuration, Configuration_Optional, Manager};
-    use crate::util::{PortRange, make_test_tempfile};
+    use crate::util::{PortRange, TimeFormat, make_test_tempfile};
     use engineering_repr::EngineeringQuantity;
     use serde::Deserialize;
 
@@ -668,6 +716,48 @@ mod test {
         assert!(err.to_string().contains("on"));
         assert!(err.to_string().contains("always"));
         assert!(err.to_string().contains("color"));
+    }
+
+    #[test]
+    fn field_extraction() {
+        let mgr = Manager::without_files(None);
+        let def = Configuration::system_default();
+        assert_eq!(
+            u64::from(
+                mgr.get_config_field::<EngineeringQuantity<u64>>("rx", None)
+                    .unwrap()
+            ),
+            def.rx()
+        );
+        assert_eq!(
+            mgr.get_config_field::<TimeFormat>("time_format", None),
+            Ok(def.time_format)
+        );
+        assert_eq!(mgr.get_color(None), Ok(*def.color));
+
+        // wrong type
+        assert!(
+            mgr.get_config_field::<bool>("rx", None)
+                .unwrap_err()
+                .to_string()
+                .contains("expected a boolean")
+        );
+        // typo'd name
+        assert!(
+            mgr.get_config_field::<u64>("no such field", None)
+                .unwrap_err()
+                .to_string()
+                .contains("no such field")
+        );
+        // field not present
+        let empty_mgr = Manager::new(None, false, false);
+        assert!(
+            empty_mgr
+                .get_config_field::<u64>("rx", None)
+                .unwrap_err()
+                .to_string()
+                .contains("missing field")
+        );
     }
 }
 
