@@ -10,6 +10,7 @@ use super::PortRange;
 
 #[derive(Debug, Clone)]
 pub(crate) struct UdpBufferSizeData {
+    #[allow(dead_code)] // `ok` is not used on windows
     pub(crate) ok: bool,
     pub(crate) send: usize,
     pub(crate) recv: usize,

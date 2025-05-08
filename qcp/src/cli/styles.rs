@@ -60,6 +60,7 @@ pub(crate) const CLAP_STYLES: Styles = Styles::styled()
 macro_rules! wrap {
     ($func:ident, $def:ident) => {
         #[allow(clippy::missing_const_for_fn)]
+        #[allow(dead_code)] // not all of these functions are used on all platforms
         pub(crate) fn $func() -> anstyle::Style {
             if use_colours() {
                 $def
