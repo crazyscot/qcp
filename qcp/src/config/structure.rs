@@ -275,19 +275,28 @@ pub struct Configuration {
     ///
     /// Passing `--color` without a value is equivalent to `--color always`.
     ///
-    /// Note that color output is not shared with the remote system, so the color output
+    /// Note that color configuration is not shared with the remote system, so the color output
     /// from the remote system (log messages, remote-config) will be coloured per the
     /// config file on the remote system.
     ///
     /// qcp also supports the `CLICOLOR`, `CLICOLOR_FORCE` and `NO_COLOR` environment variables.
     /// See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more details.
+    ///
+    /// CLI options take precedence over the configuration file, which takes precedence over environment variables.
     #[arg(
         long,
         alias("colour"),
         default_missing_value("always"), // to support `--color`
         num_args(0..=1),
         // hacky: apply the value as soon as we see it, in case a later CLI argument fails to parse
-        value_parser(clap::builder::EnumValueParser::<ColourMode>::new().map(|cm| { crate::cli::styles::configure_colours_preliminary(Some(cm)); DeserializableEnum::<ColourMode>::from(cm) })),
+        value_parser(clap::builder::EnumValueParser::<ColourMode>::new().map(|cm| {
+            #[allow(unsafe_code)]
+            unsafe {
+                // SAFETY: this is safe as we are only single threaded at this point
+                crate::cli::styles::configure_colours(Some(cm));
+            }
+            DeserializableEnum::<ColourMode>::from(cm)
+        })),
         value_name("mode")
     )]
     pub color: DeserializableEnum<ColourMode>,

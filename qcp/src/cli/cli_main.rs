@@ -3,7 +3,7 @@
 
 use std::process::ExitCode;
 
-use super::{args::CliArgs, styles::configure_colours_preliminary};
+use super::args::CliArgs;
 use crate::{
     cli::styles::{RESET, configure_colours, error},
     client::MAX_UPDATE_FPS,
@@ -47,7 +47,6 @@ impl From<&CliArgs> for MainMode {
 /// true indicates success. false indicates a failure (we have output to stderr).
 #[must_use]
 pub fn cli() -> ExitCode {
-    configure_colours_preliminary(None);
     match cli_inner() {
         Err(e) => {
             if crate::util::tracing_is_initialised() {

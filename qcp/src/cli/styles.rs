@@ -11,6 +11,7 @@ use anstyle::AnsiColor::*;
 use anstyle::Color::Ansi;
 use clap::builder::styling::Styles;
 use serde::Serialize;
+use std::io::IsTerminal;
 use std::sync::{LazyLock, atomic::AtomicBool};
 
 use crate::util::enums::ConvertibleTo;
@@ -77,7 +78,8 @@ wrap!(header, _HEADER);
 
 // CONDITIONALITY & CLI //////////////////////////////////////////////////////////
 
-static COLOURS_ENABLED: LazyLock<AtomicBool> = LazyLock::new(|| AtomicBool::new(false));
+static COLOURS_ENABLED: LazyLock<AtomicBool> =
+    LazyLock::new(|| AtomicBool::new(autodetect_colour()));
 
 pub(crate) fn use_colours() -> bool {
     COLOURS_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
@@ -98,24 +100,25 @@ pub enum ColourMode {
     Auto,
 }
 
-/// Set up the terminal colour mode for this crate only, without setting environment variables.
+/// Detect the desired colour mode from the environment variables
 ///
-/// This allows us to respect the settings as far as possible, before we have parsed
-/// the configuration file and CLI arguments.
-///
-/// This function may safely be called multiple times but should not be called after calling
-/// `configure_colours()`.
-pub(crate) fn configure_colours_preliminary(mode: Option<ColourMode>) {
-    let enable = match mode {
-        Some(ColourMode::Always) => true,
-        Some(ColourMode::Never) => false,
-        Some(ColourMode::Auto) | None => clicolors_control::colors_enabled(),
-    };
-    COLOURS_ENABLED.store(enable, std::sync::atomic::Ordering::Relaxed);
+/// See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more information.
+pub(crate) fn autodetect_colour() -> bool {
+    let clicolor_force = std::env::var("CLICOLOR_FORCE").unwrap_or_default();
+    let no_color = std::env::var("NO_COLOR").unwrap_or_default();
+
+    if !no_color.is_empty() {
+        false
+    } else if !clicolor_force.is_empty() {
+        true
+    } else {
+        // This program chooses to default colours to ON, unless explicitly disabled, so reading CLICOLOR is unnecessary.
+        std::io::stdout().is_terminal()
+    }
 }
 
 /// Set up the terminal colour mode.
-/// If `mode` is `None`, we will use the standard `CLICOLOR` environment variables to determine the mode.
+/// If `mode` is `None`, we will use the quasi-standard `CLICOLOR`, `CLICOLOR_FORCE` and `NO_COLOR` environment variables to determine the mode.
 /// See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more information.
 ///
 /// This function should only be called once, at the start of the program.
@@ -127,52 +130,22 @@ pub(crate) unsafe fn configure_colours<CM>(mode: CM)
 where
     CM: ConvertibleTo<Option<ColourMode>> + std::fmt::Debug,
 {
-    let mode = match mode.convert() {
-        Some(m) => m,
-        None => {
-            // fall back to env vars & autodetection
-            if clicolors_control::colors_enabled() {
-                ColourMode::Always
-            } else {
-                ColourMode::Never
-            }
-        }
+    let state = match mode.convert() {
+        Some(ColourMode::Always) => true,
+        Some(ColourMode::Never) => false,
+        None | Some(ColourMode::Auto) => autodetect_colour(),
     };
-
-    match mode {
-        ColourMode::Always => {
-            clicolors_control::set_colors_enabled(true);
-            #[allow(unsafe_code)]
-            unsafe {
-                std::env::set_var("CLICOLOR_FORCE", "1");
-                std::env::remove_var("NO_COLOR");
-            }
-            COLOURS_ENABLED.store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-        ColourMode::Never => {
-            clicolors_control::set_colors_enabled(false);
-            #[allow(unsafe_code)]
-            unsafe {
-                std::env::remove_var("CLICOLOR_FORCE");
-                std::env::set_var("CLICOLOR", "0");
-                std::env::set_var("NO_COLOR", "1");
-            }
-            COLOURS_ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
-        }
-        ColourMode::Auto => {
-            let enable = clicolors_control::colors_enabled();
-            #[allow(unsafe_code)]
-            unsafe {
-                if enable {
-                    std::env::set_var("CLICOLOR_FORCE", "1");
-                    std::env::remove_var("NO_COLOR");
-                } else {
-                    std::env::remove_var("CLICOLOR_FORCE");
-                    std::env::set_var("CLICOLOR", "0");
-                    std::env::set_var("NO_COLOR", "1");
-                }
-            }
-            COLOURS_ENABLED.store(enable, std::sync::atomic::Ordering::Relaxed);
+    COLOURS_ENABLED.store(state, std::sync::atomic::Ordering::Relaxed);
+    #[allow(unsafe_code)]
+    unsafe {
+        if state {
+            std::env::set_var("CLICOLOR_FORCE", "1");
+            std::env::set_var("CLICOLOR", "1");
+            std::env::remove_var("NO_COLOR");
+        } else {
+            std::env::remove_var("CLICOLOR_FORCE");
+            std::env::set_var("CLICOLOR", "0");
+            std::env::set_var("NO_COLOR", "1");
         }
     }
 }
@@ -245,17 +218,5 @@ mod test {
     test_case!(none_on, [("CLICOLOR_FORCE", "1")], None, true);
     test_case!(auto_off, [("CLICOLOR", "0")], Some(ColourMode::Auto), false);
     test_case!(none_off, [("CLICOLOR", "0")], None, false);
-
-    #[test]
-    fn configure_preliminary() {
-        use super::configure_colours_preliminary;
-        configure_colours_preliminary(None);
-        let auto = use_colours();
-        configure_colours_preliminary(Some(ColourMode::Auto));
-        assert_eq!(use_colours(), auto);
-        configure_colours_preliminary(Some(ColourMode::Always));
-        assert!(use_colours());
-        configure_colours_preliminary(Some(ColourMode::Never));
-        assert!(!use_colours());
-    }
+    test_case!(never, [("NO_COLOR", "1")], Some(ColourMode::Never), false);
 }
