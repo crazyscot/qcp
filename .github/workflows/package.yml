@@ -68,9 +68,10 @@ jobs:
           cross: true
     runs-on: ${{ matrix.host }}
     env:
-      TARBALL_ARTIFACT: ${{ format('qcp-binary-{0}', matrix.target) }}
+      BINARY_ARTIFACT: ${{ format('qcp-binary-{0}', matrix.target) }}
       DEB_ARTIFACT: ${{ matrix.build_deb && format('qcp-deb-{0}', matrix.target) }}
-      PACKAGE_ZIP: ${{ matrix.target == 'x86_64-pc-windows-gnu' }}
+      PACKAGE_ZIP: ${{ contains(matrix.target, 'windows') && 'all' || 'none' }}
+      PACKAGE_TAR: ${{ contains(matrix.target, 'windows') && 'none' || 'all' }}
     steps:
     - uses: actions/checkout@v4
     - name: Install Rust
@@ -105,7 +106,7 @@ jobs:
       run: cargo cyclonedx --target ${{ matrix.target }}
     - name: Build binary package
       uses: taiki-e/upload-rust-binary-action@31389c348ad0130069bed8448bf507fe8617f67f # v1.25.0
-      id: build-tarball
+      id: build-binary
       with:
         bin: qcp
         dry_run: true
@@ -123,15 +124,15 @@ jobs:
         # (Not all platforms have any pack_extra files)
         leading-dir: true
         locked: true
-        tar: ${{ env.PACKAGE_ZIP == true && 'none' || 'all' }}
-        zip: ${{ env.PACKAGE_ZIP == true && 'all' || 'none' }}
+        tar: ${{ env.PACKAGE_TAR }}
+        zip: ${{ env.PACKAGE_ZIP }}
     - name: Upload binary package to CI result
       # always try to do this, it allows the package to be checked
       if: success() || failure()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        name: ${{ env.TARBALL_ARTIFACT }}
-        path: ${{ steps.build-tarball.outputs.archive }}.${{ env.PACKAGE_ZIP == true && 'zip' || 'tar.gz' }}
+        name: ${{ env.BINARY_ARTIFACT }}
+        path: ${{ steps.build-binary.outputs.archive }}.${{ env.PACKAGE_ZIP == 'all' && 'zip' || 'tar.gz' }}
     - name: Make deb package
       id: deb
       if: ${{ matrix.build_deb }}
