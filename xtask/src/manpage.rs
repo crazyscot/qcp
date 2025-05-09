@@ -1,7 +1,7 @@
 use anyhow::Result;
 use pico_args::Arguments;
 use std::path::PathBuf;
-use xshell::{cmd, Shell};
+use xshell::{Shell, cmd};
 
 use crate::top_level;
 
@@ -10,7 +10,9 @@ pub(crate) fn manpage(mut args: Arguments) -> Result<()> {
     let release: bool = args.contains(["-r", "--release"]);
     let profile: Option<String> = args.opt_value_from_str(["-p", "--profile"])?;
     if args.contains(["-h", "--help"]) {
-        println!("Usage: cargo xtask man [-o|--output-directory DIR] [-r|--release] [-p|--profile PROFILE]");
+        println!(
+            "Usage: cargo xtask man [-o|--output-directory DIR] [-r|--release] [-p|--profile PROFILE]"
+        );
         return Ok(());
     }
     crate::ensure_all_args_used(args)?;

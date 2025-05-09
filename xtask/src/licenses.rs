@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use pico_args::Arguments;
 use std::path::PathBuf;
-use xshell::{cmd, Shell};
+use xshell::{Shell, cmd};
 
 #[derive(Debug)]
 struct Args {

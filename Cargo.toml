@@ -1,6 +1,7 @@
 [workspace]
 members = ["qcp", "xtask"]
 resolver = "2"
+package.edition = "2024"
 
 [workspace.dependencies]
 anyhow = "1.0.98"
