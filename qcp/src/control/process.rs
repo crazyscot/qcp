@@ -7,6 +7,7 @@ use tokio::{
     process::{ChildStdin, ChildStdout},
 };
 
+use anstream::eprintln;
 use anyhow::{Context as _, Result, anyhow};
 use indicatif::MultiProgress;
 use tokio::io::AsyncBufReadExt;
