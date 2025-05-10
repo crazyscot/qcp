@@ -41,32 +41,32 @@ impl super::AbstractPlatform for Platform {
     }
 
     #[cfg_attr(coverage_nightly, coverage(off))]
-    fn help_buffers_mode(rmem: u64, wmem: u64) {
-        help_buffers_unix(rmem, wmem);
+    fn help_buffers_mode(rmem: u64, wmem: u64) -> String {
+        help_buffers_unix(rmem, wmem)
     }
 }
 
 #[cfg_attr(coverage_nightly, coverage(off))]
-fn help_buffers_unix(rmem: u64, wmem: u64) {
+fn help_buffers_unix(rmem: u64, wmem: u64) -> String {
     #![allow(non_snake_case)]
+    use std::fmt::Write as _;
     let INFO = info();
     let WARNING = warning();
-    let SUCCESS = success();
-    let ERROR = error();
     let HEADER = header();
 
-    println!(
+    let mut output = String::from(
         r"ℹ️  For best performance, it is necessary to set the kernel UDP buffer size limits.
 This program attempts to automatically set buffer sizes for itself,
 but this usually requires the kernel limits to be configured appropriately.
 
-Testing this system..."
+Testing this system...",
     );
 
     let result = super::test_buffers(rmem, wmem);
     let tested_ok = match result {
         Err(e) => {
-            println!(
+            let _ = write!(
+                output,
                 r"
 ⚠️ {WARNING}Unable to test local UdpSocket parameters:{RESET} {e}
 Outputting general advice..."
@@ -74,21 +74,16 @@ Outputting general advice..."
             false
         }
         Ok(r) => {
-            println!(
-                "{INFO}Test result:{RESET} {rx} (read) / {tx} (write)",
+            let _ = write!(
+                output,
+                "\n{INFO}Test result:{RESET} {rx} (read) / {tx} (write)",
                 rx = r.recv.human_count_bytes(),
                 tx = r.send.human_count_bytes()
             );
             if let Some(warning) = r.warning {
-                println!(
-                    r"
-😞 {INFO}{warning}{RESET}"
-                );
+                let _ = write!(output, "\n😞 {INFO}{warning}{RESET}");
             } else {
-                println!(
-                    r"
-🚀 {SUCCESS}Great!{RESET}"
-                );
+                let _ = write!(output, "\n🚀 {SUCCESS}Great!{RESET}", SUCCESS = success());
             }
             r.ok
         }
@@ -97,24 +92,28 @@ Outputting general advice..."
     if tested_ok {
         // root can usually override resource limits, so beware of false negatives
         if geteuid() != Uid::ROOT {
-            println!(
-                r"
-💡 No administrative action is necessary. Happy qcp'ing!"
+            let _ = write!(
+                output,
+                "💡 No administrative action is necessary. Happy qcp'ing!"
             );
-            return;
+            return output;
         }
 
-        println!(
+        let _ = write!(
+            output,
             r"
+
 ⚠️  {WARNING}CAUTION: This process is running as user id 0 (root).{RESET}
 This isn't a problem, but it means we can't tell whether ordinary users are
 able to set suitable UDP buffer limits. If you like, rerun as a non-root user.
-For now, outputting general advice."
+For now, outputting general advice.
+"
         );
     }
 
     if cfg!(linux) {
-        println!(
+        let _ = write!(
+            output,
             r"
 🛠️  To set the kernel limits immediately, run the following command as root:
     {INFO}sysctl -w net.core.rmem_max={rmem} -w net.core.wmem_max={wmem}{RESET}
@@ -122,12 +121,13 @@ For now, outputting general advice."
 🛠️  To have this setting apply at boot, on most Linux distributions you
 can create a file {HEADER}/etc/sysctl.d/20-qcp.conf{RESET} containing:
     {INFO}net.core.rmem_max={rmem}
-    net.core.wmem_max={wmem}{RESET}"
+    {INFO}net.core.wmem_max={wmem}{RESET}"
         );
     } else if cfg!(bsdish) {
         // Received wisdom about BSD kernels leads me to recommend 115% of the max. I'm not sure this is necessary.
         let size = std::cmp::max(rmem, wmem) * 115 / 100;
-        println!(
+        let _ = write!(
+            output,
             r"
 🛠️ To set the kernel limits immediately, run the following command as root:
     {INFO}sysctl -w kern.ipc.maxsockbuf={size}{RESET}
@@ -136,7 +136,8 @@ or {HEADER}/etc/sysctl.d/udp_buffer.conf{RESET}:
     {INFO}kern.ipc.maxsockbuf={size}{RESET}"
         );
     } else {
-        println!(
+        let _ = write!(
+            output,
             r"
 {ERROR}Unknown unix build type!{RESET}
 
@@ -151,8 +152,10 @@ and {wmem} for writing.
 There might be a sysctl or similar mechanism you can set to enable this.
 Good luck!",
             os = std::env::consts::OS,
+            ERROR = error(),
         );
     }
+    output
 }
 
 #[cfg(test)]
