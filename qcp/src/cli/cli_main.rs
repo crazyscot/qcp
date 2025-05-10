@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 use super::args::CliArgs;
 use crate::{
-    cli::styles::{RESET, configure_colours, error},
+    cli::styles::{RESET, configure_colours, error, use_colours},
     client::MAX_UPDATE_FPS,
     config::{Configuration, Manager},
     os::{self, AbstractPlatform as _},
@@ -13,6 +13,7 @@ use crate::{
 
 use anstream::println;
 use indicatif::{MultiProgress, ProgressDrawTarget};
+use lessify::OutputPaged;
 
 enum MainMode {
     Server,
@@ -52,7 +53,7 @@ pub fn cli() -> ExitCode {
             if crate::util::tracing_is_initialised() {
                 tracing::error!("{e}");
             } else {
-                eprintln!("{ERROR}Error:{RESET} {e}", ERROR = error());
+                format!("{ERROR}Error:{RESET} {e}", ERROR = error()).output_paged();
             }
             ExitCode::FAILURE
         }
@@ -70,7 +71,12 @@ async fn cli_inner() -> anyhow::Result<bool> {
             match e.kind() {
                 clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion => {
                     // this is a normal exit
-                    e.print()?;
+                    let message = e.render();
+                    if use_colours() {
+                        message.ansi().output_paged();
+                    } else {
+                        message.output_paged();
+                    }
                     return Ok(true);
                 }
                 _ => (),
@@ -106,10 +112,11 @@ async fn cli_inner() -> anyhow::Result<bool> {
         }
         MainMode::ShowConfig => {
             config_manager.apply_system_default();
-            println!(
+            format!(
                 "Client configuration:\n{}",
                 config_manager.to_display_adapter::<Configuration>()
-            );
+            )
+            .output_paged();
             Ok(true)
         }
         MainMode::Server => Ok(crate::server_main().await.map_or_else(
