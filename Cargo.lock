@@ -761,6 +761,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
+name = "lessify"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fd9d402c935614a9674578006d1920d36edba672b54c04f15eb829cc2a7d30f"
+
+[[package]]
 name = "libc"
 version = "0.2.172"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1125,6 +1131,7 @@ dependencies = [
  "human-repr",
  "indicatif",
  "json",
+ "lessify",
  "mimalloc",
  "num-format",
  "quinn",
