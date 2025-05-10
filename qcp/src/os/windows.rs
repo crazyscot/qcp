@@ -52,47 +52,39 @@ impl super::AbstractPlatform for Platform {
     }
 
     #[cfg_attr(coverage_nightly, coverage(off))]
-    fn help_buffers_mode(rmem: u64, wmem: u64) {
-        help_buffers_win(rmem, wmem);
+    fn help_buffers_mode(rmem: u64, wmem: u64) -> String {
+        help_buffers_win(rmem, wmem)
     }
 }
 
 #[cfg_attr(coverage_nightly, coverage(off))]
-fn help_buffers_win(rmem: u64, wmem: u64) {
+fn help_buffers_win(rmem: u64, wmem: u64) -> String {
     #![allow(non_snake_case)]
     let result = super::test_buffers(rmem, wmem);
-    let INFO = info();
-    let WARNING = warning();
-    let SUCCESS = success();
-    let _tested_ok = match result {
+    match result {
         Err(e) => {
-            println!(
-                r"
-⚠️ {WARNING}Unable to test local UdpSocket parameters:{RESET} {e}
-   Sorry, we can't predict performance. Proceed with caution."
-            );
-            false
+            format!(
+                r"⚠️ {WARNING}Unable to test local UdpSocket parameters:{RESET} {e}
+                Sorry, we can't predict performance. Proceed with caution.",
+                WARNING = warning()
+            )
         }
         Ok(r) => {
-            println!(
-                "{INFO}Test result:{RESET} {rx} (read) / {tx} (write)",
+            use std::fmt::Write as _;
+            let mut output = format!(
+                "\n{INFO}Test result:{RESET} {rx} (read) / {tx} (write)",
                 rx = r.recv.human_count_bytes(),
                 tx = r.send.human_count_bytes(),
+                INFO = info(),
             );
             if let Some(warning) = r.warning {
-                println!(
-                    r"
-😞 {INFO}{warning}{RESET}",
-                );
+                let _ = write!(output, "\n😞 {INFO}{warning}{RESET}", INFO = info());
             } else {
-                println!(
-                    r"
-🚀 {SUCCESS}Great!{RESET}"
-                );
+                let _ = write!(output, "\n🚀 {SUCCESS}Great!{RESET}", SUCCESS = success());
             }
-            r.ok
+            output
         }
-    };
+    }
 }
 
 #[cfg(test)]

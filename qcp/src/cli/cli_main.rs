@@ -1,6 +1,7 @@
 //! Main CLI for qcp
 // (c) 2024 Ross Younger
 
+use std::io::Write as _;
 use std::process::ExitCode;
 
 use super::args::CliArgs;
@@ -100,9 +101,18 @@ async fn cli_inner() -> anyhow::Result<bool> {
 
     match mode {
         MainMode::HelpBuffers => {
-            os::Platform::help_buffers_mode(
-                Configuration::recv_buffer(),
-                Configuration::send_buffer(),
+            // Decided not to send this to pager as it is rich with emoji,
+            // which doesn't page well on Windows.
+
+            // Write instead of print to avoid the possibility of a panic
+            // when externally piped to another program.
+            let _ = writeln!(
+                std::io::stdout(),
+                "{}",
+                os::Platform::help_buffers_mode(
+                    Configuration::recv_buffer(),
+                    Configuration::send_buffer(),
+                )
             );
             Ok(true)
         }
