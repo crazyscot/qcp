@@ -12,7 +12,7 @@ use crate::{
     os::{self, AbstractPlatform as _},
 };
 
-use anstream::println;
+use anstream::{eprintln, println};
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use lessify::OutputPaged;
 
