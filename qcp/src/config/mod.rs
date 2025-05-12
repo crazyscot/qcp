@@ -160,6 +160,8 @@ pub(crate) use structure::Configuration_Optional;
 mod manager;
 pub use manager::Manager;
 
+mod prettyprint;
+
 pub(crate) const BASE_CONFIG_FILENAME: &str = "qcp.conf";
 
 mod source;
