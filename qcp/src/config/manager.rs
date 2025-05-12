@@ -10,7 +10,7 @@ use crate::{
 use super::{ClicolorEnv, Configuration, Configuration_Optional, ssh::ConfigFileError};
 
 use anyhow::Result;
-use figment::{Figment, Metadata, Provider, providers::Serialized};
+use figment::{Figment, Provider};
 use serde::{Deserialize, de::Error};
 use std::{
     fmt::Debug,
@@ -19,33 +19,6 @@ use std::{
 use struct_field_names_as_array::FieldNamesAsSlice;
 
 use tracing::{debug, warn};
-
-// SYSTEM DEFAULTS //////////////////////////////////////////////////////////////////////////////////////////////
-
-/// A [`figment::Provider`](https://docs.rs/figment/latest/figment/trait.Provider.html) that holds
-/// the set of system default options
-struct SystemDefault {}
-
-impl SystemDefault {
-    const META_NAME: &str = "default";
-}
-
-impl Provider for SystemDefault {
-    fn metadata(&self) -> Metadata {
-        figment::Metadata::named(Self::META_NAME)
-    }
-
-    fn data(
-        &self,
-    ) -> std::result::Result<
-        figment::value::Map<figment::Profile, figment::value::Dict>,
-        figment::Error,
-    > {
-        Serialized::defaults(Configuration::system_default()).data()
-    }
-}
-
-// CONFIG MANAGER /////////////////////////////////////////////////////////////////////////////////////////////
 
 /// Processes and merges all possible configuration sources.
 ///
@@ -189,7 +162,7 @@ impl Manager {
     /// Applies the system default settings, at a lower priority than everything else
     pub fn apply_system_default(&mut self) {
         let f = std::mem::take(&mut self.data);
-        self.data = f.join(SystemDefault {});
+        self.data = f.join(super::SystemDefault {});
     }
 
     /// Attempts to extract a particular struct from the data.

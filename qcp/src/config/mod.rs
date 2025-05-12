@@ -160,6 +160,9 @@ pub(crate) use structure::Configuration_Optional;
 mod clicolor;
 use clicolor::Env as ClicolorEnv;
 
+mod sysdefault;
+use sysdefault::SystemDefault;
+
 mod manager;
 pub use manager::Manager;
 
