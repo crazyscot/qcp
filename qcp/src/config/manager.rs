@@ -241,7 +241,9 @@ mod test {
     use crate::util::littertray::LitterTray;
     use crate::util::{PortRange, TimeFormat};
     use engineering_repr::EngineeringQuantity;
+    use rusty_fork::rusty_fork_test;
     use serde::Deserialize;
+    use tempfile::TempDir;
 
     #[test]
     fn defaults() {
@@ -271,6 +273,7 @@ mod test {
 
     #[test]
     fn type_error() {
+        // TODO: Figure out why this doesn't work reliably in a rusty-fork test
         // This is a semi unit test; this has a secondary goal of outputting something sensible
 
         #[derive(Deserialize)]
@@ -279,14 +282,16 @@ mod test {
         }
         LitterTray::try_with(|tray| {
             let path = "test.conf";
-            let _ = tray.create_text(
-                path,
-                r"
+            let _f = tray
+                .create_text(
+                    path,
+                    r"
             rx true # invalid
             rtt 3.14159 # also invalid
             magic 42
         ",
-            )?;
+                )
+                .inspect_err(|e| eprintln!("huh? {e}"))?;
             let mut mgr = Manager::without_files(None);
             mgr.merge_ssh_config(path, None, false);
             // This file successfully merges into the config, but you can't extract the struct.
@@ -595,5 +600,48 @@ mod test {
                 .to_string()
                 .contains("missing field")
         );
+    }
+
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn fake_home() -> TempDir {
+        let tempdir = tempfile::tempdir().unwrap();
+        let fake_home = tempdir.path();
+
+        // Temporarily override HOME environment variable
+        // (this must only happen in single-threaded code)
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::set_var("HOME", fake_home);
+        };
+        tempdir
+    }
+
+    rusty_fork_test! {
+        #[test]
+        fn standard_reads_config() {
+            #[allow(unsafe_code)]
+            let home = unsafe {
+                // SAFETY: this is run in a rusty-fork test, so it won't affect other tests
+                fake_home()
+            };
+            let test_conf = home.path().join(".qcp.conf");
+            let files = Manager::config_files();
+            assert!(files.contains(&test_conf.to_string_lossy().to_string()));
+            std::fs::write(&test_conf,
+                r"
+                Host testhost
+                rx 1234
+                Host *
+                rx 2345
+            ",
+            ).unwrap();
+            let mgr1 = Manager::standard(Some("testhost"));
+            eprintln!("mgr1: {mgr1:?}");
+            assert!(mgr1.get::<Configuration_Optional>().unwrap().rx == Some(1234u64.into()));
+            mgr1.validate_configuration().unwrap();
+            let mgr2 = Manager::standard(None);
+            mgr2.validate_configuration().unwrap();
+            assert!(mgr2.get::<Configuration_Optional>().unwrap().rx == Some(2345u64.into()));
+        }
     }
 }
