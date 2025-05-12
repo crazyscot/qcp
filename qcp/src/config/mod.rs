@@ -157,6 +157,9 @@ pub(crate) mod structure;
 pub(crate) use structure::Configuration;
 pub(crate) use structure::Configuration_Optional;
 
+mod clicolor;
+use clicolor::Env as ClicolorEnv;
+
 mod manager;
 pub use manager::Manager;
 
