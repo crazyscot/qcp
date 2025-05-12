@@ -58,12 +58,11 @@ impl PrettyConfig {
                 } else if let Some(ff) = num.to_f64() {
                     ff.to_string()
                 } else {
-                    todo!("unhandled Num case");
+                    todo!("unknown Num case");
                 }
             }
             Value::Empty(_tag, _) => "<empty>".into(),
-            // we don't currently support dict types
-            Value::Dict(_tag, _dict) => todo!(),
+            Value::Dict(_tag, _dict) => todo!("dicts are not currently supported"),
             Value::Array(_tag, vec) => {
                 format!(
                     "[{}]",
@@ -148,5 +147,96 @@ impl Display for DisplayAdapter<'_> {
             let _ = writable.modify(Rows::single(1), host_colour);
         }
         write!(f, "{writable}")
+    }
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod test {
+    use figment::{
+        Metadata,
+        value::{Empty, Map, Num, Tag, Value},
+    };
+
+    use super::PrettyConfig;
+    use crate::{Configuration, config::Manager};
+
+    #[test]
+    fn pretty_print() {
+        let mut mgr = Manager::new(None, false, false);
+        mgr.apply_system_default();
+        let display = mgr.to_display_adapter::<Configuration>();
+        let s = format!("{display}");
+        assert!(s.contains("field"));
+        assert!(s.contains("value"));
+        assert!(s.contains("source"));
+        assert!(s.contains("(Remote host)"));
+        assert!(s.contains("InitialCongestionWindow"));
+    }
+    #[test]
+    fn for_host() {
+        let mut mgr = Manager::new(Some("testhost"), false, false);
+        mgr.apply_system_default();
+        let display = mgr.to_display_adapter::<Configuration>();
+        let s = format!("{display}");
+        assert!(s.contains("field"));
+        assert!(s.contains("testhost"));
+    }
+    #[test]
+    fn config_meta() {
+        assert!(PrettyConfig::render_source(None).is_empty());
+        assert_eq!(
+            PrettyConfig::render_source(Some(&Metadata::named("test"))),
+            "test"
+        );
+    }
+
+    #[test]
+    fn config_types() {
+        assert_eq!(
+            PrettyConfig::render_value(&Value::String(Tag::Default, "test".into())),
+            "test"
+        );
+        assert_eq!(
+            PrettyConfig::render_value(&Value::Char(Tag::Default, 'a')),
+            "a"
+        );
+        assert_eq!(
+            PrettyConfig::render_value(&Value::Bool(Tag::Default, true)),
+            "true"
+        );
+        assert_eq!(
+            PrettyConfig::render_value(&Value::Num(Tag::Default, 1.into())),
+            "1"
+        );
+        assert_eq!(
+            PrettyConfig::render_value(&Value::Num(Tag::Default, Num::I8(-1))),
+            "-1"
+        );
+        assert_eq!(
+            PrettyConfig::render_value(&Value::Num(Tag::Default, 0.5.into())),
+            "0.5"
+        );
+        assert_eq!(
+            PrettyConfig::render_value(&Value::Empty(Tag::Default, Empty::None)),
+            "<empty>"
+        );
+        assert_eq!(
+            PrettyConfig::render_value(&Value::Array(Tag::Default, vec![])),
+            "[]"
+        );
+        assert_eq!(
+            PrettyConfig::render_value(&Value::Array(
+                Tag::Default,
+                vec![Value::String(Tag::Default, "test".into())]
+            )),
+            "[test]"
+        );
+    }
+    #[test]
+    #[should_panic(expected = "dicts are not currently supported")]
+    fn config_types_panic() {
+        // This should panic, as we don't support dicts yet.
+        let _ = PrettyConfig::render_value(&Value::Dict(Tag::Default, Map::new()));
     }
 }
