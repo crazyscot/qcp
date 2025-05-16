@@ -181,11 +181,12 @@ mod test {
     }
 
     static MAN5_PART1: &str = r#"
-    .ie \n(.g .ds Aq \\(aq
+.ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .TH QCP_CONFIG 5
 .SH NAME
-qcp_config \\- Configuration options for qcp
+qcp_config \- Configuration options for qcp
+
 .SH DESCRIPTION
 \fBqcp\fR(1) obtains run-time configuration from the following sources, in order:
 
@@ -216,8 +217,8 @@ In other words, you can use UPPERCASE, lowercase, CamelCase, mIxEDcAse, SHOUTY_S
 Arguments are separated from keywords, and each other, by whitespace.
 (It is also possible to write \fIKey=Value\fR or \fIKey = Value\fR.)
 
-Arguments may be surrounded by double quotes (\\\"); this allows you to set an argument containing spaces.
-If a backslash, double or single quote forms part of an argument it must be backslash-escaped i.e. \\\" or \\\\
+Arguments may be surrounded by double quotes ("); this allows you to set an argument containing spaces.
+If a backslash, double or single quote forms part of an argument it must be backslash-escaped i.e. \\" or \\\\
 
 Comments are supported; # introduces a comment (up to the end of the line).
 

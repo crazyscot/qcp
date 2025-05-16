@@ -1,9 +1,10 @@
 
-    .ie \n(.g .ds Aq \\(aq
+.ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .TH QCP_CONFIG 5
 .SH NAME
-qcp_config \\- Configuration options for qcp
+qcp_config \- Configuration options for qcp
+
 .SH DESCRIPTION
 \fBqcp\fR(1) obtains run-time configuration from the following sources, in order:
 
@@ -34,8 +35,8 @@ In other words, you can use UPPERCASE, lowercase, CamelCase, mIxEDcAse, SHOUTY_S
 Arguments are separated from keywords, and each other, by whitespace.
 (It is also possible to write \fIKey=Value\fR or \fIKey = Value\fR.)
 
-Arguments may be surrounded by double quotes (\\\"); this allows you to set an argument containing spaces.
-If a backslash, double or single quote forms part of an argument it must be backslash-escaped i.e. \\\" or \\\\
+Arguments may be surrounded by double quotes ("); this allows you to set an argument containing spaces.
+If a backslash, double or single quote forms part of an argument it must be backslash-escaped i.e. \\" or \\\\
 
 Comments are supported; # introduces a comment (up to the end of the line).
 
@@ -110,7 +111,7 @@ It is possible for included files to themselves include additional files; there 
 The following options from the CLI are supported in configuration files:
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
-\fIrx\fR, \fItx\fR, \fIrtt\fR, \fIcongestion\fR, \fIinitial_congestion_window\fR, \fIport\fR, \fItimeout\fR, \fIaddress_family\fR, \fIssh\fR, \fIssh_options\fR, \fIremote_port\fR, \fIremote_user\fR, \fItime_format\fR, \fIssh_config\fR, \fIssh_subsystem\fR
+\fIrx\fR, \fItx\fR, \fIrtt\fR, \fIcongestion\fR, \fIinitial_congestion_window\fR, \fIport\fR, \fItimeout\fR, \fIaddress_family\fR, \fIssh\fR, \fIssh_options\fR, \fIremote_port\fR, \fIremote_user\fR, \fItime_format\fR, \fIssh_config\fR, \fIssh_subsystem\fR, \fIcolor\fR
 
 Refer to \fBqcp\fR(1) for details.
 

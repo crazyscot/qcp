@@ -8,7 +8,7 @@ qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH SYNOPSIS
-\fBqcp\fR [\fB\-b\fR|\fB\-\-rx\fR] [\fB\-B\fR|\fB\-\-tx\fR] [\fB\-r\fR|\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-T\fR|\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-d\fR|\fB\-\-debug\fR] [\fB\-L\fR|\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
+\fBqcp\fR [\fB\-b\fR|\fB\-\-rx\fR] [\fB\-B\fR|\fB\-\-tx\fR] [\fB\-r\fR|\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-T\fR|\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-color\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-d\fR|\fB\-\-debug\fR] [\fB\-L\fR|\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH DESCRIPTION
@@ -40,6 +40,29 @@ This is an experimental implementation of an experimental protocol. While it has
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH OPTIONS
+.TP
+\fB\-\-color\fR=\fImode\fR
+Colour mode for console output (default: auto)
+
+Passing `\-\-color` without a value is equivalent to `\-\-color always`.
+
+Note that color configuration is not shared with the remote system, so the color output from the remote system (log messages, remote\-config) will be coloured per the config file on the remote system.
+
+qcp also supports the `CLICOLOR`, `CLICOLOR_FORCE` and `NO_COLOR` environment variables. See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more details.
+
+CLI options take precedence over the configuration file, which takes precedence over environment variables.
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+always: Forces colours on, whatever is happening (aliases: `on`, `yes`)
+.IP \(bu 2
+never: (aliases: `off`, `no`, `none`)
+.IP \(bu 2
+auto: Use colours only when writing to a terminal
+.RE
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)
@@ -115,9 +138,9 @@ Forces use of a particular IP version when connecting to the remote. [default: a
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-inet: IPv4
+inet: IPv4 (aliases: `4`, `inet4`)
 .IP \(bu 2
-inet6: IPv6
+inet6: IPv6 (aliases: `6`)
 .IP \(bu 2
 any: Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup
 .RE
