@@ -1,6 +1,8 @@
 //! Command-line argument definition and processing
 // (c) 2024 Ross Younger
 
+use std::ffi::OsString;
+
 use anyhow::Result;
 use clap::{ArgAction::SetTrue, Args as _, FromArgMatches as _, Parser};
 
@@ -119,10 +121,14 @@ pub(crate) struct CliArgs {
 
 impl CliArgs {
     /// Sets up and executes our parser
-    pub(crate) fn custom_parse() -> Result<Self, clap::Error> {
+    pub(crate) fn custom_parse<I, T>(args: I) -> Result<Self, clap::Error>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<OsString> + Clone,
+    {
         let cli = clap::Command::new(clap::crate_name!());
         let cli = CliArgs::augment_args(cli).version(crate::version::short());
-        let mut args = CliArgs::from_arg_matches(&cli.try_get_matches_from(std::env::args_os())?)?;
+        let mut args = CliArgs::from_arg_matches(&cli.try_get_matches_from(args)?)?;
         // Custom logic: '-4' and '-6' convenience aliases
         if args.ipv4_alias__ {
             args.config.address_family = Some(AddressFamily::Inet.into());
@@ -158,10 +164,12 @@ mod test {
     use std::str::FromStr;
 
     use figment::Provider;
+    use rusty_fork::rusty_fork_test;
 
     use crate::{
         FileSpec, Parameters,
         config::{Configuration_Optional, Manager, Source},
+        util::AddressFamily,
     };
 
     use super::CliArgs;
@@ -250,5 +258,52 @@ mod test {
         args.apply_jobspec_to(&mut mgr);
         let cfg = mgr.get::<Configuration_Optional>().unwrap();
         assert_eq!(cfg.remote_user, Some("myuser".to_owned()));
+    }
+
+    #[test]
+    fn custom_parse_aliases() {
+        let table = [("-4", AddressFamily::Inet), ("-6", AddressFamily::Inet6)];
+        for (alias, family) in table {
+            let args = ["qcp", alias, "myuser@myhost:myfile", "."];
+            let result = CliArgs::custom_parse(args).unwrap();
+            assert_eq!(
+                result.client_params.source,
+                Some(FileSpec::from_str("myuser@myhost:myfile").unwrap())
+            );
+            assert_eq!(*result.config.address_family.unwrap(), family);
+
+            let mgr = Manager::try_from(&result).unwrap();
+            assert_eq!(
+                *mgr.get::<Configuration_Optional>()
+                    .unwrap()
+                    .address_family
+                    .unwrap(),
+                family
+            );
+        }
+    }
+
+    #[test]
+    fn conflicting_options() {
+        let args = ["qcp", "--server", "--show-config"];
+        let result = CliArgs::custom_parse(args);
+        assert!(result.is_err());
+        println!("{result:?}");
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+        assert!(
+            err.to_string()
+                .contains("the argument '--server' cannot be used with '--show-config'")
+        );
+    }
+
+    rusty_fork_test! {
+        // This test affects environment variables, so run in a separate process
+        #[test]
+        fn parse_color() {
+            let args = ["qcp", "--color", "always"];
+            let result = CliArgs::custom_parse(args);
+            assert!(result.is_ok());
+        }
     }
 }

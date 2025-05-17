@@ -66,7 +66,7 @@ pub fn cli() -> ExitCode {
 /// Inner CLI entrypoint
 #[tokio::main(flavor = "current_thread")]
 async fn cli_inner() -> anyhow::Result<bool> {
-    let args = match CliArgs::custom_parse() {
+    let args = match CliArgs::custom_parse(std::env::args_os()) {
         Ok(args) => args,
         Err(e) => {
             match e.kind() {
