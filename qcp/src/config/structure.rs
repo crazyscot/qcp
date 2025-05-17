@@ -409,8 +409,12 @@ impl Configuration {
 
     /// Performs additional validation checks on the configuration.
     pub fn validate(self) -> Result<Self> {
-        Configuration_Optional::from(&self).validate()?;
+        self.try_validate()?;
         Ok(self)
+    }
+
+    fn try_validate(&self) -> Result<()> {
+        Configuration_Optional::from(self).validate()
     }
 
     /// Returns the system default settings
@@ -421,7 +425,7 @@ impl Configuration {
 }
 
 impl Configuration_Optional {
-    pub(crate) fn validate(self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         let rtt = self.rtt.unwrap_or(0);
         if let Some(rx) = self.rx {
             let rx = u64::from(rx);
@@ -445,7 +449,7 @@ impl Configuration_Optional {
             let tx = u64::from(tx);
             if tx != 0 && tx < MINIMUM_BANDWIDTH {
                 anyhow::bail!(
-                    "The transmit bandwidth ({INFO}rx {val}{RESET}B) is too small; it must be at least {min}",
+                    "The transmit bandwidth ({INFO}tx {val}{RESET}B) is too small; it must be at least {min}",
                     val = tx.to_eng(0),
                     min = MINIMUM_BANDWIDTH.to_eng(3),
                     INFO = info(),
@@ -453,7 +457,7 @@ impl Configuration_Optional {
             }
             if tx.checked_mul(rtt.into()).is_none() {
                 anyhow::bail!(
-                    "The transmit bandwidth delay product calculation ({INFO}rx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
+                    "The transmit bandwidth delay product calculation ({INFO}tx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
                     val = tx.to_eng(0),
                     INFO = info(),
                 );
@@ -467,7 +471,6 @@ impl Configuration_Optional {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::SYSTEM_DEFAULT_CONFIG;
-
     #[test]
     fn flattened() {
         let v = SYSTEM_DEFAULT_CONFIG.clone();
@@ -475,5 +478,73 @@ mod test {
         let d = json::parse(&j).unwrap();
         assert!(!d.has_key("bw"));
         assert!(d.has_key("rtt"));
+    }
+
+    #[test]
+    fn accessors() {
+        let mut cfg = SYSTEM_DEFAULT_CONFIG.clone();
+        cfg.rtt = 123;
+        assert_eq!(cfg.rtt_duration().as_millis(), 123);
+        cfg.timeout = 4;
+        assert_eq!(cfg.timeout_duration().as_secs(), 4);
+
+        let s = cfg.format_transport_config();
+        assert!(s.contains("rx 12.5MB (100Mbit)"));
+        assert!(s.contains("rtt 123ms"));
+        assert!(s.contains("congestion algorithm cubic with initial window <default>"));
+
+        cfg.initial_congestion_window = 1000u64.into();
+        let s = cfg.format_transport_config();
+        assert!(s.contains("congestion algorithm cubic with initial window 1kB"));
+    }
+
+    fn strip_color<S: AsRef<str>>(s: S) -> String {
+        use std::io::Write as _;
+        let mut buf = Vec::new();
+        let mut ss = anstream::StripStream::new(&mut buf);
+        ss.write_all(s.as_ref().as_bytes()).unwrap();
+        String::from_utf8_lossy(&buf).into_owned()
+    }
+
+    #[test]
+    fn validate() {
+        let mut cfg = SYSTEM_DEFAULT_CONFIG.clone();
+        assert!(cfg.try_validate().is_ok());
+
+        // rx too small
+        cfg.rx = 1u64.into();
+        let err = cfg.try_validate().unwrap_err();
+        assert_eq!(
+            strip_color(err.to_string()),
+            "The receive bandwidth (rx 1B) is too small; it must be at least 150"
+        );
+
+        // tx too small
+        cfg = SYSTEM_DEFAULT_CONFIG.clone();
+        cfg.tx = 1u64.into();
+        let err = cfg.try_validate().unwrap_err();
+        assert_eq!(
+            strip_color(err.to_string()),
+            "The transmit bandwidth (tx 1B) is too small; it must be at least 150"
+        );
+
+        // rx overflow
+        cfg = SYSTEM_DEFAULT_CONFIG.clone();
+        cfg.rx = u64::MAX.into();
+        let err = cfg.try_validate().unwrap_err();
+        let msg = strip_color(err.to_string());
+        assert!(
+            msg.contains("The receive bandwidth delay product calculation")
+                && msg.contains("overflowed")
+        );
+        // tx overflow
+        cfg = SYSTEM_DEFAULT_CONFIG.clone();
+        cfg.tx = u64::MAX.into();
+        let err = cfg.try_validate().unwrap_err();
+        let msg = strip_color(err.to_string());
+        assert!(
+            msg.contains("The transmit bandwidth delay product calculation")
+                && msg.contains("overflowed")
+        );
     }
 }
