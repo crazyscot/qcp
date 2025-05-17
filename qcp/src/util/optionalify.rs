@@ -6,9 +6,12 @@
 use derive_deftly::define_derive_deftly;
 use figment::value::{Dict, Value};
 
-/// Helper function for `figment::Provider` implementation
+/// Helper function for [`figment::Provider`](https://docs.rs/figment/latest/figment/trait.Provider.html) implementation
 ///
 /// If the given `arg` is not None, inserts it into `dict` with key `arg_name`.
+///
+/// We cannot avoid the large-Err issue here as it is forced by implementing `figment::Provider`, hence `#[allow(clippy::result_large_err)]`.
+#[allow(clippy::result_large_err)]
 pub fn insert_if_some<T>(
     dict: &mut Dict,
     arg_name: &str,
