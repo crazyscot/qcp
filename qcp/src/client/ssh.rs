@@ -51,7 +51,7 @@ impl SshConfigFile {
         };
         let data = match parser
             .parse_file_for(Some(host))
-            .with_context(|| format!("error reading configuration file {path:?}"))
+            .with_context(|| format!("error reading configuration file {}", path.display()))
         {
             Ok(data) => data,
             Err(e) => {

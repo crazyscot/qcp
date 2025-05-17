@@ -6,7 +6,20 @@ use thiserror::Error;
 
 /// A newtype wrapper implementing `Display` for errors originating from this module
 #[derive(Debug, Error, PartialEq)]
-pub(crate) struct ConfigFileError(#[from] figment::Error);
+pub(crate) struct ConfigFileError(#[source] Box<figment::Error>);
+
+impl From<figment::Error> for ConfigFileError {
+    fn from(e: figment::Error) -> Self {
+        Self(Box::new(e))
+    }
+}
+impl std::ops::Deref for ConfigFileError {
+    type Target = figment::Error;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl ConfigFileError {
     fn rewrite_expected_type(s: &str) -> String {
@@ -36,7 +49,7 @@ impl ConfigFileError {
 
 impl std::fmt::Display for ConfigFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let e = &self.0;
+        let e = self.0.as_ref();
         Self::fmt_kind(&e.kind, f)?;
 
         if let (Some(profile), Some(md)) = (&e.profile, &e.metadata) {
