@@ -16,6 +16,7 @@ impl From<figment::Error> for ConfigFileError {
 impl std::ops::Deref for ConfigFileError {
     type Target = figment::Error;
 
+    /// Returns a reference to the inner error
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -49,7 +50,7 @@ impl ConfigFileError {
 
 impl std::fmt::Display for ConfigFileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let e = self.0.as_ref();
+        let e = self;
         Self::fmt_kind(&e.kind, f)?;
 
         if let (Some(profile), Some(md)) = (&e.profile, &e.metadata) {
@@ -70,21 +71,39 @@ impl std::fmt::Display for ConfigFileError {
     }
 }
 
-/// An iterator over all errors in an [`SshConfigError`]
-pub(crate) struct IntoIter(<figment::Error as std::iter::IntoIterator>::IntoIter);
-impl Iterator for IntoIter {
-    type Item = ConfigFileError;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(std::convert::Into::into)
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod test {
+    use crate::config::ssh::errors::ConfigFileError;
+    use figment::error::{Actual, Kind};
+    #[test]
+    fn error_invalid_type() {
+        let err = ConfigFileError::from(figment::Error::from(Kind::InvalidType(
+            Actual::Str("string".into()),
+            "a boolean".to_string(),
+        )));
+        assert!(
+            err.to_string()
+                .contains("invalid type: found string \"string\", expected a boolean")
+        );
     }
-}
-
-impl IntoIterator for ConfigFileError {
-    type Item = ConfigFileError;
-    type IntoIter = IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        IntoIter(self.0.into_iter())
+    #[test]
+    fn error_unknown_variant() {
+        let knowns = &["a", "b"];
+        let err = ConfigFileError::from(figment::Error::from(Kind::UnknownVariant(
+            "string".to_string(),
+            knowns,
+        )));
+        assert_eq!(
+            err.to_string(),
+            "unknown variant: found string, expected `a` or `b`"
+        );
+    }
+    #[test]
+    fn error_unsupported() {
+        let err = ConfigFileError::from(figment::Error::from(Kind::Unsupported(Actual::Str(
+            "abc".into(),
+        ))));
+        assert_eq!(err.to_string(), "unsupported type `string \"abc\"`");
     }
 }
