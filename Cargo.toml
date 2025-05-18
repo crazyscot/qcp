@@ -4,9 +4,9 @@ resolver = "2"
 package.edition = "2024"
 
 [workspace.dependencies]
-anyhow = "1.0.98"
-clap = { version = "4.5.37", features = ["wrap_help", "derive", "cargo", "help", "string"] }
+clap = { version = "4.5.38", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 
+anyhow = "1.0.98"
 #[profile.dev]
 #split-debuginfo="unpacked"
 # This is not supported on windows msvc; set CARGO_PROFILE_DEV_SPLIT_DEBUGINFO=unpacked in environment instead.
