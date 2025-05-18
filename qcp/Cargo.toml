@@ -45,7 +45,7 @@ document-features = "0.2.11"
 engineering-repr = { version = "1.1.0", features = ["serde"] }
 figment = { version = "0.10.19", features = ["env"] }
 futures-util = { version = "0.3.31", default-features = false }
-gethostname = "1.0.1"
+gethostname = "1.0.2"
 glob = "0.3.2"
 heck = "0.5.0"
 homedir = "0.3.4"
@@ -54,14 +54,14 @@ indicatif = { version = "0.17.11", features = ["tokio"] }
 lessify = "0.5.0"
 mimalloc = "0.1.46"
 num-format = { version = "0.4.4" }
-quinn = { version = "0.11.7", default-features = false, features = [
+quinn = { version = "0.11.8", default-features = false, features = [
     "runtime-tokio",
     "rustls",
     "ring",
 ] }
 rcgen = { version = "0.13.2" }
 rustix = { version = "1.0.7", features = ["net", "fs", "process"] }
-rustls-pki-types = "1.11.0"
+rustls-pki-types = "1.12.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_bare = "0.5.0"
 serde_repr = "0.1.20"
@@ -71,7 +71,7 @@ strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
 tabled = "0.19.0"
 thiserror = "2.0.12"
-tokio = { version = "1.44.2", default-features = true, features = [
+tokio = { version = "1.45.0", default-features = true, features = [
     "fs",
     "io-std",
     "macros",
@@ -93,7 +93,7 @@ roff = "0.2.2"
 rusty-fork = "0.3.0"
 serde_json = "1.0.140"
 serde_test = "1.0.177"
-tempfile = "3.19.1"
+tempfile = "3.20.0"
 tokio-pipe = "0.2.12"
 
 [lints.rust]
