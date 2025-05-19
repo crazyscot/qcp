@@ -311,7 +311,7 @@ mod test {
     }
 
     #[test]
-    fn field_parse_failure() {
+    fn field_parse_failure_custom_message() {
         #[derive(Debug, Deserialize)]
         #[allow(dead_code)]
         struct Test {
@@ -331,6 +331,33 @@ mod test {
             let result = mgr.get::<Test>().unwrap_err();
             println!("{result}");
             assert!(result.to_string().contains("must be increasing"));
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn field_parse_failure_invalid_value() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        struct Test {
+            p: PortRange,
+        }
+
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
+            p junk
+        ",
+            )?;
+            let mut mgr = Manager::without_files(None);
+            mgr.merge_ssh_config(path, None, true);
+            let result = mgr.get::<Test>().unwrap_err();
+            println!("{result}");
+            let s = result.to_string();
+            assert!(s.contains("invalid value string") && s.contains("expected a single port number [0..65535] or a range"));
             Ok(())
         })
         .unwrap();
