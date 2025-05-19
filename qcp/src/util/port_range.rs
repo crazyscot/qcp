@@ -40,12 +40,13 @@ impl From<PortRange> for String {
     }
 }
 
+static PR_EXPECTED: &str = "a single port number [0..65535] or a range `a-b`";
+
 impl FromStr for PortRange {
     type Err = figment::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use figment::error::Error as FigmentError;
-        static EXPECTED: &str = "a single port number [0..65535] or a range `a-b`";
         if let Ok(n) = s.parse::<u16>() {
             // case 1: it's a number
             // port 0 is allowed here (with the usual "unspecified" semantics), the user may know what they're doing.
@@ -55,7 +56,7 @@ impl FromStr for PortRange {
             // out of range
             return Err(FigmentError::invalid_value(
                 Unexpected::Unsigned(n),
-                &EXPECTED,
+                &PR_EXPECTED,
             ));
         }
         // case 2: it's a range
@@ -79,7 +80,10 @@ impl FromStr for PortRange {
             // else failed to parse
         }
         // else failed to parse
-        Err(FigmentError::invalid_value(Unexpected::Str(s), &EXPECTED))
+        Err(FigmentError::invalid_value(
+            Unexpected::Str(s),
+            &PR_EXPECTED,
+        ))
     }
 }
 
@@ -116,7 +120,13 @@ impl<'de> serde::Deserialize<'de> for PortRange {
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        FromStr::from_str(&s).map_err(de::Error::custom)
+        FromStr::from_str(&s).map_err(|e: figment::Error| {
+            if let figment::error::Kind::InvalidValue(_, _) = e.kind {
+                de::Error::invalid_value(Unexpected::Str(&s), &PR_EXPECTED)
+            } else {
+                de::Error::custom(e)
+            }
+        })
     }
 }
 
