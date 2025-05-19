@@ -4,7 +4,9 @@
 /// Representation of an IP address family
 ///
 /// This is a local type with special parsing semantics and aliasing to take part in the config/CLI system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, serde::Serialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, serde::Serialize, strum::VariantNames,
+)]
 #[serde(rename_all = "kebab-case")] // to match clap::ValueEnum
 pub enum AddressFamily {
     /// IPv4
