@@ -203,16 +203,20 @@ impl Manager {
             if let Some(d) = default {
                 return Ok(d);
             }
-            // we need a static string for the error message, *sigh*
-            let f = Configuration::FIELD_NAMES_AS_SLICE
-                .iter()
-                .find(|s| **s == field)
-                .unwrap();
-            return Err(ConfigFileError::from(figment::Error::missing_field(f)));
+            // else continue on, the extraction raises an error
         }
-        self.data
-            .extract_inner_lossy::<T>(field)
-            .map_err(ConfigFileError::from)
+
+        self.data.extract_inner_lossy::<T>(field).map_err(|mut e| {
+            if e.metadata.is_none() {
+                e.metadata = self.data.find_metadata(field).cloned();
+                // metadata gives us the error location
+            }
+            if e.profile.is_none() {
+                e.profile = Some(self.data.profile().clone());
+                // profile gives us the host key that was selected (if any; or Default if not)
+            }
+            ConfigFileError::from(e)
+        })
     }
 
     /// Syntactic sugar for extracting a field of type [`ColourMode`].
@@ -551,10 +555,14 @@ mod test {
             let err = mgr.get::<Configuration_Optional>().unwrap_err();
             println!("{err}");
             assert!(err.to_string().contains("expected one of"));
-            assert!(err.to_string().contains("auto"));
-            assert!(err.to_string().contains("on"));
-            assert!(err.to_string().contains("always"));
+            assert!(err.to_string().contains("Auto"));
+            assert!(err.to_string().contains("Always"));
+            assert!(err.to_string().contains("Never"));
+            assert!(err.to_string().contains("for key `"));
             assert!(err.to_string().contains("color"));
+            assert!(err.to_string().contains("of host `"));
+            assert!(err.to_string().contains("foo"));
+            assert!(err.to_string().contains("at test.conf"));
             Ok(())
         })
         .unwrap();
@@ -600,6 +608,41 @@ mod test {
                 .to_string()
                 .contains("missing field")
         );
+        // field not present, with default
+        assert_eq!(
+            empty_mgr.get_config_field::<u16>("rtt", Some(42)).unwrap(),
+            42
+        );
+    }
+
+    #[test]
+    fn field_extraction_no_profile_or_metadata() {
+        LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
+           TimeFormat not-a-real-format
+        ",
+            );
+            let mut mgr = Manager::new(None, false, false);
+            mgr.merge_ssh_config(path, None, false);
+
+            // This call triggers an error without profile & metadata attached, but we want to test that they do by the time the error gets to us.
+            let err = mgr
+                .get_config_field::<TimeFormat>("time_format", None)
+                .unwrap_err();
+
+            let s = err.to_string();
+            eprintln!("{s}");
+            assert!(
+                s.contains("unknown variant")
+                    && s.contains("of host")
+                    && s.contains("at test.conf (line 2)")
+            );
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[allow(unsafe_code)]
