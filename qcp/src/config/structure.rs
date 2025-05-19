@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::Result;
-use clap::{ArgAction::SetTrue, Parser, builder::TypedValueParser as _};
+use clap::{Parser, builder::TypedValueParser as _};
 use engineering_repr::{EngineeringQuantity, EngineeringRepr};
 use human_repr::{HumanCount as _, HumanDuration as _};
 use serde::{Deserialize, Serialize};
@@ -265,7 +265,9 @@ pub struct Configuration {
     #[arg(
         long,
         alias("subsystem"),
-        action(SetTrue),
+        default_missing_value("true"), // required for a bool in Configuration, along with num_args and require_equals
+        num_args(0..=1),
+        require_equals(true),
         help_heading("Connection"),
         display_order(0)
     )]
