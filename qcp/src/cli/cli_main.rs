@@ -127,6 +127,7 @@ async fn cli_inner() -> anyhow::Result<bool> {
                 config_manager.to_display_adapter::<Configuration>()
             )
             .output_paged();
+            config_manager.validate_configuration()?;
             Ok(true)
         }
         MainMode::Server => Ok(crate::server_main().await.map_or_else(
