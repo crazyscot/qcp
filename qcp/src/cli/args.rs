@@ -49,16 +49,7 @@ pub(crate) struct CliArgs {
     ///
     /// This is what we run on the remote machine; it is not
     /// intended for interactive use.
-    #[arg(
-        long, help_heading("Modes"), hide = true,
-        conflicts_with_all([
-            "help_buffers", "show_config", "config_files",
-            "quiet", "statistics", "remote_debug", "profile", "dry_run",
-            "ssh", "ssh_options", "remote_port",
-            "source", "destination", "port", "debug",
-            "tx", "rx", "rtt", "congestion", "initial_congestion_window", "timeout",
-        ])
-    )]
+    #[arg(long, help_heading("Modes"), hide = true, exclusive(true))]
     pub server: bool,
 
     // CONFIGURABLE OPTIONS ================================================================
@@ -79,12 +70,22 @@ pub(crate) struct CliArgs {
     ///
     #[arg(long, help_heading("Configuration"), display_order(0))]
     pub show_config: bool,
-    /// Outputs the paths to configuration file(s), then exits
-    #[arg(long, help_heading("Configuration"), display_order(0))]
+    /// Outputs the paths to configuration file(s), then exits.
+    ///
+    /// This option cannot be used with any other option.
+    #[arg(long, help_heading("Configuration"), display_order(0), exclusive(true))]
     pub config_files: bool,
 
-    /// Outputs additional information about kernel UDP buffer sizes and platform-specific tips
-    #[arg(long, action, help_heading("Network tuning"), display_order(100))]
+    /// Outputs additional information about kernel UDP buffer sizes and platform-specific tips.
+    ///
+    /// This option cannot be used with any other option.
+    #[arg(
+        long,
+        action,
+        help_heading("Network tuning"),
+        display_order(100),
+        exclusive(true)
+    )]
     pub help_buffers: bool,
 
     // CLIENT-SIDE NON-CONFIGURABLE OPTIONS ================================================
@@ -262,6 +263,7 @@ mod test {
 
     #[test]
     fn custom_parse_aliases() {
+        // CAUTION: As a side effect, this test reads your user and system config files. If they contain errors, it will fail.
         let table = [("-4", AddressFamily::Inet), ("-6", AddressFamily::Inet6)];
         for (alias, family) in table {
             let args = ["qcp", alias, "myuser@myhost:myfile", "."];
@@ -291,9 +293,10 @@ mod test {
         println!("{result:?}");
         let err = result.unwrap_err();
         assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+        eprintln!("{err}");
         assert!(
             err.to_string()
-                .contains("the argument '--server' cannot be used with '--show-config'")
+                .contains("the argument '--server' cannot be used with one or more of the other")
         );
     }
 
