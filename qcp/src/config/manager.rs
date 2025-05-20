@@ -714,4 +714,41 @@ mod test {
             assert!(mgr2.get::<Configuration_Optional>().unwrap().rx == Some(2345u64.into()));
         }
     }
+
+    #[test]
+    fn quoted_string() {
+        use anyhow::Context as _;
+        let cases = &[vec!["hello", "hi there"], vec!["hello"]];
+        for case in cases {
+            LitterTray::try_with(|tray| {
+                let path = "test.conf";
+                let mut cfgstr = "SshOptions".to_string();
+                for s in case {
+                    cfgstr.push(' ');
+                    cfgstr.push('"');
+                    cfgstr.push_str(s);
+                    cfgstr.push('"');
+                }
+                let cfgstr = cfgstr;
+
+                let _f = tray
+                    .create_text(
+                        path,
+                        &format!(
+                            r"
+                        Host *
+                        {cfgstr}
+                    "
+                        ),
+                    )
+                    .context("create_text")?;
+                let mut mgr = Manager::without_files(None);
+                mgr.merge_ssh_config(path, None, false);
+                let cfg = mgr.get::<Configuration_Optional>().context("get config")?;
+                assert_eq!(&cfg.ssh_options.unwrap().to_vec(), case);
+                Ok(())
+            })
+            .unwrap();
+        }
+    }
 }

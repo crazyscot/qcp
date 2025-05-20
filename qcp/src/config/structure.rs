@@ -15,7 +15,7 @@ use crate::{
     cli::styles::{ColourMode, RESET, info},
     protocol::control::{CongestionController, CongestionControllerSerializingAsString},
     util::{
-        AddressFamily, PortRange, TimeFormat, derive_deftly_template_Optionalify,
+        AddressFamily, PortRange, TimeFormat, VecOrString, derive_deftly_template_Optionalify,
         enums::DeserializableEnum,
     },
 };
@@ -193,13 +193,13 @@ pub struct Configuration {
     /// For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`
     #[arg(
         short = 'S',
-        action,
         value_name("ssh-option"),
         allow_hyphen_values(true),
         help_heading("Connection"),
+        value_parser(clap::value_parser!(String)),
         display_order(0)
     )]
-    pub ssh_options: Vec<String>,
+    pub ssh_options: VecOrString,
 
     /// Uses the given UDP port or range on the **remote** endpoint.
     /// This can be useful when there is a firewall between the endpoints.
@@ -250,8 +250,8 @@ pub struct Configuration {
     ///
     /// This option is really intended to be used in a qcp configuration file.
     /// On the command line, you can repeat `--ssh-config file` as many times as needed.
-    #[arg(long, value_name("FILE"), help_heading("Connection"), display_order(0))]
-    pub ssh_config: Vec<String>,
+    #[arg(long, value_name("FILE"), help_heading("Connection"), display_order(0), value_parser(clap::value_parser!(String)))]
+    pub ssh_config: VecOrString,
 
     /// Ssh subsystem mode
     ///
@@ -316,11 +316,11 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     // Client
     address_family: AddressFamily::Any.into(),
     ssh: "ssh".into(),
-    ssh_options: vec![],
+    ssh_options: VecOrString::default(),
     remote_port: PortRange::default(),
     remote_user: String::new(),
     time_format: TimeFormat::Local,
-    ssh_config: Vec::new(),
+    ssh_config: VecOrString::default(),
     ssh_subsystem: false,
     color: ColourMode::Auto.into(),
 });

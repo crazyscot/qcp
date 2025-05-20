@@ -82,11 +82,12 @@ pub(crate) async fn client_main(
     let remote_ssh_hostname = job_spec.remote_host();
 
     let ssh_config_files = super::ssh::SshConfigFiles::new(
-        &working_config
+        working_config
             .ssh_config
             .as_ref()
             .unwrap_or(&default_config.ssh_config)
-            .to_owned(),
+            .to_vec_owned()
+            .as_ref(),
     );
     let remote_dns_name = ssh_config_files
         .resolve_host_alias(remote_ssh_hostname)
