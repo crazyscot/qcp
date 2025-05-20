@@ -3,6 +3,7 @@
 
 use crate::{
     cli::styles::ColourMode,
+    config::structure::Validatable as _,
     os::{AbstractPlatform as _, Platform},
     util::enums::DeserializableEnum,
 };
@@ -232,9 +233,7 @@ impl Manager {
     /// Performs additional validation checks on the fields present in the configuration, as far as possible.
     /// This is only useful when the [`Manager`] holds a [`Configuration`].
     pub fn validate_configuration(&self) -> Result<()> {
-        let working: Configuration_Optional = self.get::<Configuration_Optional>()?;
-        working.validate()?;
-        Ok(())
+        self.get::<Configuration_Optional>()?.try_validate()
     }
 }
 
