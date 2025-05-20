@@ -409,16 +409,6 @@ impl Configuration {
         )
     }
 
-    /// Performs additional validation checks on the configuration.
-    pub fn validate(self) -> Result<Self> {
-        self.try_validate()?;
-        Ok(self)
-    }
-
-    fn try_validate(&self) -> Result<()> {
-        Configuration_Optional::from(self).validate()
-    }
-
     /// Returns the system default settings
     #[must_use]
     pub fn system_default() -> &'static Self {
@@ -426,46 +416,86 @@ impl Configuration {
     }
 }
 
-impl Configuration_Optional {
-    pub(crate) fn validate(&self) -> Result<()> {
-        let rtt = self.rtt.unwrap_or(0);
-        if let Some(rx) = self.rx {
-            let rx = u64::from(rx);
-            if rx < MINIMUM_BANDWIDTH {
-                anyhow::bail!(
-                    "The receive bandwidth ({INFO}rx {val}{RESET}B) is too small; it must be at least {min}",
-                    val = rx.to_eng(0),
-                    min = MINIMUM_BANDWIDTH.to_eng(3),
-                    INFO = info()
-                );
-            }
-            if rx.checked_mul(rtt.into()).is_none() {
-                anyhow::bail!(
-                    "The receive bandwidth delay product calculation ({INFO}rx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
-                    val = rx.to_eng(0),
-                    INFO = info()
-                );
-            }
+// VALIDATION ------------------------------------------------------------
+
+/// Data needed by [`Validatable::try_validate()`]
+pub(crate) struct ValidationData {
+    rtt: u16,
+    rx: u64,
+    tx: u64,
+}
+
+pub(crate) trait Validatable {
+    fn validation_data(&self) -> ValidationData;
+
+    /// Performs additional validation checks on a configuration object
+    fn try_validate(&self) -> Result<()> {
+        let data = self.validation_data();
+
+        let rtt = data.rtt;
+        let rx = data.rx;
+        if rx < MINIMUM_BANDWIDTH {
+            anyhow::bail!(
+                "The receive bandwidth ({INFO}rx {val}{RESET}B) is too small; it must be at least {min}",
+                val = rx.to_eng(0),
+                min = MINIMUM_BANDWIDTH.to_eng(3),
+                INFO = info()
+            );
         }
-        if let Some(tx) = self.tx {
-            let tx = u64::from(tx);
-            if tx != 0 && tx < MINIMUM_BANDWIDTH {
-                anyhow::bail!(
-                    "The transmit bandwidth ({INFO}tx {val}{RESET}B) is too small; it must be at least {min}",
-                    val = tx.to_eng(0),
-                    min = MINIMUM_BANDWIDTH.to_eng(3),
-                    INFO = info(),
-                );
-            }
-            if tx.checked_mul(rtt.into()).is_none() {
-                anyhow::bail!(
-                    "The transmit bandwidth delay product calculation ({INFO}tx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
-                    val = tx.to_eng(0),
-                    INFO = info(),
-                );
-            }
+        if rx.checked_mul(rtt.into()).is_none() {
+            anyhow::bail!(
+                "The receive bandwidth delay product calculation ({INFO}rx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
+                val = rx.to_eng(0),
+                INFO = info()
+            );
+        }
+
+        let tx = data.tx;
+        if tx != 0 && tx < MINIMUM_BANDWIDTH {
+            anyhow::bail!(
+                "The transmit bandwidth ({INFO}tx {val}{RESET}B) is too small; it must be at least {min}",
+                val = tx.to_eng(0),
+                min = MINIMUM_BANDWIDTH.to_eng(3),
+                INFO = info(),
+            );
+        }
+        if tx.checked_mul(rtt.into()).is_none() {
+            anyhow::bail!(
+                "The transmit bandwidth delay product calculation ({INFO}tx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
+                val = tx.to_eng(0),
+                INFO = info(),
+            );
         }
         Ok(())
+    }
+
+    /// Performs additional validation checks on the configuration.
+    fn validate(self) -> Result<Self>
+    where
+        Self: std::marker::Sized,
+    {
+        self.try_validate()?;
+        Ok(self)
+    }
+}
+
+impl Validatable for Configuration {
+    fn validation_data(&self) -> ValidationData {
+        ValidationData {
+            rtt: self.rtt,
+            rx: self.rx(),
+            tx: self.tx(),
+        }
+    }
+}
+
+impl Validatable for Configuration_Optional {
+    fn validation_data(&self) -> ValidationData {
+        ValidationData {
+            rtt: self.rtt.unwrap_or(0),
+            rx: u64::from(self.rx.unwrap_or_default()),
+            tx: u64::from(self.tx.unwrap_or_default()),
+        }
     }
 }
 
@@ -510,6 +540,7 @@ mod test {
 
     #[test]
     fn validate() {
+        use super::Validatable as _;
         let mut cfg = SYSTEM_DEFAULT_CONFIG.clone();
         assert!(cfg.try_validate().is_ok());
 

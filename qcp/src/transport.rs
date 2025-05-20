@@ -12,7 +12,7 @@ use quinn::{
 use tracing::debug;
 
 use crate::{
-    config::{self, Configuration, Configuration_Optional, Manager},
+    config::{self, Configuration, Configuration_Optional, Manager, structure::Validatable as _},
     protocol::control::{ClientMessageV1, CongestionController},
     util::PortRange,
 };
@@ -271,8 +271,7 @@ pub fn combine_bandwidth_configurations(
     manager.merge_provider(negotiated);
     manager.apply_system_default();
 
-    let result = manager.get::<Configuration>()?;
-    result.validate()
+    manager.get::<Configuration>()?.validate()
 }
 
 fn make_entry_human_friendly(
