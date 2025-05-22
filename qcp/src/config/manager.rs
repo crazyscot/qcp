@@ -309,57 +309,32 @@ mod test {
         .unwrap();
     }
 
-    #[test]
-    fn field_parse_failure_custom_message() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        struct Test {
-            p: PortRange,
-        }
-
+    fn field_parse_failure_body(contents: &str) -> String {
+        let mut result = String::new();
         LitterTray::try_with(|tray| {
             let path = "test.conf";
-            let _ = tray.create_text(
-                path,
-                r"
-            p 234-123
-        ",
-            )?;
+            let _ = tray.create_text(path, contents)?;
             let mut mgr = Manager::without_files(None);
             mgr.merge_ssh_config(path, None, true);
-            let result = mgr.get::<Test>().unwrap_err();
+            result = mgr.get::<Configuration>().unwrap_err().to_string();
             println!("{result}");
-            assert!(result.to_string().contains("must be increasing"));
             Ok(())
         })
         .unwrap();
+        result
     }
 
     #[test]
+    fn field_parse_failure_custom_message() {
+        assert!(field_parse_failure_body("port 234-123").contains("must be increasing"));
+    }
+    #[test]
     fn field_parse_failure_invalid_value() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        struct Test {
-            p: PortRange,
-        }
-
-        LitterTray::try_with(|tray| {
-            let path = "test.conf";
-            let _ = tray.create_text(
-                path,
-                r"
-            p junk
-        ",
-            )?;
-            let mut mgr = Manager::without_files(None);
-            mgr.merge_ssh_config(path, None, true);
-            let result = mgr.get::<Test>().unwrap_err();
-            println!("{result}");
-            let s = result.to_string();
-            assert!(s.contains("invalid value string") && s.contains("expected a single port number [0..65535] or a range"));
-            Ok(())
-        })
-        .unwrap();
+        let s = field_parse_failure_body("port junk");
+        assert!(
+            s.contains("invalid value string")
+                && s.contains("expected a single port number [0..65535] or a range")
+        );
     }
 
     #[test]
