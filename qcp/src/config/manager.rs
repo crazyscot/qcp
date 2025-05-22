@@ -339,10 +339,6 @@ mod test {
 
     #[test]
     fn ssh_style() {
-        #[derive(Debug, Deserialize)]
-        struct Test {
-            ssh_options: Vec<String>,
-        }
         LitterTray::try_with(|tray| {
             let path = "test.conf";
             let _ = tray.create_text(
@@ -358,13 +354,13 @@ mod test {
             let mut mgr = Manager::without_files(Some("foo"));
             mgr.merge_ssh_config(path, Some("foo"), false);
             //println!("{}", mgr.to_display_adapter::<Configuration>(false));
-            let result = mgr.get::<Test>().unwrap();
-            assert_eq!(result.ssh_options, vec!["a", "b", "c"]);
+            let result = mgr.get::<Configuration>().unwrap();
+            assert_eq!(result.ssh_options, ["a", "b", "c"].as_slice().into());
 
             let mut mgr = Manager::without_files(Some("bar"));
             mgr.merge_ssh_config(path, Some("bar"), false);
-            let result = mgr.get::<Test>().unwrap();
-            assert_eq!(result.ssh_options, vec!["d", "e", "f"]);
+            let result = mgr.get::<Configuration>().unwrap();
+            assert_eq!(result.ssh_options, ["d", "e", "f"].as_slice().into());
             Ok(())
         })
         .unwrap();
@@ -424,11 +420,6 @@ mod test {
 
     #[test]
     fn bools() {
-        #[derive(Debug, Deserialize)]
-        struct Test {
-            b: bool,
-        }
-
         LitterTray::try_with(|tray| {
             let path = "testfile";
 
@@ -441,16 +432,16 @@ mod test {
                 ("0", false),
             ] {
                 let _ = tray
-                    .create_text(path, &format!("b {s}"))
+                    .create_text(path, &format!("SshSubsystem {s}"))
                     .expect("Unable to write tempfile");
                 // ... test it
                 let mut mgr = Manager::without_files(Some("foo"));
                 mgr.merge_ssh_config(path, Some("foo"), false);
                 let result = mgr
-                    .get::<Test>()
+                    .get::<Configuration>()
                     .inspect_err(|e| println!("ERROR: {e}"))
                     .unwrap();
-                assert_eq!(result.b, expected);
+                assert_eq!(result.ssh_subsystem, expected);
             }
             Ok(())
         })

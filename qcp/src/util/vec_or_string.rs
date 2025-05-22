@@ -49,6 +49,12 @@ impl From<Vec<String>> for VecOrString {
     }
 }
 
+impl From<&[&str]> for VecOrString {
+    fn from(value: &[&str]) -> Self {
+        VecOrString::Vec(value.iter().map(|s| String::from(*s)).collect::<Vec<_>>())
+    }
+}
+
 impl From<String> for VecOrString {
     fn from(value: String) -> Self {
         VecOrString::String(value)
