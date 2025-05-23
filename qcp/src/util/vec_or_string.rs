@@ -69,7 +69,7 @@ impl From<&str> for VecOrString {
 
 impl Default for VecOrString {
     fn default() -> Self {
-        VecOrString::String(String::new())
+        VecOrString::Vec(vec![])
     }
 }
 
