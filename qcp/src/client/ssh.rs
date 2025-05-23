@@ -10,6 +10,7 @@ use tracing::{debug, warn};
 use crate::os::{AbstractPlatform as _, Platform};
 
 /// Metadata representing an ssh config file
+#[derive(Debug)]
 struct SshConfigFile {
     /// The file to read
     path: PathBuf,
@@ -66,6 +67,7 @@ impl SshConfigFile {
 //////////////////////////////////////////////////////////////////////////////
 
 /// A set of ssh config files
+#[derive(Debug)]
 pub(crate) struct SshConfigFiles {
     files: Vec<SshConfigFile>,
 }
