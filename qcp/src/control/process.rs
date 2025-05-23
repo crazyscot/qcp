@@ -7,13 +7,12 @@ use tokio::{
     process::{ChildStdin, ChildStdout},
 };
 
-use anstream::eprintln;
 use anyhow::{Context as _, Result, anyhow};
 use indicatif::MultiProgress;
 use tokio::io::AsyncBufReadExt;
 use tracing::{debug, warn};
 
-use crate::protocol::control::ConnectionType;
+use crate::{cli::styles::maybe_strip_color, protocol::control::ConnectionType};
 use crate::{client::Parameters, protocol::common::SendReceivePair};
 use crate::{
     config::{Configuration, Configuration_Optional},
@@ -167,6 +166,7 @@ impl Ssh {
             let _reader = tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr).lines();
                 while let Ok(Some(line)) = reader.next_line().await {
+                    let line = maybe_strip_color(&line);
                     // Calling cloned.println() sometimes messes up; there seems to be a concurrency issue.
                     // But we don't need to worry too much about that. Just write it out.
                     cloned.suspend(|| eprintln!("{line}"));

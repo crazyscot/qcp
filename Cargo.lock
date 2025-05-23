@@ -1120,6 +1120,7 @@ dependencies = [
  "cfg_aliases",
  "clap",
  "clap_mangen",
+ "colorchoice",
  "console",
  "derive-deftly",
  "derive_more",

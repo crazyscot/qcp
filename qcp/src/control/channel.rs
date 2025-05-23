@@ -192,7 +192,6 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         if !message1.warning.is_empty() {
             warn!("Remote endpoint warning: {}", &message1.warning);
         }
-        //eprintln!("{manager:#?}");
         Ok(message1)
     }
 

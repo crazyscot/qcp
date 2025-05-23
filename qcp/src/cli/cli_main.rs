@@ -12,7 +12,6 @@ use crate::{
     os::{self, AbstractPlatform as _},
 };
 
-use anstream::{eprintln, println};
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use lessify::OutputPaged;
 
@@ -64,8 +63,11 @@ pub fn cli() -> ExitCode {
 }
 
 /// Inner CLI entrypoint
-#[tokio::main(flavor = "current_thread")]
-async fn cli_inner() -> anyhow::Result<bool> {
+///
+/// # Safety
+/// - This function starts a tokio runtime.
+/// - This function is not safe to call from multi-threaded code.
+fn cli_inner() -> anyhow::Result<bool> {
     let args = match CliArgs::custom_parse(std::env::args_os()) {
         Ok(args) => args,
         Err(e) => {
@@ -93,11 +95,7 @@ async fn cli_inner() -> anyhow::Result<bool> {
     // (to provoke an error here: `qcp host: host2:`)
     let mut config_manager = Manager::try_from(&args)?;
     let colours = config_manager.get_color(Some(Configuration::system_default().color))?;
-    #[allow(unsafe_code)]
-    unsafe {
-        // SAFETY: this is safe as we are only single threaded at this point
-        configure_colours(Some(colours));
-    }
+    configure_colours(Some(colours));
 
     match mode {
         MainMode::HelpBuffers => {
@@ -130,7 +128,7 @@ async fn cli_inner() -> anyhow::Result<bool> {
             config_manager.validate_configuration()?;
             Ok(true)
         }
-        MainMode::Server => Ok(crate::server_main().await.map_or_else(
+        MainMode::Server => Ok(run_in_tokio(crate::server_main).map_or_else(
             |e| {
                 eprintln!("{ERROR}ERROR{RESET} Server: {e:?}", ERROR = error());
                 false
@@ -140,7 +138,12 @@ async fn cli_inner() -> anyhow::Result<bool> {
         MainMode::Client(progress) => {
             config_manager.validate_configuration()?;
             // this mode may return false
-            crate::client_main(&mut config_manager, progress, args.client_params).await
+            run_in_tokio(|| crate::client_main(&mut config_manager, progress, args.client_params))
         }
     }
+}
+
+#[tokio::main(flavor = "current_thread")]
+async fn run_in_tokio<R, F: AsyncFnOnce() -> R>(func: F) -> R {
+    func().await
 }

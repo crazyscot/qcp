@@ -8,7 +8,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anstream::eprintln;
 use anyhow::Context;
 use indicatif::MultiProgress;
 use serde::{Deserialize, Serialize, de};
@@ -21,6 +20,8 @@ use tracing_subscriber::{
     },
     prelude::*,
 };
+
+use crate::cli::styles::maybe_strip_color;
 
 static TRACING_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
@@ -263,6 +264,7 @@ impl Write for ProgressWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let msg = std::str::from_utf8(buf)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let msg = maybe_strip_color(msg);
         if self.0.is_hidden() {
             eprintln!("{msg}");
         } else {

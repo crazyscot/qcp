@@ -290,15 +290,7 @@ pub struct Configuration {
         alias("colour"),
         default_missing_value("always"), // to support `--color`
         num_args(0..=1),
-        // hacky: apply the value as soon as we see it, in case a later CLI argument fails to parse
-        value_parser(clap::builder::EnumValueParser::<ColourMode>::new().map(|cm| {
-            #[allow(unsafe_code)]
-            unsafe {
-                // SAFETY: this is safe as we are only single threaded at this point
-                crate::cli::styles::configure_colours(Some(cm));
-            }
-            DeserializableEnum::<ColourMode>::from(cm)
-        })),
+        value_parser(clap::builder::EnumValueParser::<ColourMode>::new().map(DeserializableEnum::<ColourMode>::from)),
         value_name("mode")
     )]
     pub color: DeserializableEnum<ColourMode>,
@@ -503,6 +495,7 @@ impl Validatable for Configuration_Optional {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::SYSTEM_DEFAULT_CONFIG;
+
     #[test]
     fn flattened() {
         let v = SYSTEM_DEFAULT_CONFIG.clone();
@@ -530,14 +523,6 @@ mod test {
         assert!(s.contains("congestion algorithm cubic with initial window 1kB"));
     }
 
-    fn strip_color<S: AsRef<str>>(s: S) -> String {
-        use std::io::Write as _;
-        let mut buf = Vec::new();
-        let mut ss = anstream::StripStream::new(&mut buf);
-        ss.write_all(s.as_ref().as_bytes()).unwrap();
-        String::from_utf8_lossy(&buf).into_owned()
-    }
-
     #[test]
     fn validate() {
         use super::Validatable as _;
@@ -548,7 +533,7 @@ mod test {
         cfg.rx = 1u64.into();
         let err = cfg.try_validate().unwrap_err();
         assert_eq!(
-            strip_color(err.to_string()),
+            console::strip_ansi_codes(&err.to_string()),
             "The receive bandwidth (rx 1B) is too small; it must be at least 150"
         );
 
@@ -557,15 +542,15 @@ mod test {
         cfg.tx = 1u64.into();
         let err = cfg.try_validate().unwrap_err();
         assert_eq!(
-            strip_color(err.to_string()),
+            console::strip_ansi_codes(&err.to_string()),
             "The transmit bandwidth (tx 1B) is too small; it must be at least 150"
         );
 
         // rx overflow
         cfg = SYSTEM_DEFAULT_CONFIG.clone();
         cfg.rx = u64::MAX.into();
-        let err = cfg.try_validate().unwrap_err();
-        let msg = strip_color(err.to_string());
+        let err = cfg.try_validate().unwrap_err().to_string();
+        let msg = console::strip_ansi_codes(&err);
         assert!(
             msg.contains("The receive bandwidth delay product calculation")
                 && msg.contains("overflowed")
@@ -573,8 +558,8 @@ mod test {
         // tx overflow
         cfg = SYSTEM_DEFAULT_CONFIG.clone();
         cfg.tx = u64::MAX.into();
-        let err = cfg.try_validate().unwrap_err();
-        let msg = strip_color(err.to_string());
+        let err = cfg.try_validate().unwrap_err().to_string();
+        let msg = console::strip_ansi_codes(&err);
         assert!(
             msg.contains("The transmit bandwidth delay product calculation")
                 && msg.contains("overflowed")
