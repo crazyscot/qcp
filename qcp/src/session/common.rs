@@ -53,7 +53,6 @@ pub(super) fn progress_bar_for(
     Ok(display.add(
         ProgressBar::new(steps)
             .with_style(indicatif::ProgressStyle::with_template(style_for(
-                &console::Term::stderr(),
                 display_filename.len(),
             ))?)
             .with_message(display_filename)
