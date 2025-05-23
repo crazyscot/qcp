@@ -4,9 +4,6 @@
 /// Maximum update frequency we will use for the progress display
 pub(crate) const MAX_UPDATE_FPS: u8 = 20;
 
-use console::Term;
-use indicatif::ProgressStyle;
-
 /// A single-line style format for Indicatif which should cover most situations.
 ///
 /// ```text
@@ -36,15 +33,10 @@ const DATA_AND_PROGRESS: usize = 55;
 /// ```
 const PROGRESS_STYLE_OVERLONG: &str = "{wide_msg:.dim} [{decimal_total_bytes:.dim}]\n{wide_bar:.cyan} {eta} @ {decimal_bytes_per_sec}";
 
-/// Determine the appropriate progress style to use
-fn use_long_style(terminal: &Term, msg_size: usize) -> bool {
-    let term_width = terminal.size().1 as usize; // this returns a reasonable default if it can't detect
-    msg_size + DATA_AND_PROGRESS > term_width
-}
-
 /// Determine and retrieve the appropriate progress style to use
-pub(crate) fn style_for(terminal: &Term, msg_size: usize) -> &str {
-    if use_long_style(terminal, msg_size) {
+pub(crate) fn style_for(msg_size: usize) -> &'static str {
+    let term_width = console::Term::stderr().size().1 as usize; // this returns a reasonable default if it can't detect
+    if msg_size + DATA_AND_PROGRESS > term_width {
         PROGRESS_STYLE_OVERLONG
     } else {
         PROGRESS_STYLE_COMPACT
@@ -54,7 +46,14 @@ pub(crate) fn style_for(terminal: &Term, msg_size: usize) -> &str {
 /// Indicatif template for spinner lines
 pub(crate) const SPINNER_TEMPLATE: &str = "{spinner} {wide_msg} {prefix}";
 
-/// Indicatif template for spinner lines
-pub(crate) fn spinner_style() -> anyhow::Result<ProgressStyle> {
-    Ok(ProgressStyle::with_template(SPINNER_TEMPLATE)?)
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use crate::client::progress::{PROGRESS_STYLE_COMPACT, PROGRESS_STYLE_OVERLONG, style_for};
+
+    #[test]
+    fn filename_sizes() {
+        assert_eq!(style_for(10), PROGRESS_STYLE_COMPACT);
+        assert_eq!(style_for(500), PROGRESS_STYLE_OVERLONG);
+    }
 }
