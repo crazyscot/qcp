@@ -199,6 +199,12 @@ Breaking changes will be noted in the [changelog] and will trigger a minor versi
 
 The project will move to version 1.x when the protocol has stabilised. After 1.0, breaking changes will trigger a major version bump.
 
+### Unsafe Rust
+
+Uses of unsafe rust will be kept to a bare minimum and carefully reviewed.
+
+Test code (protected by `#[cfg(test)]`) is exempt from this policy.
+
 ## 💸 Supporting the project
 
 If you find this software useful and would like to say thank you, please consider [buying me a coffee] or [ko-fi]. [Github sponsorship] is also available.

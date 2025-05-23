@@ -22,13 +22,14 @@ rustls-log = ["quinn/rustls-log"]
 secure-alloc = ["mimalloc/secure"]
 
 [dependencies]
-anstream = "0.6.18"
+anstream = { version = "0.6.18", default-features = false }
 anstyle = "1.0.10"
 anyhow = { workspace = true }
 async-trait = "0.1.88"
 bytes = "1.10.1"
 cfg-if = "1.0.0"
 clap = { workspace = true }
+colorchoice = "1.0.3"
 console = "0.15.11"
 derive-deftly = "1.0.1"
 derive_more = { version = "2.0.1", features = [

@@ -1,18 +1,17 @@
 // (c) 2024 Ross Younger
 //! CLI output styling
 //!
-//! Users of this module probably ought to use anstream's `println!` / `eprintln!` macros.
-//!
 //! This module provides styles for use with those macros, and also a `RESET` constant to reset
 //! styling to the default.
 
+use anstream::ColorChoice;
 #[allow(clippy::enum_glob_use)]
 use anstyle::AnsiColor::*;
 use anstyle::Color::Ansi;
 use clap::builder::styling::Styles;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::io::IsTerminal;
-use std::sync::{LazyLock, atomic::AtomicBool};
 
 use crate::util::enums::ConvertibleTo;
 
@@ -79,11 +78,8 @@ wrap!(header, _HEADER);
 
 // CONDITIONALITY & CLI //////////////////////////////////////////////////////////
 
-static COLOURS_ENABLED: LazyLock<AtomicBool> =
-    LazyLock::new(|| AtomicBool::new(autodetect_colour()));
-
 pub(crate) fn use_colours() -> bool {
-    COLOURS_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
+    console::colors_enabled()
 }
 
 /// The available terminal colour modes
@@ -121,13 +117,7 @@ pub(crate) fn autodetect_colour() -> bool {
 /// Set up the terminal colour mode.
 /// If `mode` is `None`, we will use the quasi-standard `CLICOLOR`, `CLICOLOR_FORCE` and `NO_COLOR` environment variables to determine the mode.
 /// See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more information.
-///
-/// This function should only be called once, at the start of the program.
-///
-/// SAFETY: This function sets environment variables, which is not thread-safe on all platforms.
-/// Justification: There is no way to tell all the downstream crates to use colours (or not) other than the environment.
-#[allow(unsafe_code)]
-pub(crate) unsafe fn configure_colours<CM>(mode: CM)
+pub(crate) fn configure_colours<CM>(mode: CM)
 where
     CM: ConvertibleTo<Option<ColourMode>> + std::fmt::Debug,
 {
@@ -136,18 +126,21 @@ where
         Some(ColourMode::Never) => false,
         None | Some(ColourMode::Auto) => autodetect_colour(),
     };
-    COLOURS_ENABLED.store(state, std::sync::atomic::Ordering::Relaxed);
-    #[allow(unsafe_code)]
-    unsafe {
-        if state {
-            std::env::set_var("CLICOLOR_FORCE", "1");
-            std::env::set_var("CLICOLOR", "1");
-            std::env::remove_var("NO_COLOR");
-        } else {
-            std::env::remove_var("CLICOLOR_FORCE");
-            std::env::set_var("CLICOLOR", "0");
-            std::env::set_var("NO_COLOR", "1");
-        }
+    console::set_colors_enabled(state);
+    console::set_colors_enabled_stderr(state);
+    if state {
+        ColorChoice::Always
+    } else {
+        ColorChoice::Never
+    }
+    .write_global();
+}
+
+pub(crate) fn maybe_strip_color(s: &str) -> Cow<'_, str> {
+    if use_colours() {
+        s.into()
+    } else {
+        console::strip_ansi_codes(s)
     }
 }
 
@@ -157,6 +150,7 @@ where
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::{ColourMode, configure_colours, use_colours};
+    use anstream::ColorChoice;
     use rusty_fork::rusty_fork_test;
     use std::{collections::HashMap, env};
 
@@ -175,22 +169,16 @@ mod test {
             }
             configure_colours(setting);
         }
-        assert!(use_colours() == enabled);
+        assert_eq!(use_colours(), enabled);
+        assert_eq!(console::colors_enabled(), enabled);
+        assert_eq!(console::colors_enabled_stderr(), enabled);
+        let choice = ColorChoice::global();
         if enabled {
+            assert_eq!(choice, ColorChoice::Always);
             assert_eq!(super::error(), super::_ERROR);
-            assert_eq!(env::var("CLICOLOR_FORCE").unwrap_or_default(), "1");
-            assert_eq!(
-                env::var("NO_COLOR").unwrap_err().to_string(),
-                "environment variable not found"
-            );
         } else {
+            assert_eq!(choice, ColorChoice::Never);
             assert_eq!(super::error(), anstyle::Style::new());
-            assert_eq!(env::var("CLICOLOR").unwrap_or_default(), "0");
-            assert_eq!(
-                env::var("CLICOLOR_FORCE").unwrap_err().to_string(),
-                "environment variable not found"
-            );
-            assert!(env::var("NO_COLOR").is_ok());
         }
     }
 
