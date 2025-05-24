@@ -304,7 +304,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
                 bandwidth_to_server: Uint(config.rx()),
                 bandwidth_to_client: Uint(config.tx()),
                 rtt: config.rtt,
-                congestion: config.congestion.into(),
+                congestion: *config.congestion,
                 initial_congestion_window: Uint(config.initial_congestion_window.into()),
                 timeout: config.timeout,
                 warning,

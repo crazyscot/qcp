@@ -15,7 +15,7 @@ fn test_body<T: FnOnce()>(setter: T, expected: ColourMode, check_meta: bool) {
     let mut mgr = Manager::new(None, true, false);
     mgr.apply_system_default();
     let result = mgr.get::<Configuration>().unwrap();
-    assert_eq!(result.color, expected.into());
+    assert_eq!(result.color, expected);
 
     if check_meta {
         let val = mgr.data_().find_value("color").unwrap();

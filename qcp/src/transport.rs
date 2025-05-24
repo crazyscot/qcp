@@ -237,7 +237,7 @@ pub fn combine_bandwidth_configurations(
     )?;
     negotiate!(
         client.congestion,
-        server.congestion,
+        server.congestion.map(|c| *c),
         |_: CongestionController, _| CombinationResponse::Failure(anyhow::anyhow!(
             "server and client have incompatible congestion algorithm requirements"
         )),

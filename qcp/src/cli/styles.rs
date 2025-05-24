@@ -9,11 +9,9 @@ use anstyle::AnsiColor::*;
 use anstyle::Color::Ansi;
 use clap::builder::styling::Styles;
 use colorchoice::ColorChoice;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::io::IsTerminal;
-
-use crate::util::enums::ConvertibleTo;
 
 // RAW STYLE DEFINITIONS //////////////////////////////////////////////////////////////////
 
@@ -92,15 +90,16 @@ pub fn use_colours() -> bool {
 }
 
 /// The available terminal colour modes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Serialize, strum::VariantNames)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Serialize, Deserialize, strum::VariantNames,
+)]
 #[serde(rename_all = "kebab-case")] // to match clap::ValueEnum
 pub enum ColourMode {
     #[value(alias = "on", alias = "yes")]
     /// Forces colours on, whatever is happening
-    /// (aliases: `on`, `yes`)
     Always,
     #[value(alias = "off", alias = "no", alias = "none")]
-    /// (aliases: `off`, `no`, `none`)
+    /// Never use colours
     Never,
     /// Use colours only when writing to a terminal. This is the default behaviour.
     Auto,
@@ -129,9 +128,9 @@ pub(crate) fn autodetect_colour() -> bool {
 /// See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more information.
 pub fn configure_colours<CM>(mode: CM)
 where
-    CM: ConvertibleTo<Option<ColourMode>> + std::fmt::Debug,
+    CM: Into<Option<ColourMode>> + std::fmt::Debug,
 {
-    let state = match mode.convert() {
+    let state = match mode.into() {
         Some(ColourMode::Always) => true,
         Some(ColourMode::Never) => false,
         None | Some(ColourMode::Auto) => autodetect_colour(),
