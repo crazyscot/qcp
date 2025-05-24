@@ -1,5 +1,6 @@
 //! xtask?
 //! See <https://github.com/matklad/cargo-xtask>
+// (c) 2025 Ross Younger
 
 use std::{fs::File, io::BufReader, path::PathBuf, process::Command};
 
