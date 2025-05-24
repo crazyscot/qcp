@@ -1151,6 +1151,7 @@ dependencies = [
  "indicatif",
  "json",
  "lessify",
+ "littertray",
  "mimalloc",
  "num-format",
  "quinn",

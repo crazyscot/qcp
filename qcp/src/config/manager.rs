@@ -248,10 +248,10 @@ impl Manager {
 mod test {
     use crate::config::{Configuration, Configuration_Optional, Manager};
     use crate::protocol::control::CongestionController;
-    use crate::util::littertray::LitterTray;
     use crate::util::serialization::SerializeAsString;
     use crate::util::{PortRange, TimeFormat};
     use engineering_repr::EngineeringQuantity;
+    use littertray::LitterTray;
     use serde::Deserialize;
 
     // Some tests for this module are in `qcp_unsafe_tests::manager`.

@@ -302,10 +302,9 @@ mod test {
     use tracing_subscriber::EnvFilter;
 
     use super::{create_layers, setup};
-    use crate::{
-        Parameters,
-        util::{TimeFormat, littertray::LitterTray},
-    };
+    use crate::{Parameters, util::TimeFormat};
+
+    use littertray::LitterTray;
 
     #[test]
     fn trace_levels() {
