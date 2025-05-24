@@ -12,6 +12,7 @@ anstream = { version = "0.6.18", default-features = false }
 anstyle = { version = "1.0.10", default-features = false }
 cfg-if = "1.0.0"
 console = { version = "0.15.11", default-features = false }
+littertray = "0.1.0"
 rusty-fork = "0.3.0"
 tempfile = { version = "3.20.0", default-features = false }
 
