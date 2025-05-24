@@ -1185,6 +1185,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "cfg-if",
+ "colorchoice",
  "console",
  "littertray",
  "qcp",

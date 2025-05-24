@@ -4,11 +4,11 @@
 //! This module provides styles for use with those macros, and also a `RESET` constant to reset
 //! styling to the default.
 
-use anstream::ColorChoice;
 #[allow(clippy::enum_glob_use)]
 use anstyle::AnsiColor::*;
 use anstyle::Color::Ansi;
 use clap::builder::styling::Styles;
+use colorchoice::ColorChoice;
 use serde::Serialize;
 use std::borrow::Cow;
 use std::io::IsTerminal;
