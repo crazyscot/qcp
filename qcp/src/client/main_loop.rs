@@ -3,7 +3,7 @@
 
 use crate::{
     cli::styles::use_colours,
-    client::progress::spinner_style,
+    client::progress::SPINNER_TEMPLATE,
     config::{Configuration, Configuration_Optional, Manager},
     control::{ClientSsh, ControlChannel, create_endpoint},
     util::{
@@ -14,7 +14,7 @@ use crate::{
 
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
-use indicatif::{MultiProgress, ProgressBar};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::Connection;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use tokio::{self, time::Duration, time::timeout};
@@ -71,7 +71,9 @@ pub(crate) async fn client_main(
     let spinner = if parameters.quiet {
         ProgressBar::hidden()
     } else {
-        display.add(ProgressBar::new_spinner().with_style(spinner_style()?))
+        display.add(
+            ProgressBar::new_spinner().with_style(ProgressStyle::with_template(SPINNER_TEMPLATE)?),
+        )
     };
     spinner.enable_steady_tick(Duration::from_millis(150));
 

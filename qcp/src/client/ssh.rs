@@ -10,6 +10,7 @@ use tracing::{debug, warn};
 use crate::os::{AbstractPlatform as _, Platform};
 
 /// Metadata representing an ssh config file
+#[derive(Debug)]
 struct SshConfigFile {
     /// The file to read
     path: PathBuf,
@@ -66,6 +67,7 @@ impl SshConfigFile {
 //////////////////////////////////////////////////////////////////////////////
 
 /// A set of ssh config files
+#[derive(Debug)]
 pub(crate) struct SshConfigFiles {
     files: Vec<SshConfigFile>,
 }
@@ -150,7 +152,9 @@ mod test {
     use std::{ffi::OsStr, path::PathBuf};
 
     use super::SshConfigFiles;
-    use crate::{client::ssh::SshConfigFile, util::littertray::LitterTray};
+    use crate::client::ssh::SshConfigFile;
+
+    use littertray::LitterTray;
 
     fn resolve_one<P: AsRef<OsStr>>(path: P, host: &str) -> Option<String> {
         let files = SshConfigFiles::new(&[path.as_ref()]);

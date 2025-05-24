@@ -1,3 +1,5 @@
+//! License summary generation
+// (c) 2025 Ross Younger
 use anyhow::{Result, anyhow};
 use pico_args::Arguments;
 use std::path::PathBuf;

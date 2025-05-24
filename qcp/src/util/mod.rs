@@ -12,15 +12,13 @@ pub(crate) use dns::lookup_host_by_family;
 mod cert;
 pub(crate) use cert::Credentials;
 
-pub(crate) mod enums;
 pub(crate) mod io;
 pub(crate) mod socket;
 pub(crate) mod stats;
 pub(crate) mod time;
 
-#[cfg(test)]
-#[cfg_attr(coverage_nightly, coverage(off))]
-pub(crate) mod littertray;
+pub(crate) mod serialization;
+pub use serialization::SerializeAsString;
 
 mod tracing;
 pub(crate) use tracing::{

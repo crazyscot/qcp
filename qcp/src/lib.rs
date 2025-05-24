@@ -78,6 +78,7 @@
 
 pub(crate) mod cli;
 pub use cli::cli as main;
+pub use cli::styles;
 pub(crate) mod client;
 pub(crate) use client::client_main;
 pub use client::{CopyJobSpec, FileSpec, Parameters};

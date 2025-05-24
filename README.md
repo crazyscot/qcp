@@ -2,7 +2,7 @@
 [![Build status](https://github.com/crazyscot/qcp/actions/workflows/ci.yml/badge.svg)](https://github.com/crazyscot/qcp/actions/workflows/ci.yml)
 [![Documentation](https://docs.rs/qcp/badge.svg)](https://docs.rs/qcp/)
 [![codecov](https://codecov.io/gh/crazyscot/qcp/graph/badge.svg?token=RNYUNDHTQI)](https://codecov.io/gh/crazyscot/qcp)
-[![License](https://img.shields.io/badge/License-AGPL_v3-orange.svg)](LICENSE)
+![GitHub License](https://img.shields.io/github/license/crazyscot/qcp)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/crazyscot/qcp)
 
 The QUIC Copier (`qcp`) is an experimental
@@ -198,6 +198,15 @@ In its initial experimental phase, the major number will be kept at 0.
 Breaking changes will be noted in the [changelog] and will trigger a minor version bump.
 
 The project will move to version 1.x when the protocol has stabilised. After 1.0, breaking changes will trigger a major version bump.
+
+### Unsafe Rust
+
+Any uses of unsafe Rust will be kept to a bare minimum and carefully reviewed.
+
+Test code (protected by `#[cfg(test)]`) may be exempted from this policy.
+However we prefer that unsafe test code lives in the subcrate `qcp-unsafe-tests`.
+
+Therefore, unsafe Rust is currently forbidden in the main qcp crate.
 
 ## 💸 Supporting the project
 

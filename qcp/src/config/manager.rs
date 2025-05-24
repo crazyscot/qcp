@@ -5,7 +5,6 @@ use crate::{
     cli::styles::ColourMode,
     config::structure::Validatable as _,
     os::{AbstractPlatform as _, Platform},
-    util::enums::DeserializableEnum,
 };
 
 use super::{ClicolorEnv, Configuration, Configuration_Optional, ssh::ConfigFileError};
@@ -34,8 +33,10 @@ pub struct Manager {
 }
 
 impl Manager {
-    /// Constructor. The structure is set up to extract data for the given `host`, if any.
-    pub(super) fn new(host: Option<&str>, apply_env: bool, apply_config_files: bool) -> Self {
+    /// Generic constructor. The structure is set up to extract data for the given `host`, if any.
+    ///
+    /// Most uses cases should prefer [Manager::standard].
+    pub fn new(host: Option<&str>, apply_env: bool, apply_config_files: bool) -> Self {
         let profile = if let Some(host) = host {
             figment::Profile::new(host)
         } else {
@@ -95,6 +96,12 @@ impl Manager {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn host(&self) -> Option<String> {
         self.host.clone()
+    }
+
+    /// Accessor (used by qcp-unsafe-tests)
+    #[must_use]
+    pub fn data_(&self) -> &Figment {
+        &self.data
     }
 
     fn add_config(
@@ -170,7 +177,7 @@ impl Manager {
     ///
     /// Within qcp, `T` is usually [Configuration], but it isn't intrinsically required to be.
     /// (This is useful for unit testing.)
-    pub(crate) fn get<'de, T>(&self) -> anyhow::Result<T, ConfigFileError>
+    pub fn get<'de, T>(&self) -> anyhow::Result<T, ConfigFileError>
     where
         T: Deserialize<'de>,
     {
@@ -224,10 +231,9 @@ impl Manager {
     /// See [`get_config`] for details.
     pub(crate) fn get_color(
         &self,
-        default: Option<DeserializableEnum<ColourMode>>,
+        default: Option<ColourMode>,
     ) -> anyhow::Result<ColourMode, ConfigFileError> {
-        self.get_config_field::<DeserializableEnum<ColourMode>>("color", default)
-            .map(|c| *c)
+        self.get_config_field::<ColourMode>("color", default)
     }
 
     /// Performs additional validation checks on the fields present in the configuration, as far as possible.
@@ -241,12 +247,14 @@ impl Manager {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use crate::config::{Configuration, Configuration_Optional, Manager};
-    use crate::util::littertray::LitterTray;
+    use crate::protocol::control::CongestionController;
+    use crate::util::serialization::SerializeAsString;
     use crate::util::{PortRange, TimeFormat};
     use engineering_repr::EngineeringQuantity;
-    use rusty_fork::rusty_fork_test;
+    use littertray::LitterTray;
     use serde::Deserialize;
-    use tempfile::TempDir;
+
+    // Some tests for this module are in `qcp_unsafe_tests::manager`.
 
     #[test]
     fn defaults() {
@@ -368,9 +376,7 @@ mod test {
 
     #[test]
     fn types() {
-        use crate::protocol::control::{
-            CongestionController, CongestionControllerSerializingAsString,
-        };
+        use crate::protocol::control::CongestionController;
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
@@ -378,7 +384,7 @@ mod test {
             s: String,
             i: u32,
             b: bool,
-            en: CongestionControllerSerializingAsString,
+            en: SerializeAsString<CongestionController>,
             pr: PortRange,
         }
 
@@ -450,12 +456,10 @@ mod test {
 
     #[test]
     fn invalid_data() {
-        use crate::protocol::control::CongestionControllerSerializingAsString;
-
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
             b: bool,
-            en: CongestionControllerSerializingAsString,
+            en: SerializeAsString<CongestionController>,
             i: u32,
             pr: PortRange,
         }
@@ -547,9 +551,9 @@ mod test {
             let err = mgr.get::<Configuration_Optional>().unwrap_err();
             println!("{err}");
             assert!(err.to_string().contains("expected one of"));
-            assert!(err.to_string().contains("Auto"));
-            assert!(err.to_string().contains("Always"));
-            assert!(err.to_string().contains("Never"));
+            assert!(err.to_string().contains("auto"));
+            assert!(err.to_string().contains("always"));
+            assert!(err.to_string().contains("never"));
             assert!(err.to_string().contains("for key `"));
             assert!(err.to_string().contains("color"));
             assert!(err.to_string().contains("of host `"));
@@ -575,7 +579,7 @@ mod test {
             mgr.get_config_field::<TimeFormat>("time_format", None),
             Ok(def.time_format)
         );
-        assert_eq!(mgr.get_color(None), Ok(*def.color));
+        assert_eq!(mgr.get_color(None), Ok(def.color));
 
         // wrong type
         assert!(
@@ -635,49 +639,6 @@ mod test {
             Ok(())
         })
         .unwrap();
-    }
-
-    #[allow(unsafe_code)]
-    pub(crate) unsafe fn fake_home() -> TempDir {
-        let tempdir = tempfile::tempdir().unwrap();
-        let fake_home = tempdir.path();
-
-        // Temporarily override HOME environment variable
-        // (this must only happen in single-threaded code)
-        #[allow(unsafe_code)]
-        unsafe {
-            std::env::set_var("HOME", fake_home);
-        };
-        tempdir
-    }
-
-    rusty_fork_test! {
-        #[test]
-        fn standard_reads_config() {
-            #[allow(unsafe_code)]
-            let home = unsafe {
-                // SAFETY: this is run in a rusty-fork test, so it won't affect other tests
-                fake_home()
-            };
-            let test_conf = home.path().join(".qcp.conf");
-            let files = Manager::config_files();
-            assert!(files.contains(&test_conf.to_string_lossy().to_string()));
-            std::fs::write(&test_conf,
-                r"
-                Host testhost
-                rx 1234
-                Host *
-                rx 2345
-            ",
-            ).unwrap();
-            let mgr1 = Manager::standard(Some("testhost"));
-            eprintln!("mgr1: {mgr1:?}");
-            assert!(mgr1.get::<Configuration_Optional>().unwrap().rx == Some(1234u64.into()));
-            mgr1.validate_configuration().unwrap();
-            let mgr2 = Manager::standard(None);
-            mgr2.validate_configuration().unwrap();
-            assert!(mgr2.get::<Configuration_Optional>().unwrap().rx == Some(2345u64.into()));
-        }
     }
 
     #[test]

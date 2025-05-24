@@ -46,9 +46,10 @@ pub(crate) async fn create_truncate_file(
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{protocol::session::FileHeaderV1, util::littertray::LitterTray};
-
     use super::create_truncate_file;
+    use crate::protocol::session::FileHeaderV1;
+
+    use littertray::LitterTray;
 
     const NEW_LEN: u64 = 42;
     const FILE: &str = "file1";

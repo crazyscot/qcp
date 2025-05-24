@@ -22,13 +22,14 @@ rustls-log = ["quinn/rustls-log"]
 secure-alloc = ["mimalloc/secure"]
 
 [dependencies]
-anstream = "0.6.18"
+anstream = { version = "0.6.18", default-features = false }
 anstyle = "1.0.10"
 anyhow = { workspace = true }
 async-trait = "0.1.88"
 bytes = "1.10.1"
 cfg-if = "1.0.0"
 clap = { workspace = true }
+colorchoice = "1.0.3"
 console = "0.15.11"
 derive-deftly = "1.0.1"
 derive_more = { version = "2.0.1", features = [
@@ -89,6 +90,7 @@ assertables = "9.5.2"
 clap_mangen = "0.2.26"
 either = "1.15.0"
 json = "0.12.4"
+littertray = { version = "0.1.0", features = ["async"] }
 roff = "0.2.2"
 rusty-fork = "0.3.0"
 serde_json = "1.0.140"
@@ -109,7 +111,7 @@ single_use_lifetimes = "deny"
 trivial_casts = "deny"
 trivial_numeric_casts = "deny"
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(coverage_nightly)'] }
-unsafe_code = "deny"
+unsafe_code = "forbid"
 unsafe_op_in_unsafe_fn = "deny"
 unreachable_pub = "deny"
 # unused_crate_dependencies = "deny" # false positives

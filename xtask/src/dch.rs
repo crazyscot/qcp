@@ -1,5 +1,5 @@
-// xtask to create dummy debian changelog for this package
-
+//! xtask to create dummy debian changelog for this package
+// (c) 2025 Ross Younger
 use std::{fs::File, io::Write, path::PathBuf};
 
 use anyhow::Result;

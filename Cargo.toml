@@ -1,5 +1,5 @@
 [workspace]
-members = ["qcp", "xtask"]
+members = ["qcp", "qcp-unsafe-tests", "xtask"]
 resolver = "2"
 package.edition = "2024"
 

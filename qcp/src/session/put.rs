@@ -244,8 +244,9 @@ mod test {
         client::CopyJobSpec,
         protocol::session::{Command, Status},
         session::{Put, test::*},
-        util::{littertray::LitterTray, test_protocol::test_plumbing},
+        util::test_protocol::test_plumbing,
     };
+    use littertray::LitterTray;
 
     /// Run a PUT, return the results from sender & receiver.
     ///
@@ -296,7 +297,8 @@ mod test {
             assert_eq!(readback, contents);
             Ok(())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -315,7 +317,8 @@ mod test {
             assert_eq!(readback, contents);
             Ok(())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -330,7 +333,8 @@ mod test {
             assert!(r2.is_ok());
             Ok(())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -345,7 +349,8 @@ mod test {
             assert!(r2.is_ok());
             Ok(())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -361,7 +366,8 @@ mod test {
             assert_eq!(readback, contents);
             Ok(())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -375,7 +381,8 @@ mod test {
             assert!(r2.is_ok());
             Ok(())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -389,7 +396,8 @@ mod test {
             assert!(r2.is_ok());
             Ok(())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -404,7 +412,8 @@ mod test {
             assert!(r2.is_ok());
             Ok(())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -421,7 +430,8 @@ mod test {
             assert!(r2.is_ok());
             Ok(())
         })
-        .await
+        .await?;
+        Ok(())
     }
 
     #[tokio::test]

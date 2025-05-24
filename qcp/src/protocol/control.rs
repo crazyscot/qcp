@@ -38,7 +38,6 @@
 use std::{
     fmt::Display,
     net::{IpAddr, SocketAddr},
-    str::FromStr,
 };
 
 use anyhow::anyhow;
@@ -50,12 +49,11 @@ use quinn::ConnectionStats;
 use serde::{Deserialize, Serialize};
 use serde_bare::Uint;
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use strum::VariantNames as _;
 
 use super::common::ProtocolMessage;
 use crate::{
     config::Configuration_Optional,
-    util::{Credentials, PortRange as CliPortRange},
+    util::{Credentials, PortRange as CliPortRange, serialization::SerializeAsString},
 };
 
 /// Server banner message, sent on stdout and checked by the client
@@ -152,7 +150,7 @@ impl From<SocketAddr> for ConnectionType {
 
 /// Selects the congestion control algorithm to use.
 /// This structure is serialized as a standard BARE enum.
-/// To serialize it as a string, see [`CongestionControllerSerializingAsString`].
+/// To serialize it as a string, see [`SerializeAsString`].
 #[derive(
     Copy,
     Clone,
@@ -205,58 +203,6 @@ impl TryFrom<Uint> for CongestionController {
 impl From<CongestionController> for figment::value::Value {
     fn from(value: CongestionController) -> Self {
         value.to_string().into()
-    }
-}
-
-/// Selects the congestion control algorithm to use.
-/// This is a newtype wrapper to the enum defined in crate::protocol, but with
-/// different serialization semantics.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize)]
-#[serde(into = "String")]
-pub struct CongestionControllerSerializingAsString(pub(crate) CongestionController);
-
-impl<'de> Deserialize<'de> for CongestionControllerSerializingAsString {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let lower = s.to_ascii_lowercase();
-        // requires strum::EnumString && strum::VariantNames && #[strum(serialize_all = "lowercase")]
-        Self::try_from(lower)
-            .map_err(|_| serde::de::Error::unknown_variant(&s, CongestionController::VARIANTS))
-    }
-}
-
-impl TryFrom<String> for CongestionControllerSerializingAsString {
-    type Error = strum::ParseError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        CongestionController::from_str(&value).map(CongestionControllerSerializingAsString)
-    }
-}
-
-impl Display for CongestionControllerSerializingAsString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<CongestionControllerSerializingAsString> for String {
-    fn from(value: CongestionControllerSerializingAsString) -> Self {
-        value.to_string()
-    }
-}
-
-impl From<CongestionControllerSerializingAsString> for CongestionController {
-    fn from(value: CongestionControllerSerializingAsString) -> Self {
-        value.0
-    }
-}
-
-impl From<CongestionController> for CongestionControllerSerializingAsString {
-    fn from(value: CongestionController) -> Self {
-        Self(value)
     }
 }
 
@@ -437,7 +383,9 @@ impl ClientMessageV1 {
             },
             bandwidth_to_client: my_config.rx.map(u64::from).map(Uint),
             rtt: my_config.rtt,
-            congestion: my_config.congestion.map(Into::into),
+            congestion: my_config
+                .congestion
+                .map(|o: SerializeAsString<CongestionController>| *o),
             initial_congestion_window: my_config
                 .initial_congestion_window
                 .map(|u| Uint(u64::from(u))),
@@ -674,11 +622,10 @@ mod test {
             common::ProtocolMessage,
             control::{
                 ClientMessageV1, ClosedownReport, CompatibilityLevel, CongestionController,
-                CongestionControllerSerializingAsString, ConnectionType, ServerGreeting,
-                ServerMessageV1,
+                ConnectionType, ServerGreeting, ServerMessageV1,
             },
         },
-        util::{Credentials, PortRange as CliPortRange},
+        util::{Credentials, PortRange as CliPortRange, serialization::SerializeAsString},
     };
 
     use super::{
@@ -953,9 +900,9 @@ mod test {
     #[test]
     fn type_conversions_congestion() {
         let c = CongestionController::Cubic;
-        let c2 = CongestionControllerSerializingAsString::from(c);
+        let c2 = SerializeAsString::<CongestionController>::from(c);
         println!("{c2}");
-        assert_eq!(CongestionController::from(c2), c);
+        assert_eq!(*c2, c);
     }
 
     #[test]

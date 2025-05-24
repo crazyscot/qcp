@@ -1,3 +1,6 @@
+//! Manual page generation
+// (c) 2025 Ross Younger
+
 use anyhow::Result;
 use pico_args::Arguments;
 use std::path::PathBuf;

@@ -6,7 +6,7 @@ use thiserror::Error;
 
 /// A newtype wrapper implementing `Display` for errors originating from this module
 #[derive(Debug, Error, PartialEq)]
-pub(crate) struct ConfigFileError(#[source] Box<figment::Error>);
+pub struct ConfigFileError(#[source] Box<figment::Error>);
 
 impl From<figment::Error> for ConfigFileError {
     fn from(e: figment::Error) -> Self {
