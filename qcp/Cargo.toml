@@ -90,6 +90,7 @@ assertables = "9.5.2"
 clap_mangen = "0.2.26"
 either = "1.15.0"
 json = "0.12.4"
+littertray = { version = "0.2.0", features = ["async"] }
 roff = "0.2.2"
 rusty-fork = "0.3.0"
 serde_json = "1.0.140"
