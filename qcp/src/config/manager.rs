@@ -5,7 +5,6 @@ use crate::{
     cli::styles::ColourMode,
     config::structure::Validatable as _,
     os::{AbstractPlatform as _, Platform},
-    util::enums::DeserializableEnum,
 };
 
 use super::{ClicolorEnv, Configuration, Configuration_Optional, ssh::ConfigFileError};
@@ -232,10 +231,9 @@ impl Manager {
     /// See [`get_config`] for details.
     pub(crate) fn get_color(
         &self,
-        default: Option<DeserializableEnum<ColourMode>>,
+        default: Option<ColourMode>,
     ) -> anyhow::Result<ColourMode, ConfigFileError> {
-        self.get_config_field::<DeserializableEnum<ColourMode>>("color", default)
-            .map(|c| *c)
+        self.get_config_field::<ColourMode>("color", default)
     }
 
     /// Performs additional validation checks on the fields present in the configuration, as far as possible.
@@ -249,7 +247,9 @@ impl Manager {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use crate::config::{Configuration, Configuration_Optional, Manager};
+    use crate::protocol::control::CongestionController;
     use crate::util::littertray::LitterTray;
+    use crate::util::serialization::SerializeAsString;
     use crate::util::{PortRange, TimeFormat};
     use engineering_repr::EngineeringQuantity;
     use serde::Deserialize;
@@ -376,9 +376,7 @@ mod test {
 
     #[test]
     fn types() {
-        use crate::protocol::control::{
-            CongestionController, CongestionControllerSerializingAsString,
-        };
+        use crate::protocol::control::CongestionController;
 
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
@@ -386,7 +384,7 @@ mod test {
             s: String,
             i: u32,
             b: bool,
-            en: CongestionControllerSerializingAsString,
+            en: SerializeAsString<CongestionController>,
             pr: PortRange,
         }
 
@@ -458,12 +456,10 @@ mod test {
 
     #[test]
     fn invalid_data() {
-        use crate::protocol::control::CongestionControllerSerializingAsString;
-
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
             b: bool,
-            en: CongestionControllerSerializingAsString,
+            en: SerializeAsString<CongestionController>,
             i: u32,
             pr: PortRange,
         }
@@ -555,9 +551,9 @@ mod test {
             let err = mgr.get::<Configuration_Optional>().unwrap_err();
             println!("{err}");
             assert!(err.to_string().contains("expected one of"));
-            assert!(err.to_string().contains("Auto"));
-            assert!(err.to_string().contains("Always"));
-            assert!(err.to_string().contains("Never"));
+            assert!(err.to_string().contains("auto"));
+            assert!(err.to_string().contains("always"));
+            assert!(err.to_string().contains("never"));
             assert!(err.to_string().contains("for key `"));
             assert!(err.to_string().contains("color"));
             assert!(err.to_string().contains("of host `"));
@@ -583,7 +579,7 @@ mod test {
             mgr.get_config_field::<TimeFormat>("time_format", None),
             Ok(def.time_format)
         );
-        assert_eq!(mgr.get_color(None), Ok(*def.color));
+        assert_eq!(mgr.get_color(None), Ok(def.color));
 
         // wrong type
         assert!(

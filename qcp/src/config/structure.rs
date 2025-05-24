@@ -13,10 +13,10 @@ use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
     cli::styles::{ColourMode, RESET, info},
-    protocol::control::{CongestionController, CongestionControllerSerializingAsString},
+    protocol::control::CongestionController,
     util::{
         AddressFamily, PortRange, TimeFormat, VecOrString, derive_deftly_template_Optionalify,
-        enums::DeserializableEnum,
+        serialization::SerializeAsString,
     },
 };
 
@@ -115,11 +115,11 @@ pub struct Configuration {
         long,
         action,
         value_name = "algorithm",
-        value_parser(clap::builder::EnumValueParser::<CongestionController>::new().map(CongestionControllerSerializingAsString)), /* whee, this was fun to figure out :-) */
+        value_parser(clap::builder::EnumValueParser::<CongestionController>::new().map(SerializeAsString)), /* whee, this was fun to figure out :-) */
         help_heading("Advanced network tuning"),
         display_order(0)
     )]
-    pub congestion: CongestionControllerSerializingAsString,
+    pub congestion: SerializeAsString<CongestionController>,
 
     /// _(Network wizards only!)_
     /// The initial value for the sending congestion control window, in bytes.
@@ -173,10 +173,10 @@ pub struct Configuration {
         long,
         help_heading("Connection"),
         group("ip address"),
-        value_parser(clap::builder::EnumValueParser::<AddressFamily>::new().map(DeserializableEnum::<AddressFamily>::from)),
+        //value_parser(clap::builder::EnumValueParser::<AddressFamily>::new().map(AddressFamily::from)),
         display_order(0)
     )]
-    pub address_family: DeserializableEnum<AddressFamily>,
+    pub address_family: AddressFamily,
 
     /// Specifies the ssh client program to use [default: `ssh`]
     #[arg(
@@ -290,10 +290,10 @@ pub struct Configuration {
         alias("colour"),
         default_missing_value("always"), // to support `--color`
         num_args(0..=1),
-        value_parser(clap::builder::EnumValueParser::<ColourMode>::new().map(DeserializableEnum::<ColourMode>::from)),
+        //value_parser(clap::builder::EnumValueParser::<ColourMode>::new().map(ColourMode::from)),
         value_name("mode")
     )]
-    pub color: DeserializableEnum<ColourMode>,
+    pub color: ColourMode,
 }
 
 static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
@@ -306,7 +306,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     port: PortRange::default(),
     timeout: 5,
     // Client
-    address_family: AddressFamily::Any.into(),
+    address_family: AddressFamily::Any,
     ssh: "ssh".into(),
     ssh_options: VecOrString::default(),
     remote_port: PortRange::default(),
@@ -314,7 +314,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     time_format: TimeFormat::Local,
     ssh_config: VecOrString::default(),
     ssh_subsystem: false,
-    color: ColourMode::Auto.into(),
+    color: ColourMode::Auto,
 });
 
 impl Configuration {

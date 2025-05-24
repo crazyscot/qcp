@@ -5,7 +5,7 @@ use std::net::IpAddr;
 
 use anyhow::Context as _;
 
-use super::{AddressFamily, enums::ConvertibleTo};
+use super::AddressFamily;
 
 /// DNS lookup helper
 ///
@@ -14,9 +14,9 @@ use super::{AddressFamily, enums::ConvertibleTo};
 /// If there are no matching records of the required type, returns an error.
 pub(crate) fn lookup_host_by_family<AF>(host: &str, desired: AF) -> anyhow::Result<IpAddr>
 where
-    AF: ConvertibleTo<AddressFamily>,
+    AF: Into<AddressFamily>,
 {
-    let desired = desired.convert();
+    let desired = desired.into();
     let candidates = dns_lookup::lookup_host(host)
         .with_context(|| format!("host name lookup for {host} failed"))?;
     let mut it = candidates.iter();

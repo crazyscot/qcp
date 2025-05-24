@@ -132,9 +132,9 @@ impl CliArgs {
         let mut args = CliArgs::from_arg_matches(&cli.try_get_matches_from(args)?)?;
         // Custom logic: '-4' and '-6' convenience aliases
         if args.ipv4_alias__ {
-            args.config.address_family = Some(AddressFamily::Inet.into());
+            args.config.address_family = Some(AddressFamily::Inet);
         } else if args.ipv6_alias__ {
-            args.config.address_family = Some(AddressFamily::Inet6.into());
+            args.config.address_family = Some(AddressFamily::Inet6);
         }
         Ok(args)
     }
@@ -272,11 +272,11 @@ mod test {
                 result.client_params.source,
                 Some(FileSpec::from_str("myuser@myhost:myfile").unwrap())
             );
-            assert_eq!(*result.config.address_family.unwrap(), family);
+            assert_eq!(result.config.address_family.unwrap(), family);
 
             let mgr = Manager::try_from(&result).unwrap();
             assert_eq!(
-                *mgr.get::<Configuration_Optional>()
+                mgr.get::<Configuration_Optional>()
                     .unwrap()
                     .address_family
                     .unwrap(),
