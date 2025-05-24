@@ -173,3 +173,6 @@ pub(crate) const BASE_CONFIG_FILENAME: &str = "qcp.conf";
 mod source;
 pub(crate) use source::LocalConfigSource as Source;
 pub(crate) mod ssh;
+
+pub use crate::cli::styles::ColourMode;
+pub use ssh::includes::find_include_files;

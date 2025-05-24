@@ -35,11 +35,11 @@ const _HEADER: anstyle::Style = anstyle::Style::new()
     .underline()
     .fg_color(Some(Ansi(Yellow)));
 
-/// Resets styling to default.
+/// Resets styling to default. This is a re-export of [`anstyle::Reset`].
 ///
 /// This is purely for convenience; you can also call `error()::render_reset()` (etc.)
 ///
-pub(crate) use anstyle::Reset as RESET;
+pub use anstyle::Reset as RESET;
 
 // COMPOSITE STYLES //////////////////////////////////////////////////////////////////////
 
@@ -60,7 +60,14 @@ macro_rules! wrap {
     ($func:ident, $def:ident) => {
         #[allow(clippy::missing_const_for_fn)]
         #[allow(dead_code)] // not all of these functions are used on all platforms
-        pub(crate) fn $func() -> anstyle::Style {
+        #[must_use]
+        /// Conditional styling accessor for
+        #[doc = stringify!($func)]
+        /// messages
+        ///
+        /// This function returns either an active [`anstyle::Style`], or
+        /// (if colours are disabled) the empty Style.
+        pub fn $func() -> anstyle::Style {
             if use_colours() {
                 $def
             } else {
@@ -78,7 +85,9 @@ wrap!(header, _HEADER);
 
 // CONDITIONALITY & CLI //////////////////////////////////////////////////////////
 
-pub(crate) fn use_colours() -> bool {
+/// Are we configured to use terminal colours?
+#[must_use]
+pub fn use_colours() -> bool {
     console::colors_enabled()
 }
 
@@ -93,7 +102,7 @@ pub enum ColourMode {
     #[value(alias = "off", alias = "no", alias = "none")]
     /// (aliases: `off`, `no`, `none`)
     Never,
-    /// Use colours only when writing to a terminal
+    /// Use colours only when writing to a terminal. This is the default behaviour.
     Auto,
 }
 
@@ -115,9 +124,10 @@ pub(crate) fn autodetect_colour() -> bool {
 }
 
 /// Set up the terminal colour mode.
+///
 /// If `mode` is `None`, we will use the quasi-standard `CLICOLOR`, `CLICOLOR_FORCE` and `NO_COLOR` environment variables to determine the mode.
 /// See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more information.
-pub(crate) fn configure_colours<CM>(mode: CM)
+pub fn configure_colours<CM>(mode: CM)
 where
     CM: ConvertibleTo<Option<ColourMode>> + std::fmt::Debug,
 {
