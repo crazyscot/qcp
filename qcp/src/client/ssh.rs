@@ -152,7 +152,9 @@ mod test {
     use std::{ffi::OsStr, path::PathBuf};
 
     use super::SshConfigFiles;
-    use crate::{client::ssh::SshConfigFile, util::littertray::LitterTray};
+    use crate::client::ssh::SshConfigFile;
+
+    use littertray::LitterTray;
 
     fn resolve_one<P: AsRef<OsStr>>(path: P, host: &str) -> Option<String> {
         let files = SshConfigFiles::new(&[path.as_ref()]);

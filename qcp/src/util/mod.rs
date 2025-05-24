@@ -17,10 +17,6 @@ pub(crate) mod socket;
 pub(crate) mod stats;
 pub(crate) mod time;
 
-#[cfg(test)]
-#[cfg_attr(coverage_nightly, coverage(off))]
-pub(crate) mod littertray;
-
 pub(crate) mod serialization;
 pub use serialization::SerializeAsString;
 

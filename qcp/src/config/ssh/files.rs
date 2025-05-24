@@ -291,8 +291,9 @@ mod test {
     use crate::{
         config::Configuration,
         os::{AbstractPlatform, Platform},
-        util::littertray::LitterTray,
     };
+
+    use littertray::LitterTray;
 
     macro_rules! assert_1_arg {
         ($left:expr, $right:expr) => {

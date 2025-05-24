@@ -151,9 +151,10 @@ mod test {
         client::CopyJobSpec,
         protocol::session::{Command, Status},
         session::{Get, test::*},
-        util::{littertray::LitterTray, test_protocol::test_plumbing},
+        util::test_protocol::test_plumbing,
     };
     use either::Left;
+    use littertray::LitterTray;
 
     /// Run a GET to completion, return the results from sender & receiver.
     async fn test_get_main(file1: &str, file2: &str) -> Result<(Result<u64>, Result<()>)> {

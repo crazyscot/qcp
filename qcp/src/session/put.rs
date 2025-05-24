@@ -138,7 +138,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         Ok(payload_len)
     }
 
-    async fn handle(&mut self) -> anyhow::Result<()> {
+    async fn handle(&mut self) -> Result<()> {
         let Some(ref args) = self.args else {
             anyhow::bail!("PUT handler called without args");
         };
@@ -244,8 +244,9 @@ mod test {
         client::CopyJobSpec,
         protocol::session::{Command, Status},
         session::{Put, test::*},
-        util::{littertray::LitterTray, test_protocol::test_plumbing},
+        util::test_protocol::test_plumbing,
     };
+    use littertray::LitterTray;
 
     /// Run a PUT, return the results from sender & receiver.
     ///

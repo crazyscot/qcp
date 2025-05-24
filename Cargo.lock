@@ -817,6 +817,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "littertray"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a600348ef462569edba712c2cfacf07bc1d6d7a89f4139fe2da1e62f27c4bbb"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "document-features",
+ "rustversion",
+ "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "log"
 version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1151,6 +1166,7 @@ dependencies = [
  "indicatif",
  "json",
  "lessify",
+ "littertray 0.2.0",
  "mimalloc",
  "num-format",
  "quinn",
@@ -1187,7 +1203,7 @@ dependencies = [
  "cfg-if",
  "colorchoice",
  "console",
- "littertray",
+ "littertray 0.1.0",
  "qcp",
  "rusty-fork",
  "tempfile",
@@ -1449,9 +1465,9 @@ dependencies = [
 
 [[package]]
 name = "rustversion"
-version = "1.0.20"
+version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eded382c5f5f786b989652c49544c4877d9f015cc22e145a5ea8ea66c2921cd2"
+checksum = "8a0d197bd2c9dc6e53b84da9556a69ba4cdfab8619eb41a8bd1cc2027a0f6b1d"
 
 [[package]]
 name = "rusty-fork"
