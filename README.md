@@ -201,9 +201,12 @@ The project will move to version 1.x when the protocol has stabilised. After 1.0
 
 ### Unsafe Rust
 
-Uses of unsafe rust will be kept to a bare minimum and carefully reviewed.
+Any uses of unsafe Rust will be kept to a bare minimum and carefully reviewed.
 
-Test code (protected by `#[cfg(test)]`) is exempt from this policy.
+Test code (protected by `#[cfg(test)]`) may be exempted from this policy.
+However we prefer that unsafe test code lives in the subcrate `qcp-unsafe-tests`.
+
+Therefore, unsafe Rust is currently forbidden in the main qcp crate.
 
 ## 💸 Supporting the project
 
