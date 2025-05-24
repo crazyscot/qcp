@@ -805,6 +805,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 
 [[package]]
+name = "littertray"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "786fa74b5ade20fb3473b796ea9d26772510ef071bee35b68bc55411f39f426a"
+dependencies = [
+ "anyhow",
+ "document-features",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "log"
 version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1174,6 +1186,7 @@ dependencies = [
  "anstyle",
  "cfg-if",
  "console",
+ "littertray",
  "qcp",
  "rusty-fork",
  "tempfile",
