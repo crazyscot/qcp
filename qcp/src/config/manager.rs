@@ -34,8 +34,10 @@ pub struct Manager {
 }
 
 impl Manager {
-    /// Constructor. The structure is set up to extract data for the given `host`, if any.
-    pub(super) fn new(host: Option<&str>, apply_env: bool, apply_config_files: bool) -> Self {
+    /// Generic constructor. The structure is set up to extract data for the given `host`, if any.
+    ///
+    /// Most uses cases should prefer [Manager::standard].
+    pub fn new(host: Option<&str>, apply_env: bool, apply_config_files: bool) -> Self {
         let profile = if let Some(host) = host {
             figment::Profile::new(host)
         } else {
@@ -95,6 +97,12 @@ impl Manager {
     #[cfg_attr(coverage_nightly, coverage(off))]
     fn host(&self) -> Option<String> {
         self.host.clone()
+    }
+
+    /// Accessor (used by qcp-unsafe-tests)
+    #[must_use]
+    pub fn data_(&self) -> &Figment {
+        &self.data
     }
 
     fn add_config(
@@ -170,7 +178,7 @@ impl Manager {
     ///
     /// Within qcp, `T` is usually [Configuration], but it isn't intrinsically required to be.
     /// (This is useful for unit testing.)
-    pub(crate) fn get<'de, T>(&self) -> anyhow::Result<T, ConfigFileError>
+    pub fn get<'de, T>(&self) -> anyhow::Result<T, ConfigFileError>
     where
         T: Deserialize<'de>,
     {

@@ -52,7 +52,7 @@ where
 }
 
 /// A From-like trait but without the tangle you get from `From` and `Into`.
-pub(crate) trait ConvertibleTo<T> {
+pub trait ConvertibleTo<T> {
     fn convert(self) -> T;
 }
 

@@ -40,7 +40,7 @@ fn expand_home_directory(path: &str) -> Result<PathBuf> {
 }
 
 /// Wildcard matching and ~ expansion for Include directives
-pub(super) fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>> {
+pub fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>> {
     let mut path = if arg.starts_with('~') {
         anyhow::ensure!(
             is_user,

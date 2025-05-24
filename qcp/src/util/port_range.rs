@@ -1,4 +1,4 @@
-//! CLI argument helper type - a range of UDP port numnbers.
+//! CLI argument helper type - a range of port numnbers.
 // (c) 2024 Ross Younger
 use serde::{
     Serialize,
@@ -6,7 +6,7 @@ use serde::{
 };
 use std::{fmt::Display, str::FromStr};
 
-/// A range of UDP port numbers.
+/// A range of port numbers.
 ///
 /// Port 0 is allowed with the usual meaning ("any available port"), but 0 may not form part of a range.
 ///
