@@ -1,6 +1,6 @@
 // (c) 2025 Ross Younger
 
-use anstream::ColorChoice;
+use colorchoice::ColorChoice;
 use qcp::config::ColourMode;
 use qcp::styles::{configure_colours, error, use_colours};
 use rusty_fork::rusty_fork_test;
