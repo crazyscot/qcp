@@ -1167,6 +1167,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "qcp-unsafe-tests"
+version = "0.1.0"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "cfg-if",
+ "console",
+ "qcp",
+ "rusty-fork",
+ "tempfile",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -5,7 +5,7 @@ mod errors;
 pub(crate) use errors::ConfigFileError;
 
 mod files;
-mod includes;
+pub(crate) mod includes;
 mod lines;
 mod matching;
 mod values;
