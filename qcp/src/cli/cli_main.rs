@@ -94,8 +94,15 @@ fn cli_inner() -> anyhow::Result<bool> {
     // Now fold the arguments in with the CLI config (which may fail)
     // (to provoke an error here: `qcp host: host2:`)
     let mut config_manager = Manager::try_from(&args)?;
-    let colours = config_manager.get_color(Some(Configuration::system_default().color))?;
-    configure_colours(Some(colours));
+    configure_colours(
+        match config_manager.get_color(Some(Configuration::system_default().color)) {
+            Ok(c) => Some(c),
+            // If the config file is invalid, and we're in server mode, we should not report an error here (that will confuse the remote, which is expecting a protocol banner).
+            // Instead fall back to default; we'll send Negotiation Failed later after trying to unpick
+            Err(_) if mode == MainMode::Server => None,
+            Err(e) => return Err(e.into()),
+        },
+    );
 
     match mode {
         MainMode::HelpBuffers => {
