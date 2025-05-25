@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1](https://github.com/crazyscot/qcp/compare/qcp-v0.4.0...qcp-v0.4.1)
+
+### ⛰️ Features
+
+- Make ANSI colour support optional via config / CLI / environment variables - ([e42f4aa](https://github.com/crazyscot/qcp/commit/e42f4aad91a0db02ba5a42d1733b4ba7a8572f43))
+- Send long CLI output to pager (--help, --show-config) - ([b88c49d](https://github.com/crazyscot/qcp/commit/b88c49d171ec953778d05c560104df163ea320d0))
+- --show-config also reports validation errors - ([c9fd657](https://github.com/crazyscot/qcp/commit/c9fd657190b8c1dbbea88f2f9cf0038e6778d278))
+
+### 🐛 Bug Fixes
+
+- Correctly apply system default ssh_config and ssh_options ([#113](https://github.com/crazyscot/qcp/pull/113)) - ([0ff032a](https://github.com/crazyscot/qcp/commit/0ff032aac1e5e362d5ac526862128899c4cb486c))
+- SshConfig / SshOptions configuration allow a single string ([#113](https://github.com/crazyscot/qcp/pull/113)) - ([d0b5462](https://github.com/crazyscot/qcp/commit/d0b5462b575647a1d7a02edd2dd0c59dca69d787))
+- Make SshSubsystem in config files work properly ([#112](https://github.com/crazyscot/qcp/pull/112)) - ([e9f1090](https://github.com/crazyscot/qcp/commit/e9f1090785e206e372ab214521a8ed0672039db1))
+- Use anstream::eprintln instead of plain eprintln - ([4530327](https://github.com/crazyscot/qcp/commit/453032739e42cf60e38eda9e2fb8e29bacbfe5b8))
+
+### 🎨 Styling
+
+- *(windows)* Change table style so it doesn't output mojibake when sent to more - ([65b6a9f](https://github.com/crazyscot/qcp/commit/65b6a9fef74f1363d64868e9efb11eb466d72936))
+
+### 🧪 Testing
+
+- Move unsafe tests out to a separate helper crate - ([e1ae4b2](https://github.com/crazyscot/qcp/commit/e1ae4b2249303a772eeb7f5f39c989a3330cc7f0))
+- Various unit tests added ([df7e3a8](https://github.com/crazyscot/qcp/commit/df7e3a85a805dafaa273672502911d2e20093e63)) ([06002d2](https://github.com/crazyscot/qcp/commit/06002d21f62a6ccd2ef023e0eb89192c7f25c55c)) ([d3b79f8](https://github.com/crazyscot/qcp/commit/d3b79f846f14116fc9d4e66c6870001373883847)) ([1e1823f](https://github.com/crazyscot/qcp/commit/1e1823f1ebaf0d6ddd2ab1dc3281c06168169eb0)) ([6fb7a64](https://github.com/crazyscot/qcp/commit/6fb7a64072aa838dd208552d934c9fe3edaf0ad4)) & refactored ([27c5c97](https://github.com/crazyscot/qcp/commit/27c5c97adf103285f07111c4ced30f5923a7cb12))
+
+### 🏗️ Build, packaging & CI
+
+- *(safety)* Forbid unsafe rust in the qcp main crate - ([dca4765](https://github.com/crazyscot/qcp/commit/dca4765f9572493aa6e54db24d7d008d6b88f689))
+- Switch off coveralls - ([946e026](https://github.com/crazyscot/qcp/commit/946e0267093a2a062e4f853d8fcafa2c1b524d25))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(safety)* Remove unsafe code, add safety policy - ([094193d](https://github.com/crazyscot/qcp/commit/094193ddbc9b79bc49853e2805f6d3fb1c4810d5))
+- *(test)* Fix test leaving stray files in source tree - ([8745dbb](https://github.com/crazyscot/qcp/commit/8745dbb5ba839a9a507addbeb07f4ff63d2117f5))
+- Many internal rearrangements for readability and testability
+- `LitterTray` is now a separate crate - ([b67d4bb](https://github.com/crazyscot/qcp/commit/b67d4bb6ce75ea538406a66ca80c29b63af08aac))
+- Mark some structs and functions as public to support an external testing crate - ([30a24ba](https://github.com/crazyscot/qcp/commit/30a24ba099aa29cb2ca31e6547f08c9880d9a2a6))
+- Remove suboptimal error coercion in PortRange - ([a579805](https://github.com/crazyscot/qcp/commit/a5798056d997abe8cc9c29a3b46bd4370d3a0ae3))
+- Fix/silence linter warnings for rust 1.87 - ([8aeb3f8](https://github.com/crazyscot/qcp/commit/8aeb3f8ff358862f9387a1eba7fdd1dfb67a5bf7))
+- Update manpages, fix garbage - ([0bc9574](https://github.com/crazyscot/qcp/commit/0bc957467b34be5c2745bc2f4d43e3da9fd1fd2d))
+- Unify Rust edition 2024 across the workspace - ([73c7249](https://github.com/crazyscot/qcp/commit/73c7249b3209d326c4a8c3f9ee0335c16d53e7e3))
+- Fix dead code warnings on windows builds - ([ceeded1](https://github.com/crazyscot/qcp/commit/ceeded17680871442f2ccba5500fcaf49cea5f89))
+- Reduce the number of config extractions we perform - ([41b2aad](https://github.com/crazyscot/qcp/commit/41b2aadf43349da5348e0c196de5c2b4af08aa48)) ([d94c3b2](https://github.com/crazyscot/qcp/commit/d94c3b29a60b11ed58368ff8a6995b7abe57fae2))
+
+### 🚜 Refactor
+
+- Configuration validation checks - ([183cd48](https://github.com/crazyscot/qcp/commit/183cd48a5a39515eb37be5a9d2ce3d173ff36ab3))
+- Help-buffers mode - ([644bfc5](https://github.com/crazyscot/qcp/commit/644bfc5bccab207e2c0c863f1f493fe091e2efd3))
+
 ## [0.4.0](https://github.com/crazyscot/qcp/compare/v0.3.3...v0.4.0)
 
 ### ⛰️ Features
