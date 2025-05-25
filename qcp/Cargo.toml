@@ -22,15 +22,15 @@ rustls-log = ["quinn/rustls-log"]
 secure-alloc = ["mimalloc/secure"]
 
 [dependencies]
-anstream = { version = "0.6.18", default-features = false }
-anstyle = "1.0.10"
+anstream = { workspace = true }
+anstyle = { workspace = true }
 anyhow = { workspace = true }
 async-trait = "0.1.88"
 bytes = "1.10.1"
-cfg-if = "1.0.0"
+cfg-if = { workspace = true }
 clap = { workspace = true }
-colorchoice = "1.0.3"
-console = "0.15.11"
+colorchoice = { workspace = true }
+console = { workspace = true }
 derive-deftly = "1.0.1"
 derive_more = { version = "2.0.1", features = [
     "constructor",
@@ -72,7 +72,7 @@ strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
 tabled = "0.19.0"
 thiserror = "2.0.12"
-tokio = { version = "1.45.0", default-features = true, features = [
+tokio = { version = "1.45.1", default-features = true, features = [
     "fs",
     "io-std",
     "macros",
@@ -90,12 +90,12 @@ assertables = "9.5.2"
 clap_mangen = "0.2.26"
 either = "1.15.0"
 json = "0.12.4"
-littertray = { version = "0.2.0", features = ["async"] }
+littertray = { workspace = true, features = ["async"] }
 roff = "0.2.2"
-rusty-fork = "0.3.0"
+rusty-fork = { workspace = true }
 serde_json = "1.0.140"
 serde_test = "1.0.177"
-tempfile = "3.20.0"
+tempfile = { workspace = true }
 tokio-pipe = "0.2.12"
 
 [lints.rust]

@@ -1,6 +1,6 @@
 [package]
 name = "qcp-unsafe-tests"
-version = "0.1.0"
+version = "0.0.0"
 edition.workspace = true
 license = "MIT"           # Note this license applies only to qcp-unsafe-tests, not to qcp itself.
 publish = false
@@ -8,16 +8,14 @@ publish = false
 [dev-dependencies]
 qcp = { path = "../qcp" }
 
-anstream = { version = "0.6.18", default-features = false }
-anstyle = { version = "1.0.10", default-features = false }
-cfg-if = "1.0.0"
-console = { version = "0.15.11", default-features = false }
-littertray = "0.1.0"
-rusty-fork = "0.3.0"
-tempfile = { version = "3.20.0", default-features = false }
+anstream = { workspace = true }
+anstyle = { workspace = true }
+cfg-if = { workspace = true }
+colorchoice = { workspace = true }
+console = { workspace = true }
+littertray = { workspace = true }
+rusty-fork = { workspace = true }
+tempfile = { workspace = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(coverage_nightly)'] }
-
-[dependencies]
-colorchoice = "1.0.3"
