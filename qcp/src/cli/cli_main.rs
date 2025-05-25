@@ -6,6 +6,7 @@ use std::process::ExitCode;
 
 use super::args::CliArgs;
 use crate::{
+    Parameters,
     cli::styles::{RESET, configure_colours, error, use_colours},
     client::MAX_UPDATE_FPS,
     config::{Configuration, Manager},
@@ -15,9 +16,10 @@ use crate::{
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use lessify::OutputPaged;
 
+#[derive(PartialEq, Clone, Copy, Debug)]
 enum MainMode {
     Server,
-    Client(MultiProgress),
+    Client,
     ShowConfig,
     HelpBuffers,
     ShowConfigFiles,
@@ -34,9 +36,7 @@ impl From<&CliArgs> for MainMode {
         } else if args.config_files {
             MainMode::ShowConfigFiles
         } else {
-            MainMode::Client(MultiProgress::with_draw_target(
-                ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS),
-            ))
+            MainMode::Client
         }
     }
 }
@@ -44,113 +44,135 @@ impl From<&CliArgs> for MainMode {
 /// Main CLI entrypoint
 ///
 /// Call this from `main`. It reads argv.
-/// # Return
-/// true indicates success. false indicates a failure (we have output to stderr).
+///
+/// # Safety
+/// - This function may start a tokio runtime and perform work in it.
+/// - This function is not safe to call from multi-threaded code.
 #[must_use]
 pub fn cli() -> ExitCode {
-    match cli_inner() {
-        Err(e) => {
+    #[allow(clippy::match_bool)] // improved readability
+    cli_inner()
+        .inspect_err(|e| {
             if crate::util::tracing_is_initialised() {
                 tracing::error!("{e}");
             } else {
                 format!("{ERROR}Error:{RESET} {e}", ERROR = error()).output_paged();
             }
-            ExitCode::FAILURE
-        }
-        Ok(true) => ExitCode::SUCCESS,
-        Ok(false) => ExitCode::FAILURE,
-    }
+        })
+        .map_or(ExitCode::FAILURE, |success| match success {
+            true => ExitCode::SUCCESS,
+            false => ExitCode::FAILURE,
+        })
 }
 
-/// Inner CLI entrypoint
+/// Inner CLI logic
 ///
-/// # Safety
-/// - This function starts a tokio runtime.
-/// - This function is not safe to call from multi-threaded code.
+/// # Return
+/// true indicates success. false indicates a failure where the callee has output to stderr.
+///
+/// # Note
+/// - This function starts a tokio runtime and performs work in it.
 fn cli_inner() -> anyhow::Result<bool> {
-    let args = match CliArgs::custom_parse(std::env::args_os()) {
-        Ok(args) => args,
-        Err(e) => {
-            match e.kind() {
-                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion => {
-                    // this is a normal exit
-                    let message = e.render();
-                    if use_colours() {
-                        message.ansi().output_paged();
-                    } else {
-                        message.output_paged();
-                    }
-                    return Ok(true);
-                }
-                _ => (),
-            }
-            // this is an error
-            anyhow::bail!(e);
-        }
+    let Some(args) = parse_args()? else {
+        return Ok(true); // help/version shown; exit
     };
 
-    let mode = MainMode::from(&args); // side-effect: holds progress bar, if we need one
+    let mode = MainMode::from(&*args);
 
     // Now fold the arguments in with the CLI config (which may fail)
     // (to provoke an error here: `qcp host: host2:`)
-    let mut config_manager = Manager::try_from(&args)?;
-    configure_colours(
-        match config_manager.get_color(Some(Configuration::system_default().color)) {
-            Ok(c) => Some(c),
-            // If the config file is invalid, and we're in server mode, we should not report an error here (that will confuse the remote, which is expecting a protocol banner).
-            // Instead fall back to default; we'll send Negotiation Failed later after trying to unpick
-            Err(_) if mode == MainMode::Server => None,
-            Err(e) => return Err(e.into()),
-        },
-    );
+    let mut config_manager = Manager::try_from(&*args)?;
+    setup_colours(&config_manager, mode)?;
 
+    handle_mode(mode, &mut config_manager, args.client_params)
+}
+
+fn parse_args() -> anyhow::Result<Option<Box<CliArgs>>> {
+    use clap::error::ErrorKind::{DisplayHelp, DisplayVersion};
+    match CliArgs::custom_parse(std::env::args_os()) {
+        Ok(args) => Ok(Some(Box::new(args))),
+        Err(e) if matches!(e.kind(), DisplayHelp | DisplayVersion) => {
+            let message = e.render();
+            if use_colours() {
+                message.ansi().output_paged();
+            } else {
+                message.output_paged();
+            }
+            Ok(None)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn setup_colours(manager: &Manager, mode: MainMode) -> anyhow::Result<()> {
+    let colour_mode = match manager.get_color(Some(Configuration::system_default().color)) {
+        Ok(c) => Some(c),
+        // If the config file is invalid, and we're in server mode, we should not report an error here (that will confuse the remote, which is expecting a protocol banner).
+        // Instead fall back to default; we'll send Negotiation Failed later after trying to unpick the config.
+        Err(_) if mode == MainMode::Server => None,
+        Err(e) => return Err(e.into()),
+    };
+    configure_colours(colour_mode);
+    Ok(())
+}
+
+// MODE HANDLERS ///////////////////////////////////////////////////////////
+
+#[tokio::main(flavor = "current_thread")]
+async fn handle_mode(
+    mode: MainMode,
+    config_manager: &mut Manager,
+    client_params: Parameters,
+) -> anyhow::Result<bool> {
     match mode {
         MainMode::HelpBuffers => {
-            // Decided not to send this to pager as it is rich with emoji,
-            // which doesn't page well on Windows.
-
-            // Write instead of print to avoid the possibility of a panic
-            // when externally piped to another program.
-            let _ = writeln!(
-                std::io::stdout(),
-                "{}",
-                os::Platform::help_buffers_mode(
-                    Configuration::recv_buffer(),
-                    Configuration::send_buffer(),
-                )
-            );
+            print_help_buffers();
             Ok(true)
         }
         MainMode::ShowConfigFiles => {
             println!("{:?}", Manager::config_files());
             Ok(true)
         }
-        MainMode::ShowConfig => {
-            config_manager.apply_system_default();
-            format!(
-                "Client configuration:\n{}",
-                config_manager.to_display_adapter::<Configuration>()
-            )
-            .output_paged();
-            config_manager.validate_configuration()?;
-            Ok(true)
-        }
-        MainMode::Server => Ok(run_in_tokio(crate::server_main).map_or_else(
-            |e| {
-                eprintln!("{ERROR}ERROR{RESET} Server: {e:?}", ERROR = error());
-                false
-            },
-            |()| true,
-        )),
-        MainMode::Client(progress) => {
-            config_manager.validate_configuration()?;
-            // this mode may return false
-            run_in_tokio(|| crate::client_main(&mut config_manager, progress, args.client_params))
-        }
+        MainMode::ShowConfig => show_config(config_manager),
+        MainMode::Server => run_server().await,
+        MainMode::Client => run_client(config_manager, client_params).await,
     }
 }
 
-#[tokio::main(flavor = "current_thread")]
-async fn run_in_tokio<R, F: AsyncFnOnce() -> R>(func: F) -> R {
-    func().await
+fn print_help_buffers() {
+    let _ = writeln!(
+        std::io::stdout(),
+        "{}",
+        os::Platform::help_buffers_mode(Configuration::recv_buffer(), Configuration::send_buffer(),)
+    );
+}
+
+fn show_config(config_manager: &mut Manager) -> anyhow::Result<bool> {
+    config_manager.apply_system_default();
+    format!(
+        "Client configuration:\n{}",
+        config_manager.to_display_adapter::<Configuration>()
+    )
+    .output_paged();
+    config_manager.validate_configuration()?;
+    Ok(true)
+}
+
+async fn run_server() -> anyhow::Result<bool> {
+    crate::server_main().await.map_err(|e| {
+        eprintln!("{ERROR}ERROR{RESET} Server: {e:?}", ERROR = error());
+        anyhow::anyhow!("Server failed")
+    })?;
+    Ok(true)
+}
+
+async fn run_client(
+    config_manager: &mut Manager,
+    client_params: Parameters,
+) -> anyhow::Result<bool> {
+    let progress =
+        MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS));
+    config_manager.validate_configuration()?;
+    // this mode may return false
+    crate::client_main(config_manager, progress, client_params).await
 }
