@@ -57,11 +57,11 @@ CLI options take precedence over the configuration file, which takes precedence 
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-always: Forces colours on, whatever is happening (aliases: `on`, `yes`)
+always: Forces colours on, whatever is happening
 .IP \(bu 2
-never: (aliases: `off`, `no`, `none`)
+never: Never use colours
 .IP \(bu 2
-auto: Use colours only when writing to a terminal
+auto: Use colours only when writing to a terminal. This is the default behaviour
 .RE
 .TP
 \fB\-h\fR, \fB\-\-help\fR
@@ -94,7 +94,9 @@ If not specified or 0, uses the value of `rx`.
 The expected network Round Trip time to the target system, in milliseconds. [default: 300]
 .TP
 \fB\-\-help\-buffers\fR
-Outputs additional information about kernel UDP buffer sizes and platform\-specific tips
+Outputs additional information about kernel UDP buffer sizes and platform\-specific tips.
+
+This option cannot be used with any other option.
 .SH "ADVANCED NETWORK TUNING"
 .TP
 \fB\-\-congestion\fR=\fIalgorithm\fR
@@ -138,9 +140,9 @@ Forces use of a particular IP version when connecting to the remote. [default: a
 \fIPossible values:\fR
 .RS 14
 .IP \(bu 2
-inet: IPv4 (aliases: `4`, `inet4`)
+inet: IPv4
 .IP \(bu 2
-inet6: IPv6 (aliases: `6`)
+inet6: IPv6
 .IP \(bu 2
 any: Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup
 .RE
@@ -172,7 +174,7 @@ By default, qcp reads your user and system ssh config files to look for Hostname
 
 This option is really intended to be used in a qcp configuration file. On the command line, you can repeat `\-\-ssh\-config file` as many times as needed.
 .TP
-\fB\-\-ssh\-subsystem\fR
+\fB\-\-ssh\-subsystem\fR=\fISSH_SUBSYSTEM\fR
 Ssh subsystem mode
 
 This mode causes qcp to run `ssh <host> \-s qcp` instead of `ssh <host> qcp \-\-server`.
@@ -180,6 +182,10 @@ This mode causes qcp to run `ssh <host> \-s qcp` instead of `ssh <host> qcp \-\-
 This is useful where the remote system has a locked\-down `PATH` and the qcp binary is not resident on that `PATH`. The remote system sshd has to be configured with a line like this:
 
 `Subsystem qcp /usr/local/bin/qcp \-\-server`
+.br
+
+.br
+[\fIpossible values: \fRtrue, false]
 .TP
 \fB\-4\fR
 Forces use of IPv4
@@ -232,7 +238,9 @@ If a remote `SOURCE` or `DESTINATION` argument is given, outputs the configurati
 If not, outputs only global settings from configuration, which may be overridden by `Host` blocks in configuration files.
 .TP
 \fB\-\-config\-files\fR
-Outputs the paths to configuration file(s), then exits
+Outputs the paths to configuration file(s), then exits.
+
+This option cannot be used with any other option.
 .TP
 \fB\-\-dry\-run\fR
 Connects to a remote server but does not actually transfer any files. This is useful to test that the control channel works and when debugging the negotiated bandwidth parameters (see also `\-\-remote\-config`)
