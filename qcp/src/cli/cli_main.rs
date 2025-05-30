@@ -4,7 +4,7 @@
 use std::io::Write as _;
 use std::process::ExitCode;
 
-use super::args::CliArgs;
+use super::args::{CliArgs, MainMode};
 use crate::{
     Parameters,
     cli::styles::{RESET, configure_colours, error, use_colours},
@@ -16,34 +16,6 @@ use crate::{
 use anyhow::Result;
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use lessify::OutputPaged;
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-enum MainMode {
-    Server,
-    Client,
-    ShowConfig,
-    HelpBuffers,
-    ShowConfigFiles,
-    ListFeatures,
-}
-
-impl From<&CliArgs> for MainMode {
-    fn from(args: &CliArgs) -> Self {
-        if args.server {
-            MainMode::Server
-        } else if args.show_config {
-            MainMode::ShowConfig
-        } else if args.help_buffers {
-            MainMode::HelpBuffers
-        } else if args.config_files {
-            MainMode::ShowConfigFiles
-        } else if args.list_features {
-            MainMode::ListFeatures
-        } else {
-            MainMode::Client
-        }
-    }
-}
 
 /// Main CLI entrypoint
 ///
@@ -81,14 +53,12 @@ fn cli_inner() -> Result<bool> {
         return Ok(true); // help/version shown; exit
     };
 
-    let mode = MainMode::from(&*args);
-
     // Now fold the arguments in with the CLI config (which may fail)
     // (to provoke an error here: `qcp host: host2:`)
     let mut config_manager = Manager::try_from(&*args)?;
-    setup_colours(&config_manager, mode)?;
+    setup_colours(&config_manager, args.mode_)?;
 
-    handle_mode(mode, &mut config_manager, args.client_params)
+    handle_mode(args.mode_, &mut config_manager, args.client_params)
 }
 
 fn parse_args() -> Result<Option<Box<CliArgs>>> {
