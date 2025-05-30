@@ -13,6 +13,7 @@ use crate::{
     os::{self, AbstractPlatform as _},
 };
 
+use anyhow::Result;
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use lessify::OutputPaged;
 
@@ -23,6 +24,7 @@ enum MainMode {
     ShowConfig,
     HelpBuffers,
     ShowConfigFiles,
+    ListFeatures,
 }
 
 impl From<&CliArgs> for MainMode {
@@ -35,6 +37,8 @@ impl From<&CliArgs> for MainMode {
             MainMode::HelpBuffers
         } else if args.config_files {
             MainMode::ShowConfigFiles
+        } else if args.list_features {
+            MainMode::ListFeatures
         } else {
             MainMode::Client
         }
@@ -72,7 +76,7 @@ pub fn cli() -> ExitCode {
 ///
 /// # Note
 /// - This function starts a tokio runtime and performs work in it.
-fn cli_inner() -> anyhow::Result<bool> {
+fn cli_inner() -> Result<bool> {
     let Some(args) = parse_args()? else {
         return Ok(true); // help/version shown; exit
     };
@@ -87,7 +91,7 @@ fn cli_inner() -> anyhow::Result<bool> {
     handle_mode(mode, &mut config_manager, args.client_params)
 }
 
-fn parse_args() -> anyhow::Result<Option<Box<CliArgs>>> {
+fn parse_args() -> Result<Option<Box<CliArgs>>> {
     use clap::error::ErrorKind::{DisplayHelp, DisplayVersion};
     match CliArgs::custom_parse(std::env::args_os()) {
         Ok(args) => Ok(Some(Box::new(args))),
@@ -104,7 +108,7 @@ fn parse_args() -> anyhow::Result<Option<Box<CliArgs>>> {
     }
 }
 
-fn setup_colours(manager: &Manager, mode: MainMode) -> anyhow::Result<()> {
+fn setup_colours(manager: &Manager, mode: MainMode) -> Result<()> {
     let colour_mode = match manager.get_color(Some(Configuration::system_default().color)) {
         Ok(c) => Some(c),
         // If the config file is invalid, and we're in server mode, we should not report an error here (that will confuse the remote, which is expecting a protocol banner).
@@ -123,12 +127,9 @@ async fn handle_mode(
     mode: MainMode,
     config_manager: &mut Manager,
     client_params: Parameters,
-) -> anyhow::Result<bool> {
+) -> Result<bool> {
     match mode {
-        MainMode::HelpBuffers => {
-            print_help_buffers();
-            Ok(true)
-        }
+        MainMode::HelpBuffers => Ok(print_help_buffers()),
         MainMode::ShowConfigFiles => {
             println!("{:?}", Manager::config_files());
             Ok(true)
@@ -136,18 +137,31 @@ async fn handle_mode(
         MainMode::ShowConfig => show_config(config_manager),
         MainMode::Server => run_server().await,
         MainMode::Client => run_client(config_manager, client_params).await,
+        MainMode::ListFeatures => Ok(list_features()),
     }
 }
 
-fn print_help_buffers() {
+fn list_features() -> bool {
+    use tabled::settings::{Alignment, object::Columns};
+
+    let mut tbl = crate::protocol::compat::pretty_list();
+    let _ = tbl
+        .with(crate::cli::styles::TABLE_STYLE.clone())
+        .modify(Columns::last(), Alignment::center());
+    format!("{tbl}").output_paged();
+    true
+}
+
+fn print_help_buffers() -> bool {
     let _ = writeln!(
         std::io::stdout(),
         "{}",
         os::Platform::help_buffers_mode(Configuration::recv_buffer(), Configuration::send_buffer(),)
     );
+    true
 }
 
-fn show_config(config_manager: &mut Manager) -> anyhow::Result<bool> {
+fn show_config(config_manager: &mut Manager) -> Result<bool> {
     config_manager.apply_system_default();
     format!(
         "Client configuration:\n{}",
@@ -158,7 +172,7 @@ fn show_config(config_manager: &mut Manager) -> anyhow::Result<bool> {
     Ok(true)
 }
 
-async fn run_server() -> anyhow::Result<bool> {
+async fn run_server() -> Result<bool> {
     crate::server_main().await.map_err(|e| {
         eprintln!("{ERROR}ERROR{RESET} Server: {e:?}", ERROR = error());
         anyhow::anyhow!("Server failed")
@@ -166,10 +180,7 @@ async fn run_server() -> anyhow::Result<bool> {
     Ok(true)
 }
 
-async fn run_client(
-    config_manager: &mut Manager,
-    client_params: Parameters,
-) -> anyhow::Result<bool> {
+async fn run_client(config_manager: &mut Manager, client_params: Parameters) -> Result<bool> {
     let progress =
         MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS));
     {
