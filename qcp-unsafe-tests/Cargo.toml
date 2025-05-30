@@ -16,6 +16,7 @@ console = { workspace = true }
 littertray = { workspace = true }
 rusty-fork = { workspace = true }
 tempfile = { workspace = true }
+pretty_assertions = "1.4.1"
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(coverage_nightly)'] }

@@ -1,5 +1,6 @@
 // (c) 2025 Ross Younger
 
+use pretty_assertions::assert_eq;
 use qcp::Configuration;
 use qcp::config::{ColourMode, Manager};
 use rusty_fork::rusty_fork_test;

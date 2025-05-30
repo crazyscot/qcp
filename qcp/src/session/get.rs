@@ -149,6 +149,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use anyhow::{Result, bail};
+    use pretty_assertions::assert_eq;
 
     use crate::{
         client::CopyJobSpec,

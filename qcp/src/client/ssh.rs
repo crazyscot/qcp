@@ -155,6 +155,7 @@ mod test {
     use crate::client::ssh::SshConfigFile;
 
     use littertray::LitterTray;
+    use pretty_assertions::assert_eq;
 
     fn resolve_one<P: AsRef<OsStr>>(path: P, host: &str) -> Option<String> {
         let files = SshConfigFiles::new(&[path.as_ref()]);

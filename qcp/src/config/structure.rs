@@ -484,6 +484,7 @@ mod test {
     use crate::config::Manager;
 
     use super::SYSTEM_DEFAULT_CONFIG;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn flattened() {

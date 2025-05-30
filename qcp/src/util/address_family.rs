@@ -32,6 +32,7 @@ pub enum AddressFamily {
 mod test {
     use super::AddressFamily;
     use clap::ValueEnum as _;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn serialize() {

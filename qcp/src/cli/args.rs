@@ -165,6 +165,7 @@ mod test {
     use std::str::FromStr;
 
     use figment::Provider;
+    use pretty_assertions::assert_eq;
     use rusty_fork::rusty_fork_test;
 
     use crate::{
