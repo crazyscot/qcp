@@ -27,7 +27,8 @@ jobs:
         run: tree "${{ steps.download1.outputs.download-path }}"
         continue-on-error: true
       - name: upload
-        run: bash -xc 'gh release upload "${{ github.ref_name }}" ./*'
+        # Without a checkout, one must explicitly specify the repo to upload to (-R option).
+        run: bash -xc 'gh release upload -R "${{ github.repository }}" "${{ github.ref_name }}" ./*'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # Is there really no canned action I can pass a shell glob or list of files to?!
