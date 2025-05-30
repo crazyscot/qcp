@@ -2,6 +2,7 @@
 
 use std::{fs::File, io::Write as _, path::PathBuf};
 
+use pretty_assertions::assert_eq;
 use rusty_fork::rusty_fork_test;
 use tempfile::TempDir;
 

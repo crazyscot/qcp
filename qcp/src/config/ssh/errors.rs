@@ -76,6 +76,8 @@ impl std::fmt::Display for ConfigFileError {
 mod test {
     use crate::config::ssh::errors::ConfigFileError;
     use figment::error::{Actual, Kind};
+    use pretty_assertions::assert_eq;
+
     #[test]
     fn error_invalid_type() {
         let err = ConfigFileError::from(figment::Error::from(Kind::InvalidType(

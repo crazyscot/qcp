@@ -52,6 +52,7 @@ mod test {
 
     use super::SerializeAsString;
     use crate::protocol::control::CongestionController;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn derivations() {

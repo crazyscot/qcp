@@ -157,6 +157,7 @@ mod test {
         Metadata,
         value::{Empty, Map, Num, Tag, Value},
     };
+    use pretty_assertions::assert_eq;
 
     use super::PrettyConfig;
     use crate::{Configuration, config::Manager};

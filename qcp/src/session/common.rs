@@ -89,6 +89,7 @@ mod tests {
     use std::task::{Context, Poll};
 
     use indicatif::MultiProgress;
+    use pretty_assertions::assert_eq;
     use tokio::io::AsyncWrite;
 
     use super::progress_bar_for;

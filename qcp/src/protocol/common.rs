@@ -209,6 +209,7 @@ mod tests {
     use crate::protocol::common::MessageHeader;
 
     use super::{Error, ProtocolMessage};
+    use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
     use std::io::Cursor;
 
