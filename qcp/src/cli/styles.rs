@@ -1,8 +1,8 @@
 // (c) 2024 Ross Younger
 //! CLI output styling
 //!
-//! This module provides styles for use with those macros, and also a `RESET` constant to reset
-//! styling to the default.
+//! This module provides style macros which conditionally apply style based on the terminal and user preferences,
+//! along with a `RESET` constant to reset styling to the default.
 
 #[allow(clippy::enum_glob_use)]
 use anstyle::AnsiColor::*;
@@ -12,6 +12,7 @@ use colorchoice::ColorChoice;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::io::IsTerminal;
+use std::sync::LazyLock;
 
 // RAW STYLE DEFINITIONS //////////////////////////////////////////////////////////////////
 
@@ -80,6 +81,20 @@ wrap!(warning, _WARNING);
 wrap!(info, _INFO);
 wrap!(success, _SUCCESS);
 wrap!(header, _HEADER);
+
+// TABLED CONDITIONAL STYLING ////////////////////////////////////////////////////
+
+/// Conditional table styles based on the platform.
+///
+/// Windows paging via more.com does not understand the UTF-8 characters used by more modern-looking themes.
+pub(crate) static TABLE_STYLE: LazyLock<tabled::settings::Theme> = LazyLock::new(|| {
+    use tabled::settings::style::Style;
+    if cfg!(windows) {
+        Style::psql().into()
+    } else {
+        Style::sharp().into()
+    }
+});
 
 // CONDITIONALITY & CLI //////////////////////////////////////////////////////////
 

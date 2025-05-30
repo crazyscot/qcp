@@ -10,21 +10,12 @@ use serde::Deserialize;
 use std::{
     collections::HashSet,
     fmt::{Debug, Display},
-    sync::LazyLock,
 };
 use struct_field_names_as_array::FieldNamesAsSlice;
 use tabled::{
     Table, Tabled,
-    settings::{Color, Theme, object::Rows, style::Style},
+    settings::{Color, object::Rows},
 };
-
-static TABLE_STYLE: LazyLock<Theme> = LazyLock::new(|| {
-    if cfg!(windows) {
-        Style::psql().into()
-    } else {
-        Style::sharp().into()
-    }
-});
 
 /// Data type used when rendering the config table
 #[derive(Tabled)]
@@ -142,7 +133,7 @@ impl Display for DisplayAdapter<'_> {
             }
         }
         let mut writable = Table::new(output);
-        let _ = writable.with(TABLE_STYLE.clone());
+        let _ = writable.with(crate::styles::TABLE_STYLE.clone());
         if use_colours() {
             let _ = writable.modify(Rows::single(1), host_colour);
         }
