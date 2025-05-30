@@ -56,7 +56,8 @@ At the time of writing, qcp has only been tested with the OpenSSH server and cli
 * Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine.
 * Run `qcp --help-buffers` and follow its instructions.
 * Platform-specific notes exist for:
-  * [OSX](https://docs.rs/qcp/latest/qcp/doc/performance/osx.html)
+  * [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html)
+  * [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html)
 
 ### Installing by package
 
@@ -228,7 +229,6 @@ Some ideas for the future, in no particular order:
 
 * File checksum/hash checking/reporting
 * Support for copying multiple files (e.g. shell globs or `scp -r`)
-* Windows native support
 * Firewall/NAT traversal
 * Interactive file transfer (akin to `ftp`)
 * Smart file copy using the `rsync` protocol or similar (send only the sections you need to)
