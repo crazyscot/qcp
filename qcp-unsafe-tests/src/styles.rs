@@ -1,6 +1,7 @@
 // (c) 2025 Ross Younger
 
 use colorchoice::ColorChoice;
+use pretty_assertions::{assert_eq, assert_ne};
 use qcp::config::ColourMode;
 use qcp::styles::{configure_colours, error, use_colours};
 use rusty_fork::rusty_fork_test;

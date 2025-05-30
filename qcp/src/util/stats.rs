@@ -149,6 +149,7 @@ pub(crate) fn process_statistics(
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::DataRate;
+    use pretty_assertions::assert_eq;
     use std::time::Duration;
 
     #[test]

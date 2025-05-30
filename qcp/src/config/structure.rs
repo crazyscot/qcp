@@ -495,6 +495,7 @@ impl Validatable for Configuration_Optional {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::SYSTEM_DEFAULT_CONFIG;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn flattened() {

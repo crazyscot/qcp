@@ -91,6 +91,7 @@ clap_mangen = "0.2.26"
 either = "1.15.0"
 json = "0.12.4"
 littertray = { workspace = true, features = ["async"] }
+pretty_assertions = "1.4.1"
 roff = "0.2.2"
 rusty-fork = { workspace = true }
 serde_json = "1.0.140"
