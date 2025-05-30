@@ -49,7 +49,7 @@ pub(crate) struct CliArgs {
     ///
     /// This is what we run on the remote machine; it is not
     /// intended for interactive use.
-    #[arg(long, help_heading("Modes"), hide = true, exclusive(true))]
+    #[arg(long, hide = true, exclusive(true))]
     pub server: bool,
 
     // CONFIGURABLE OPTIONS ================================================================
@@ -87,6 +87,12 @@ pub(crate) struct CliArgs {
         exclusive(true)
     )]
     pub help_buffers: bool,
+
+    /// Outputs all known protocol features with their compatibility levels.
+    ///
+    /// This option cannot be used with any other option.
+    #[arg(long, help_heading("Compatibility"), exclusive(true))]
+    pub list_features: bool,
 
     // CLIENT-SIDE NON-CONFIGURABLE OPTIONS ================================================
     // (including positional arguments!)
