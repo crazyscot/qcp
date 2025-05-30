@@ -37,3 +37,11 @@
     * Update tagged release version in `nix/default.nix`
     * Pre-compute the release hash (v0.3.0 is the release in this example) and replace the `fetchFromGithub.hash` value to the output SRI: `nix hash to-sri --type sha256 "$(nix-prefetch-url --unpack 'https://github.com/crazyscot/qcp/archive/v0.3.0.tar.gz')"`.
     * Run a test build with previous hashes or `lib.fakeHash` set for `cargoHash` and place the expected hash in place.
+
+## Adding sub-crates
+
+If you add a new crate that should not be published to crates.io, ensure it's marked
+as `release = false` in release-plz.toml.
+
+If we later move to multiple published crates from this repo, we will need to update
+the version string logic in `qcp/build.rs`.
