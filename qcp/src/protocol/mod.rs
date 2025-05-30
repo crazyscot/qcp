@@ -109,5 +109,6 @@
 //! [LetsEncrypt]: <https://letsencrypt.org/>
 
 pub mod common;
+pub mod compat;
 pub mod control;
 pub mod session;

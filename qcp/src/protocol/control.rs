@@ -930,4 +930,14 @@ mod test {
         let sf = ServerFailure::Unknown("hello".to_string());
         assert_eq!(format!("{sf}"), "Unknown error: hello");
     }
+
+    #[test]
+    fn level_ordering() {
+        assert!(CompatibilityLevel::V1 > CompatibilityLevel::UNKNOWN);
+        assert!(CompatibilityLevel::NEWER > CompatibilityLevel::V1);
+        assert!(CompatibilityLevel::V1 >= CompatibilityLevel::UNKNOWN);
+        assert!(CompatibilityLevel::V1 >= CompatibilityLevel::V1);
+        assert!(CompatibilityLevel::V1 <= CompatibilityLevel::V1);
+        assert!(CompatibilityLevel::V1 <= CompatibilityLevel::NEWER);
+    }
 }
