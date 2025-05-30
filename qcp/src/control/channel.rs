@@ -451,6 +451,7 @@ mod test {
     };
     use anyhow::Result;
     use indicatif::MultiProgress;
+    use pretty_assertions::assert_eq;
     use quinn::ConnectionStats;
     use tokio::io::AsyncWriteExt;
 

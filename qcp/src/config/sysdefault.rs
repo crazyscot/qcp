@@ -31,6 +31,7 @@ impl Provider for SystemDefault {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use crate::{Configuration, config::Manager};
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_system_default() {

@@ -195,6 +195,7 @@ impl ProtocolMessage for FileTrailer {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
+    use pretty_assertions::assert_eq;
     use serde_bare::Uint;
 
     use crate::protocol::{

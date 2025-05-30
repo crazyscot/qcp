@@ -140,6 +140,7 @@ impl From<PortRange> for figment::value::Value {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::PortRange as ConfigPortRange;
+    use pretty_assertions::assert_eq;
     use std::str::FromStr;
 
     type Uut = super::PortRange;

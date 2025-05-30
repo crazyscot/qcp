@@ -298,6 +298,7 @@ pub(crate) fn setup_tracing_for_tests() {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use indicatif::{MultiProgress, ProgressDrawTarget};
+    use pretty_assertions::assert_eq;
     use rusty_fork::rusty_fork_test;
     use tracing_subscriber::EnvFilter;
 

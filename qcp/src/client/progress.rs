@@ -50,6 +50,7 @@ pub(crate) const SPINNER_TEMPLATE: &str = "{spinner} {wide_msg} {prefix}";
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use crate::client::progress::{PROGRESS_STYLE_COMPACT, PROGRESS_STYLE_OVERLONG, style_for};
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn filename_sizes() {

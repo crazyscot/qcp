@@ -251,6 +251,7 @@ mod test {
     use crate::util::{PortRange, TimeFormat};
     use engineering_repr::EngineeringQuantity;
     use littertray::LitterTray;
+    use pretty_assertions::assert_eq;
     use serde::Deserialize;
 
     // Some tests for this module are in `qcp_unsafe_tests::manager`.

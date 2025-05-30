@@ -84,6 +84,7 @@ pub fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>> {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::{expand_home_directory, find_include_files};
+    use pretty_assertions::assert_eq;
 
     // Some tests for this module are in `qcp_unsafe_tests::ssh_includes`.
 

@@ -88,6 +88,7 @@ impl PartialEq for VecOrString {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use crate::util::VecOrString;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn comparison() {

@@ -144,6 +144,7 @@ impl Parameters {
 mod tests {
     use super::*;
     use clap::Parser;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_debug_option() {

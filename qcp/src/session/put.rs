@@ -242,6 +242,7 @@ async fn limited_copy(
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use anyhow::{Result, bail};
+    use pretty_assertions::assert_eq;
 
     use crate::{
         client::CopyJobSpec,

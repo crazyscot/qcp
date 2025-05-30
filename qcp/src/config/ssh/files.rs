@@ -283,6 +283,7 @@ impl<R: Read> Parser<R> {
 mod test {
     use anyhow::{Context, Result, anyhow};
     use assertables::{assert_contains, assert_contains_as_result, assert_eq_as_result};
+    use pretty_assertions::assert_eq;
     use struct_field_names_as_array::FieldNamesAsSlice;
 
     use super::Parser;

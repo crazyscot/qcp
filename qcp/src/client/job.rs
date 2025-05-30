@@ -147,6 +147,7 @@ impl CopyJobSpec {
 mod test {
     type Res = anyhow::Result<()>;
     use engineering_repr::EngineeringQuantity;
+    use pretty_assertions::assert_eq;
 
     use super::FileSpec;
     use std::str::FromStr;

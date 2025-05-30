@@ -612,6 +612,7 @@ mod test {
     };
 
     use assertables::assert_matches;
+    use pretty_assertions::assert_eq;
     use quinn::ConnectionStats;
     use serde::{Deserialize, Serialize};
     use serde_bare::Uint;
