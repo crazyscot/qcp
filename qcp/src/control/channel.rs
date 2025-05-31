@@ -20,8 +20,8 @@ use crate::config::{Configuration, Configuration_Optional, Manager};
 use crate::control::create_endpoint;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::control::{
-    BANNER, COMPATIBILITY_LEVEL, ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport,
-    ClosedownReportV1, CompatibilityLevel, ConnectionType, OLD_BANNER, ServerFailure,
+    BANNER, ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport, ClosedownReportV1,
+    CompatibilityLevel, ConnectionType, OLD_BANNER, OUR_COMPATIBILITY_LEVEL, ServerFailure,
     ServerGreeting, ServerMessage, ServerMessageV1,
 };
 use crate::transport::combine_bandwidth_configurations;
@@ -30,8 +30,8 @@ use crate::util::{Credentials, TimeFormat};
 /// Control channel abstraction
 pub(crate) struct ControlChannel<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
-    /// The other side's declared compatibility level
-    pub compat: CompatibilityLevel,
+    /// The selected compatibility level for the connection
+    pub selected_compat: CompatibilityLevel,
 }
 
 impl SendingStream for Stdout {}
@@ -57,7 +57,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     pub(crate) fn new(stream: SendReceivePair<S, R>) -> Self {
         Self {
             stream,
-            compat: CompatibilityLevel::UNKNOWN,
+            selected_compat: CompatibilityLevel::UNKNOWN,
         }
     }
 
@@ -89,16 +89,18 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
 
     fn process_compatibility_levels(&mut self, theirs: u16) {
         // FUTURE: We may decide to deprecate older compatibility versions. Handle that here.
-        let d = match theirs.cmp(&COMPATIBILITY_LEVEL.into()) {
+        let d = match theirs.cmp(&OUR_COMPATIBILITY_LEVEL.into()) {
             std::cmp::Ordering::Less => Some("older"),
             std::cmp::Ordering::Equal => None,
             std::cmp::Ordering::Greater => Some("newer"),
         };
         if let Some(d) = d {
-            debug!("Remote compatibility level {theirs} is {d} than ours {COMPATIBILITY_LEVEL}");
+            debug!(
+                "Remote compatibility level {theirs} is {d} than ours {OUR_COMPATIBILITY_LEVEL}"
+            );
         }
-        self.compat = min(theirs.into(), COMPATIBILITY_LEVEL);
-        debug!("selected compatibility level {}", self.compat);
+        self.selected_compat = min(theirs.into(), OUR_COMPATIBILITY_LEVEL);
+        debug!("selected compatibility level {}", self.selected_compat);
     }
 
     // =================================================================================
@@ -110,7 +112,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     ) -> Result<ServerGreeting> {
         self.send(
             ClientGreeting {
-                compatibility: COMPATIBILITY_LEVEL.into(),
+                compatibility: OUR_COMPATIBILITY_LEVEL.into(),
                 debug: remote_debug,
                 extension: 0,
             },
@@ -252,7 +254,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     async fn server_exchange_greetings(&mut self) -> Result<ClientGreeting> {
         self.send(
             ServerGreeting {
-                compatibility: COMPATIBILITY_LEVEL.into(),
+                compatibility: OUR_COMPATIBILITY_LEVEL.into(),
                 extension: 0,
             },
             "server greeting",
