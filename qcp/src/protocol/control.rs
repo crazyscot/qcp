@@ -64,7 +64,7 @@ pub const BANNER: &str = "qcp-server-2\n";
 pub const OLD_BANNER: &str = "qcp-server-1\n";
 
 /// The protocol compatibility version implemented by this crate
-pub const COMPATIBILITY_LEVEL: CompatibilityLevel = CompatibilityLevel::V1;
+pub const OUR_COMPATIBILITY_LEVEL: CompatibilityLevel = CompatibilityLevel::V2;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // COMPATIBILITY
