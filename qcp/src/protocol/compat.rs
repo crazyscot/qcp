@@ -48,6 +48,8 @@ def_enum!(
     pub Feature => CompatibilityLevel {
         /// The original base protocol introduced in qcp v0.3.0
         BASIC_PROTOCOL => CompatibilityLevel::V1,
+        /// Support for the `NewReno` congestion control algorithm
+        NEW_RENO => CompatibilityLevel::V2,
     }
 );
 
