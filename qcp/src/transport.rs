@@ -7,13 +7,16 @@ use anyhow::Result;
 use human_repr::HumanCount as _;
 use quinn::{
     TransportConfig,
-    congestion::{BbrConfig, CubicConfig},
+    congestion::{BbrConfig, CubicConfig, NewRenoConfig},
 };
 use tracing::debug;
 
 use crate::{
     config::{self, Configuration, Configuration_Optional, Manager},
-    protocol::control::{ClientMessageV1, CompatibilityLevel, CongestionController},
+    protocol::{
+        compat::Feature,
+        control::{ClientMessageV1, CompatibilityLevel, CongestionController},
+    },
     util::PortRange,
 };
 
@@ -39,7 +42,7 @@ pub enum ThroughputMode {
 pub fn create_config(
     params: &Configuration,
     mode: ThroughputMode,
-    _compat: CompatibilityLevel,
+    compat: CompatibilityLevel,
 ) -> Result<Arc<TransportConfig>> {
     let mut config = TransportConfig::default();
     let _ = config
@@ -82,6 +85,17 @@ pub fn create_config(
                 let _ = bbr.initial_window(window);
             }
             let _ = config.congestion_controller_factory(Arc::new(bbr));
+        }
+        CongestionController::NewReno => {
+            anyhow::ensure!(
+                compat.supports(Feature::NEW_RENO),
+                "Remote host does not support NewReno"
+            );
+            let mut newreno = NewRenoConfig::default();
+            if window != 0 {
+                let _ = newreno.initial_window(window);
+            }
+            let _ = config.congestion_controller_factory(Arc::new(newreno));
         }
     }
 
