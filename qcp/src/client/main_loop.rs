@@ -152,6 +152,7 @@ pub(crate) async fn client_main(
         &config,
         job_spec.throughput_mode(),
         false,
+        control.selected_compat,
     )?;
 
     debug!("Opening QUIC connection to {server_address_port:?}");
