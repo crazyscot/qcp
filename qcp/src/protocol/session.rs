@@ -63,6 +63,7 @@ use super::common::ProtocolMessage;
 )]
 #[repr(u16)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub enum Status {
     Ok = 0,
     FileNotFound = 1,

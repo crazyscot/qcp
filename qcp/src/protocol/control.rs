@@ -81,6 +81,7 @@ pub const OUR_COMPATIBILITY_LEVEL: CompatibilityLevel = CompatibilityLevel::V2;
 ///
 /// See also [`Feature`](super::compat::Feature).
 #[repr(u16)]
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, strum::Display, PartialEq, Eq, strum::FromRepr, PartialOrd, Ord)]
 pub enum CompatibilityLevel {
     /// Indicates that we do not know the peer's compatibility level.
