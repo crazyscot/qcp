@@ -13,7 +13,7 @@ use tracing::debug;
 
 use crate::{
     config::{self, Configuration, Configuration_Optional, Manager, structure::Validatable as _},
-    protocol::control::{ClientMessageV1, CongestionController},
+    protocol::control::{ClientMessageV1, CompatibilityLevel, CongestionController},
     util::PortRange,
 };
 
@@ -36,7 +36,11 @@ pub enum ThroughputMode {
 }
 
 /// Creates a `quinn::TransportConfig` for the endpoint setup
-pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc<TransportConfig>> {
+pub fn create_config(
+    params: &Configuration,
+    mode: ThroughputMode,
+    _compat: CompatibilityLevel,
+) -> Result<Arc<TransportConfig>> {
     let mut config = TransportConfig::default();
     let _ = config
         .max_concurrent_bidi_streams(1u8.into())

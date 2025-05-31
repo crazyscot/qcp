@@ -401,6 +401,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
             // we have no way to know what the client will request, so must configure for both
             crate::transport::ThroughputMode::Both,
             true,
+            remote_greeting.compatibility.into(),
         ) {
             Ok(t) => t,
             Err(e) => {
