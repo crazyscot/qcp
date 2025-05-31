@@ -8,13 +8,16 @@ use human_repr::HumanCount as _;
 use num_traits::ToPrimitive as _;
 use quinn::{
     MtuDiscoveryConfig, TransportConfig, VarInt,
-    congestion::{BbrConfig, CubicConfig},
+    congestion::{BbrConfig, CubicConfig, NewRenoConfig},
 };
 use tracing::{debug, trace};
 
 use crate::{
     config::{self, Configuration, Configuration_Optional, Manager},
-    protocol::control::{ClientMessageV1, CompatibilityLevel, CongestionController},
+    protocol::{
+        compat::Feature,
+        control::{ClientMessageV1, CompatibilityLevel, CongestionController},
+    },
     util::PortRange,
 };
 
@@ -40,7 +43,7 @@ pub enum ThroughputMode {
 pub fn create_config(
     params: &Configuration,
     mode: ThroughputMode,
-    _compat: CompatibilityLevel,
+    compat: CompatibilityLevel,
 ) -> Result<Arc<TransportConfig>> {
     let mut mtu_cfg = MtuDiscoveryConfig::default();
     let _ = mtu_cfg.upper_bound(params.max_mtu);
@@ -99,6 +102,17 @@ pub fn create_config(
                 let _ = bbr.initial_window(window);
             }
             let _ = config.congestion_controller_factory(Arc::new(bbr));
+        }
+        CongestionController::NewReno => {
+            anyhow::ensure!(
+                compat.supports(Feature::NEW_RENO),
+                "Remote host does not support NewReno"
+            );
+            let mut newreno = NewRenoConfig::default();
+            if window != 0 {
+                let _ = newreno.initial_window(window);
+            }
+            let _ = config.congestion_controller_factory(Arc::new(newreno));
         }
     }
 
