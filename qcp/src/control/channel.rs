@@ -19,10 +19,11 @@ use crate::client::Parameters;
 use crate::config::{Configuration, Configuration_Optional, Manager};
 use crate::control::create_endpoint;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
+use crate::protocol::compat::Feature;
 use crate::protocol::control::{
     BANNER, ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport, ClosedownReportV1,
-    CompatibilityLevel, ConnectionType, OLD_BANNER, OUR_COMPATIBILITY_LEVEL, ServerFailure,
-    ServerGreeting, ServerMessage, ServerMessageV1,
+    CompatibilityLevel, CongestionController, ConnectionType, OLD_BANNER, OUR_COMPATIBILITY_LEVEL,
+    ServerFailure, ServerGreeting, ServerMessage, ServerMessageV1,
 };
 use crate::transport::combine_bandwidth_configurations;
 use crate::util::{Credentials, TimeFormat, TracingSetupFn};
@@ -159,6 +160,17 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         config: &Configuration_Optional,
     ) -> Result<()> {
         // FUTURE: Select the client message version to send based on server's compatibility level.
+
+        let congestion = config
+            .congestion
+            .unwrap_or(Configuration::system_default().congestion);
+        if *congestion == CongestionController::NewReno {
+            anyhow::ensure!(
+                self.selected_compat.supports(Feature::NEW_RENO),
+                "Remote host does not support NewReno"
+            );
+        }
+
         let message = ClientMessage::new(
             credentials,
             connection_type,
