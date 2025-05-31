@@ -188,6 +188,11 @@ pub enum CongestionController {
     /// `https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/`
     /// for more discussion.
     Bbr = 1,
+    /// The traditional "NewReno" congestion algorithm.
+    /// This was the algorithm used in TCP before the introduction of Cubic.
+    ///
+    /// This option requires qcp protocol compatibility level V2.
+    NewReno = 2,
 }
 
 impl From<CongestionController> for Uint {
