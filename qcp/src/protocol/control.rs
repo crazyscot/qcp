@@ -78,6 +78,8 @@ pub const COMPATIBILITY_LEVEL: CompatibilityLevel = CompatibilityLevel::V1;
 ///
 /// While this enum is part of the control protocol, it affects both control and session; the same principles
 /// of compatibility apply.
+///
+/// See also [`Feature`](super::compat::Feature).
 #[repr(u16)]
 #[derive(Clone, Copy, Debug, strum::Display, PartialEq, Eq, strum::FromRepr, PartialOrd, Ord)]
 pub enum CompatibilityLevel {
@@ -87,6 +89,9 @@ pub enum CompatibilityLevel {
 
     /// Version 1 was introduced in qcp 0.3
     V1 = 1,
+
+    /// Version 2 was introduced in qcp 0.5
+    V2 = 2,
 
     /// Special value indicating the peer is newer than our latest version.
     /// This value should never be seen on the wire.
