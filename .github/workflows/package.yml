@@ -105,7 +105,7 @@ jobs:
     - name: Generate CycloneDX SBOM
       run: cargo cyclonedx --target ${{ matrix.target }}
     - name: Build binary package
-      uses: taiki-e/upload-rust-binary-action@31389c348ad0130069bed8448bf507fe8617f67f # v1.25.0
+      uses: taiki-e/upload-rust-binary-action@db101489b509ad1c7acce163e118eb36a1650f98 # v1.26.0
       id: build-binary
       with:
         bin: qcp
