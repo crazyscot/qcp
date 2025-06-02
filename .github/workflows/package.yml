@@ -109,8 +109,8 @@ jobs:
       id: build-binary
       with:
         bin: qcp
-        dry_run: true
-        dry_run_intended: true
+        dry-run: true
+        dry-run-intended: true
         ref: refs/tags/dry-run # silence a warning
         token: ${{ secrets.GITHUB_TOKEN }} # Needs write permission on release
         target: ${{ matrix.target }}
