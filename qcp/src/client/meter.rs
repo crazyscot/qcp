@@ -81,6 +81,12 @@ impl InstaMeterRunner {
             warn!("logic error: stop called with a stopper but no task");
         }
     }
+
+    #[allow(clippy::cast_possible_truncation)] // inaccuracy is unlikely but OK
+    #[allow(clippy::cast_sign_loss)] // sign loss is impossible
+    pub(crate) fn peak(&self) -> u64 {
+        self.inner.lock().unwrap().peak as u64
+    }
 }
 
 impl Drop for InstaMeterRunner {
@@ -99,6 +105,7 @@ pub(crate) struct InstaMeterInner {
     source: ProgressBar,
     destination: ProgressBar,
     tick_calc: TickRateCalculator,
+    pub(crate) peak: f64,
 }
 
 impl InstaMeterInner {
@@ -109,6 +116,7 @@ impl InstaMeterInner {
             source: source.clone(),
             destination,
             tick_calc: TickRateCalculator::new(max_throughput as f64),
+            peak: 0.,
         }
     }
 
@@ -120,7 +128,8 @@ impl InstaMeterInner {
         let elapsed = elapsed.as_secs_f64();
         let rate = progress / elapsed;
         self.previous_position = current;
-        let msg = format!("{} (last 1s)", rate.human_throughput_bytes());
+        let msg = format!("{} (last ~1s)", rate.human_throughput_bytes());
+        self.peak = f64::max(self.peak, rate);
         self.destination.set_prefix(msg.clone());
         self.destination
             .enable_steady_tick(self.tick_calc.tick_time(progress));
@@ -130,6 +139,8 @@ impl InstaMeterInner {
 
 /// This is a Rust implementation of the calibration algorithm from
 /// `https://github.com/rsalmei/alive-progress/blob/main/alive_progress/core/calibration.py`
+///
+/// The constructor parameter `max_throughput` sets the rate that will give the fastest possible tick rate
 #[derive(Clone, Copy, Debug)]
 struct TickRateCalculator {
     calibration: f64,

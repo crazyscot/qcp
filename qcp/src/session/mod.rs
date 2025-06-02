@@ -18,6 +18,27 @@ use indicatif::{MultiProgress, ProgressBar};
 
 use crate::{client::CopyJobSpec, config::Configuration};
 
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct CommandStats {
+    pub payload_bytes: u64,
+    pub peak_transfer_rate: u64,
+}
+
+impl CommandStats {
+    pub(crate) fn new() -> Self {
+        CommandStats {
+            payload_bytes: 0,
+            peak_transfer_rate: 0,
+        }
+    }
+    /// Combine this set of stats with another.
+    /// Sum payload bytes; peak becomes peak of either.
+    pub(crate) fn fold(&mut self, other: CommandStats) {
+        self.payload_bytes += other.payload_bytes;
+        self.peak_transfer_rate = u64::max(self.peak_transfer_rate, other.peak_transfer_rate);
+    }
+}
+
 /// Common structure for session protocol commands
 #[async_trait]
 pub(crate) trait SessionCommandImpl: Send {
@@ -31,7 +52,7 @@ pub(crate) trait SessionCommandImpl: Send {
         spinner: ProgressBar,
         config: &Configuration,
         quiet: bool,
-    ) -> Result<u64>;
+    ) -> Result<CommandStats>;
 
     /// Server side implementation, takes care of handling the command and all its
     /// traffic. Does not return until completion (or error).
@@ -47,7 +68,7 @@ pub(crate) trait SessionCommandImpl: Send {
         &mut self,
         spec: &CopyJobSpec,
         config: Option<&Configuration>,
-    ) -> Result<u64> {
+    ) -> Result<CommandStats> {
         let config = config.unwrap_or_else(|| Configuration::system_default());
         self.send(
             spec,
@@ -57,5 +78,28 @@ pub(crate) trait SessionCommandImpl: Send {
             true,
         )
         .await
+    }
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::CommandStats;
+
+    #[test]
+    fn stats() {
+        let mut acc = CommandStats::new();
+        let d1 = CommandStats {
+            payload_bytes: 42,
+            peak_transfer_rate: 3456,
+        };
+        let d2 = CommandStats {
+            payload_bytes: 78,
+            peak_transfer_rate: 2345,
+        };
+        acc.fold(d1);
+        acc.fold(d2);
+        assert_eq!(acc.payload_bytes, 42 + 78);
+        assert_eq!(acc.peak_transfer_rate, 3456);
     }
 }

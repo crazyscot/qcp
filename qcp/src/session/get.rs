@@ -8,7 +8,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::Instant;
 use tracing::trace;
 
-use super::SessionCommandImpl;
+use super::{CommandStats, SessionCommandImpl};
 
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::{Command, FileHeader, FileTrailer, GetArgs, Response, Status};
@@ -39,7 +39,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         spinner: indicatif::ProgressBar,
         config: &crate::config::Configuration,
         quiet: bool,
-    ) -> Result<u64> {
+    ) -> Result<CommandStats> {
         let filename = &job.source.filename;
         let dest = &job.destination.filename;
 
@@ -94,7 +94,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         file.flush().await?;
         trace!("complete");
         progress_bar.finish_and_clear();
-        Ok(header.size.0)
+        Ok(CommandStats {
+            payload_bytes: header.size.0,
+            peak_transfer_rate: meter.peak(),
+        })
     }
 
     async fn handle(&mut self) -> Result<()> {
@@ -150,14 +153,14 @@ mod test {
     use crate::{
         client::CopyJobSpec,
         protocol::session::{Command, Status},
-        session::{Get, test::*},
+        session::{CommandStats, Get, test::*},
         util::test_protocol::test_plumbing,
     };
     use either::Left;
     use littertray::LitterTray;
 
     /// Run a GET to completion, return the results from sender & receiver.
-    async fn test_get_main(file1: &str, file2: &str) -> Result<(Result<u64>, Result<()>)> {
+    async fn test_get_main(file1: &str, file2: &str) -> Result<(Result<CommandStats>, Result<()>)> {
         let (pipe1, mut pipe2) = test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2).unwrap();
         let mut sender = Get::boxed(pipe1, None);
@@ -180,7 +183,7 @@ mod test {
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_get_main("s:file1", "file2").await?;
-            assert_eq!(r1?, contents.len() as u64);
+            assert_eq!(r1?.payload_bytes, contents.len() as u64);
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("file2")?;
             assert_eq!(readback, contents);

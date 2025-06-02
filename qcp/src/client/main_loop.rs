@@ -6,6 +6,7 @@ use crate::{
     client::progress::SPINNER_TEMPLATE,
     config::{Configuration, Configuration_Optional, Manager},
     control::{ClientSsh, ControlChannel, create_endpoint},
+    session::CommandStats,
     util::{
         self, Credentials, TimeFormat, lookup_host_by_family,
         time::{Stopwatch, StopwatchChain},
@@ -174,7 +175,7 @@ pub(crate) async fn client_main(
         parameters.quiet,
     )
     .await;
-    let total_bytes = match result {
+    let command_stats = match result {
         Err(b) | Ok(b) => b,
     };
 
@@ -202,7 +203,7 @@ pub(crate) async fn client_main(
         let transport_time = timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
         crate::util::stats::process_statistics(
             &connection.stats(),
-            total_bytes,
+            command_stats,
             transport_time,
             remote_stats,
             &config,
@@ -218,8 +219,8 @@ pub(crate) async fn client_main(
 }
 
 /// Do whatever it is we were asked to.
-/// On success: returns the number of bytes transferred.
-/// On error: returns the number of bytes that were transferred, as far as we know.
+/// On success: returns statistics about the transfer.
+/// On error: returns the transfer statistics, as far as we know, up to the point of failure
 async fn manage_request(
     connection: &Connection,
     copy_spec: CopyJobSpec,
@@ -227,7 +228,7 @@ async fn manage_request(
     spinner: ProgressBar,
     config: &Configuration,
     quiet: bool,
-) -> Result<u64, u64> {
+) -> Result<CommandStats, CommandStats> {
     let mut tasks = tokio::task::JoinSet::new();
     let connection = connection.clone();
     let config = config.clone();
@@ -252,7 +253,7 @@ async fn manage_request(
         }
     });
 
-    let mut total_bytes = 0u64;
+    let mut stats = CommandStats::new();
     let mut success = true;
     loop {
         let Some(result) = tasks.join_next().await else {
@@ -267,23 +268,22 @@ async fn manage_request(
                     // Resume the panic on the main task
                     std::panic::resume_unwind(reason);
                 }
-                warn!("unexpected task join failure (shouldn't happen)");
-                Ok(0)
+                Err(anyhow::anyhow!(
+                    "unexpected task join failure (shouldn't happen)"
+                ))
             }
         };
 
         // The second layer of possible errors are failures in the protocol. Continue with other jobs as far as possible.
         match result {
-            Ok(size) => total_bytes += size,
+            Ok(st) => {
+                stats.fold(st);
+            }
             Err(e) => {
                 error!("{e}");
                 success = false;
             }
         }
     }
-    if success {
-        Ok(total_bytes)
-    } else {
-        Err(total_bytes)
-    }
+    if success { Ok(stats) } else { Err(stats) }
 }
