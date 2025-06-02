@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, error, trace};
 
-use super::SessionCommandImpl;
+use super::{CommandStats, SessionCommandImpl};
 
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::{Command, FileHeader, FileTrailer, PutArgs, Response, Status};
@@ -37,7 +37,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         spinner: indicatif::ProgressBar,
         config: &crate::config::Configuration,
         quiet: bool,
-    ) -> Result<u64> {
+    ) -> Result<CommandStats> {
         let src_filename = &job.source.filename;
         let dest_filename = &job.destination.filename;
 
@@ -135,7 +135,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         // Note that the Quinn sendstream calls finish() on drop.
         trace!("complete");
         progress_bar.finish_and_clear();
-        Ok(payload_len)
+        Ok(CommandStats {
+            payload_bytes: payload_len,
+            peak_transfer_rate: meter.peak(),
+        })
     }
 
     async fn handle(&mut self) -> Result<()> {
@@ -243,7 +246,7 @@ mod test {
     use crate::{
         client::CopyJobSpec,
         protocol::session::{Command, Status},
-        session::{Put, test::*},
+        session::{CommandStats, Put, test::*},
         util::test_protocol::test_plumbing,
     };
     use littertray::LitterTray;
@@ -258,7 +261,7 @@ mod test {
         file1: &str,
         file2: &str,
         sender_bails: bool,
-    ) -> Result<(Result<u64>, Result<()>)> {
+    ) -> Result<(Result<CommandStats>, Result<()>)> {
         let (pipe1, mut pipe2) = test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2).unwrap();
         let mut sender = Put::boxed(pipe1, None);
@@ -291,7 +294,7 @@ mod test {
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "s:file2", false).await?;
-            assert_eq!(r1?, contents.len() as u64);
+            assert_eq!(r1?.payload_bytes, contents.len() as u64);
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("file2")?;
             assert_eq!(readback, contents);
@@ -310,7 +313,7 @@ mod test {
             let _ = tray.create_text("send_dir/file1", contents)?;
             assert!(!std::fs::exists("file1")?); // ensure the test is valid
             let (r1, r2) = test_put_main("send_dir/file1", "s:", false).await?;
-            assert_eq!(r1?, contents.len() as u64);
+            assert_eq!(r1?.payload_bytes, contents.len() as u64);
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("file1")?;
             assert_eq!(readback, contents);
@@ -356,7 +359,7 @@ mod test {
             let _ = tray.create_text("file1", contents)?;
             let _ = tray.make_dir("destdir")?;
             let (r1, r2) = test_put_main("file1", "s:destdir", false).await?;
-            assert_eq!(r1?, contents.len() as u64);
+            assert_eq!(r1?.payload_bytes, contents.len() as u64);
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("destdir/file1")?;
             assert_eq!(readback, contents);

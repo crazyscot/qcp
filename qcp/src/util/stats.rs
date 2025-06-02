@@ -7,7 +7,7 @@ use quinn::ConnectionStats;
 use std::{cmp, fmt::Display, time::Duration};
 use tracing::{info, warn};
 
-use crate::{config::Configuration, protocol::control::ClosedownReportV1};
+use crate::{config::Configuration, protocol::control::ClosedownReportV1, session::CommandStats};
 
 /// Human friendly output helper
 #[derive(Debug, Clone, Copy)]
@@ -50,19 +50,21 @@ impl Display for DataRate {
 // this is a cosmetic function, it is not practical to test in its current form
 pub(crate) fn process_statistics(
     stats: &ConnectionStats,
-    payload_bytes: u64,
+    command_stats: CommandStats,
     transport_time: Option<Duration>,
     remote_stats: ClosedownReportV1,
     bandwidth: &Configuration,
     show_statistics: bool,
 ) {
     let locale = &num_format::Locale::en;
+    let payload_bytes = command_stats.payload_bytes;
     if payload_bytes != 0 {
         let size = payload_bytes.human_count_bytes();
         let rate = crate::util::stats::DataRate::new(payload_bytes, transport_time);
         let transport_time_str =
             transport_time.map_or("unknown".to_string(), |d| d.human_duration().to_string());
-        info!("Transferred {size} in {transport_time_str}; average {rate}");
+        let peak = command_stats.peak_transfer_rate.human_throughput_bytes();
+        info!("Transferred {size} in {transport_time_str}; average {rate}; peak {peak}");
     }
     if show_statistics {
         info!(
