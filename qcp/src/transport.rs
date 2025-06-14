@@ -12,7 +12,7 @@ use quinn::{
 use tracing::debug;
 
 use crate::{
-    config::{self, Configuration, Configuration_Optional, Manager, structure::Validatable as _},
+    config::{self, Configuration, Configuration_Optional, Manager},
     protocol::control::{ClientMessageV1, CongestionController},
     util::PortRange,
 };
