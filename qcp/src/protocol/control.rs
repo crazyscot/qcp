@@ -957,4 +957,88 @@ mod test {
         assert!(CompatibilityLevel::V1 <= CompatibilityLevel::V1);
         assert!(CompatibilityLevel::V1 <= CompatibilityLevel::NEWER);
     }
+
+    #[test]
+    fn wire_marshalling_client_greeting() {
+        // This message is critical to the entire protocol. It cannot change without breaking compatibility.
+        let msg = ClientGreeting {
+            compatibility: CompatibilityLevel::V1.into(),
+            debug: true,
+            extension: 3,
+        };
+        let wire = msg.to_vec().unwrap();
+        let expected = b"\x01\x00\x01\x03".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_server_greeting() {
+        // This message is critical to the entire protocol. It cannot change without breaking compatibility.
+        let msg = ServerGreeting {
+            compatibility: CompatibilityLevel::V1.into(),
+            extension: 4,
+        };
+        let wire = msg.to_vec().unwrap();
+        let expected = b"\x01\x00\x04".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_client_message_v1() {
+        let creds = dummy_credentials();
+        let msg = ClientMessage::V1(ClientMessageV1::new(
+            &creds,
+            ConnectionType::Ipv4,
+            false,
+            &Configuration_Optional::default(),
+        ));
+        let wire = msg.to_vec().unwrap();
+        let expected = b"\x01\x03\x00\x01\x02\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_server_message_v1() {
+        let msg = ServerMessage::V1(ServerMessageV1 {
+            port: 12345,
+            cert: vec![9, 8, 7],
+            name: "hello".to_string(),
+            bandwidth_to_client: Uint(123),
+            bandwidth_to_server: Uint(456),
+            rtt: 789,
+            congestion: CongestionController::Bbr,
+            initial_congestion_window: Uint(4321),
+            timeout: 42,
+            warning: String::from("this is a warning"),
+            extension: 0,
+        });
+        let wire = msg.to_vec().unwrap();
+        let expected = b"\x0190\x03\x09\x08\x07\x05hello\xc8\x03{\x15\x03\x01\xe1!*\x00\x11this is a warning\x00".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_server_message_failure() {
+        let msg = ServerMessage::Failure(ServerFailure::NegotiationFailed("hello".to_string()));
+        let wire = msg.to_vec().unwrap();
+        let expected = b"\x02\x01\x05hello".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_closedown_report_v1() {
+        let msg = ClosedownReport::V1(ClosedownReportV1 {
+            cwnd: Uint(42),
+            sent_packets: Uint(65),
+            lost_packets: Uint(66),
+            lost_bytes: Uint(456_798),
+            congestion_events: Uint(44),
+            black_holes: Uint(49),
+            sent_bytes: Uint(987_654),
+            extension: 0,
+        });
+        let wire = msg.to_vec().unwrap();
+        let expected = b"\x01*AB\xde\xf0\x1b,1\x86\xa4<\x00".to_vec();
+        assert_eq!(wire, expected);
+    }
 }
