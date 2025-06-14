@@ -365,7 +365,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         setup_tracing(level, None, None, time_format, colours)?;
         // Now we can use the tracing system!
 
-        let _span = tracing::error_span!("Server").entered();
+        let _span = tracing::error_span!("[Server]").entered();
         debug!("got client greeting {remote_greeting:?}");
         debug!("client IP is {}", remote_ip.as_ref().map_or("none", |v| v));
 

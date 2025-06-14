@@ -144,7 +144,7 @@ fn show_config(config_manager: &mut Manager) -> Result<bool> {
 
 async fn run_server() -> Result<bool> {
     crate::server_main().await.map_err(|e| {
-        eprintln!("{ERROR}ERROR{RESET} Server: {e:?}", ERROR = error());
+        eprintln!("{ERROR}ERROR{RESET} [Server] {e:?}", ERROR = error());
         anyhow::anyhow!("Server failed")
     })?;
     Ok(true)
