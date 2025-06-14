@@ -262,4 +262,54 @@ mod test {
         let deser = FileTrailer::from_slice(&wire).unwrap();
         assert_eq!(trail, deser);
     }
+
+    #[test]
+    fn wire_marshalling_command_get() {
+        let cmd = Command::Get(super::GetArgs {
+            filename: "myfile".to_string(),
+        });
+        let wire = cmd.to_vec().unwrap();
+        let expected = b"\x00\x06myfile".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_command_put() {
+        let cmd = Command::Put(super::PutArgs {
+            filename: "myfile2".to_string(),
+        });
+        let wire = cmd.to_vec().unwrap();
+        let expected = b"\x01\x07myfile2".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_response_v1() {
+        let resp = Response::V1(ResponseV1 {
+            status: Status::IoError,
+            message: Some("hi".to_string()),
+        });
+        let wire = resp.to_vec().unwrap();
+        let expected = b"\x00\x04\x01\x02hi".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_file_header_v1() {
+        let head = FileHeader::V1(FileHeaderV1 {
+            size: Uint(12345),
+            filename: "myfile".to_string(),
+        });
+        let wire = head.to_vec().unwrap();
+        let expected = b"\x00\xb9`\x06myfile".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_file_trailer_v1() {
+        let trail = FileTrailer::V1;
+        let wire = trail.to_vec().unwrap();
+        let expected = b"\x00".to_vec(); // V1 has no contents
+        assert_eq!(wire, expected);
+    }
 }
