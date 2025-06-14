@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2](https://github.com/crazyscot/qcp/compare/v0.4.1...v0.4.2)
+
+### ⛰️ Features
+
+- Report peak transfer speed - ([2d4c25f](https://github.com/crazyscot/qcp/commit/2d4c25fca6c3bb0b0410318bd0af684807d30ccc))
+
+### 🐛 Bug Fixes
+
+- Pre-flight configuration validation when not all fields are set - ([e3eb0bd](https://github.com/crazyscot/qcp/commit/e3eb0bd9648181e621759fc9d7eac6d1e4255c55))
+
+### ⚙️ Miscellaneous Tasks
+
+- Update readme - ([f797e7d](https://github.com/crazyscot/qcp/commit/f797e7d8a32be7a53688de1d4f961c25261d484f))
+
+
 ## [0.4.1](https://github.com/crazyscot/qcp/compare/qcp-v0.4.0...qcp-v0.4.1)
 
 ### ⛰️ Features
