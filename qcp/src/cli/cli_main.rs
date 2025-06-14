@@ -172,7 +172,14 @@ async fn run_client(
 ) -> anyhow::Result<bool> {
     let progress =
         MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS));
-    config_manager.validate_configuration()?;
+    {
+        // Caution: We haven't applied the system default config at this point, so we don't necessarily have all the fields.
+        // In order to validate what we have, we need to temporarily underlay the system default.
+        let mut temp_mgr = config_manager.clone();
+        temp_mgr.apply_system_default();
+        temp_mgr.validate_configuration()?;
+    }
+
     // this mode may return false
     crate::client_main(config_manager, progress, client_params).await
 }

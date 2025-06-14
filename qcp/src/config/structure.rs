@@ -411,17 +411,24 @@ impl Configuration {
 // VALIDATION ------------------------------------------------------------
 
 /// Data needed by [`Validatable::try_validate()`]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ValidationData {
     rtt: u16,
     rx: u64,
     tx: u64,
 }
 
-pub(crate) trait Validatable {
-    fn validation_data(&self) -> ValidationData;
+impl Configuration {
+    fn validation_data(&self) -> ValidationData {
+        ValidationData {
+            rtt: self.rtt,
+            rx: self.rx(),
+            tx: self.tx(),
+        }
+    }
 
     /// Performs additional validation checks on a configuration object
-    fn try_validate(&self) -> Result<()> {
+    pub(crate) fn try_validate(&self) -> Result<()> {
         let data = self.validation_data();
 
         let rtt = data.rtt;
@@ -462,7 +469,7 @@ pub(crate) trait Validatable {
     }
 
     /// Performs additional validation checks on the configuration.
-    fn validate(self) -> Result<Self>
+    pub(crate) fn validate(self) -> Result<Self>
     where
         Self: std::marker::Sized,
     {
@@ -471,29 +478,11 @@ pub(crate) trait Validatable {
     }
 }
 
-impl Validatable for Configuration {
-    fn validation_data(&self) -> ValidationData {
-        ValidationData {
-            rtt: self.rtt,
-            rx: self.rx(),
-            tx: self.tx(),
-        }
-    }
-}
-
-impl Validatable for Configuration_Optional {
-    fn validation_data(&self) -> ValidationData {
-        ValidationData {
-            rtt: self.rtt.unwrap_or(0),
-            rx: u64::from(self.rx.unwrap_or_default()),
-            tx: u64::from(self.tx.unwrap_or_default()),
-        }
-    }
-}
-
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
+    use crate::config::Manager;
+
     use super::SYSTEM_DEFAULT_CONFIG;
 
     #[test]
@@ -525,7 +514,6 @@ mod test {
 
     #[test]
     fn validate() {
-        use super::Validatable as _;
         let mut cfg = SYSTEM_DEFAULT_CONFIG.clone();
         assert!(cfg.try_validate().is_ok());
 
@@ -564,5 +552,15 @@ mod test {
             msg.contains("The transmit bandwidth delay product calculation")
                 && msg.contains("overflowed")
         );
+    }
+
+    #[test]
+    fn issue_123_validate_default_data() {
+        let mgr = Manager::without_files(None);
+        let cfg = mgr.get::<super::Configuration>().unwrap();
+        let data = cfg.validation_data();
+        assert_eq!(data.rtt, SYSTEM_DEFAULT_CONFIG.rtt);
+        assert_eq!(data.rx, SYSTEM_DEFAULT_CONFIG.rx());
+        assert_eq!(data.tx, SYSTEM_DEFAULT_CONFIG.tx());
     }
 }

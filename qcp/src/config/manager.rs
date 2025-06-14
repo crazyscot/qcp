@@ -3,11 +3,10 @@
 
 use crate::{
     cli::styles::ColourMode,
-    config::structure::Validatable as _,
     os::{AbstractPlatform as _, Platform},
 };
 
-use super::{ClicolorEnv, Configuration, Configuration_Optional, ssh::ConfigFileError};
+use super::{ClicolorEnv, Configuration, ssh::ConfigFileError};
 
 use anyhow::Result;
 use figment::{Figment, Provider};
@@ -24,7 +23,7 @@ use tracing::{debug, warn};
 ///
 /// Configuration file locations are platform-dependent.
 /// To see what applies on the current platform, run `qcp --config-files`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Manager {
     /// Configuration data
     pub(super) data: Figment,
@@ -239,7 +238,7 @@ impl Manager {
     /// Performs additional validation checks on the fields present in the configuration, as far as possible.
     /// This is only useful when the [`Manager`] holds a [`Configuration`].
     pub fn validate_configuration(&self) -> Result<()> {
-        self.get::<Configuration_Optional>()?.try_validate()
+        self.get::<Configuration>()?.try_validate()
     }
 }
 
