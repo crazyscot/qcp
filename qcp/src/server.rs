@@ -27,6 +27,7 @@ pub(crate) async fn server_main() -> anyhow::Result<()> {
             use_colours(),
         )
         .await?;
+    let _span = tracing::error_span!("[Server]").entered();
     let endpoint = result.endpoint;
 
     let mut tasks = JoinSet::new();
