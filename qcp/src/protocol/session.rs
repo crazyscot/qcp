@@ -135,7 +135,7 @@ impl PartialEq<Status> for Uint {
 /// A command from client to server.
 ///
 /// The server must respond with a Response before anything else can happen on this connection.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, strum::Display)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, strum_macros::Display)]
 pub enum Command {
     /// Retrieves a file. This may fail if the file does not exist or the user doesn't have read permission.
     /// * Client ➡️ Server: `Get` command
