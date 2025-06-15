@@ -112,7 +112,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
             Ok(res) => res,
             Err(e) => {
                 let (status, message) = crate::util::io::status_from_error(&e);
-                return send_response(&mut self.stream.send, status, Some(&message)).await;
+                return send_response(&mut self.stream.send, status, message.as_deref()).await;
             }
         };
         if meta.is_dir() {

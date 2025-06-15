@@ -4,11 +4,11 @@
 use crate::protocol::session::Status;
 use std::{fs::Metadata, io::ErrorKind, path::Path, path::PathBuf, str::FromStr as _};
 
-pub(crate) fn status_from_error(e: &tokio::io::Error) -> (Status, String) {
+pub(crate) fn status_from_error(e: &tokio::io::Error) -> (Status, Option<String>) {
     match e.kind() {
-        ErrorKind::NotFound => (Status::FileNotFound, e.to_string()),
-        ErrorKind::PermissionDenied => (Status::IncorrectPermissions, e.to_string()),
-        _ => (Status::IoError, e.to_string()),
+        ErrorKind::NotFound => (Status::FileNotFound, None),
+        ErrorKind::PermissionDenied => (Status::IncorrectPermissions, None),
+        _ => (Status::IoError, Some(e.to_string())),
     }
 }
 
