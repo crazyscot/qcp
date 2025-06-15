@@ -25,7 +25,7 @@ where
     W: AsyncWriteExt + std::marker::Unpin + Send,
 {
     Response::V1(ResponseV1::new(
-        status,
+        status.into(),
         message.map(std::string::ToString::to_string),
     ))
     .to_writer_async_framed(send)
@@ -70,9 +70,10 @@ where
     if response.status == Status::Ok {
         Ok(())
     } else {
-        Err(anyhow::Error::new(response.status).context(format!(
+        let st = Status::try_from(response.status)?;
+        Err(anyhow::Error::new(st).context(format!(
             "{} from {}{}",
-            response.status,
+            st,
             context(),
             response
                 .message
@@ -139,7 +140,10 @@ mod tests {
         let msg = Response::from_reader_framed(&mut Cursor::new(ts.written)).unwrap();
         assert_eq!(
             msg,
-            Response::V1(ResponseV1::new(Status::Ok, Some("hello".to_string())))
+            Response::V1(ResponseV1::new(
+                Status::Ok.into(),
+                Some("hello".to_string())
+            ))
         );
     }
 
