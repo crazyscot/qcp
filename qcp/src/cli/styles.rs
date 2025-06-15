@@ -106,7 +106,15 @@ pub fn use_colours() -> bool {
 
 /// The available terminal colour modes
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Serialize, Deserialize, strum::VariantNames,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    clap::ValueEnum,
+    Serialize,
+    Deserialize,
+    strum_macros::VariantNames,
 )]
 #[serde(rename_all = "kebab-case")] // to match clap::ValueEnum
 pub enum ColourMode {

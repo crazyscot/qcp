@@ -13,7 +13,7 @@
     clap::ValueEnum,
     serde::Serialize,
     serde::Deserialize,
-    strum::VariantNames,
+    strum_macros::VariantNames,
 )]
 #[serde(rename_all = "kebab-case")] // to match clap::ValueEnum
 pub enum AddressFamily {
