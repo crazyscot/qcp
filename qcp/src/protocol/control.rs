@@ -27,7 +27,15 @@
 //!   * The server MUST NOT send a newer version than the client understands.
 //! * C ➡️ S: (closes control channel; server takes this as a cue to exit)
 //!
+//! # Wire encoding
+//!
 //! On the wire these are [BARE] messages.
+//!
+//! Note that serde_bare by default encodes enums on the wire as uints (rust `usize`),
+//! ignoring any explicit discriminant!
+//!
+//! Unit enums (C-like) may be encoded with explicitly sized types (repr attribute) and using
+//! their discriminant as the wire value, if derived from `Serialize_repr` or `Deserialize_repr`.
 //!
 //! # See also
 //! [Common](super::common) protocol functions
@@ -171,14 +179,16 @@ impl From<SocketAddr> for ConnectionType {
     strum::VariantNames,
     clap::ValueEnum,
 )]
-#[repr(u8)]
 #[serde(try_from = "Uint")]
 #[serde(into = "Uint")]
 #[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
 pub enum CongestionController {
     /// The congestion algorithm TCP uses. This is good for most cases.
+    //
+    // Note that this enum is serialized without serde_repr, so explicit discriminants are not used on the wire.
+    // This also means that the ordering and meaning can never be changed without breaking compatibility.
     #[default]
-    Cubic = 0,
+    Cubic,
     /// (Use with caution!) An experimental algorithm created by Google,
     /// which increases goodput in some situations
     /// (particularly long and fat connections where the intervening
@@ -187,12 +197,12 @@ pub enum CongestionController {
     /// See
     /// `https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/`
     /// for more discussion.
-    Bbr = 1,
+    Bbr,
     /// The traditional "NewReno" congestion algorithm.
     /// This was the algorithm used in TCP before the introduction of Cubic.
     ///
     /// This option requires qcp protocol compatibility level V2.
-    NewReno = 2,
+    NewReno,
 }
 
 impl From<CongestionController> for Uint {
@@ -205,7 +215,7 @@ impl TryFrom<Uint> for CongestionController {
     type Error = anyhow::Error;
 
     fn try_from(value: Uint) -> anyhow::Result<Self> {
-        let v = u8::try_from(value.0)?;
+        let v = usize::try_from(value.0)?;
         CongestionController::from_repr(v).ok_or(anyhow!("invalid congestioncontroller enum"))
     }
 }
@@ -612,6 +622,8 @@ impl From<&ConnectionStats> for ClosedownReportV1 {
         }
     }
 }
+
+// //////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
