@@ -151,7 +151,15 @@ impl From<u16> for CompatibilityLevel {
 // CONNECTION TYPE
 
 #[derive(
-    Serialize_repr, Deserialize_repr, PartialEq, Eq, Debug, Default, Clone, Copy, strum::Display,
+    Serialize_repr,
+    Deserialize_repr,
+    PartialEq,
+    Eq,
+    Debug,
+    Default,
+    Clone,
+    Copy,
+    strum_macros::Display,
 )]
 /// Protocol representation of a connection type
 ///
@@ -198,10 +206,10 @@ impl From<SocketAddr> for ConnectionType {
     Eq,
     Serialize,
     Deserialize,
-    strum::Display,
-    strum::EnumString,
-    strum::FromRepr,
-    strum::VariantNames,
+    strum_macros::Display,
+    strum_macros::EnumString,
+    strum_macros::FromRepr,
+    strum_macros::VariantNames,
     clap::ValueEnum,
 )]
 #[serde(try_from = "Uint")]
