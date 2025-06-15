@@ -41,15 +41,15 @@ def_enum!(
     ///
     /// ```
     /// use qcp::protocol::{control::CompatibilityLevel, compat::Feature};
-    /// assert_eq!(Feature::BASIC_PROTOCOL.level(), CompatibilityLevel::V1);
+    /// assert_eq!(Feature::BASIC_PROTOCOL.level(), CompatibilityLevel::Level(1));
     /// assert_eq!(Feature::BASIC_PROTOCOL.name(), "BASIC_PROTOCOL");
     /// ```
 
     pub Feature => CompatibilityLevel {
         /// The original base protocol introduced in qcp v0.3.0
-        BASIC_PROTOCOL => CompatibilityLevel::V1,
+        BASIC_PROTOCOL => CompatibilityLevel::Level(1),
         /// Support for the `NewReno` congestion control algorithm
-        NEW_RENO => CompatibilityLevel::V2,
+        NEW_RENO => CompatibilityLevel::Level(2),
     }
 );
 
@@ -77,7 +77,11 @@ impl CompatibilityLevel {
     #[must_use]
     /// Does this level support that feature?
     pub fn supports(self, feature: Feature) -> bool {
-        self >= feature.level()
+        match self {
+            CompatibilityLevel::Unknown => false,
+            CompatibilityLevel::Newer => true,
+            CompatibilityLevel::Level(l) => l >= feature.level().into(),
+        }
     }
 }
 
@@ -131,9 +135,11 @@ mod test {
 
     #[test]
     fn supports() {
-        assert!(CompatibilityLevel::V1.supports(Feature::BASIC_PROTOCOL));
-        assert!(CompatibilityLevel::NEWER.supports(Feature::BASIC_PROTOCOL));
+        assert!(CompatibilityLevel::Level(1).supports(Feature::BASIC_PROTOCOL));
+        assert!(CompatibilityLevel::Newer.supports(Feature::BASIC_PROTOCOL));
+        assert!(!CompatibilityLevel::Unknown.supports(Feature::BASIC_PROTOCOL));
 
-        assert!(!CompatibilityLevel::UNKNOWN.supports(Feature::BASIC_PROTOCOL));
+        assert!(!CompatibilityLevel::Level(1).supports(Feature::NEW_RENO));
+        assert!(CompatibilityLevel::Level(2).supports(Feature::NEW_RENO));
     }
 }
