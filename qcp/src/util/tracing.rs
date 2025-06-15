@@ -52,9 +52,9 @@ pub(crate) fn trace_level(args: &crate::client::Parameters) -> &str {
     Default,
     Eq,
     PartialEq,
-    strum::Display,
-    strum::EnumString,
-    strum::VariantNames,
+    strum_macros::Display,
+    strum_macros::EnumString,
+    strum_macros::VariantNames,
     clap::ValueEnum,
     Serialize,
 )]
