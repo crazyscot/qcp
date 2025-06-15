@@ -72,7 +72,10 @@ pub const BANNER: &str = "qcp-server-2\n";
 pub const OLD_BANNER: &str = "qcp-server-1\n";
 
 /// The protocol compatibility version implemented by this crate
-pub const OUR_COMPATIBILITY_LEVEL: CompatibilityLevel = CompatibilityLevel::V2;
+pub(crate) const OUR_COMPATIBILITY_NUMERIC: u16 = 2;
+/// The protocol compatibility version implemented by this crate
+pub const OUR_COMPATIBILITY_LEVEL: CompatibilityLevel =
+    CompatibilityLevel::Level(OUR_COMPATIBILITY_NUMERIC);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // COMPATIBILITY
@@ -87,38 +90,60 @@ pub const OUR_COMPATIBILITY_LEVEL: CompatibilityLevel = CompatibilityLevel::V2;
 /// While this enum is part of the control protocol, it affects both control and session; the same principles
 /// of compatibility apply.
 ///
-/// See also [`Feature`](super::compat::Feature).
-#[repr(u16)]
-#[derive(Clone, Copy, Debug, strum::Display, PartialEq, Eq, strum::FromRepr, PartialOrd, Ord)]
+/// The following compatibility levels are defined:
+/// * 1: Introduced in qcp 0.3.
+/// * 2: Introduced in qcp 0.5.
+///
+/// See [`Feature`](super::compat::Feature) for a mapping from compatibility levels to specific features.
+///
+/// <div class="warning">
+/// While this type implements an automatic `PartialEq`, it does not offer an `Ord` or `PartialOrd`
+/// due to the special meanings of [`CompatibilityLevel::Unknown`] and [`CompatibilityLevel::Newer`].
+/// Prefer to use a match block and compare the u16 within directly.
+/// </div>
+///
+#[derive(Clone, Copy, Debug, Default, derive_more::Display, PartialEq, Serialize, Deserialize)]
 pub enum CompatibilityLevel {
-    /// Indicates that we do not know the peer's compatibility level.
+    /// Indicates that we do not (yet) know the peer's compatibility level.
+    ///
+    /// This value should never be seen on the wire. The set of supported features is undefined.
+    ///
+    /// This value is not considered to be equal to itself. Use a match block if you need to test for unknown-ness.
+    #[default]
+    #[serde(skip_serializing)]
+    Unknown,
+    /// Special value indicating the peer is newer than the latest version we now about.
+    ///
     /// This value should never be seen on the wire.
-    UNKNOWN = 0,
+    /// The set of supported features is assumed to be an unspecified superset of ours.
+    ///
+    /// Where the peer is `Newer` than us, we would expect to use the latest protocol version we know about.
+    ///
+    #[serde(skip_serializing)]
+    Newer,
 
-    /// Version 1 was introduced in qcp 0.3
-    V1 = 1,
-
-    /// Version 2 was introduced in qcp 0.5
-    V2 = 2,
-
-    /// Special value indicating the peer is newer than our latest version.
-    /// This value should never be seen on the wire.
-    /// Where the peer is `NEWER` than us, we would expect to use the latest protocol version we know about.
-    NEWER = 65535,
+    /// General compatibility level, serialized as a u16.
+    #[serde(untagged)]
+    Level(u16),
 }
 
-impl From<u16> for CompatibilityLevel {
-    /// This conversion is infallible because any unknown value is mapped to `VersionCompatibility::NEWER`.
-    fn from(value: u16) -> Self {
-        match CompatibilityLevel::from_repr(value) {
-            Some(v) => v,
-            None => CompatibilityLevel::NEWER,
+impl From<CompatibilityLevel> for u16 {
+    fn from(value: CompatibilityLevel) -> Self {
+        match value {
+            CompatibilityLevel::Level(v) => v,
+            CompatibilityLevel::Unknown | CompatibilityLevel::Newer => 0,
         }
     }
 }
-impl From<CompatibilityLevel> for u16 {
-    fn from(value: CompatibilityLevel) -> Self {
-        value as u16
+
+impl From<u16> for CompatibilityLevel {
+    fn from(value: u16) -> Self {
+        if value > OUR_COMPATIBILITY_NUMERIC {
+            // If the value is greater than our compatibility level, we treat it as "newer"
+            CompatibilityLevel::Newer
+        } else {
+            CompatibilityLevel::Level(value)
+        }
     }
 }
 
@@ -685,13 +710,6 @@ mod test {
         assert_eq!(report, expected);
     }
 
-    #[test]
-    fn convert_version_compat() {
-        assert_eq!(u16::from(CompatibilityLevel::V1), 1);
-        assert_eq!(CompatibilityLevel::from(1), CompatibilityLevel::V1);
-        assert_eq!(CompatibilityLevel::from(12345), CompatibilityLevel::NEWER);
-    }
-
     /// Time-travelling compatibility: Version 1 of the structure.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
     struct Test1 {
@@ -747,7 +765,7 @@ mod test {
     #[test]
     fn serialize_client_greeting() {
         let msg = ClientGreeting {
-            compatibility: CompatibilityLevel::V1.into(),
+            compatibility: 1,
             debug: false,
             extension: 0,
         };
@@ -759,7 +777,7 @@ mod test {
     #[test]
     fn serialize_server_greeting() {
         let msg = ServerGreeting {
-            compatibility: CompatibilityLevel::V1.into(),
+            compatibility: 1,
             extension: 0,
         };
         let wire = msg.to_vec().unwrap();
@@ -961,20 +979,28 @@ mod test {
     }
 
     #[test]
-    fn level_ordering() {
-        assert!(CompatibilityLevel::V1 > CompatibilityLevel::UNKNOWN);
-        assert!(CompatibilityLevel::NEWER > CompatibilityLevel::V1);
-        assert!(CompatibilityLevel::V1 >= CompatibilityLevel::UNKNOWN);
-        assert!(CompatibilityLevel::V1 >= CompatibilityLevel::V1);
-        assert!(CompatibilityLevel::V1 <= CompatibilityLevel::V1);
-        assert!(CompatibilityLevel::V1 <= CompatibilityLevel::NEWER);
+    fn compat_level_from_wire() {
+        let cases = &[
+            (0u16, CompatibilityLevel::Level(0)),
+            (1, CompatibilityLevel::Level(1)),
+            (2, CompatibilityLevel::Level(2)),
+            (32768, CompatibilityLevel::Newer),
+            (65535, CompatibilityLevel::Newer),
+        ];
+        for (wire, expected) in cases {
+            let level: CompatibilityLevel = (*wire).into();
+            assert_eq!(
+                level, *expected,
+                "wire {wire} should be {expected:?} but got {level}"
+            );
+        }
     }
 
     #[test]
     fn wire_marshalling_client_greeting() {
         // This message is critical to the entire protocol. It cannot change without breaking compatibility.
         let msg = ClientGreeting {
-            compatibility: CompatibilityLevel::V1.into(),
+            compatibility: 1,
             debug: true,
             extension: 3,
         };
@@ -987,7 +1013,7 @@ mod test {
     fn wire_marshalling_server_greeting() {
         // This message is critical to the entire protocol. It cannot change without breaking compatibility.
         let msg = ServerGreeting {
-            compatibility: CompatibilityLevel::V1.into(),
+            compatibility: 1,
             extension: 4,
         };
         let wire = msg.to_vec().unwrap();

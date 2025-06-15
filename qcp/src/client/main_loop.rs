@@ -469,7 +469,7 @@ mod test {
                 &config,
                 &server_message,
                 server_address_port.into(),
-                CompatibilityLevel::V1,
+                CompatibilityLevel::Level(1),
             )
             .unwrap();
         assert!(endpoint.local_addr().is_ok());

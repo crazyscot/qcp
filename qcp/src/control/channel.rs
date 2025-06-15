@@ -4,7 +4,6 @@
 //! Control channel management for the qcp client
 // (c) 2024 Ross Younger
 
-use std::cmp::min;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
@@ -23,7 +22,7 @@ use crate::protocol::compat::Feature;
 use crate::protocol::control::{
     BANNER, ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport, ClosedownReportV1,
     CompatibilityLevel, CongestionController, ConnectionType, OLD_BANNER, OUR_COMPATIBILITY_LEVEL,
-    ServerFailure, ServerGreeting, ServerMessage, ServerMessageV1,
+    OUR_COMPATIBILITY_NUMERIC, ServerFailure, ServerGreeting, ServerMessage, ServerMessageV1,
 };
 use crate::transport::combine_bandwidth_configurations;
 use crate::util::{Credentials, TimeFormat, TracingSetupFn};
@@ -87,7 +86,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     pub(crate) fn new(stream: SendReceivePair<S, R>) -> Self {
         Self {
             stream,
-            selected_compat: CompatibilityLevel::UNKNOWN,
+            selected_compat: CompatibilityLevel::Unknown,
         }
     }
 
@@ -117,20 +116,25 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         Ok(())
     }
 
-    fn process_compatibility_levels(&mut self, theirs: u16) {
-        // FUTURE: We may decide to deprecate older compatibility versions. Handle that here.
-        let d = match theirs.cmp(&OUR_COMPATIBILITY_LEVEL.into()) {
-            std::cmp::Ordering::Less => Some("older"),
-            std::cmp::Ordering::Equal => None,
-            std::cmp::Ordering::Greater => Some("newer"),
+    // STATIC METHOD
+    fn choose_compatibility_level(ours: u16, theirs: u16) -> CompatibilityLevel {
+        // Reporting older/newer compatibility levels is useful for debugging.
+        use std::cmp::Ordering::{Equal, Greater, Less};
+        let (d, result) = match theirs.cmp(&ours) {
+            Less => (Some("older"), theirs),
+            Equal => (None, ours),
+            Greater => (Some("newer"), ours),
         };
         if let Some(d) = d {
-            debug!(
-                "Remote compatibility level {theirs} is {d} than ours {OUR_COMPATIBILITY_LEVEL}"
-            );
+            debug!("Remote compatibility level {theirs} is {d} than ours {ours}");
         }
-        self.selected_compat = min(theirs.into(), OUR_COMPATIBILITY_LEVEL);
-        debug!("selected compatibility level {}", self.selected_compat);
+        debug!("selected compatibility level {result}");
+        result.into()
+    }
+
+    fn process_compatibility_levels(&mut self, theirs: u16) {
+        // FUTURE: We may decide to deprecate older compatibility versions. Handle that here.
+        self.selected_compat = Self::choose_compatibility_level(OUR_COMPATIBILITY_NUMERIC, theirs);
     }
 
     // =================================================================================
@@ -707,5 +711,18 @@ mod test {
         let e = cli_res.unwrap_err();
         eprintln!("msg {e:?}");
         assert!(e.to_string().contains("Endpoint Failed"));
+    }
+
+    #[test]
+    fn compatibility_level_comparison() {
+        type Uut = ControlChannel<tokio::io::Stdout, tokio::io::Stdin>;
+        let cases = &[(1u16, 1u16, 1u16), (1, 2, 1), (2, 1, 1), (65535, 1, 1)];
+        for (a, b, result) in cases {
+            assert_eq!(
+                Uut::choose_compatibility_level(*a, *b),
+                (*result).into(),
+                "case: {a} {b} -> {result}"
+            );
+        }
     }
 }
