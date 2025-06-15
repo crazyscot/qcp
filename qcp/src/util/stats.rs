@@ -4,7 +4,11 @@
 use human_repr::{HumanCount, HumanDuration, HumanThroughput};
 use num_format::ToFormattedString as _;
 use quinn::ConnectionStats;
-use std::{cmp, fmt::Display, time::Duration};
+use std::{
+    cmp::{self, max},
+    fmt::Display,
+    time::Duration,
+};
 use tracing::{info, warn};
 
 use crate::{config::Configuration, protocol::control::ClosedownReportV1, session::CommandStats};
@@ -56,6 +60,8 @@ pub(crate) fn process_statistics(
     bandwidth: &Configuration,
     show_statistics: bool,
 ) {
+    #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
     let locale = &num_format::Locale::en;
     let payload_bytes = command_stats.payload_bytes;
     if payload_bytes != 0 {
@@ -63,7 +69,12 @@ pub(crate) fn process_statistics(
         let rate = crate::util::stats::DataRate::new(payload_bytes, transport_time);
         let transport_time_str =
             transport_time.map_or("unknown".to_string(), |d| d.human_duration().to_string());
-        let peak = command_stats.peak_transfer_rate.human_throughput_bytes();
+
+        let peak_rate = max(
+            command_stats.peak_transfer_rate,
+            rate.byte_rate().unwrap_or_default() as u64,
+        );
+        let peak = peak_rate.human_throughput_bytes();
         info!("Transferred {size} in {transport_time_str}; average {rate}; peak {peak}");
     }
     if show_statistics {
