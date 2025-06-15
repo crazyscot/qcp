@@ -35,10 +35,22 @@
 //! _N.B. In versions 0.3.0 through to 0.3.3, the server's [Response] was sent between [PutArgs] and [FileHeader].
 //!  This is a minor protocol refinement that improves reliability and testability without affecting compatibility._
 //!
-//!
 //! After transfer, close the stream.
 //!
 //! If the server needs to abort the transfer mid-flow, it may send a Response explaining why, then close the stream.
+//!
+//! # Wire encoding
+//!
+//! On the wire these are [BARE] messages.
+//!
+//! Note that serde_bare by default encodes enums on the wire as uints (rust `usize`),
+//! ignoring any explicit discriminant!
+//!
+//! Unit enums (C-like) may be encoded with explicitly sized types (repr attribute) and using
+//! their discriminant as the wire value, if derived from `Serialize_repr` or `Deserialize_repr`.
+//!
+//! # See also
+//! [Common](super::common) protocol functions
 //!
 //! [quic]: https://quicwg.github.io/
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
@@ -61,9 +73,10 @@ use super::common::ProtocolMessage;
     thiserror::Error,
     strum_macros::Display,
 )]
-#[repr(u16)]
 #[allow(missing_docs)]
 pub enum Status {
+    // Note that this enum is serialized without serde_repr, so explicit discriminants are not used on the wire.
+    // This also means that the ordering and meaning of existing items cannot be changed without breaking compatibility.
     Ok = 0,
     FileNotFound = 1,
     IncorrectPermissions = 2,
@@ -78,7 +91,6 @@ pub enum Status {
 ///
 /// The server must respond with a Response before anything else can happen on this connection.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, strum::Display)]
-#[repr(u16)]
 pub enum Command {
     /// Retrieves a file. This may fail if the file does not exist or the user doesn't have read permission.
     /// * Client ➡️ Server: `Get` command
@@ -86,7 +98,7 @@ pub enum Command {
     /// * Client closes the stream after transfer.
     /// * If the client needs to abort transfer, it closes the stream.
     /// * If the server needs to abort transfer, it closes the stream.
-    Get(GetArgs) = 1,
+    Get(GetArgs),
     /// Sends a file. This may fail for permissions or if the containing directory doesn't exist.
     /// * Client ➡️ Server: `Put` command
     /// * S➡️C: [`Response`] (to the command)
@@ -96,7 +108,7 @@ pub enum Command {
     /// * Then close the stream.
     ///
     /// If the server needs to abort the transfer, it may send a Response explaining why, then close the stream.
-    Put(PutArgs) = 2,
+    Put(PutArgs),
 }
 impl ProtocolMessage for Command {}
 
@@ -116,10 +128,9 @@ pub struct PutArgs {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 /// Response packet
-#[repr(u16)]
 pub enum Response {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
-    V1(ResponseV1) = 1,
+    V1(ResponseV1),
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor)]
@@ -149,10 +160,9 @@ impl Display for ResponseV1 {
 /// File Header packet. Metadata sent before file data.
 ///
 /// This is an enum to provide for forward compatibility.
-#[repr(u16)]
 pub enum FileHeader {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
-    V1(FileHeaderV1) = 1,
+    V1(FileHeaderV1),
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
