@@ -28,8 +28,14 @@ pub(crate) const MINIMUM_BANDWIDTH: u64 = 150;
 
 /// The set of configurable options supported by qcp.
 ///
-/// **IMPORTANT:** The configurations of the server and client are combined at runtime.
+/// **IMPORTANT:** The server and client configurations are combined at runtime.
 /// See [`combine_bandwidth_configurations`](crate::transport::combine_bandwidth_configurations) for details.
+///
+/// ## tl;dr
+///
+/// For good performance, at the very least, configure:
+/// * [rx](Configuration#structfield.rx); and
+/// * [tx](Configuration#structfield.tx) if it is significantly different from rx.
 ///
 /// ### Configuration files
 ///
@@ -65,12 +71,19 @@ pub struct Configuration {
     /// The maximum network bandwidth we expect receiving data FROM the remote system.
     /// [default: 12.5M]
     ///
+    /// <div class="warning">
+    /// <big><b>This is the single most important configuration necessary for good performance!</b></big>
+    ///
+    /// If you configure nothing else, at least set this to suit your network.
+    /// </div>
+    ///
     /// This parameter is always interpreted as the **local** bandwidth, whether operating in client or server mode.
     ///
     /// This may be specified directly as a number, or as an SI quantity
     /// like `10M` or `256k`. **Note that this is described in BYTES, not bits**;
     /// if (for example) you expect to fill a 1Gbit ethernet connection,
-    /// 125M might be a suitable setting.
+    /// 125M would be a suitable setting.
+    /// See also [`EngineeringQuantity`](https://docs.rs/engineering-repr/latest/engineering_repr/struct.EngineeringQuantity.html).
     ///
     #[arg(
         short('b'),
@@ -88,6 +101,8 @@ pub struct Configuration {
     /// This parameter is always interpreted as the **local** bandwidth, whether operating in client or server mode.
     ///
     /// If not specified or 0, uses the value of `rx`.
+    ///
+    /// See also [`EngineeringQuantity`](https://docs.rs/engineering-repr/latest/engineering_repr/struct.EngineeringQuantity.html).
     #[arg(
         short('B'),
         long,
@@ -126,6 +141,7 @@ pub struct Configuration {
     /// If unspecified, the active congestion control algorithm decides.
     ///
     /// This may be specified directly as a number, or as an SI quantity like `10k`.
+    /// See also [`EngineeringQuantity`](https://docs.rs/engineering-repr/latest/engineering_repr/struct.EngineeringQuantity.html).
     ///
     /// _Setting this value too high reduces performance!_
     #[arg(
@@ -349,16 +365,16 @@ impl Configuration {
         Duration::from_millis(u64::from(self.rtt))
     }
 
-    /// UDP kernel sending buffer size to use
+    /// Kernel UDP sending buffer size to use
     #[must_use]
     pub fn send_buffer() -> u64 {
-        // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
+        // Kernel UDP buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
         2_097_152
     }
-    /// UDP kernel receive buffer size to use
+    /// Kernel UDP receive buffer size to use
     #[must_use]
     pub fn recv_buffer() -> u64 {
-        // UDP kernel buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
+        // Kernel UDP buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
         2_097_152
     }
 
@@ -410,7 +426,7 @@ impl Configuration {
 
 // VALIDATION ------------------------------------------------------------
 
-/// Data needed by [`Validatable::try_validate()`]
+/// Data required by [`Configuration::try_validate()`]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ValidationData {
     rtt: u16,

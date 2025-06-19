@@ -47,7 +47,7 @@ impl ReceivingStream for ChildStdout {}
 
 impl Ssh {
     /// A reasonably controlled shutdown.
-    /// (If you want to be rough, simply drop the [`Channel`].)
+    /// (If you don't mind being rough, simply drop the [`Ssh`].)
     pub(crate) async fn close(&mut self) -> Result<()> {
         // wait() closes the child process stdin
         let _ = self.process.wait().await?;

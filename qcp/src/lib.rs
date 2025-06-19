@@ -2,7 +2,18 @@
 
 #![allow(clippy::doc_markdown)]
 //! The QUIC Copier (`qcp`) is an experimental high-performance remote file copy utility,
-//! intended for long-distance internet connections.
+//! intended for long-distance high-bandwidth internet connections ("long, fat pipes").
+//!
+//! ## 📖 Documentation
+//!
+//! * [About the QCP protocol](protocol)
+//! * [Configuring QCP](config)
+//! * [Performance tuning](doc::performance)
+//! * [Troubleshooting](doc::troubleshooting)
+//! * OS-specific notes:
+//!   * 🍎 [OSX](os::osx)
+//!   * 🐧 [Linux & other Unix](os::unix)
+//!   * 🪟 [Windows](os::windows)
 //!
 //! ## Overview
 //! - 🔧 Drop-in replacement for `scp`
@@ -13,7 +24,7 @@
 //!   - Data is transported using the [QUIC](https://quicwg.github.io/) protocol over UDP
 //!   - Tunable network properties
 //!
-//! ### Use case
+//! #### Use case
 //!
 //! This utility and protocol can be useful when copying **large** files (tens of MB or more),
 //! from _point to point_ over a _long, fat, congested pipe_.
@@ -31,6 +42,25 @@
 //! * Peer to peer file transfer (Use [BitTorrent]?)
 //! * An improvement for interactive shells (Use [mosh].)
 //! * Delta-based copying (Use [rsync].)
+//!
+//! ## 🧰 Getting Started
+//!
+//! * You must have ssh access to the target machine.
+//! * You must also be able to connect to the target on a given UDP port.
+//!   - If the local machine is behind connection-tracking NAT, things usually work just fine. This is the case for the vast majority of home and business network connections.
+//!   - If the target is behind a firewall, you need to configure the firewall so at least some small set of UDP ports is
+//!     accessible, and **not subject to network port translation**.
+//!     (You can configure qcp to use a particular port range if you need to; see `--port` / `--remote-port`.)
+//!     - In different terms: The target machine will bind to a random UDP port, and advise its peer (via ssh)
+//!       of its choice of port number.
+//! * Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine,
+//!   or you need to set up `SshSubsystem` mode.
+//!   * Check the platform-specific notes: [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html),
+//!     [Linux/other Unix](https://docs.rs/qcp/latest/qcp/doc/unix/index.html),
+//!     [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html)
+//! * Try it out! Use `qcp` where you would `scp`, e.g. `qcp myfile some-server:some-directory/`
+//! * Browse the tuning options in [Configuration](https://docs.rs/qcp/latest/qcp/struct.Configuration.html)
+//! * Set up a [config](config) file that tunes for your network connection. (You might find the `--stats` option useful when experimenting.)
 //!
 //! ## 📖 How it works
 //!
@@ -54,13 +84,15 @@
 //!
 //! On the command line, qcp has a comprehensive `--help` message.
 //!
-//! Many options can also be specified in a config file. See [config] for detalis.
+//! Many options can also be specified in a config file. See [config] for details.
 //!
-//! ## 📈 Getting the best out of qcp
+//! ### 📖 Getting the best out of qcp
 //!
 //! See [performance](doc::performance) and [troubleshooting](doc::troubleshooting).
 //!
-//! ## MSRV policy
+//! ## Miscellanea
+//!
+//! #### MSRV policy
 //!
 //! As this is an application crate, the MSRV is not guaranteed to remain stable.
 //! The MSRV may be upgraded from time to time to take advantage of new language features.
@@ -72,7 +104,7 @@
 //! [rsync]: https://en.wikipedia.org/wiki/Rsync
 //! [mosh]: https://mosh.org/
 //!
-//! ## Feature flags
+//! #### Feature flags
 #![doc = document_features::document_features!()]
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 

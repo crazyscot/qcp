@@ -1,8 +1,8 @@
 // (c) 2024 Ross Younger
-//! # 📖 Configuration management
+//! # 📖 Configuring QCP
 //!
 //! qcp obtains run-time configuration from the following sources, in order:
-//! 1. Command-line options
+//! 1. Command-line options (run `qcp -h` for a listing; `qcp --help` for full detail)
 //! 2. The user's configuration file on either side of the connection (see [negotiation](#configuration-negotiation))
 //!    * On Unix, this is `~/.qcp.conf` or `~/.config/qcp/qcp.conf`
 //!    * On Windows, this is `%AppData%\Roaming\qcp\qcp.conf`
@@ -11,7 +11,7 @@
 //!    * On Windows, this is `%ProgramData%\qcp.conf`
 //! 4. Hard-wired defaults
 //!
-//! Run `qcp --config-files` for a list of which files we read.
+//! Run `qcp --config-files` to see a list of which files we would read for the current user.
 //!
 //! Each option may appear in multiple places, but only the first match is used.
 //!
@@ -67,7 +67,7 @@
 //!
 //! ## Configurable options
 //!
-//! The set of supported fields is the [Configuration] structure.
+//! See the [Configuration] structure for a comprehensive list of all available configurable options.
 //!
 //! In configuration files, option keywords are case insensitive and ignore hyphens and underscores.
 //! (On the command line, they must be specified in kebab-case.)

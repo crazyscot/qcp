@@ -174,7 +174,7 @@ fn min_ignoring_zero(cli: u64, srv: u64) -> CombinationResponse<u64> {
 /// ## Parameter resolution
 ///
 ///
-/// | [Configuration] field  | [Control protocol](ClientMessageV1) | Resolution |
+/// | [Configuration] field  | [Control protocol](ClientMessageV1) field | Resolution |
 /// | ---                    | ---                 | ---       |
 /// | Client [`rx`](Configuration#structfield.rx) / Server [`tx`](Configuration#structfield.tx) | [`bandwidth_to_client`](ClientMessageV1#structfield.bandwidth_to_client) | Use the smaller of the two (ignoring zeroes) |
 /// | Client [`tx`](Configuration#structfield.tx) / Server [`rx`](Configuration#structfield.rx) | [`bandwidth_to_server`](ClientMessageV1#structfield.bandwidth_to_server) | Use the smaller of the two (ignoring zeroes) |
@@ -187,7 +187,7 @@ fn min_ignoring_zero(cli: u64, srv: u64) -> CombinationResponse<u64> {
 /// # Outputs
 /// This function returns a fresh [`Configuration`] object holding the result of this logic.
 ///
-/// In addition the input [`Manager`] is modified to show the provenance of each of the values.
+/// In addition the input [`Manager`] is modified with _metadata_ to show the origin of each of the values.
 ///
 /// # Errors
 /// * If the input [`Manager`] is in the fused-error state
