@@ -227,7 +227,7 @@ impl Manager {
     }
 
     /// Syntactic sugar for extracting a field of type [`ColourMode`].
-    /// See [`get_config`] for details.
+    /// See [`Self::get_config_field`] for details.
     pub(crate) fn get_color(
         &self,
         default: Option<ColourMode>,

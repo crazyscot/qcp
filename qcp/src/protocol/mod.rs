@@ -1,9 +1,8 @@
 // (c) 2024 Ross Younger
-
-//! 📖 Protocol defininitions
+// Code in this module: Protocol defininitions
 //!
 #![allow(clippy::doc_markdown)]
-//! # The QCP protocol
+//! # 📖 The QCP protocol
 //! `qcp` is a **hybrid protocol**.
 //! The binary contains the complete protocol implementation,
 //! except for the ssh binary used to establish the control channel itself.

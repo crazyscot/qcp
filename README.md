@@ -50,14 +50,21 @@ At the time of writing, qcp has only been tested with the OpenSSH server and cli
 ## 🧰 Getting Started
 
 * You must have ssh access to the target machine.
-  - You must be able to exchange UDP packets with the target on a given port.
+* You must also be able to connect to the target on a given UDP port.
   - If the local machine is behind connection-tracking NAT, things usually work just fine. This is the case for the vast majority of home and business network connections.
-  - You can tell qcp to use a particular port range if you need to.
-* Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine.
-* Run `qcp --help-buffers` and follow its instructions.
-* Platform-specific notes exist for:
-  * [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html)
-  * [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html)
+  - If the target is behind a firewall, you need to configure the firewall so at least some small set of UDP ports is
+    accessible, and **not subject to network port translation**.
+    (You can configure qcp to use a particular port range if you need to; see `--port` / `--remote-port`.)
+    - In different terms: The target machine will bind to a random UDP port, and advise its peer (via ssh)
+      of its choice of port number.
+* Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine,
+  or you need to set up `SshSubsystem` mode.
+  * Check the platform-specific notes: [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html),
+    [Linux/other Unix](https://docs.rs/qcp/latest/qcp/doc/unix/index.html),
+    [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html)
+* Try it out! Use `qcp` where you would `scp`, e.g. `qcp myfile some-server:some-directory/`
+* Browse the tuning options in [Configuration](https://docs.rs/qcp/latest/qcp/struct.Configuration.html)
+* Set up a [config](config) file that tunes for your network connection. (You might find the `--stats` option useful when experimenting.)
 
 ### Installing by package
 

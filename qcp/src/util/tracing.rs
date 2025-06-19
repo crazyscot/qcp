@@ -33,7 +33,7 @@ const STANDARD_ENV_VAR: &str = "RUST_LOG";
 /// Environment variable that controls what gets logged to file
 const LOG_FILE_DETAIL_ENV_VAR: &str = "RUST_LOG_FILE_DETAIL";
 
-/// Computes the trace level for a given set of [ClientParameters]
+/// Computes the trace level for a given set of [crate::client::Parameters]
 pub(crate) fn trace_level(args: &crate::client::Parameters) -> &str {
     if args.debug {
         "debug"
