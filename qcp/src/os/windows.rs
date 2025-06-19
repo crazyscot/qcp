@@ -1,5 +1,45 @@
-//! OS concretions for Windows
 // (c) 2025 Ross Younger
+// Code in this module: OS concretions for Windows
+//
+//! 🪟 qcp on Windows
+//!
+//! ## 🖥 Server Mode
+//!
+//! #### 1. Get ssh going first
+//!
+//! I tested on Windows 11 with OpenSSH Server (installed via System -> Optional features).
+//! See <https://learn.microsoft.com/en-us/windows-server/administration/OpenSSH/openssh-server-configuration> for details.
+//!
+//! I found I needed to manually start sshd (in Services).
+//!
+//! I found I needed to explicitly allow access through the Windows firewall for sshd before I could connect to it.
+//!
+//! #### 2. Set up qcp somewhere the ssh daemon can reach it
+//!
+//! You need to put the qcp executable somewhere that the ssh server can find it on a non-interactive login.
+//! The most convenient place I found was in my profile directory `C:\Users\myusername`.
+//!
+//! ssh subsystem mode may be an option, but I couldn't readily get that working.
+//!
+//! #### 3. Allow access through the Windows firewall
+//!
+//! You need to allow qcp through the Windows firewall.
+//! If you don't, the machine initiating the connection will complain of a protocol
+//! timeout setting up the QUIC session.
+//!
+//! This is in Windows Security > Firewall & network protection > Allow an app through firewall.
+//!
+//! # 🚀 Network tuning
+//!
+//! qcp performed well straight out of the box; no additional system configuration was necessary.
+//! Nevertheless, we still check the buffer sizes at runtime, to be able to warn if this isn't the case in future.
+//!
+//! # 🕵️ Troubleshooting
+//!
+//! #### Protocol timeout setting up the QUIC session
+//!
+//! Most likely the Windows firewall, or some other intervening firewall, is blocking the
+//! UDP packets. [See above](#3-allow-access-through-the-windows-firewall).
 
 use crate::cli::styles::{RESET, info, success, warning};
 use crate::config::BASE_CONFIG_FILENAME;
@@ -8,12 +48,12 @@ use human_repr::HumanCount as _;
 use std::path::PathBuf;
 
 /// Windows platform implementation
-#[derive(Debug, Clone, Copy)]
-pub struct Platform {}
+#[allow(missing_copy_implementations, missing_debug_implementations)]
+pub struct WindowsPlatform {}
 
-impl super::AbstractPlatform for Platform {
+impl super::AbstractPlatform for WindowsPlatform {
+    /// System ssh config file. On Windows this is `%ProgramData%\ssh\ssh_config`
     fn system_ssh_config() -> Option<PathBuf> {
-        // %ProgramData%\ssh\ssh_config
         let Ok(progdata) = std::env::var("ProgramData") else {
             return None;
         };
@@ -24,8 +64,8 @@ impl super::AbstractPlatform for Platform {
         Some(pb)
     }
 
+    /// User config file. On Windows this is `%UserProfile%\.ssh\config`
     fn user_ssh_config() -> Option<PathBuf> {
-        // %UserProfile%\.ssh\config
         let Ok(pd) = std::env::var("UserProfile") else {
             return None;
         };
@@ -36,12 +76,13 @@ impl super::AbstractPlatform for Platform {
         Some(pb)
     }
 
+    /// No extra user configuration file path is provided on Windows.
     fn user_config_path_extra() -> Option<PathBuf> {
         None
     }
 
+    /// Path to the system config file. On Windows this is `%ProgramData%\qcp.conf`
     fn system_config_path() -> Option<PathBuf> {
-        // %ProgramData%\qcp.conf
         let Ok(progdata) = std::env::var("ProgramData") else {
             return None;
         };
@@ -92,7 +133,7 @@ fn help_buffers_win(rmem: u64, wmem: u64) -> String {
 /// See also [`qcp_unsafe_tests::test_windows`]
 mod test {
     use super::super::test_buffers;
-    use super::Platform;
+    use super::WindowsPlatform as Platform;
     use crate::os::AbstractPlatform;
 
     #[cfg(unix)]

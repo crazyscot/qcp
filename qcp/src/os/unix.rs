@@ -1,5 +1,30 @@
-//! OS concretions for Unix platforms
 // (c) 2024 Ross Younger
+// Code in this module: OS concretions for Unix platforms
+// Docs in this module: Linux/Unix notes
+//
+//! 🐧 qcp on Linux and other Unix platforms
+//!
+//! (See also [OSX](super::osx) specific notes.)
+//!
+//! ## Getting started (IMPORTANT)
+//!
+//! **Short version:** Run `qcp --help-buffers` and follow its instructions.
+//!
+//! *Long version:*
+//!
+//! The Linux kernel, by default, sets quite a low limit for UDP send and receive buffers.
+//!
+//! 🚀 **It is essential to change this setting for good performance.**
+//!
+//! There is a runtime check that warns of any detected kernel configuration issues and advises how the sysadmin can resolve these.
+//!
+//! The Debian/Ubuntu packaging drops a file into `/etc/sysctl.d/20-qcp.conf` that does this for you.
+//!
+//! ## Packaging
+//!
+//! The released Linux binary images (named `qcp-<ARCH>-unknown-linux-musl.tar.gz`) should work with any
+//! recent Linux kernel, independent of distribution.
+//! (They are statically linked against `musl`.)
 
 use crate::cli::styles::{RESET, error, header, info, success, warning};
 use crate::config::BASE_CONFIG_FILENAME;
@@ -9,11 +34,11 @@ use rustix::process::{Uid, geteuid};
 
 use std::path::PathBuf;
 
-/// Unix platform implementation
-#[derive(Debug, Clone, Copy)]
-pub struct Platform {}
+/// Unix platform implementation (Linux, OSX, BSD and others)
+#[allow(missing_copy_implementations, missing_debug_implementations)]
+pub struct UnixPlatform {}
 
-impl super::AbstractPlatform for Platform {
+impl super::AbstractPlatform for UnixPlatform {
     fn system_ssh_config() -> Option<PathBuf> {
         Some("/etc/ssh/ssh_config".into())
     }
@@ -162,7 +187,7 @@ Good luck!",
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::super::test_buffers;
-    use super::Platform;
+    use super::UnixPlatform as Platform;
     use crate::os::AbstractPlatform;
 
     #[test]

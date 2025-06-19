@@ -1,18 +1,17 @@
 // (c) 2025 Ross Younger
 
-//! 🍎 Notes for OSX users
+//! 🍎 qcp on OSX
 //!
-//! # 🖥️ Running qcp from the Terminal (Client mode)
+//! This mostly just worked, using the [Unix](super::UnixPlatform) platform implementation.
+//! Running the qcp command-line needed no special handling.
 //!
-//! This worked for me, straight out of the box.
-//!
-//! # 🖥 Connecting qcp to a server running OSX (Server mode)
+//! ## 🖥 Server mode
 //!
 //! My test hardware was a 10 year old iMac running OSX 10.15.7 (Darwin kernel 19.6.0).
 //!
 //! There are two things you need to do to set up qcp so you can connect to it from another machine:
 //!
-//! ## 1. Set up qcp somewhere the ssh daemon can reach it
+//! #### 1. Set up qcp somewhere the ssh daemon can reach it
 //!
 //! You need to put the qcp executable somewhere that the ssh server can find it on a non-interactive login.
 //! By default OSX's sshd is quite tightly locked down, and the introduction of System Integrity Protection
@@ -21,7 +20,7 @@
 //! There are a few ways to achieve this. (Maybe some kind OSX code signing expert can help me figure out
 //! whether code signing will let me install qcp directly into /usr/bin/ ?)
 //!
-//! #### (a) Set up qcp as an ssh subsystem
+//! ##### (a) Set up qcp as an ssh subsystem
 //!
 //! 1. Decide where you're going to put qcp. I chose to put it in `/usr/local/bin`;
 //!    adjust these instructions to suit.
@@ -36,7 +35,7 @@
 //!
 //!    Use the `--ssh-subsystem` argument on the CLI, or put `SshSubsystem 1` in your config file.
 //!
-//! #### (b) Configure sshd path
+//! ##### (b) Configure sshd path
 //!
 //! 1. Decide where you're going to put qcp. I chose to put it in `/usr/local/bin`;
 //!    adjust these instructions to suit.
@@ -57,17 +56,17 @@
 //!
 //!     `sudo launchctl kickstart -k system/com.openssh.sshd`
 //!
-//! #### (c) ~Disable SIP~
+//! ##### (c) ~Disable SIP~
 //!
 //! <div class="warning">
 //! I really do not recommend this course of action, so I'm not going to explain how to do it.
-//! It's quite a security risk and I include it only for completeness.
+//! It's quite a security risk and I mention it only for completeness.
 //! </div>
 //!
 //! That said, if you have already decided you want to live on the edge by disabling SIP,
-//! then copying qcp into `/usr/bin` is the easiest way to get it going.
+//! then copying the qcp binary into `/usr/bin` is the easiest way to get it going.
 //!
-//! ## 2. Allow access through the OSX firewall
+//! #### 2. Allow access through the OSX firewall
 //!
 //! You need to configure the OSX firewall to allow incoming connections to qcp.
 //! If you don't, the machine initiating the connection will complain of a protocol
@@ -75,11 +74,11 @@
 //!
 //! There are a couple of options here too:
 //!
-//! #### (a) Make an inbound qcp connection to your OSX machine
+//! ##### (a) Make an inbound qcp connection to your OSX machine
 //! You should get an OSX dialog asking "Do you want the application “qcp” to accept incoming network connections?"
 //! Say yes, obviously.
 //!
-//! #### (b) Manual firewall configuration
+//! ##### (b) Manual firewall configuration
 //!
 //! Manually add qcp as an application allowed to receive incoming traffic.
 //!
@@ -87,7 +86,7 @@
 //!
 //! On newer OSX I understand this may be under System Settings > Network > Firewall.
 //!
-//! # 🚀 Network tuning
+//! ## 🚀 Network tuning
 //!
 //! I found the kernel imposes an 8MB UDP send/receive buffer limit by default.
 //! qcp performed well straight out of the box; no sysctl configuration was necessary.
@@ -98,9 +97,9 @@
 //! nearly-saturate my 300Mbit fibre downlink pulling from a server with
 //! ~310ms ping time. This is the same result as on my Linux desktop.
 //!
-//! # 🕵️ Troubleshooting
+//! ## 🕵️ Troubleshooting
 //!
-//! ### Command not found (connecting to an OSX machine)
+//! #### Command not found (connecting to an OSX machine)
 //! The control channel fails with a message like one of these?
 //!
 //! ```text
