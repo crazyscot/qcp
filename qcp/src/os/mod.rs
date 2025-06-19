@@ -1,6 +1,7 @@
-//! OS abstraction layer
+//! OS abstraction layer and OS-specific documentation
 //!
-//! See also the [Windows](crate::doc::windows) and [OSX](crate::doc::osx) end-user notes.
+//! **NOTE:** The appropriate Platform for the build is re-exported as `Platform` at compile time.
+//!
 // (c) 2024 Ross Younger
 
 use std::{
@@ -14,28 +15,33 @@ use anyhow::Result;
 use cfg_if::cfg_if;
 use rustix::net::sockopt as RustixSO;
 
+pub mod osx;
+#[cfg(unix)]
+pub mod unix; // doesn't compile on windows
+pub mod windows;
+
 static_assertions::assert_cfg!(any(unix, windows), "This OS is not currently supported");
 
 cfg_if! {
     if #[cfg(unix)] {
         use rustix::fd::AsFd as SocketType;
-        mod unix;
-        pub use unix::Platform as UnixPlatform;
-        pub(crate) use UnixPlatform as Platform;
+        /// For docs
+        pub use unix::UnixPlatform;
+        /// For real
+        pub use UnixPlatform as Platform;
     }
 }
 
 // Include the windows layer in unix dev builds, so it's covered by CI.
 cfg_if! {
     if #[cfg(windows_or_dev)] {
-        mod windows;
-        pub use windows::Platform as WindowsPlatform;
+        pub use windows::WindowsPlatform;
     }
 }
 cfg_if! {
     if #[cfg(windows)] {
         use rustix::fd::AsSocket as SocketType;
-        pub(crate) use WindowsPlatform as Platform;
+        pub use WindowsPlatform as Platform;
 
     }
 }
@@ -48,7 +54,7 @@ const fn buffer_size_fix(s: usize) -> usize {
 /// Platform initialisation hook.
 /// This must be called at least once before using platform features.
 /// # Panics
-/// On Windows, if wsa_startup() fails.
+/// On Windows, if `wsa_startup()` fails.
 pub fn initialise_platform() -> Result<()> {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
@@ -67,10 +73,9 @@ mod private {
     impl SealedSocket for super::UdpSocket {}
 }
 
-/// OS abstraction trait providing access to socket options
+/// OS abstraction trait providing ergonomic access to additional Berkeley socket options.
 ///
-/// **This is a sealed trait** : it only works for `UdpSocket` and
-/// ensures the platform initialisation hook is called.
+/// **This is a sealed trait** : it only works for `UdpSocket`.
 pub trait SocketOptions: private::SealedSocket
 where
     Self: Sized,
@@ -140,6 +145,7 @@ where
     }
 }
 
+/// This is the only place UdpSocket is defined.
 impl SocketOptions for UdpSocket {}
 
 /// Can we set the kernel buffer sizes we want to?
