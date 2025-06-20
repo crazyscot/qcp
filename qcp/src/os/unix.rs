@@ -66,13 +66,13 @@ impl super::AbstractPlatform for UnixPlatform {
     }
 
     #[cfg_attr(coverage_nightly, coverage(off))]
-    fn help_buffers_mode(rmem: u64, wmem: u64) -> String {
-        help_buffers_unix(rmem, wmem)
+    fn help_buffers_mode(udp: u64) -> String {
+        help_buffers_unix(udp)
     }
 }
 
 #[cfg_attr(coverage_nightly, coverage(off))]
-fn help_buffers_unix(rmem: u64, wmem: u64) -> String {
+fn help_buffers_unix(udp: u64) -> String {
     #![allow(non_snake_case)]
     use std::fmt::Write as _;
     let INFO = info();
@@ -87,7 +87,7 @@ but this usually requires the kernel limits to be configured appropriately.
 Testing this system...",
     );
 
-    let result = super::test_buffers(rmem, wmem);
+    let result = super::test_udp_buffers(udp, udp);
     let tested_ok = match result {
         Err(e) => {
             let _ = write!(
@@ -106,7 +106,7 @@ Outputting general advice..."
                 tx = r.send.human_count_bytes()
             );
             if let Some(warning) = r.warning {
-                let _ = write!(output, "\n😞 {INFO}{warning}{RESET}");
+                let _ = write!(output, "\n😞 {}{warning}{RESET}", error());
             } else {
                 let _ = write!(output, "\n🚀 {SUCCESS}Great!{RESET}", SUCCESS = success());
             }
@@ -137,27 +137,32 @@ For now, outputting general advice.
     }
 
     if cfg!(linux) {
+        let settings_file_msg = if std::fs::exists("/etc/sysctl.d/20-qcp.conf").unwrap_or(false) {
+            "Check your settings in"
+        } else {
+            "To have this setting apply at boot, put this into"
+        };
         let _ = write!(
             output,
             r"
-🛠️  To set the kernel limits immediately, run the following command as root:
-    {INFO}sysctl -w net.core.rmem_max={rmem} -w net.core.wmem_max={wmem}{RESET}
 
-🛠️  To have this setting apply at boot, on most Linux distributions you
-can create a file {HEADER}/etc/sysctl.d/20-qcp.conf{RESET} containing:
-    {INFO}net.core.rmem_max={rmem}
-    {INFO}net.core.wmem_max={wmem}{RESET}"
+🛠️  {settings_file_msg} {HEADER}/etc/sysctl.d/20-qcp.conf{RESET}:
+    {INFO}net.core.rmem_max={udp}
+    {INFO}net.core.wmem_max={udp}{RESET}
+
+🛠️  To set the kernel limits immediately, run the following command as root:
+    {INFO}sysctl -w net.core.rmem_max={udp} -w net.core.wmem_max={udp}{RESET}"
         );
     } else if cfg!(bsdish) {
         // Received wisdom about BSD kernels leads me to recommend 115% of the max. I'm not sure this is necessary.
-        let size = std::cmp::max(rmem, wmem) * 115 / 100;
+        let size = udp * 115 / 100;
         let _ = write!(
             output,
             r"
 🛠️ To set the kernel limits immediately, run the following command as root:
     {INFO}sysctl -w kern.ipc.maxsockbuf={size}{RESET}
-To have this setting apply at boot, add this line to {HEADER}/etc/sysctl.conf{RESET}
-or {HEADER}/etc/sysctl.d/udp_buffer.conf{RESET}:
+
+To have this setting apply at boot, add this line to {HEADER}/etc/sysctl.conf{RESET}:
     {INFO}kern.ipc.maxsockbuf={size}{RESET}"
         );
     } else {
@@ -171,8 +176,8 @@ which is not covered by any of the current help messages.
 Sorry about that! If you can fill in the details, please get in touch with
 the developers.
 
-We need the kernel UDP buffer size limit to be at least {rmem} for reading,
-and {wmem} for writing.
+We need the kernel UDP buffer size limit to be at least {udp} for reading and writing
+(assuming you want to work bidirectionally).
 
 There might be a sysctl or similar mechanism you can set to enable this.
 Good luck!",
@@ -186,7 +191,7 @@ Good luck!",
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use super::super::test_buffers;
+    use super::super::test_udp_buffers;
     use super::UnixPlatform as Platform;
     use crate::os::AbstractPlatform;
 
@@ -213,12 +218,17 @@ mod test {
 
     #[test]
     fn test_buffers_small_ok() {
-        assert!(test_buffers(131_072, 131_072).unwrap().warning.is_none());
+        assert!(
+            test_udp_buffers(131_072, 131_072)
+                .unwrap()
+                .warning
+                .is_none()
+        );
     }
     #[test]
     fn test_buffers_gigantic_err() {
         assert!(
-            test_buffers(1_073_741_824, 1_073_741_824)
+            test_udp_buffers(1_073_741_824, 1_073_741_824)
                 .unwrap()
                 .warning
                 .is_some()

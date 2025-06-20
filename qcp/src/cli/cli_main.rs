@@ -99,7 +99,7 @@ async fn handle_mode(
     client_params: Parameters,
 ) -> Result<bool> {
     match mode {
-        MainMode::HelpBuffers => Ok(print_help_buffers()),
+        MainMode::HelpBuffers => print_help_buffers(config_manager),
         MainMode::ShowConfigFiles => {
             println!("{:?}", Manager::config_files());
             Ok(true)
@@ -122,13 +122,18 @@ fn list_features() -> bool {
     true
 }
 
-fn print_help_buffers() -> bool {
+fn print_help_buffers(manager: &mut Manager) -> Result<bool> {
+    manager.apply_system_default();
+    manager.validate_configuration()?;
+    let config = manager.get::<Configuration>()?;
+    let udp_buf = u64::from(config.udp_buffer);
+
     let _ = writeln!(
         std::io::stdout(),
         "{}",
-        os::Platform::help_buffers_mode(Configuration::recv_buffer(), Configuration::send_buffer(),)
+        os::Platform::help_buffers_mode(udp_buf)
     );
-    true
+    Ok(true)
 }
 
 fn show_config(config_manager: &mut Manager) -> Result<bool> {
