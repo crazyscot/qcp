@@ -26,6 +26,8 @@ use derive_deftly::Deftly;
 /// You have to have a limit somewhere; zero doesn't work. So I chose 1200 baud ...
 pub(crate) const MINIMUM_BANDWIDTH: u64 = 150;
 
+pub(crate) const MINIMUM_UDP_BUFFER: u64 = 1024; // ridiculously small, but you have to have a limit somewhere.
+
 /// The set of configurable options supported by qcp.
 ///
 /// **IMPORTANT:** The server and client configurations are combined at runtime.
@@ -181,6 +183,16 @@ pub struct Configuration {
     )]
     pub timeout: u16,
 
+    /// Size of the UDP kernel buffer in bytes.
+    ///
+    /// Specify as an integer or as an SI quantity, e.g. 4M.
+    ///
+    /// The default, 4M, should be good for most cases.
+    /// However there may be high-bandwidth situations (10Gbps or more) where this becomes a bottleneck,
+    /// or situations where you wish to restrict memory consumption.
+    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
+    pub udp_buffer: EngineeringQuantity<u64>,
+
     // CLIENT OPTIONS ==================================================================================
     /// Forces use of a particular IP version when connecting to the remote. [default: any]
     ///
@@ -314,13 +326,15 @@ pub struct Configuration {
 
 static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
     // Transport
-    rx: 12_500_000u64.into(),
+    rx: 12_500_000u64.into(), // 100Mbit
     tx: 0u64.into(),
     rtt: 300,
     congestion: CongestionController::Cubic.into(),
     initial_congestion_window: 0u64.into(),
     port: PortRange::default(),
     timeout: 5,
+    // https://fasterdata.es.net/host-tuning/linux/udp-tuning/ recommends 4M as good for most settings
+    udp_buffer: 4_000_000u64.into(),
     // Client
     address_family: AddressFamily::Any,
     ssh: "ssh".into(),
@@ -334,16 +348,14 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
 });
 
 impl Configuration {
-    /// Computes the theoretical bandwidth-delay product for outbound data
+    /// Computes the theoretical round-trip bandwidth-delay product for outbound data
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn bandwidth_delay_product_tx(&self) -> u64 {
+    pub(crate) fn rtt_bandwidth_delay_product_tx(&self) -> u64 {
         self.tx() * u64::from(self.rtt) / 1000
     }
-    /// Computes the theoretical bandwidth-delay product for inbound data
+    /// Computes the theoretical round-trip bandwidth-delay product for inbound data
     #[must_use]
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn bandwidth_delay_product_rx(&self) -> u64 {
+    pub(crate) fn rtt_bandwidth_delay_product_rx(&self) -> u64 {
         self.rx() * u64::from(self.rtt) / 1000
     }
     #[must_use]
@@ -365,31 +377,18 @@ impl Configuration {
         Duration::from_millis(u64::from(self.rtt))
     }
 
-    /// Kernel UDP sending buffer size to use
-    #[must_use]
-    pub fn send_buffer() -> u64 {
-        // Kernel UDP buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
-        2_097_152
-    }
-    /// Kernel UDP receive buffer size to use
-    #[must_use]
-    pub fn recv_buffer() -> u64 {
-        // Kernel UDP buffers of 2MB have proven sufficient to get close to line speed on a 300Mbit downlink with 300ms RTT.
-        2_097_152
-    }
-
     /// QUIC receive window
     #[must_use]
     pub fn recv_window(&self) -> u64 {
         // The theoretical in-flight limit appears to be sufficient
-        self.bandwidth_delay_product_rx()
+        self.rtt_bandwidth_delay_product_rx()
     }
 
     /// QUIC send window
     #[must_use]
     pub fn send_window(&self) -> u64 {
-        // Quinn defaults to 8x the send window
-        8 * self.bandwidth_delay_product_tx()
+        // Quinn defaults to 8x the receive window
+        8 * self.rtt_bandwidth_delay_product_tx()
     }
 
     /// Accessor for `timeout`, as a Duration
@@ -432,6 +431,7 @@ pub(crate) struct ValidationData {
     rtt: u16,
     rx: u64,
     tx: u64,
+    udp: u64,
 }
 
 impl Configuration {
@@ -440,28 +440,29 @@ impl Configuration {
             rtt: self.rtt,
             rx: self.rx(),
             tx: self.tx(),
+            udp: self.udp_buffer.into(),
         }
     }
 
     /// Performs additional validation checks on a configuration object
     pub(crate) fn try_validate(&self) -> Result<()> {
         let data = self.validation_data();
-
         let rtt = data.rtt;
         let rx = data.rx;
+        #[allow(non_snake_case)] // look, it's a const
+        let INFO = info();
+
         if rx < MINIMUM_BANDWIDTH {
             anyhow::bail!(
                 "The receive bandwidth ({INFO}rx {val}{RESET}B) is too small; it must be at least {min}",
                 val = rx.to_eng(0),
                 min = MINIMUM_BANDWIDTH.to_eng(3),
-                INFO = info()
             );
         }
         if rx.checked_mul(rtt.into()).is_none() {
             anyhow::bail!(
                 "The receive bandwidth delay product calculation ({INFO}rx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
                 val = rx.to_eng(0),
-                INFO = info()
             );
         }
 
@@ -471,14 +472,19 @@ impl Configuration {
                 "The transmit bandwidth ({INFO}tx {val}{RESET}B) is too small; it must be at least {min}",
                 val = tx.to_eng(0),
                 min = MINIMUM_BANDWIDTH.to_eng(3),
-                INFO = info(),
             );
         }
         if tx.checked_mul(rtt.into()).is_none() {
             anyhow::bail!(
                 "The transmit bandwidth delay product calculation ({INFO}tx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
                 val = tx.to_eng(0),
-                INFO = info(),
+            );
+        }
+
+        let udp = data.udp;
+        if udp < MINIMUM_UDP_BUFFER {
+            anyhow::bail!(
+                "The UDP buffer size ({INFO}{udp}{RESET}) is too small; it must be at least {MINIMUM_UDP_BUFFER}",
             );
         }
         Ok(())

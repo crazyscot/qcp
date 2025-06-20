@@ -1179,6 +1179,7 @@ dependencies = [
  "littertray",
  "mimalloc",
  "num-format",
+ "num-traits",
  "pretty_assertions",
  "quinn",
  "rcgen",

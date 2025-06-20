@@ -762,6 +762,7 @@ mod test {
             rx: Some(89u64.into()),
             rtt: Some(1234),
             congestion: Some(CongestionController::Bbr.into()),
+            udp_buffer: Some(456_789u64.into()),
             initial_congestion_window: Some(12345u64.into()),
             port: Some(CliPortRange { begin: 17, end: 98 }),
             remote_port: Some(CliPortRange {
