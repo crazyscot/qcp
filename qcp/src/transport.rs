@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Result;
 use human_repr::HumanCount as _;
 use quinn::{
-    TransportConfig,
+    TransportConfig, VarInt,
     congestion::{BbrConfig, CubicConfig},
 };
 use tracing::debug;
@@ -56,8 +56,10 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
     match mode {
         // TODO: If we later support multiple streams at once, will need to consider receive_window and stream_receive_window.
         ThroughputMode::Rx | ThroughputMode::Both => {
+            let rwnd: VarInt = params.recv_window().try_into()?;
             let _ = config
-                .stream_receive_window(params.recv_window().try_into()?)
+                .receive_window(rwnd) // Not strictly essential as quinn defaults to unlimited
+                .stream_receive_window(rwnd) // essential; quinn defaults to 100Mbits x 100ms
                 .datagram_receive_buffer_size(Some(Configuration::recv_buffer() as usize));
         }
         ThroughputMode::Tx => (),

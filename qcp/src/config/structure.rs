@@ -388,8 +388,8 @@ impl Configuration {
     /// QUIC send window
     #[must_use]
     pub fn send_window(&self) -> u64 {
-        // There might be random added latency en route, so provide for a larger send window than theoretical.
-        2 * self.bandwidth_delay_product_tx()
+        // Quinn defaults to 8x the send window
+        8 * self.bandwidth_delay_product_tx()
     }
 
     /// Accessor for `timeout`, as a Duration
