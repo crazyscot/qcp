@@ -122,11 +122,7 @@ pub(crate) fn bind_range_for_family(
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use crate::{
-        os::SocketOptions as _,
-        protocol::control::ConnectionType,
-        util::{PortRange, tracing::setup_tracing_for_tests},
-    };
+    use crate::{os::SocketOptions as _, protocol::control::ConnectionType, util::PortRange};
     use rusty_fork::rusty_fork_test;
     use std::net::{IpAddr, Ipv4Addr, UdpSocket};
 
@@ -134,26 +130,12 @@ mod test {
 
     const UNSPECIFIED: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 
+    // set_udp_buffer_sizes is tested by the OS-specific tests
+
     // To see how this behaves with privileges, you might:
     //    sudo -E cargo test -- util::socket::test::set_socket_bufsize
     // The program executable name reported by info!() will not be very useful, but you could probably have guessed that :-)
     rusty_fork_test! {
-        #[test]
-        fn set_udp_buffer_sizes_large_fails() {
-            setup_tracing_for_tests(); // this modifies global state, so needs to be run in a fork
-            let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let result = super::set_udp_buffer_sizes(&mut sock, Some(4_194_304), Some(10_485_760)).unwrap();
-            assert!(!result.ok);
-        }
-
-        #[test]
-        fn set_udp_buffer_sizes_small_succeeds() {
-            setup_tracing_for_tests(); // this modifies global state, so needs to be run in a fork
-            let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let result = super::set_udp_buffer_sizes(&mut sock, Some(123_456), Some(123_456)).unwrap();
-            assert!(result.ok);
-        }
-
         #[test]
         fn set_socket_bufsize_direct() {
             let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();

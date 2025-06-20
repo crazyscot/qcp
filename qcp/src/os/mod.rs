@@ -149,7 +149,7 @@ where
 impl SocketOptions for UdpSocket {}
 
 /// Can we set the kernel buffer sizes we want to?
-fn test_buffers(wanted_recv: u64, wanted_send: u64) -> anyhow::Result<UdpBufferSizeData> {
+fn test_udp_buffers(wanted_recv: u64, wanted_send: u64) -> anyhow::Result<UdpBufferSizeData> {
     let mut socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0))?;
     crate::util::socket::set_udp_buffer_sizes(
         &mut socket,
@@ -212,5 +212,5 @@ pub trait AbstractPlatform {
     /// It returns a string, intended for the console, with useful information and advice.
     /// It may, if applicable, check the OS configuration to improve the quality of the advice
     /// given.
-    fn help_buffers_mode(rmem: u64, wmem: u64) -> String;
+    fn help_buffers_mode(udp: u64) -> String;
 }

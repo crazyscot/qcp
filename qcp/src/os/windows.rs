@@ -93,15 +93,15 @@ impl super::AbstractPlatform for WindowsPlatform {
     }
 
     #[cfg_attr(coverage_nightly, coverage(off))]
-    fn help_buffers_mode(rmem: u64, wmem: u64) -> String {
-        help_buffers_win(rmem, wmem)
+    fn help_buffers_mode(udp: u64) -> String {
+        help_buffers_win(udp)
     }
 }
 
 #[cfg_attr(coverage_nightly, coverage(off))]
-fn help_buffers_win(rmem: u64, wmem: u64) -> String {
+fn help_buffers_win(udp: u64) -> String {
     #![allow(non_snake_case)]
-    let result = super::test_buffers(rmem, wmem);
+    let result = super::test_udp_buffers(udp, udp);
     match result {
         Err(e) => {
             format!(
@@ -132,7 +132,7 @@ fn help_buffers_win(rmem: u64, wmem: u64) -> String {
 #[cfg_attr(coverage_nightly, coverage(off))]
 /// See also [`qcp_unsafe_tests::test_windows`]
 mod test {
-    use super::super::test_buffers;
+    use super::super::test_udp_buffers;
     use super::WindowsPlatform as Platform;
     use crate::os::AbstractPlatform;
 
@@ -146,12 +146,17 @@ mod test {
 
     #[test]
     fn test_buffers_small_ok() {
-        assert!(test_buffers(131_072, 131_072).unwrap().warning.is_none());
+        assert!(
+            test_udp_buffers(131_072, 131_072)
+                .unwrap()
+                .warning
+                .is_none()
+        );
     }
     #[test]
     fn test_buffers_gigantic_err() {
         assert!(
-            test_buffers(1_073_741_824, 1_073_741_824)
+            test_udp_buffers(1_073_741_824, 1_073_741_824)
                 .unwrap()
                 .warning
                 .is_some()

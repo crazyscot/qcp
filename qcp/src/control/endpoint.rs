@@ -9,6 +9,7 @@ use crate::{
 };
 
 use anyhow::Result;
+use num_traits::ToPrimitive;
 use quinn::crypto::rustls::{QuicClientConfig, QuicServerConfig};
 use quinn::rustls::server::WebPkiClientVerifier;
 use quinn::{EndpointConfig, rustls};
@@ -58,12 +59,16 @@ pub(crate) fn create_endpoint(
 
     trace!("bind & configure socket, port={:?}", config.port);
     let mut socket = util::socket::bind_range_for_family(connection_type, config.port)?;
+    let udp_buf = config
+        .udp_buffer
+        .to_usize()
+        .ok_or(anyhow::anyhow!("udp_buffer size overflowed usize"))?;
     let wanted_send = match mode {
-        ThroughputMode::Both | ThroughputMode::Tx => Some(Configuration::send_buffer().try_into()?),
+        ThroughputMode::Both | ThroughputMode::Tx => Some(udp_buf),
         ThroughputMode::Rx => None,
     };
     let wanted_recv = match mode {
-        ThroughputMode::Both | ThroughputMode::Rx => Some(Configuration::recv_buffer().try_into()?),
+        ThroughputMode::Both | ThroughputMode::Rx => Some(udp_buf),
         ThroughputMode::Tx => None,
     };
 

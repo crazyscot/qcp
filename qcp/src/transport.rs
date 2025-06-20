@@ -5,6 +5,7 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use human_repr::HumanCount as _;
+use num_traits::ToPrimitive as _;
 use quinn::{
     TransportConfig, VarInt,
     congestion::{BbrConfig, CubicConfig},
@@ -25,7 +26,7 @@ const META_NEGOTIATED: &str = "config resolution logic";
 
 /// Specifies whether to configure to maximise transmission throughput, receive throughput, or both.
 /// Specifying `Both` for a one-way data transfer will work, but wastes kernel memory.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, strum_macros::Display)]
 pub enum ThroughputMode {
     /// We expect to send a lot but not receive
     Tx,
@@ -44,15 +45,20 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
         .keep_alive_interval(Some(PROTOCOL_KEEPALIVE))
         .allow_spin(true);
 
+    let udp_buf = params
+        .udp_buffer
+        .to_usize()
+        .ok_or(anyhow::anyhow!("udp_buffer size overflowed usize"))?;
+
     match mode {
         ThroughputMode::Tx | ThroughputMode::Both => {
             let _ = config
                 .send_window(params.send_window())
-                .datagram_send_buffer_size(Configuration::send_buffer().try_into()?);
+                .datagram_send_buffer_size(udp_buf);
         }
         ThroughputMode::Rx => (),
     }
-    #[allow(clippy::cast_possible_truncation)]
+
     match mode {
         // TODO: If we later support multiple streams at once, will need to consider receive_window and stream_receive_window.
         ThroughputMode::Rx | ThroughputMode::Both => {
@@ -60,7 +66,7 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
             let _ = config
                 .receive_window(rwnd) // Not strictly essential as quinn defaults to unlimited
                 .stream_receive_window(rwnd) // essential; quinn defaults to 100Mbits x 100ms
-                .datagram_receive_buffer_size(Some(Configuration::recv_buffer() as usize));
+                .datagram_receive_buffer_size(Some(udp_buf));
         }
         ThroughputMode::Tx => (),
     }
@@ -87,13 +93,26 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
         "Final network configuration: {}",
         params.format_transport_config()
     );
-    debug!(
-        "Buffer configuration: send window {sw}, buffer {sb}; recv window {rw}, buffer {rb}",
-        sw = params.send_window().human_count_bytes(),
-        sb = Configuration::send_buffer().human_count_bytes(),
-        rw = params.recv_window().human_count_bytes(),
-        rb = Configuration::recv_buffer().human_count_bytes()
-    );
+
+    let send_data = if mode == ThroughputMode::Rx {
+        ""
+    } else {
+        &format!(
+            "; send window {}, send buffer {}",
+            params.send_window().human_count_bytes(),
+            udp_buf.human_count_bytes()
+        )
+    };
+    let recv_data = if mode == ThroughputMode::Tx {
+        ""
+    } else {
+        &format!(
+            "; recv window {}, recv buffer {}",
+            params.recv_window().human_count_bytes(),
+            udp_buf.human_count_bytes()
+        )
+    };
+    debug!("Buffer configuration: mode {mode}{send_data}{recv_data}");
 
     Ok(config.into())
 }
