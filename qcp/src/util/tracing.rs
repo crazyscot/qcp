@@ -153,6 +153,17 @@ where
     }
 }
 
+/// Abstraction of setup_tracing()
+pub(crate) trait SetupTracingFunction {
+    fn run(
+        _trace_level: &str,
+        _display: Option<&MultiProgress>,
+        _filename: Option<&String>,
+        _time_format: TimeFormat,
+        _colour: bool,
+    ) -> anyhow::Result<()>;
+}
+
 /// Set up rust tracing, to console (via an optional `MultiProgress`) and optionally to file.
 ///
 /// By default we log only our events (qcp), at a given trace level.
@@ -163,6 +174,29 @@ where
 /// **CAUTION:** If this function fails, tracing won't be set up; callers must take extra care to report the error.
 ///
 /// **NOTE:** You can only run this once per process. A global bool prevents re-running.
+pub(crate) struct RealSetupTracing {}
+impl SetupTracingFunction for RealSetupTracing {
+    #[allow(clippy::unnecessary_wraps)]
+    fn run(
+        trace_level: &str,
+        display: Option<&MultiProgress>,
+        filename: Option<&String>,
+        time_format: TimeFormat,
+        colours: bool,
+    ) -> anyhow::Result<()> {
+        if is_initialized() {
+            tracing::warn!("tracing::setup called a second time (ignoring)");
+            return Ok(());
+        }
+        TRACING_INITIALIZED.store(true, Ordering::Relaxed);
+
+        let layers = create_layers(trace_level, display, filename, time_format, colours)?;
+        tracing_subscriber::registry().with(layers).init();
+
+        Ok(())
+    }
+}
+
 pub(crate) fn setup(
     trace_level: &str,
     display: Option<&MultiProgress>,
@@ -373,6 +407,15 @@ mod test {
 
             let result2 = setup("info", None, None, TimeFormat::Utc, false);
             assert!(result2.is_ok()); // Second call should succeed but be ignored
+        }
+
+        #[test]
+        fn setup_tracing() {
+            use super::RealSetupTracing;
+            use super::SetupTracingFunction as _;
+            RealSetupTracing::run("debug", None, None, TimeFormat::Utc, false).unwrap();
+            // a second call must succeed (albeit with a warning)
+            RealSetupTracing::run("debug", None, None, TimeFormat::Utc, false).unwrap();
         }
     }
 }
