@@ -100,6 +100,8 @@ pub struct Configuration {
     /// if it is different from the bandwidth FROM the system.
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
     ///
+    /// Specify as a number, or as an SI quantity (e.g. `10M`).
+    ///
     /// This parameter is always interpreted as the **local** bandwidth, whether operating in client or server mode.
     ///
     /// If not specified or 0, uses the value of `rx`.
@@ -142,10 +144,12 @@ pub struct Configuration {
     /// The initial value for the sending congestion control window, in bytes.
     /// If unspecified, the active congestion control algorithm decides.
     ///
+    /// _Setting this value too high reduces performance!_
+    ///
     /// This may be specified directly as a number, or as an SI quantity like `10k`.
+    ///
     /// See also [`EngineeringQuantity`](https://docs.rs/engineering-repr/latest/engineering_repr/struct.EngineeringQuantity.html).
     ///
-    /// _Setting this value too high reduces performance!_
     #[arg(
         long,
         help_heading("Advanced network tuning"),
@@ -192,6 +196,24 @@ pub struct Configuration {
     /// or situations where you wish to restrict memory consumption.
     #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
     pub udp_buffer: EngineeringQuantity<u64>,
+
+    /// Packet reordering loss detection threshold
+    ///
+    /// The default, 3, should be good for most cases.
+    /// See RFC 9002 s6.1 for more details.
+    #[arg(long, help_heading("Advanced network tuning"), value_name = "packets")]
+    pub packet_threshold: u32,
+
+    /// Time reordering loss detection threshold
+    ///
+    /// The default, 1.125, should be good for most cases.
+    /// See RFC 9002 s6.1 for more details.
+    #[arg(
+        long,
+        help_heading("Advanced network tuning"),
+        value_name = "multiples of RTT"
+    )]
+    pub time_threshold: f32,
 
     // CLIENT OPTIONS ==================================================================================
     /// Forces use of a particular IP version when connecting to the remote. [default: any]
@@ -335,6 +357,8 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     timeout: 5,
     // https://fasterdata.es.net/host-tuning/linux/udp-tuning/ recommends 4M as good for most settings
     udp_buffer: 4_000_000u64.into(),
+    packet_threshold: 3,     // default from Quinn
+    time_threshold: 9. / 8., // default from Quinn
     // Client
     address_family: AddressFamily::Any,
     ssh: "ssh".into(),
@@ -406,13 +430,25 @@ impl Configuration {
         };
         let (tx, rx) = (self.tx(), self.rx());
         format!(
-            "rx {rx} ({rxbits}), tx {tx} ({txbits}), rtt {rtt}, congestion algorithm {congestion} with initial window {iwind}",
+            concat!(
+                "rx {rx} ({rxbits}), tx {tx} ({txbits}), rtt {rtt}; ",
+                "congestion algorithm {congestion} with initial window {iwind}; ",
+                "send window {swnd}, receive window {rwnd}, ",
+                "UDP buffer size {udp}; ",
+                "packet_threshold {pkt_t}, time_threshold {tim_t}xRTT"
+            ),
             tx = tx.human_count_bytes(),
             txbits = (tx * 8).human_count("bit"),
             rx = rx.human_count_bytes(),
             rxbits = (rx * 8).human_count("bit"),
             rtt = self.rtt_duration().human_duration(),
             congestion = self.congestion,
+            iwind = iwind,
+            swnd = self.send_window().human_count_bytes(),
+            rwnd = self.recv_window().human_count_bytes(),
+            udp = u64::from(self.udp_buffer).human_count_bytes(),
+            pkt_t = self.packet_threshold,
+            tim_t = self.time_threshold,
         )
     }
 

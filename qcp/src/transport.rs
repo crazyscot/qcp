@@ -10,7 +10,7 @@ use quinn::{
     TransportConfig, VarInt,
     congestion::{BbrConfig, CubicConfig},
 };
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::{
     config::{self, Configuration, Configuration_Optional, Manager},
@@ -88,11 +88,15 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
             let _ = config.congestion_controller_factory(Arc::new(bbr));
         }
     }
+    let _ = config
+        .packet_threshold(params.packet_threshold)
+        .time_threshold(params.time_threshold);
 
     debug!(
         "Final network configuration: {}",
         params.format_transport_config()
     );
+    trace!("Quinn network configuration: {config:?}");
 
     let send_data = if mode == ThroughputMode::Rx {
         ""
