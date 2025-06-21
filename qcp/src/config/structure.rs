@@ -91,9 +91,23 @@ pub struct Configuration {
         short('b'),
         long,
         alias("rx-bw"),
-        help_heading("Network tuning"),
         display_order(1),
-        value_name = "bytes"
+        value_name = "bytes",
+        help_heading("Network tuning"),
+        long_help(r"
+The maximum network bandwidth we expect receiving data FROM the remote system.
+[default: 12.5M]
+
+This is the single most important configuration necessary for good performance!
+If you configure nothing else, at least set this to suit your network.
+
+This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode.
+
+This may be specified directly as a number, or as an SI quantity
+like `10M` or `256k`. Note that this is described in BYTES, not bits;
+if (for example) you expect to fill a 1Gbit ethernet connection,
+125M would be a suitable setting.
+        "),
     )]
     pub rx: EngineeringQuantity<u64>,
     /// The maximum network bandwidth we expect sending data TO the remote system,
@@ -111,9 +125,19 @@ pub struct Configuration {
         short('B'),
         long,
         alias("tx-bw"),
-        help_heading("Network tuning"),
         display_order(1),
-        value_name = "bytes"
+        value_name = "bytes",
+        help_heading("Network tuning"),
+        long_help(r"
+The maximum network bandwidth we expect sending data TO the remote system,
+if it is different from the bandwidth FROM the system.
+(For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
+
+Specify as a number, or as an SI quantity (e.g. `10M`).
+
+This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode.
+If not specified or 0, uses the value of `rx`.
+"),
     )]
     pub tx: EngineeringQuantity<u64>,
 
@@ -152,10 +176,21 @@ pub struct Configuration {
     ///
     #[arg(
         long,
-        help_heading("Advanced network tuning"),
         value_name = "bytes",
         alias("cwnd"),
-        display_order(0)
+        display_order(0),
+        help_heading("Advanced network tuning"),
+        long_help(
+            r"
+(Network wizards only!)
+
+The initial value for the sending congestion control window, in bytes.
+If unspecified, the active congestion control algorithm decides.
+
+Setting this value too high reduces performance!
+
+This may be specified directly as a number, or as an SI quantity like `10k`."
+        )
     )]
     pub initial_congestion_window: EngineeringQuantity<u64>,
 
@@ -285,9 +320,14 @@ pub struct Configuration {
         short = 'S',
         value_name("ssh-option"),
         allow_hyphen_values(true),
-        help_heading("Connection"),
         value_parser(clap::value_parser!(String)),
-        display_order(0)
+        display_order(0),
+        help_heading("Connection"),
+        long_help(r"
+Provides an additional option or argument to pass to the ssh client. [default: none]
+
+On the command line, you must repeat `-S` for each argument.
+For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"),
     )]
     pub ssh_options: VecOrString,
 
@@ -353,6 +393,7 @@ pub struct Configuration {
     ///
     /// `Subsystem qcp /usr/local/bin/qcp --server`
     #[arg(
+
         long,
         alias("subsystem"),
         default_missing_value("true"), // required for a bool in Configuration, along with num_args and require_equals
@@ -381,7 +422,19 @@ pub struct Configuration {
         default_missing_value("always"), // to support `--color`
         num_args(0..=1),
         //value_parser(clap::builder::EnumValueParser::<ColourMode>::new().map(ColourMode::from)),
-        value_name("mode")
+        value_name("mode"),
+        long_help(r"Colour mode for console output (default: auto)
+
+Passing `--color` without a value is equivalent to `--color always`.
+
+Note that color configuration is not shared with the remote system, so the color output
+from the remote system (log messages, remote-config) will be coloured per the
+config file on the remote system.
+
+qcp also supports the `CLICOLOR`, `CLICOLOR_FORCE` and `NO_COLOR` environment variables.
+See https://bixense.com/clicolors/ for more details.
+
+CLI options take precedence over the configuration file, which takes precedence over environment variables."),
     )]
     pub color: ColourMode,
 }
