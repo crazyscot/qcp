@@ -3,6 +3,7 @@
 
 use crate::cli::styles::use_colours;
 use crate::config::Manager;
+use crate::util::RealSetupTracing;
 
 use anyhow::Context as _;
 use human_repr::HumanDuration;
@@ -12,7 +13,6 @@ use tokio::time::timeout;
 use tracing::{debug, error, info, trace, warn};
 
 mod connection;
-use connection::handle_connection;
 mod connection_info;
 use connection_info::parse_ssh_env;
 mod stream;
@@ -27,12 +27,7 @@ pub(crate) async fn server_main() -> anyhow::Result<()> {
     let remote_ip = parse_ssh_env(env_ssh_connection.as_deref(), env_ssh_client.as_deref());
     let mut manager = Manager::standard(remote_ip.as_deref());
     let result = control
-        .run_server(
-            remote_ip,
-            &mut manager,
-            crate::util::setup_tracing,
-            use_colours(),
-        )
+        .run_server(remote_ip, &mut manager, RealSetupTracing {}, use_colours())
         .await?;
     let endpoint = result.endpoint;
 
@@ -49,7 +44,7 @@ pub(crate) async fn server_main() -> anyhow::Result<()> {
         .context("Timed out waiting for QUIC connection")?
     {
         let _ = tasks.spawn(async move {
-            let result = handle_connection(conn).await;
+            let result = connection::handle_incoming(conn).await;
             match result {
                 Err(e) => error!("inward stream failed: {reason}", reason = e.to_string()),
                 Ok(conn_stats) => {
