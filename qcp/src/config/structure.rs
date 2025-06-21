@@ -215,6 +215,46 @@ pub struct Configuration {
     )]
     pub time_threshold: f32,
 
+    /// The maximum UDP payload size to use before initial MTU discovery has completed (default: 1200)
+    ///
+    /// QUIC runs dynamic Path MTU detection, so this option is not necessary.
+    ///
+    /// Setting it appropriately can speed up the initial transfer phase, particularly if
+    /// jumbo frames are in use.
+    ///
+    /// Setting it higher than supported will cause very poor performance while QUIC deals with blackhole
+    /// events and figures out what the network is actually capable of.
+    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
+    pub initial_mtu: u16,
+
+    /// The minimum MTU that the network is guaranteed to support.
+    ///
+    /// Unless you have very good control over all the network infrastructure in use,
+    /// this setting is unlikely to help you. The default, 1200, is the protocol minimum.
+    ///
+    /// Setting this higher than the network actually supports will cause very poor performance and unpredictable
+    /// effects; it may not be possible to complete a file transfer in a reasonable time.
+    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
+    pub min_mtu: u16,
+
+    /// The maximum value that Path MTU discovery will search for (default: 1452)
+    ///
+    /// The maximum MTU only really affects the sending direction of the connection.
+    ///
+    /// If jumbo frames are possible with your end-to-end network connection, set this appropriately.
+    ///
+    /// The default is reasonably conservative. Depending on your network connection and any tunnelling
+    /// or VPN in use, hosts connected by ethernet may be able to support a slightly higher maximum MTU.
+    ///
+    /// Some connections do not support even this MTU, so for best efficiency - particularly with small
+    /// file transfers - it may be worth setting this lower to avoid the penalty caused by MTU detection
+    /// triggering black hole behaviour.
+    ///
+    /// It is safe to set a high limit, but that may reduce efficiency as MTU discovery will take longer
+    /// to complete.
+    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
+    pub max_mtu: u16,
+
     // CLIENT OPTIONS ==================================================================================
     /// Forces use of a particular IP version when connecting to the remote. [default: any]
     ///
@@ -359,6 +399,10 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     udp_buffer: 4_000_000u64.into(),
     packet_threshold: 3,     // default from Quinn
     time_threshold: 9. / 8., // default from Quinn
+    initial_mtu: 1200,       // same as Quinn
+    min_mtu: 1200,           // same as Quinn
+    max_mtu: 1452,           // same as Quinn
+
     // Client
     address_family: AddressFamily::Any,
     ssh: "ssh".into(),
@@ -519,6 +563,22 @@ impl Configuration {
             udp >= MINIMUM_UDP_BUFFER,
             "The UDP buffer size ({INFO}{udp}{RESET}) is too small; it must be at least {MINIMUM_UDP_BUFFER}",
         );
+
+        anyhow::ensure!(
+            self.min_mtu >= 1200,
+            "Minimum MTU ({mtu}) cannot be less than 1200",
+            mtu = self.min_mtu
+        );
+        anyhow::ensure!(
+            self.max_mtu >= 1200,
+            "Maximum MTU ({mtu}) cannot be less than 1200",
+            mtu = self.max_mtu
+        );
+        anyhow::ensure!(
+            self.initial_mtu >= 1200,
+            "Initial MTU ({mtu}) cannot be less than 1200",
+            mtu = self.initial_mtu
+        );
         Ok(())
     }
 
@@ -538,6 +598,7 @@ mod test {
     use crate::config::Manager;
 
     use super::SYSTEM_DEFAULT_CONFIG;
+    use assertables::assert_contains;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -569,44 +630,49 @@ mod test {
 
     #[test]
     fn validate() {
-        let mut cfg = SYSTEM_DEFAULT_CONFIG.clone();
+        fn tc<T: Fn(&mut crate::Configuration)>(func: T, expected: &str, expected2: Option<&str>) {
+            let mut cfg = SYSTEM_DEFAULT_CONFIG.clone();
+            func(&mut cfg);
+            let str = cfg.try_validate().unwrap_err().to_string();
+            let error = console::strip_ansi_codes(&str);
+            assert_contains!(error, expected);
+            if let Some(expected2_) = expected2 {
+                assert_contains!(error, expected2_);
+            }
+        }
+
+        let cfg = SYSTEM_DEFAULT_CONFIG.clone();
         assert!(cfg.try_validate().is_ok());
 
-        // rx too small
-        cfg.rx = 1u64.into();
-        let err = cfg.try_validate().unwrap_err();
-        assert_eq!(
-            console::strip_ansi_codes(&err.to_string()),
-            "The receive bandwidth (rx 1B) is too small; it must be at least 150"
+        tc(
+            |c| c.rx = 1u64.into(),
+            "receive bandwidth (rx 1B) is too small",
+            None,
         );
-
-        // tx too small
-        cfg = SYSTEM_DEFAULT_CONFIG.clone();
-        cfg.tx = 1u64.into();
-        let err = cfg.try_validate().unwrap_err();
-        assert_eq!(
-            console::strip_ansi_codes(&err.to_string()),
-            "The transmit bandwidth (tx 1B) is too small; it must be at least 150"
+        tc(
+            |c| c.tx = 1u64.into(),
+            "transmit bandwidth (tx 1B) is too small",
+            None,
         );
-
-        // rx overflow
-        cfg = SYSTEM_DEFAULT_CONFIG.clone();
-        cfg.rx = u64::MAX.into();
-        let err = cfg.try_validate().unwrap_err().to_string();
-        let msg = console::strip_ansi_codes(&err);
-        assert!(
-            msg.contains("The receive bandwidth delay product calculation")
-                && msg.contains("overflowed")
+        tc(
+            |c| c.rx = u64::MAX.into(),
+            "receive bandwidth delay product calculation",
+            Some("overflowed"),
         );
-        // tx overflow
-        cfg = SYSTEM_DEFAULT_CONFIG.clone();
-        cfg.tx = u64::MAX.into();
-        let err = cfg.try_validate().unwrap_err().to_string();
-        let msg = console::strip_ansi_codes(&err);
-        assert!(
-            msg.contains("The transmit bandwidth delay product calculation")
-                && msg.contains("overflowed")
+        tc(
+            |c| c.tx = u64::MAX.into(),
+            "transmit bandwidth delay product calculation",
+            Some("overflowed"),
         );
+        tc(|c| c.rtt = 0, "RTT cannot be zero", None);
+        tc(
+            |c| c.udp_buffer = 0u64.into(),
+            "The UDP buffer size (0) is too small",
+            None,
+        );
+        tc(|c| c.min_mtu = 0, "Minimum MTU (0) cannot be ", None);
+        tc(|c| c.max_mtu = 0, "Maximum MTU (0) cannot be ", None);
+        tc(|c| c.initial_mtu = 0, "Initial MTU (0) cannot be ", None);
     }
 
     #[test]
