@@ -488,41 +488,37 @@ impl Configuration {
         #[allow(non_snake_case)] // look, it's a const
         let INFO = info();
 
-        if rx < MINIMUM_BANDWIDTH {
-            anyhow::bail!(
-                "The receive bandwidth ({INFO}rx {val}{RESET}B) is too small; it must be at least {min}",
-                val = rx.to_eng(0),
-                min = MINIMUM_BANDWIDTH.to_eng(3),
-            );
-        }
-        if rx.checked_mul(rtt.into()).is_none() {
-            anyhow::bail!(
-                "The receive bandwidth delay product calculation ({INFO}rx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
-                val = rx.to_eng(0),
-            );
-        }
+        anyhow::ensure!(
+            rx >= MINIMUM_BANDWIDTH,
+            "The receive bandwidth ({INFO}rx {val}{RESET}B) is too small; it must be at least {min}",
+            val = rx.to_eng(0),
+            min = MINIMUM_BANDWIDTH.to_eng(3),
+        );
+        anyhow::ensure!(rtt > 0, "RTT cannot be zero");
+        anyhow::ensure!(
+            rx.checked_mul(rtt.into()).is_some(),
+            "The receive bandwidth delay product calculation ({INFO}rx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
+            val = rx.to_eng(0),
+        );
 
         let tx = data.tx;
-        if tx != 0 && tx < MINIMUM_BANDWIDTH {
-            anyhow::bail!(
-                "The transmit bandwidth ({INFO}tx {val}{RESET}B) is too small; it must be at least {min}",
-                val = tx.to_eng(0),
-                min = MINIMUM_BANDWIDTH.to_eng(3),
-            );
-        }
-        if tx.checked_mul(rtt.into()).is_none() {
-            anyhow::bail!(
-                "The transmit bandwidth delay product calculation ({INFO}tx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
-                val = tx.to_eng(0),
-            );
-        }
+        anyhow::ensure!(
+            tx == 0 || tx >= MINIMUM_BANDWIDTH,
+            "The transmit bandwidth ({INFO}tx {val}{RESET}B) is too small; it must be at least {min}",
+            val = tx.to_eng(0),
+            min = MINIMUM_BANDWIDTH.to_eng(3),
+        );
+        anyhow::ensure!(
+            tx == 0 || tx.checked_mul(rtt.into()).is_some(),
+            "The transmit bandwidth delay product calculation ({INFO}tx {val}{RESET}B x {INFO}rtt {rtt}{RESET}ms) overflowed",
+            val = tx.to_eng(0),
+        );
 
         let udp = data.udp;
-        if udp < MINIMUM_UDP_BUFFER {
-            anyhow::bail!(
-                "The UDP buffer size ({INFO}{udp}{RESET}) is too small; it must be at least {MINIMUM_UDP_BUFFER}",
-            );
-        }
+        anyhow::ensure!(
+            udp >= MINIMUM_UDP_BUFFER,
+            "The UDP buffer size ({INFO}{udp}{RESET}) is too small; it must be at least {MINIMUM_UDP_BUFFER}",
+        );
         Ok(())
     }
 
