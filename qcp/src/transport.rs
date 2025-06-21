@@ -43,7 +43,10 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
         .max_concurrent_bidi_streams(1u8.into())
         .max_concurrent_uni_streams(0u8.into())
         .keep_alive_interval(Some(PROTOCOL_KEEPALIVE))
-        .allow_spin(true);
+        .allow_spin(true)
+        .initial_rtt(2 * params.rtt_duration())
+        .packet_threshold(params.packet_threshold)
+        .time_threshold(params.time_threshold);
 
     let udp_buf = params
         .udp_buffer
@@ -88,9 +91,6 @@ pub fn create_config(params: &Configuration, mode: ThroughputMode) -> Result<Arc
             let _ = config.congestion_controller_factory(Arc::new(bbr));
         }
     }
-    let _ = config
-        .packet_threshold(params.packet_threshold)
-        .time_threshold(params.time_threshold);
 
     debug!(
         "Final network configuration: {}",
