@@ -3,6 +3,8 @@
 
 use crate::cli::styles::use_colours;
 use crate::config::Manager;
+use crate::control::ControlChannelServerInterface;
+use crate::protocol::common::{ReceivingStream, SendingStream};
 use crate::util::RealSetupTracing;
 
 use anyhow::Context as _;
@@ -20,14 +22,30 @@ use stream::handle_stream;
 
 /// Server event loop
 #[allow(clippy::module_name_repetitions)]
+#[cfg_attr(coverage_nightly, coverage(off))] // This is a thin adaptor, not worth testing
 pub(crate) async fn server_main() -> anyhow::Result<()> {
-    let mut control = crate::control::stdio_channel();
+    let control = crate::control::stdio_channel();
     let env_ssh_connection = std::env::var("SSH_CONNECTION").ok();
     let env_ssh_client = std::env::var("SSH_CLIENT").ok();
     let remote_ip = parse_ssh_env(env_ssh_connection.as_deref(), env_ssh_client.as_deref());
     let mut manager = Manager::standard(remote_ip.as_deref());
+
+    server_main_inner(control, remote_ip, &mut manager).await
+}
+
+/// Server event loop with dependency injection for unit tests
+#[allow(clippy::module_name_repetitions)]
+async fn server_main_inner<
+    S: SendingStream + 'static,
+    R: ReceivingStream + 'static,
+    CC: ControlChannelServerInterface<S, R>,
+>(
+    mut control: CC,
+    remote_ip: Option<String>,
+    manager: &mut Manager,
+) -> anyhow::Result<()> {
     let result = control
-        .run_server(remote_ip, &mut manager, RealSetupTracing {}, use_colours())
+        .run_server(remote_ip, manager, RealSetupTracing {}, use_colours())
         .await?;
     let endpoint = result.endpoint;
 
@@ -74,4 +92,73 @@ pub(crate) async fn server_main() -> anyhow::Result<()> {
     control.send_closedown_report(&stats).await?;
     trace!("finished");
     Ok(())
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod test {
+    use std::net::UdpSocket;
+
+    use crate::Configuration;
+    use crate::config::Manager;
+    use crate::control::{MockControlChannelServerInterface, ServerResult};
+    use crate::server::server_main_inner;
+    use crate::util::RealSetupTracing;
+
+    use quinn::{Endpoint, EndpointConfig};
+    use tokio_test::io::Mock as MockStream;
+
+    //use mockall::predicate::*;
+    use mockall::*;
+
+    // channel.rs already has mocks and Control.run_server() is already tested.
+    // For this test, we only really care that the main loop in this unit does something sensible.
+
+    #[tokio::test]
+    async fn control_channel_basic() {
+        let mut manager = Manager::standard(None);
+        manager.apply_system_default();
+        let expected_config = manager.get::<Configuration>().unwrap();
+        let hostname = "myserver";
+
+        let mut mock_control = MockControlChannelServerInterface::<MockStream, MockStream>::new();
+        let _expect = mock_control
+            .expect_run_server()
+            .with(
+                predicate::eq(Some(hostname.into())),
+                predicate::function(move |mgr: &Manager| {
+                    mgr.get::<Configuration>().unwrap() == expected_config
+                }),
+                predicate::always(),
+                predicate::always(),
+            )
+            .times(1)
+            .returning(|_ip, mgr, _setup_tracing: RealSetupTracing, _colour| {
+                let runtime = quinn::default_runtime()
+                    .ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
+
+                let endpoint = Endpoint::new(
+                    EndpointConfig::default(),
+                    None,
+                    UdpSocket::bind("127.0.0.1:0")?,
+                    runtime,
+                )?;
+                // This isn't currently a mocked Endpoint, so all we can really do is cause the server loop to exit.
+                endpoint.close(0u8.into(), &[]);
+
+                Ok(ServerResult {
+                    config: mgr.get::<Configuration>()?,
+                    endpoint,
+                })
+            });
+        let _expect = mock_control
+            .expect_send_closedown_report()
+            .with(predicate::always())
+            .times(1)
+            .returning(|_| Ok(()));
+
+        server_main_inner(mock_control, Some(hostname.into()), &mut manager)
+            .await
+            .unwrap();
+    }
 }

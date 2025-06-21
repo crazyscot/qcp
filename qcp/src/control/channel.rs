@@ -8,11 +8,12 @@ use std::cmp::min;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
+use async_trait::async_trait;
 use quinn::{ConnectionStats, Endpoint};
 use serde_bare::Uint;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, Stdin, Stdout};
 use tokio::time::timeout;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{Instrument as _, debug, error, info, trace, warn};
 
 use crate::client::Parameters;
 use crate::config::{Configuration, Configuration_Optional, Manager};
@@ -26,7 +27,36 @@ use crate::protocol::control::{
 use crate::transport::combine_bandwidth_configurations;
 use crate::util::{Credentials, SetupTracingFunction, TimeFormat};
 
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
 /// Control channel abstraction
+#[cfg_attr(test, automock)]
+#[async_trait]
+pub(crate) trait ControlChannelServerInterface<
+    S: SendingStream + 'static,
+    R: ReceivingStream + 'static,
+>
+{
+    async fn run_server<SetupTracing: SetupTracingFunction + Send + 'static>(
+        &mut self,
+        remote_ip: Option<String>,
+        manager: &mut Manager,
+        setup_tracing: SetupTracing,
+        colours: bool,
+    ) -> anyhow::Result<ServerResult>;
+
+    async fn run_server_inner(
+        &mut self,
+        remote_ip: Option<String>,
+        manager: &mut Manager,
+        greeting: &ClientGreeting,
+    ) -> anyhow::Result<ServerResult>;
+
+    async fn send_closedown_report(&mut self, stats: &ConnectionStats) -> Result<()>;
+}
+
+/// Real control channel
 pub(crate) struct ControlChannel<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
     /// The other side's declared compatibility level
@@ -103,10 +133,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     // =================================================================================
     // CLIENT
 
-    pub(super) async fn client_exchange_greetings(
-        &mut self,
-        remote_debug: bool,
-    ) -> Result<ServerGreeting> {
+    async fn client_exchange_greetings(&mut self, remote_debug: bool) -> Result<ServerGreeting> {
         self.send(
             ClientGreeting {
                 compatibility: COMPATIBILITY_LEVEL.into(),
@@ -122,7 +149,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         Ok(reply)
     }
 
-    pub(super) async fn client_send_message(
+    async fn client_send_message(
         &mut self,
         credentials: &Credentials,
         connection_type: ConnectionType,
@@ -319,8 +346,13 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     fn server_trace_level(debug: bool) -> &'static str {
         if debug { "debug" } else { "info" }
     }
+}
 
-    pub(crate) async fn run_server<SetupTracing: SetupTracingFunction>(
+#[async_trait]
+impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelServerInterface<S, R>
+    for ControlChannel<S, R>
+{
+    async fn run_server<SetupTracing: SetupTracingFunction + Send>(
         &mut self,
         remote_ip: Option<String>,
         manager: &mut Manager,
@@ -342,9 +374,22 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         SetupTracing::run(level, None, None, time_format, colours)?;
         // Now we can use the tracing system!
 
-        let _span = tracing::error_span!("Server").entered();
+        self.run_server_inner(remote_ip, manager, &remote_greeting)
+            .instrument(tracing::error_span!("Server").or_current())
+            .await
+    }
+
+    async fn run_server_inner(
+        &mut self,
+        remote_ip: Option<String>,
+        manager: &mut Manager,
+        remote_greeting: &ClientGreeting,
+    ) -> anyhow::Result<ServerResult> {
+        debug!(
+            "client IP is {}",
+            remote_ip.as_deref().map_or("none", |v| v)
+        );
         debug!("got client greeting {remote_greeting:?}");
-        debug!("client IP is {}", remote_ip.as_ref().map_or("none", |v| v));
 
         // PHASE 3: MESSAGES
         // PHASE 3A: Read client message
@@ -413,7 +458,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         Ok(ServerResult { config, endpoint })
     }
 
-    pub(crate) async fn send_closedown_report(&mut self, stats: &ConnectionStats) -> Result<()> {
+    async fn send_closedown_report(&mut self, stats: &ConnectionStats) -> Result<()> {
         // FUTURE: When later versions of ClosedownReport are created, check client compatibility and send the appropriate version.
         self.send(
             ClosedownReport::V1(ClosedownReportV1::from(stats)),
@@ -430,7 +475,7 @@ mod test {
     use crate::{
         client::Parameters,
         config::{Configuration_Optional, Manager},
-        control::ControlChannel,
+        control::{ControlChannel, ControlChannelServerInterface as _},
         protocol::{
             common::{
                 MessageHeader, ProtocolMessage as _, ReceivingStream, SendReceivePair,
