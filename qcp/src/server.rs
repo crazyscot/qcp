@@ -7,6 +7,7 @@ use crate::protocol::common::{ProtocolMessage as _, SendReceivePair};
 use crate::protocol::session::Command;
 
 use anyhow::Context as _;
+use human_repr::HumanDuration;
 use quinn::ConnectionStats;
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
@@ -63,6 +64,12 @@ pub(crate) async fn server_main() -> anyhow::Result<()> {
     endpoint.close(1u8.into(), "finished".as_bytes());
     endpoint.wait_idle().await;
     let stats = stats_rx.try_recv().unwrap_or_default();
+
+    debug!(
+        "Remote stats: final mtu={pmtu}, rtt={rtt}",
+        pmtu = stats.path.current_mtu,
+        rtt = stats.path.rtt.human_duration()
+    );
     control.send_closedown_report(&stats).await?;
     trace!("finished");
     Ok(())
