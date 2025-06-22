@@ -11,5 +11,5 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 #[cfg_attr(coverage_nightly, coverage(off))]
 fn main() -> ExitCode {
-    qcp::main()
+    qcp::main(std::env::args_os())
 }

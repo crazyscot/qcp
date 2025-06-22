@@ -118,9 +118,9 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "assertables"
-version = "9.5.2"
+version = "9.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "218459a1ca1459c9fbfedc0dc14febf22d0b809708d496b2368e407da91ff5a8"
+checksum = "b8ea58571e7a793f14036fcb1e63b4350b5121a8765d194c0efc234e752c8199"
 
 [[package]]
 name = "async-stream"
@@ -1300,6 +1300,8 @@ version = "0.0.0"
 dependencies = [
  "anstream",
  "anstyle",
+ "anyhow",
+ "assertables",
  "cfg-if",
  "colorchoice",
  "console",
