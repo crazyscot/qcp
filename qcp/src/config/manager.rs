@@ -190,7 +190,7 @@ impl Manager {
     /// Possible outcomes:
     /// - The field is present and has the correct type. Returns the value.
     /// - The field is present but has the wrong type. Returns InvalidType.
-    /// - The field is not present. If `allow_missing` is given, that value is returned; otherwise, returns MissingField.
+    /// - The field is not present. If `default` is given, that value is returned; otherwise, returns MissingField.
     /// - The field name is not valid. Returns UnknownField.
     pub(crate) fn get_config_field<'de, T>(
         &self,

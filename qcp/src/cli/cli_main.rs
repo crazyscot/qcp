@@ -112,39 +112,42 @@ async fn handle_mode(
 }
 
 fn list_features() -> bool {
+    list_features_data().output_paged();
+    true
+}
+fn list_features_data() -> String {
     use tabled::settings::{Alignment, object::Columns};
 
     let mut tbl = crate::protocol::compat::pretty_list();
     let _ = tbl
         .with(crate::cli::styles::TABLE_STYLE.clone())
         .modify(Columns::last(), Alignment::center());
-    format!("{tbl}").output_paged();
-    true
+    format!("{tbl}")
 }
 
 fn print_help_buffers(manager: &mut Manager) -> Result<bool> {
+    let _ = writeln!(std::io::stdout(), "{}", help_buffers_data(manager)?);
+    Ok(true)
+}
+fn help_buffers_data(manager: &mut Manager) -> Result<String> {
     manager.apply_system_default();
     manager.validate_configuration()?;
     let config = manager.get::<Configuration>()?;
     let udp_buf = u64::from(config.udp_buffer);
-
-    let _ = writeln!(
-        std::io::stdout(),
-        "{}",
-        os::Platform::help_buffers_mode(udp_buf)
-    );
-    Ok(true)
+    Ok(os::Platform::help_buffers_mode(udp_buf))
 }
 
 fn show_config(config_manager: &mut Manager) -> Result<bool> {
+    show_config_data(config_manager).output_paged();
+    config_manager.validate_configuration()?;
+    Ok(true)
+}
+fn show_config_data(config_manager: &mut Manager) -> String {
     config_manager.apply_system_default();
     format!(
         "Client configuration:\n{}",
         config_manager.to_display_adapter::<Configuration>()
     )
-    .output_paged();
-    config_manager.validate_configuration()?;
-    Ok(true)
 }
 
 async fn run_server() -> Result<bool> {
@@ -168,4 +171,75 @@ async fn run_client(config_manager: &mut Manager, client_params: Parameters) -> 
 
     // this mode may return false
     crate::client_main(config_manager, progress, client_params).await
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use assertables::assert_contains;
+
+    use super::{MainMode, handle_mode};
+    use crate::{
+        Parameters,
+        cli::cli_main::{help_buffers_data, list_features_data, show_config_data},
+        config::Manager,
+    };
+
+    fn test_mgr() -> Manager {
+        let mut mgr = Manager::without_default(None);
+        mgr.apply_system_default();
+        mgr
+    }
+
+    #[test]
+    fn help_buffers() {
+        let mut mgr = test_mgr();
+        assert_contains!(help_buffers_data(&mut mgr).unwrap(), "Testing this system");
+    }
+
+    #[test]
+    fn list_features() {
+        let data = list_features_data();
+        assert_contains!(data, "Feature");
+        assert_contains!(data, "BasicProtocol");
+    }
+
+    #[test]
+    fn show_config() {
+        let mut mgr = test_mgr();
+        let data = show_config_data(&mut mgr);
+        assert_contains!(data, "Client config");
+        assert_contains!(data, "Remote host");
+        assert_contains!(data, "AddressFamily");
+    }
+    #[test]
+    fn show_config_files() {
+        let mut mgr = test_mgr();
+        let params = Parameters {
+            ..Default::default()
+        };
+        assert!(handle_mode(MainMode::ShowConfigFiles, &mut mgr, params).unwrap());
+    }
+
+    #[test]
+    fn setup_colours_invalid_config() {
+        let mgr = littertray::LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(
+                path,
+                r"
+            Host *
+            color invalid
+        ",
+            )?;
+            let mut mgr = Manager::without_files(None);
+            mgr.merge_ssh_config(path, None, false);
+            Ok(mgr)
+        })
+        .unwrap();
+
+        super::setup_colours(&mgr, MainMode::Server).unwrap();
+        let e = super::setup_colours(&mgr, MainMode::Client).unwrap_err();
+        eprintln!("{e}");
+    }
 }
