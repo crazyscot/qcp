@@ -34,8 +34,14 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 pub(crate) trait SendingStream: AsyncWrite + Send + Unpin {}
 impl SendingStream for quinn::SendStream {}
 
+#[cfg(test)]
+impl SendingStream for tokio_test::io::Mock {}
+
 pub(crate) trait ReceivingStream: AsyncRead + Send + Unpin {}
 impl ReceivingStream for quinn::RecvStream {}
+
+#[cfg(test)]
+impl ReceivingStream for tokio_test::io::Mock {}
 
 /// Syntactic sugar helper type
 pub(crate) struct SendReceivePair<S: SendingStream, R: ReceivingStream> {
