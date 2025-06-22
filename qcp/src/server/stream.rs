@@ -30,3 +30,68 @@ where
 
     handler.handle().await
 }
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use crate::protocol::{
+        common::{ProtocolMessage, SendReceivePair},
+        session::{Command, GetArgs, PutArgs, Response, ResponseV1, Status},
+    };
+
+    use super::handle_stream;
+    use tokio_test::io::Builder;
+
+    #[tokio::test]
+    async fn test_handle_get_command() {
+        let get_cmd = Command::Get(GetArgs {
+            filename: "no-such-file.txt".to_string(),
+        });
+        let mut send_buf = Vec::new();
+        get_cmd.to_writer_framed(&mut send_buf).unwrap();
+
+        let expected = Response::V1(ResponseV1::new(
+            Status::FileNotFound,
+            Some("No such file or directory (os error 2)".to_string()),
+        ));
+        let mut expect_buf = Vec::new();
+        expected.to_writer_framed(&mut expect_buf).unwrap();
+
+        let mock_recv = Builder::new()
+            .read(&send_buf[0..4])
+            .read(&send_buf[4..])
+            .build();
+        let mock_send = Builder::new()
+            .write(&expect_buf[0..4])
+            .write(&expect_buf[4..])
+            .build();
+
+        let result = handle_stream(SendReceivePair::from((mock_send, mock_recv))).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_handle_put_command() {
+        let put_cmd = Command::Put(PutArgs {
+            filename: "/fjds/no-such-file.txt".to_string(),
+        });
+        let mut send_buf = Vec::new();
+        put_cmd.to_writer_framed(&mut send_buf).unwrap();
+
+        let expected = Response::V1(ResponseV1::new(Status::DirectoryDoesNotExist, None));
+        let mut expect_buf = Vec::new();
+        expected.to_writer_framed(&mut expect_buf).unwrap();
+
+        let mock_recv = Builder::new()
+            .read(&send_buf[0..4])
+            .read(&send_buf[4..])
+            .build();
+        let mock_send = Builder::new()
+            .write(&expect_buf[0..4])
+            .write(&expect_buf[4..])
+            .build();
+
+        let result = handle_stream(SendReceivePair::from((mock_send, mock_recv))).await;
+        assert!(result.is_ok());
+    }
+}
