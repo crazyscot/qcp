@@ -4,6 +4,7 @@
 #![cfg_attr(coverage_nightly, feature(coverage_attribute), coverage(off))]
 #![cfg(test)]
 
+mod cli;
 mod clicolor;
 mod manager;
 mod ssh_includes;

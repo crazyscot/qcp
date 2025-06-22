@@ -1,8 +1,8 @@
 //! Main CLI for qcp
 // (c) 2024 Ross Younger
 
-use std::io::Write as _;
 use std::process::ExitCode;
+use std::{ffi::OsString, io::Write as _};
 
 use super::args::{CliArgs, MainMode};
 use crate::{
@@ -19,15 +19,20 @@ use lessify::OutputPaged;
 
 /// Main CLI entrypoint
 ///
-/// Call this from `main`. It reads argv.
+/// Call this from `main`, passing the arguments to use.
+/// Normally you will call `cli(std::env::args_os())` but you can pass in alternate arguments for CLI testing.
 ///
 /// # Safety
 /// - This function may start a tokio runtime and perform work in it.
 /// - This function is not safe to call from multi-threaded code.
 #[must_use]
-pub fn cli() -> ExitCode {
+pub fn cli<I, T>(args: I) -> ExitCode
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
     #[allow(clippy::match_bool)] // improved readability
-    cli_inner()
+    cli_inner(args)
         .inspect_err(|e| {
             if crate::util::tracing_is_initialised() {
                 tracing::error!("{e}");
@@ -48,8 +53,12 @@ pub fn cli() -> ExitCode {
 ///
 /// # Note
 /// - This function starts a tokio runtime and performs work in it.
-fn cli_inner() -> Result<bool> {
-    let Some(args) = parse_args()? else {
+fn cli_inner<I, T>(args: I) -> Result<bool>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let Some(args) = parse_args(args)? else {
         return Ok(true); // help/version shown; exit
     };
 
@@ -61,9 +70,13 @@ fn cli_inner() -> Result<bool> {
     handle_mode(args.mode_, &mut config_manager, args.client_params)
 }
 
-fn parse_args() -> Result<Option<Box<CliArgs>>> {
+fn parse_args<I, T>(args: I) -> Result<Option<Box<CliArgs>>>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
     use clap::error::ErrorKind::{DisplayHelp, DisplayVersion};
-    match CliArgs::custom_parse(std::env::args_os()) {
+    match CliArgs::custom_parse(args) {
         Ok(args) => Ok(Some(Box::new(args))),
         Err(e) if matches!(e.kind(), DisplayHelp | DisplayVersion) => {
             let message = e.render();
