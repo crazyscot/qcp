@@ -42,7 +42,8 @@ pub(crate) fn create_endpoint(
         tls_config.max_early_data_size = u32::MAX;
         let qsc = QuicServerConfig::try_from(tls_config)?;
         let mut server_cfg = quinn::ServerConfig::with_crypto(Arc::new(qsc));
-        let _ = server_cfg.transport_config(crate::transport::create_config(config, mode, compat)?);
+        let _ =
+            server_cfg.transport_config(crate::transport::create_config(config, mode, compat)?.0);
 
         (None, Some(server_cfg))
     } else {
@@ -53,7 +54,8 @@ pub(crate) fn create_endpoint(
         );
         let mut client_cfg =
             quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
-        let _ = client_cfg.transport_config(crate::transport::create_config(config, mode, compat)?);
+        let _ =
+            client_cfg.transport_config(crate::transport::create_config(config, mode, compat)?.0);
 
         (Some(client_cfg), None)
     };

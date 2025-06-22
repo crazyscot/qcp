@@ -1,7 +1,7 @@
 //! Configures the QUIC transport layer from user settings
 // (c) 2024 Ross Younger
 
-use std::{sync::Arc, time::Duration};
+use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use human_repr::HumanCount as _;
@@ -21,6 +21,13 @@ use crate::{
     util::PortRange,
 };
 
+/// A wrapping trait for congestion controller factories. Needed to be able to
+/// debug-print them as `TransportConfig` does not.
+pub trait DebugControllerFactory: quinn::congestion::ControllerFactory + std::fmt::Debug {}
+impl DebugControllerFactory for BbrConfig {}
+impl DebugControllerFactory for CubicConfig {}
+impl DebugControllerFactory for NewRenoConfig {}
+
 /// Keepalive interval for the QUIC connection
 pub(crate) const PROTOCOL_KEEPALIVE: Duration = Duration::from_secs(5);
 
@@ -39,12 +46,13 @@ pub enum ThroughputMode {
     Both,
 }
 
-/// Creates a `quinn::TransportConfig` for the endpoint setup
+/// Creates a `quinn::TransportConfig` for the endpoint setup.
+/// Also returns the `quinn_proto::congestion::ControllerFactory` for testing.
 pub fn create_config(
     params: &Configuration,
     mode: ThroughputMode,
     compat: CompatibilityLevel,
-) -> Result<Arc<TransportConfig>> {
+) -> Result<(Arc<TransportConfig>, Arc<dyn DebugControllerFactory>)> {
     let mut mtu_cfg = MtuDiscoveryConfig::default();
     let _ = mtu_cfg.upper_bound(params.max_mtu);
 
@@ -88,20 +96,24 @@ pub fn create_config(
     }
 
     let window = u64::from(params.initial_congestion_window);
-    match params.congestion.0 {
+    let congestion: Arc<dyn DebugControllerFactory> = match params.congestion.0 {
         CongestionController::Cubic => {
             let mut cubic = CubicConfig::default();
             if window != 0 {
                 let _ = cubic.initial_window(window);
             }
-            let _ = config.congestion_controller_factory(Arc::new(cubic));
+            let factory = Arc::new(cubic);
+            let _ = config.congestion_controller_factory(factory.clone());
+            factory
         }
         CongestionController::Bbr => {
             let mut bbr = BbrConfig::default();
             if window != 0 {
                 let _ = bbr.initial_window(window);
             }
-            let _ = config.congestion_controller_factory(Arc::new(bbr));
+            let factory = Arc::new(bbr);
+            let _ = config.congestion_controller_factory(factory.clone());
+            factory
         }
         CongestionController::NewReno => {
             anyhow::ensure!(
@@ -112,9 +124,11 @@ pub fn create_config(
             if window != 0 {
                 let _ = newreno.initial_window(window);
             }
-            let _ = config.congestion_controller_factory(Arc::new(newreno));
+            let factory = Arc::new(newreno);
+            let _ = config.congestion_controller_factory(factory.clone());
+            factory
         }
-    }
+    };
 
     debug!(
         "Final network configuration: {}",
@@ -142,9 +156,10 @@ pub fn create_config(
     };
     debug!("Buffer configuration: mode {mode}{send_data}{recv_data}");
 
-    Ok(config.into())
+    Ok((config.into(), congestion))
 }
 
+#[derive(Debug)]
 enum CombinationResponse<T> {
     Server,
     Client,
@@ -341,4 +356,158 @@ fn make_entry_human_friendly(
 fn make_dict_human_friendly(dict: &mut figment::value::Dict) {
     make_entry_human_friendly(dict.entry("rx".into()));
     make_entry_human_friendly(dict.entry("tx".into()));
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use assertables::{assert_contains, assert_matches};
+    use serde_bare::Uint;
+
+    use crate::{
+        Configuration,
+        config::Manager,
+        protocol::control::{CompatibilityLevel, PortRange_OnWire},
+        transport::{Configuration_Optional, combine_bandwidth_configurations},
+        util::PortRange,
+    };
+
+    use super::{ThroughputMode, create_config};
+
+    fn process_config(cfg: &Configuration, mode: ThroughputMode) -> (String, String) {
+        let (tc, congestion) = create_config(cfg, mode, CompatibilityLevel::Level(2)).unwrap();
+        (format!("{tc:#?}"), format!("{congestion:#?}"))
+    }
+
+    #[test]
+    fn modes() {
+        let mut cfg = Configuration::system_default().clone();
+        cfg.tx = 1_000_000u64.into();
+        cfg.rx = cfg.tx;
+        cfg.rtt = 456;
+
+        // Rx only: receive window per BDP calculation, send window at Quinn's default
+        let (str, _) = process_config(&cfg, ThroughputMode::Rx);
+        assert_contains!(str, "stream_receive_window: 456000");
+        assert_contains!(str, "send_window: 10000000");
+
+        // Tx only: send window as 8x BDP calculation, receive window at Quinn's default
+        let (str, _) = process_config(&cfg, ThroughputMode::Tx);
+        assert_contains!(str, "stream_receive_window: 1250000");
+        assert_contains!(str, "send_window: 3648000"); //
+    }
+
+    #[test]
+    fn congestion_config() {
+        let mut cfg = Configuration::system_default().clone();
+        cfg.congestion = crate::protocol::control::CongestionController::Cubic.into();
+        cfg.initial_congestion_window = 1000u64.into();
+
+        let (_, str) = process_config(&cfg, ThroughputMode::Both);
+        assert_contains!(str, "CubicConfig");
+        assert_contains!(str, "initial_window: 1000");
+
+        cfg.congestion = crate::protocol::control::CongestionController::Bbr.into();
+        let (_, str) = process_config(&cfg, ThroughputMode::Both);
+        assert_contains!(str, "BbrConfig");
+        assert_contains!(str, "initial_window: 1000");
+
+        cfg.congestion = crate::protocol::control::CongestionController::NewReno.into();
+        let (_, str) = process_config(&cfg, ThroughputMode::Both);
+        assert_contains!(str, "NewRenoConfig");
+        assert_contains!(str, "initial_window: 1000");
+    }
+
+    #[test]
+    fn congestion_config_compat() {
+        let mut cfg = Configuration::system_default().clone();
+        cfg.congestion = crate::protocol::control::CongestionController::NewReno.into();
+
+        let e =
+            create_config(&cfg, ThroughputMode::Both, CompatibilityLevel::Level(1)).unwrap_err();
+        eprintln!("{e}");
+        assert_contains!(e.to_string(), "Remote host does not support NewReno");
+    }
+    #[test]
+    fn congestion_config_incompat() {
+        // server config
+        let server_cfg = Configuration_Optional {
+            congestion: Some(crate::protocol::control::CongestionController::NewReno.into()),
+            ..Default::default()
+        };
+        let mut mgr = Manager::without_files(None);
+        mgr.merge_provider(server_cfg);
+
+        // client message
+        let mp = crate::protocol::control::ClientMessageV1 {
+            congestion: crate::protocol::control::CongestionController::Cubic.into(),
+            ..Default::default()
+        };
+
+        let e = combine_bandwidth_configurations(&mut mgr, &mp).unwrap_err();
+        assert_contains!(
+            e.to_string(),
+            "server and client have incompatible congestion algorithm requirements"
+        );
+    }
+
+    #[test]
+    fn negotiation() {
+        // server config
+        let server_cfg = Configuration_Optional {
+            // PortRange will lead to a Combined result
+            port: Some(PortRange {
+                begin: 1000,
+                end: 2000,
+            }),
+            // Congestion Window will lead to a Server result
+            initial_congestion_window: Some(1000u64.into()),
+            ..Default::default()
+        };
+        let mut mgr = Manager::new(None, false, false);
+        mgr.merge_provider(server_cfg);
+
+        // client message
+        let mp = crate::protocol::control::ClientMessageV1 {
+            port: Some(PortRange_OnWire {
+                begin: 500,
+                end: 1500,
+            }),
+            initial_congestion_window: Some(Uint(500)),
+            // rtt is only present in the client message
+            rtt: Some(1234),
+            ..Default::default()
+        };
+
+        let c = combine_bandwidth_configurations(&mut mgr, &mp).unwrap();
+        assert_matches!(
+            c,
+            Configuration {
+                port: PortRange {
+                    begin: 1000,
+                    end: 1500
+                },
+                rtt: 1234,
+                ..
+            }
+        );
+        // it doesn't seem possible to use assert_matches! on an EngineeringRepr field
+        assert_eq!(c.initial_congestion_window, 1000u64.into());
+    }
+
+    #[test]
+    fn test_min_ignoring_zero() {
+        use super::{CombinationResponse, min_ignoring_zero};
+        assert_matches!(min_ignoring_zero(0, 0), CombinationResponse::Server);
+        assert_matches!(min_ignoring_zero(0, 100), CombinationResponse::Server);
+        assert_matches!(min_ignoring_zero(100, 0), CombinationResponse::Client);
+        assert_matches!(
+            min_ignoring_zero(100, 200),
+            CombinationResponse::Combined(100)
+        );
+        assert_matches!(
+            min_ignoring_zero(200, 100),
+            CombinationResponse::Combined(100)
+        );
+    }
 }

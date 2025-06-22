@@ -34,7 +34,7 @@ pub struct Manager {
 impl Manager {
     /// Generic constructor. The structure is set up to extract data for the given `host`, if any.
     ///
-    /// Most uses cases should prefer [Manager::standard].
+    /// Most use cases should prefer [Manager::standard].
     pub fn new(host: Option<&str>, apply_env: bool, apply_config_files: bool) -> Self {
         let profile = if let Some(host) = host {
             figment::Profile::new(host)
