@@ -92,6 +92,7 @@ pub(crate) struct StopwatchChain {
 impl StopwatchChain {
     /// Convenience method: constructs and starts a stopwatch chain
     #[must_use]
+    #[allow(dead_code)]
     pub(crate) fn new_running(name: &str) -> Self {
         let mut r = Self::default();
         r.next(name);

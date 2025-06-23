@@ -86,7 +86,7 @@ impl std::fmt::Display for FileSpec {
 }
 
 /// Details of a file copy job.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct CopyJobSpec {
     pub(crate) source: FileSpec,
     pub(crate) destination: FileSpec,

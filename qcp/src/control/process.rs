@@ -175,6 +175,32 @@ impl Ssh {
         }
         Ok(Self { process })
     }
+
+    #[cfg(test)]
+    #[cfg_attr(coverage_nightly, coverage(off))]
+    /// Creates a fake SSH client for testing purposes.
+    /// It returns a given output stream.
+    pub(crate) fn fake<B>(data: &B) -> Self
+    where
+        B: AsRef<[u8]> + Send + 'static,
+    {
+        use std::fmt::Write;
+
+        let mut encoded = String::new();
+        for byte in data.as_ref() {
+            // Encode each byte as a two-digit hex number, with a leading zero if necessary.
+            write!(encoded, "\\x{byte:02x}").expect("failed to write to encoded string");
+        }
+        eprintln!("Fake SSH client will echo -e {encoded}");
+
+        let process = tokio::process::Command::new("/bin/echo")
+            .args(["-en", &encoded])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("failed to start fake ssh client");
+        Self { process }
+    }
 }
 
 #[cfg(test)]
