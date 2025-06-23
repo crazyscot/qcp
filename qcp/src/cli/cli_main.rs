@@ -64,10 +64,10 @@ where
 
     // Now fold the arguments in with the CLI config (which may fail)
     // (to provoke an error here: `qcp host: host2:`)
-    let mut config_manager = Manager::try_from(&*args)?;
+    let config_manager = Manager::try_from(&*args)?;
     setup_colours(&config_manager, args.mode_)?;
 
-    handle_mode(args.mode_, &mut config_manager, args.client_params)
+    handle_mode(args.mode_, config_manager, args.client_params)
 }
 
 fn parse_args<I, T>(args: I) -> Result<Option<Box<CliArgs>>>
@@ -108,7 +108,7 @@ fn setup_colours(manager: &Manager, mode: MainMode) -> Result<()> {
 #[tokio::main(flavor = "current_thread")]
 async fn handle_mode(
     mode: MainMode,
-    config_manager: &mut Manager,
+    config_manager: Manager,
     client_params: Parameters,
 ) -> Result<bool> {
     match mode {
@@ -138,11 +138,11 @@ fn list_features_data() -> String {
     format!("{tbl}")
 }
 
-fn print_help_buffers(manager: &mut Manager) -> Result<bool> {
+fn print_help_buffers(manager: Manager) -> Result<bool> {
     let _ = writeln!(std::io::stdout(), "{}", help_buffers_data(manager)?);
     Ok(true)
 }
-fn help_buffers_data(manager: &mut Manager) -> Result<String> {
+fn help_buffers_data(mut manager: Manager) -> Result<String> {
     manager.apply_system_default();
     manager.validate_configuration()?;
     let config = manager.get::<Configuration>()?;
@@ -150,8 +150,8 @@ fn help_buffers_data(manager: &mut Manager) -> Result<String> {
     Ok(os::Platform::help_buffers_mode(udp_buf))
 }
 
-fn show_config(config_manager: &mut Manager) -> Result<bool> {
-    show_config_data(config_manager).output_paged();
+fn show_config(mut config_manager: Manager) -> Result<bool> {
+    show_config_data(&mut config_manager).output_paged();
     config_manager.validate_configuration()?;
     Ok(true)
 }
@@ -171,7 +171,7 @@ async fn run_server() -> Result<bool> {
     Ok(true)
 }
 
-async fn run_client(config_manager: &mut Manager, client_params: Parameters) -> Result<bool> {
+async fn run_client(config_manager: Manager, client_params: Parameters) -> Result<bool> {
     let progress =
         MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS));
     {
@@ -206,8 +206,10 @@ mod tests {
 
     #[test]
     fn help_buffers() {
-        let mut mgr = test_mgr();
-        assert_contains!(help_buffers_data(&mut mgr).unwrap(), "Testing this system");
+        assert_contains!(
+            help_buffers_data(test_mgr()).unwrap(),
+            "Testing this system"
+        );
     }
 
     #[test]
@@ -227,11 +229,10 @@ mod tests {
     }
     #[test]
     fn show_config_files() {
-        let mut mgr = test_mgr();
         let params = Parameters {
             ..Default::default()
         };
-        assert!(handle_mode(MainMode::ShowConfigFiles, &mut mgr, params).unwrap());
+        assert!(handle_mode(MainMode::ShowConfigFiles, test_mgr(), params).unwrap());
     }
 
     #[test]
