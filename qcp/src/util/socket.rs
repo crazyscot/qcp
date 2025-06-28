@@ -122,7 +122,7 @@ pub(crate) fn bind_range_for_family(
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use crate::{os::SocketOptions as _, protocol::control::ConnectionType, util::PortRange};
+    use crate::{protocol::control::ConnectionType, util::PortRange};
     use rusty_fork::rusty_fork_test;
     use std::net::{IpAddr, Ipv4Addr, UdpSocket};
 
@@ -137,13 +137,17 @@ mod test {
     // The program executable name reported by info!() will not be very useful, but you could probably have guessed that :-)
     rusty_fork_test! {
         #[test]
+        #[allow(clippy::items_after_statements)]
         fn set_socket_bufsize_direct() {
-            let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
             cfg_if::cfg_if! {
                 if #[cfg(linux)] {
+                    use crate::os::SocketOptions as _;
+                    let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
                     assert!(sock.has_force_sendrecvbuf());
                     let _ = sock.force_sendbuf(128).unwrap_err();
                     let _ = sock.force_recvbuf(128).unwrap_err();
+                } else {
+                    let _ = UdpSocket::bind("0.0.0.0:0").unwrap();
                 }
             }
         }
