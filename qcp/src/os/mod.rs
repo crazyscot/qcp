@@ -214,3 +214,28 @@ pub trait AbstractPlatform {
     /// given.
     fn help_buffers_mode(udp: u64) -> String;
 }
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod test {
+    use super::test_udp_buffers;
+
+    #[test]
+    fn test_buffers_small_ok() {
+        assert!(
+            test_udp_buffers(131_072, 131_072)
+                .unwrap()
+                .warning
+                .is_none()
+        );
+    }
+    #[test]
+    fn test_buffers_gigantic_err() {
+        assert!(
+            test_udp_buffers(1_073_741_824, 1_073_741_824)
+                .unwrap()
+                .warning
+                .is_some()
+        );
+    }
+}
