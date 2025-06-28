@@ -22,6 +22,12 @@ pub mod windows;
 
 static_assertions::assert_cfg!(any(unix, windows), "This OS is not currently supported");
 
+const TESTING_BUFFERS_MESSAGE: &str = r"ℹ️  For best performance, it is necessary to set the kernel UDP buffer size limits.
+This program attempts to automatically set buffer sizes for itself,
+but this usually requires the kernel limits to be configured appropriately.
+
+Testing this system...";
+
 cfg_if! {
     if #[cfg(unix)] {
         use rustix::fd::AsFd as SocketType;
@@ -39,7 +45,7 @@ cfg_if! {
     }
 }
 
-// Include the windows layer in unix dev builds, so it's covered by CI.
+// Include the windows layer in unix dev builds, so it's included in coverage runs.
 cfg_if! {
     if #[cfg(windows_or_dev)] {
         pub use windows::WindowsPlatform;
@@ -234,11 +240,9 @@ mod test {
     }
     #[test]
     fn test_buffers_gigantic_err() {
-        assert!(
-            test_udp_buffers(1_073_741_824, 1_073_741_824)
-                .unwrap()
-                .warning
-                .is_some()
-        );
+        let big = 2u64.pow(60);
+        let result = test_udp_buffers(big, big).unwrap();
+        eprintln!("{result:?}");
+        assert!(result.warning.is_some());
     }
 }

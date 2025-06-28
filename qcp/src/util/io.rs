@@ -63,10 +63,13 @@ mod tests {
 
     fn setup(tray: &mut LitterTray) -> anyhow::Result<FileHeaderV1> {
         let _ = tray.create_text(FILE, "12345")?;
-        let _ = tray.make_symlink(FILE, FILE_LINK)?;
         let _ = tray.make_dir(DIR)?;
-        let _ = tray.make_symlink(DIR, DIR_LINK)?;
-        let _ = tray.make_symlink(BROKEN_LINK_DEST, BROKEN_LINK);
+        #[cfg(unix)]
+        {
+            let _ = tray.make_symlink(FILE, FILE_LINK)?;
+            let _ = tray.make_symlink(DIR, DIR_LINK)?;
+            let _ = tray.make_symlink(BROKEN_LINK_DEST, BROKEN_LINK);
+        }
 
         Ok(FileHeaderV1 {
             size: serde_bare::Uint(NEW_LEN),
@@ -74,6 +77,7 @@ mod tests {
         })
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn dest_is_symlink_to_file() {
         LitterTray::try_with_async(async |tray| {
@@ -107,6 +111,7 @@ mod tests {
         .unwrap();
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn dest_is_symlink_to_dir() {
         LitterTray::try_with_async(async |tray| {
@@ -124,6 +129,7 @@ mod tests {
         .unwrap();
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn dest_is_broken_link() {
         LitterTray::try_with_async(async |tray| {

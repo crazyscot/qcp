@@ -242,6 +242,8 @@ async fn limited_copy(
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use anyhow::{Result, bail};
+    use assertables::assert_contains;
+    use cfg_if::cfg_if;
     use pretty_assertions::assert_eq;
 
     use crate::{
@@ -327,11 +329,14 @@ mod test {
     async fn source_file_not_found() -> Result<()> {
         LitterTray::try_with_async(async |_tray| {
             let (r1, r2) = test_put_main("file1", "s:file2", true).await?;
-            assert!(
-                r1.unwrap_err()
-                    .to_string()
-                    .contains("No such file or directory")
-            );
+            let msg = r1.unwrap_err().to_string();
+            cfg_if! {
+                if #[cfg(unix)] {
+                    assert_contains!(msg, "No such file or directory");
+                } else {
+                    assert_contains!(msg, "File not found");
+                }
+            }
             assert!(r2.is_ok());
             Ok(())
         })
@@ -342,11 +347,14 @@ mod test {
     async fn source_is_a_directory() -> Result<()> {
         LitterTray::try_with_async(async |_tray| {
             let (r1, r2) = test_put_main("/tmp", "s:foo", true).await?;
-            assert!(
-                r1.unwrap_err()
-                    .to_string()
-                    .contains("Source is a directory")
-            );
+            let msg = r1.unwrap_err().to_string();
+            cfg_if! {
+                if #[cfg(unix)] {
+                    assert_contains!(msg, "Source is a directory");
+                } else {
+                    assert_contains!(msg, "Access denied");
+                }
+            }
             assert!(r2.is_ok());
             Ok(())
         })
@@ -390,7 +398,14 @@ mod test {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "s:destdir/", false).await?;
             let r1 = r1.unwrap_err();
-            assert_eq!(Status::from(r1), Status::ItIsADirectory);
+            let status = Status::from(r1);
+            cfg_if! {
+                if #[cfg(linux)] {
+                    assert_eq!(status, Status::ItIsADirectory);
+                } else {
+                    assert_eq!(status, Status::IoError);
+                }
+            };
             assert!(r2.is_ok());
             Ok(())
         })
@@ -404,8 +419,14 @@ mod test {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "s:/dev/", false).await?;
             let r1 = r1.unwrap_err();
-            assert!(r1.to_string().contains("Permission denied"));
-            assert_eq!(Status::from(r1), Status::IncorrectPermissions);
+            let msg = r1.to_string();
+            if cfg!(unix) {
+                assert_contains!(msg, "Permission denied");
+                assert_eq!(Status::from(r1), Status::IncorrectPermissions);
+            } else {
+                assert_contains!(msg, "Access denied");
+                assert_eq!(Status::from(r1), Status::IoError);
+            }
             assert!(r2.is_ok());
             Ok(())
         })
@@ -418,11 +439,18 @@ mod test {
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "s:/dev/full", false).await?;
-            assert!(
-                r1.unwrap_err()
-                    .to_string()
-                    .contains("No space left on device")
-            );
+            let msg = r1.unwrap_err().to_string();
+            cfg_if! {
+                if #[cfg(target_os = "macos")] {
+                    assert_contains!(msg, "Permission denied");
+                } else if #[cfg(unix)] {
+                    assert_contains!(msg, "No space left on device");
+                } else if #[cfg(windows)] {
+                    assert_contains!(msg, "Invalid handle");
+                } else {
+                    panic!("Unknown OS test case; is `{msg}` appropriate?");
+                }
+            }
             assert!(r2.is_ok());
             Ok(())
         })

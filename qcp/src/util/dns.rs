@@ -41,12 +41,13 @@ mod tests {
 
     #[tokio::test]
     async fn ipv4() {
-        let result = lookup_host_by_family("dns.google", AddressFamily::Inet).unwrap();
+        let result = lookup_host_by_family("ipv4.google.com", AddressFamily::Inet).unwrap();
         assert!(result.is_ipv4());
     }
+    #[cfg_attr(target_os = "macos", ignore)] // GitHub OSX runners seem unable to look up ipv6.google.com?!
     #[tokio::test]
     async fn ipv6() {
-        let result = lookup_host_by_family("dns.google", AddressFamily::Inet6).unwrap();
+        let result = lookup_host_by_family("ipv6.google.com", AddressFamily::Inet6).unwrap();
         assert!(result.is_ipv6());
     }
 
