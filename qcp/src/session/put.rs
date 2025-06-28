@@ -243,7 +243,6 @@ async fn limited_copy(
 mod test {
     use anyhow::{Result, bail};
     use assertables::assert_contains;
-    use cfg_if::cfg_if;
     use pretty_assertions::assert_eq;
 
     use crate::{
@@ -330,12 +329,10 @@ mod test {
         LitterTray::try_with_async(async |_tray| {
             let (r1, r2) = test_put_main("file1", "s:file2", true).await?;
             let msg = r1.unwrap_err().to_string();
-            cfg_if! {
-                if #[cfg(unix)] {
-                    assert_contains!(msg, "No such file or directory");
-                } else {
-                    assert_contains!(msg, "File not found");
-                }
+            if cfg!(unix) {
+                assert_contains!(msg, "No such file or directory");
+            } else {
+                assert_contains!(msg, "File not found");
             }
             assert!(r2.is_ok());
             Ok(())
@@ -348,12 +345,10 @@ mod test {
         LitterTray::try_with_async(async |_tray| {
             let (r1, r2) = test_put_main("/tmp", "s:foo", true).await?;
             let msg = r1.unwrap_err().to_string();
-            cfg_if! {
-                if #[cfg(unix)] {
-                    assert_contains!(msg, "Source is a directory");
-                } else {
-                    assert_contains!(msg, "Access denied");
-                }
+            if cfg!(unix) {
+                assert_contains!(msg, "Source is a directory");
+            } else {
+                assert_contains!(msg, "Access denied");
             }
             assert!(r2.is_ok());
             Ok(())
@@ -399,13 +394,11 @@ mod test {
             let (r1, r2) = test_put_main("file1", "s:destdir/", false).await?;
             let r1 = r1.unwrap_err();
             let status = Status::from(r1);
-            cfg_if! {
-                if #[cfg(linux)] {
-                    assert_eq!(status, Status::ItIsADirectory);
-                } else {
-                    assert_eq!(status, Status::IoError);
-                }
-            };
+            if cfg!(linux) {
+                assert_eq!(status, Status::ItIsADirectory);
+            } else {
+                assert_eq!(status, Status::IoError);
+            }
             assert!(r2.is_ok());
             Ok(())
         })
@@ -440,16 +433,14 @@ mod test {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "s:/dev/full", false).await?;
             let msg = r1.unwrap_err().to_string();
-            cfg_if! {
-                if #[cfg(target_os = "macos")] {
-                    assert_contains!(msg, "Permission denied");
-                } else if #[cfg(unix)] {
-                    assert_contains!(msg, "No space left on device");
-                } else if #[cfg(windows)] {
-                    assert_contains!(msg, "Invalid handle");
-                } else {
-                    panic!("Unknown OS test case; is `{msg}` appropriate?");
-                }
+            if cfg!(target_os = "macos") {
+                assert_contains!(msg, "Permission denied");
+            } else if cfg!(unix) {
+                assert_contains!(msg, "No space left on device");
+            } else if cfg!(windows) {
+                assert_contains!(msg, "Invalid handle");
+            } else {
+                panic!("Unknown OS test case; is `{msg}` appropriate?");
             }
             assert!(r2.is_ok());
             Ok(())
