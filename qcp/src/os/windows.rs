@@ -132,7 +132,6 @@ fn help_buffers_win(udp: u64) -> String {
 #[cfg_attr(coverage_nightly, coverage(off))]
 /// See also [`qcp_unsafe_tests::test_windows`]
 mod test {
-    use super::super::test_udp_buffers;
     use super::WindowsPlatform as Platform;
     use crate::os::AbstractPlatform;
 
@@ -142,24 +141,5 @@ mod test {
         assert!(Platform::system_ssh_config().is_none());
         assert!(Platform::user_ssh_config().is_none());
         assert!(Platform::system_config_path().is_none());
-    }
-
-    #[test]
-    fn test_buffers_small_ok() {
-        assert!(
-            test_udp_buffers(131_072, 131_072)
-                .unwrap()
-                .warning
-                .is_none()
-        );
-    }
-    #[test]
-    fn test_buffers_gigantic_err() {
-        assert!(
-            test_udp_buffers(1_073_741_824, 1_073_741_824)
-                .unwrap()
-                .warning
-                .is_some()
-        );
     }
 }

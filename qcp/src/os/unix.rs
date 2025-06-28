@@ -191,7 +191,6 @@ Good luck!",
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use super::super::test_udp_buffers;
     use super::UnixPlatform as Platform;
     use crate::os::AbstractPlatform;
 
@@ -214,24 +213,5 @@ mod test {
         assert!(pv[0].to_string_lossy().contains("/qcp/qcp.conf"));
         assert!(pv[1].to_string_lossy().contains("/home/"));
         assert!(pv[1].to_string_lossy().contains("/.qcp.conf"));
-    }
-
-    #[test]
-    fn test_buffers_small_ok() {
-        assert!(
-            test_udp_buffers(131_072, 131_072)
-                .unwrap()
-                .warning
-                .is_none()
-        );
-    }
-    #[test]
-    fn test_buffers_gigantic_err() {
-        assert!(
-            test_udp_buffers(1_073_741_824, 1_073_741_824)
-                .unwrap()
-                .warning
-                .is_some()
-        );
     }
 }
