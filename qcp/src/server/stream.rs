@@ -40,6 +40,8 @@ mod tests {
     };
 
     use super::handle_stream;
+    use assertables::assert_matches;
+    use tokio::io::simplex;
     use tokio_test::io::Builder;
 
     #[tokio::test]
@@ -50,24 +52,27 @@ mod tests {
         let mut send_buf = Vec::new();
         get_cmd.to_writer_framed(&mut send_buf).unwrap();
 
-        let expected = Response::V1(ResponseV1::new(
-            Status::FileNotFound,
-            Some("No such file or directory (os error 2)".to_string()),
-        ));
-        let mut expect_buf = Vec::new();
-        expected.to_writer_framed(&mut expect_buf).unwrap();
-
         let mock_recv = Builder::new()
             .read(&send_buf[0..4])
             .read(&send_buf[4..])
             .build();
-        let mock_send = Builder::new()
-            .write(&expect_buf[0..4])
-            .write(&expect_buf[4..])
-            .build();
 
-        let result = handle_stream(SendReceivePair::from((mock_send, mock_recv))).await;
-        assert!(result.is_ok());
+        let (mut out_read, out_write) = simplex(1024);
+
+        handle_stream(SendReceivePair::from((out_write, mock_recv)))
+            .await
+            .unwrap();
+
+        let resp = Response::from_reader_async_framed(&mut out_read)
+            .await
+            .unwrap();
+        assert_matches!(
+            resp,
+            Response::V1(ResponseV1 {
+                status: Status::FileNotFound,
+                .. // message is OS specific
+            })
+        );
     }
 
     #[tokio::test]

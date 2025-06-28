@@ -75,6 +75,7 @@ pub(crate) fn stdio_channel() -> ControlChannel<Stdout, Stdin> {
 }
 
 /// Composite return type for `Channel::run_server()`
+#[derive(Debug)]
 pub(crate) struct ServerResult {
     /// Final negotiated configuration
     pub(crate) config: Configuration,
@@ -554,6 +555,7 @@ mod test {
         let ser_fut = server.run_server(None, &mut manager, MockSetupTracing {}, false);
 
         let (cli_res, ser_res) = tokio::join!(cli_fut, ser_fut);
+        eprintln!("Client: {cli_res:?}\nServer: {ser_res:?}");
         assert!(cli_res.is_ok());
         assert!(ser_res.is_ok());
 

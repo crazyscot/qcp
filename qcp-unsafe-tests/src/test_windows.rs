@@ -3,6 +3,8 @@
 use cfg_if::cfg_if;
 use qcp::os::{AbstractPlatform as _, WindowsPlatform as Platform};
 use rusty_fork::rusty_fork_test;
+use static_str_ops::static_format;
+use std::path::MAIN_SEPARATOR;
 
 rusty_fork_test! {
     #[test]
@@ -14,15 +16,15 @@ rusty_fork_test! {
                 #[allow(unsafe_code)]
                 unsafe {
                     // SAFETY: This is run in single threaded mode.
-                    std::env::set_var("ProgramData", "/programdata");
-                    std::env::set_var("UserProfile", "/userprofile");
+                    std::env::set_var("ProgramData", static_format!("{MAIN_SEPARATOR}programdata"));
+                    std::env::set_var("UserProfile", static_format!("{MAIN_SEPARATOR}userprofile"));
                 }
             }
         }
 
-        assert!(Platform::system_ssh_config().unwrap().to_string_lossy().ends_with("/ssh_config"));
-        assert!(Platform::user_ssh_config().unwrap().to_string_lossy().ends_with("/config"));
-        assert!(Platform::system_config_path().unwrap().to_string_lossy().ends_with("/qcp.conf"));
+        assert!(Platform::system_ssh_config().unwrap().to_string_lossy().ends_with(static_format!("{MAIN_SEPARATOR}ssh_config")));
+        assert!(Platform::user_ssh_config().unwrap().to_string_lossy().ends_with(static_format!("{MAIN_SEPARATOR}config")));
+        assert!(Platform::system_config_path().unwrap().to_string_lossy().ends_with(static_format!("{MAIN_SEPARATOR}qcp.conf")));
 
         let pv = Platform::user_config_paths();
         assert!(pv.len() == 1);

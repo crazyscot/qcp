@@ -149,6 +149,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use anyhow::{Result, bail};
+    use cfg_if::cfg_if;
     use pretty_assertions::assert_eq;
 
     use crate::{
@@ -209,13 +210,21 @@ mod test {
         LitterTray::try_with_async(async |tray| {
             let _ = tray.make_dir("td")?;
             let (r1, r2) = test_get_main("s:td", "file2").await?;
-            assert_eq!(Status::from(r1), Status::ItIsADirectory);
+            let status = Status::from(r1);
+            cfg_if! {
+                if #[cfg(windows)] {
+                    assert_eq!(status, Status::IncorrectPermissions);
+                } else {
+                    assert_eq!(status, Status::ItIsADirectory);
+                }
+            };
             assert!(r2.is_ok());
             Ok(())
         })
         .await
     }
 
+    #[cfg(linux)] // TODO: Make more cross-platform
     #[tokio::test]
     async fn permission_denied() -> Result<()> {
         LitterTray::try_with_async(async |_tray| {

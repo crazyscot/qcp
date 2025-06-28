@@ -162,10 +162,13 @@ mod test {
         let _s = bind_range_for_address(UNSPECIFIED, range).unwrap();
     }
 
+    #[cfg_attr(target_os = "macos", ignore)] // GitHub OSX runners allow binding to ports <1024...
     #[test]
     fn bind_range_fails_non_root() {
         let range = PortRange { begin: 1, end: 2 };
-        let _e = bind_range_for_address(UNSPECIFIED, range).unwrap_err();
+        let r = bind_range_for_address(UNSPECIFIED, range);
+        eprintln!("{r:?}");
+        let _ = r.unwrap_err();
     }
 
     #[test]

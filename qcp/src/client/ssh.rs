@@ -224,6 +224,8 @@ mod test {
         // testing that this doesn't panic
         assert!(s.get("", "hostname").is_none());
     }
+
+    #[cfg(linux)] // TODO: Make more cross-platform
     #[test]
     fn file_permissions() {
         let path = PathBuf::from("/dev/console");
