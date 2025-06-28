@@ -107,6 +107,9 @@ impl super::AbstractPlatform for WindowsPlatform {
 fn help_buffers_win(udp: u64) -> String {
     #![allow(non_snake_case)]
     let result = super::test_udp_buffers(udp, udp);
+
+    let mut output = String::from(super::TESTING_BUFFERS_MESSAGE);
+
     match result {
         Err(e) => {
             format!(
@@ -117,7 +120,8 @@ fn help_buffers_win(udp: u64) -> String {
         }
         Ok(r) => {
             use std::fmt::Write as _;
-            let mut output = format!(
+            let _ = write!(
+                output,
                 "\n{INFO}Test result:{RESET} {rx} (read) / {tx} (write)",
                 rx = r.recv.human_count_bytes(),
                 tx = r.send.human_count_bytes(),

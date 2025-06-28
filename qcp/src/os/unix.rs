@@ -84,13 +84,7 @@ fn help_buffers_unix(udp: u64) -> String {
     let WARNING = warning();
     let HEADER = header();
 
-    let mut output = String::from(
-        r"ℹ️  For best performance, it is necessary to set the kernel UDP buffer size limits.
-This program attempts to automatically set buffer sizes for itself,
-but this usually requires the kernel limits to be configured appropriately.
-
-Testing this system...",
-    );
+    let mut output = String::from(super::TESTING_BUFFERS_MESSAGE);
 
     let result = super::test_udp_buffers(udp, udp);
     let tested_ok = match result {
@@ -199,6 +193,11 @@ mod test {
     use super::UnixPlatform as Platform;
     use crate::os::AbstractPlatform;
 
+    #[cfg(target_os = "macos")]
+    const HOME_COMMON: &str = "/Users/";
+    #[cfg(not(target_os = "macos"))]
+    const HOME_COMMON: &str = "/home/";
+
     #[test]
     fn config_paths() {
         assert!(
@@ -208,15 +207,16 @@ mod test {
                 .contains("/etc/ssh/ssh_config")
         );
         let s = Platform::user_ssh_config().unwrap();
-        assert!(s.to_string_lossy().contains("/home/"));
+        assert!(s.to_string_lossy().contains(HOME_COMMON));
         let q = Platform::system_config_path().unwrap();
         assert!(q.to_string_lossy().starts_with("/etc/"));
 
         let pv = Platform::user_config_paths();
+        eprintln!("{pv:?}");
         assert!(pv.len() == 2);
-        assert!(pv[0].to_string_lossy().contains("/home/"));
+        assert!(pv[0].to_string_lossy().contains(HOME_COMMON));
         assert!(pv[0].to_string_lossy().contains("/qcp/qcp.conf"));
-        assert!(pv[1].to_string_lossy().contains("/home/"));
+        assert!(pv[1].to_string_lossy().contains(HOME_COMMON));
         assert!(pv[1].to_string_lossy().contains("/.qcp.conf"));
     }
 }

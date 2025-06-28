@@ -212,7 +212,8 @@ mod test {
     }
 
     #[tokio::test]
-    async fn ssh_no_such_host() {
+    #[cfg_attr(target_os = "windows", ignore)]
+    async fn ssh_no_such_host_requires_ssh_on_path() {
         let mp = MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden());
         let manager = Manager::without_files(None);
         let params = Parameters::default();

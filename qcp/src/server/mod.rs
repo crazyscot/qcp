@@ -134,20 +134,20 @@ mod test {
             )
             .times(1)
             .returning(|_ip, mgr, _setup_tracing: RealSetupTracing, _colour| {
-                let runtime = quinn::default_runtime()
-                    .ok_or_else(|| anyhow::anyhow!("no async runtime found"))?;
+                let runtime = quinn::default_runtime().unwrap();
 
                 let endpoint = Endpoint::new(
                     EndpointConfig::default(),
                     None,
-                    UdpSocket::bind("127.0.0.1:0")?,
+                    UdpSocket::bind("127.0.0.1:0").unwrap(),
                     runtime,
-                )?;
+                )
+                .unwrap();
                 // This isn't currently a mocked Endpoint, so all we can really do is cause the server loop to exit.
                 endpoint.close(0u8.into(), &[]);
 
                 Ok(ServerResult {
-                    config: mgr.get::<Configuration>()?,
+                    config: mgr.get::<Configuration>().unwrap(),
                     endpoint,
                 })
             });

@@ -104,16 +104,25 @@ mod test {
 
     #[test]
     fn home_dir() {
-        let home_env = std::env::var("HOME").unwrap_or("dummy-test-home".into());
+        use super::MAIN_SEPARATOR;
+
+        let home_env = homedir::my_home()
+            .unwrap()
+            .unwrap_or("dummy-test-home".into());
         assert_eq!(xhd!("~"), *home_env);
 
-        let s = format!("{home_env}/file");
-        assert_eq!(xhd!("~/file"), *s);
+        let expect = format!("{}{MAIN_SEPARATOR}file", home_env.display());
+        let lookup = format!("~{MAIN_SEPARATOR}file");
+        assert_eq!(xhd!(&lookup), *expect);
+    }
 
+    #[cfg_attr(target_os = "windows", ignore)] // Windows doesn't seem able to do this
+    #[test]
+    fn home_dir_other_user() {
         // tricky case. a username.
         let user = std::env::var("USER").expect("this test requires a USER");
         assert!(!user.is_empty());
-        let home = dirs::home_dir().expect("this test requires a HOME");
+        let home = dirs::home_dir().expect("this test requires a home directory");
         let path_part = format!("~{user}");
         assert_eq!(xhd!(&path_part), home);
 
@@ -125,8 +134,8 @@ mod test {
     fn include_paths() {
         let _ = find_include_files("~", false).expect_err("~ in system should be disallowed");
         let _ = dirs::home_dir().expect("this test requires a HOME");
-        let d = find_include_files("~/zzznonexistent", true)
-            .expect("home directory should have expanded");
+        let testpath = format!("~{}zzznonexistent", super::MAIN_SEPARATOR);
+        let d = find_include_files(&testpath, true).expect("home directory should have expanded");
         assert!(d.is_empty());
         let _ = find_include_files("~nonexistent-user-xyzy", true)
             .expect_err("non existent user should have bailed");
