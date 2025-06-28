@@ -2,6 +2,7 @@
 // (c) 2024 Ross Younger
 
 use std::net::IpAddr;
+use std::net::ToSocketAddrs as _;
 
 use anyhow::Context as _;
 
@@ -17,17 +18,18 @@ where
     AF: Into<AddressFamily>,
 {
     let desired = desired.into();
-    let candidates = dns_lookup::lookup_host(host)
+    let mut it = (host, 0)
+        .to_socket_addrs()
         .with_context(|| format!("host name lookup for {host} failed"))?;
-    let mut it = candidates.iter();
 
     let found = match desired {
         AddressFamily::Any => it.next(),
-        AddressFamily::Inet => it.find(|addr| addr.is_ipv4()),
-        AddressFamily::Inet6 => it.find(|addr| addr.is_ipv6()),
+        AddressFamily::Inet => it.find(std::net::SocketAddr::is_ipv4),
+        AddressFamily::Inet6 => it.find(std::net::SocketAddr::is_ipv6),
     };
+
     found
-        .map(std::borrow::ToOwned::to_owned)
+        .map(|a| a.ip())
         .ok_or(anyhow::anyhow!("host {host} found, but not as {desired:?}"))
 }
 
@@ -37,19 +39,19 @@ mod tests {
     use super::AddressFamily;
     use super::lookup_host_by_family;
 
-    #[test]
-    fn ipv4() {
+    #[tokio::test]
+    async fn ipv4() {
         let result = lookup_host_by_family("dns.google", AddressFamily::Inet).unwrap();
         assert!(result.is_ipv4());
     }
-    #[test]
-    fn ipv6() {
+    #[tokio::test]
+    async fn ipv6() {
         let result = lookup_host_by_family("dns.google", AddressFamily::Inet6).unwrap();
         assert!(result.is_ipv6());
     }
 
-    #[test]
-    fn failure() {
+    #[tokio::test]
+    async fn failure() {
         let result = lookup_host_by_family("no.such.host.invalid", AddressFamily::Any);
         assert!(result.is_err());
     }
