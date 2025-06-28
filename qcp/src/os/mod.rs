@@ -46,11 +46,8 @@ cfg_if! {
 }
 
 // Include the windows layer in unix dev builds, so it's included in coverage runs.
-cfg_if! {
-    if #[cfg(windows_or_dev)] {
-        pub use windows::WindowsPlatform;
-    }
-}
+#[cfg(windows_or_dev)]
+pub use windows::WindowsPlatform;
 
 /// Platform-specific: Modify values returned from getsockopt(SndBuf | RcvBuf).
 const fn buffer_size_fix(s: usize) -> usize {

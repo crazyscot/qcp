@@ -139,16 +139,14 @@ mod test {
         #[test]
         #[allow(clippy::items_after_statements)]
         fn set_socket_bufsize_direct() {
-            cfg_if::cfg_if! {
-                if #[cfg(linux)] {
-                    use crate::os::SocketOptions as _;
-                    let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
-                    assert!(sock.has_force_sendrecvbuf());
-                    let _ = sock.force_sendbuf(128).unwrap_err();
-                    let _ = sock.force_recvbuf(128).unwrap_err();
-                } else {
-                    let _ = UdpSocket::bind("0.0.0.0:0").unwrap();
-                }
+            if cfg!(linux) {
+                use crate::os::SocketOptions as _;
+                let mut sock = UdpSocket::bind("0.0.0.0:0").unwrap();
+                assert!(sock.has_force_sendrecvbuf());
+                let _ = sock.force_sendbuf(128).unwrap_err();
+                let _ = sock.force_recvbuf(128).unwrap_err();
+            } else {
+                let _ = UdpSocket::bind("0.0.0.0:0").unwrap();
             }
         }
     }
