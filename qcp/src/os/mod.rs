@@ -32,17 +32,17 @@ cfg_if! {
     }
 }
 
-// Include the windows layer in unix dev builds, so it's covered by CI.
-cfg_if! {
-    if #[cfg(windows_or_dev)] {
-        pub use windows::WindowsPlatform;
-    }
-}
 cfg_if! {
     if #[cfg(windows)] {
         use rustix::fd::AsSocket as SocketType;
         pub use WindowsPlatform as Platform;
+    }
+}
 
+// Include the windows layer in unix dev builds, so it's covered by CI.
+cfg_if! {
+    if #[cfg(windows_or_dev)] {
+        pub use windows::WindowsPlatform;
     }
 }
 

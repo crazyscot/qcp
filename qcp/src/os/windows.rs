@@ -130,7 +130,6 @@ fn help_buffers_win(udp: u64) -> String {
 
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
-/// See also [`qcp_unsafe_tests::test_windows`]
 mod test {
     use super::WindowsPlatform as Platform;
     use crate::os::AbstractPlatform;
@@ -138,8 +137,20 @@ mod test {
     #[cfg(unix)]
     #[test]
     fn config_paths_unset() {
+        // We rashly assume that Unix platforms will not set Windows-specific environment variables.
+        // This in turn tests that that part of the mechanism works.
         assert!(Platform::system_ssh_config().is_none());
         assert!(Platform::user_ssh_config().is_none());
         assert!(Platform::system_config_path().is_none());
+    }
+
+    // See also [`qcp_unsafe_tests::test_windows`]
+
+    #[cfg(windows)]
+    #[test]
+    fn config_paths_win() {
+        assert!(Platform::system_ssh_config().is_some());
+        assert!(Platform::user_ssh_config().is_some());
+        assert!(Platform::system_config_path().is_some());
     }
 }
