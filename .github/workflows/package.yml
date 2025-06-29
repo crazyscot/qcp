@@ -134,6 +134,8 @@ jobs:
       with:
         name: ${{ env.BINARY_ARTIFACT }}
         path: ${{ steps.build-binary.outputs.archive }}.${{ env.PACKAGE_ZIP == 'all' && 'zip' || 'tar.gz' }}
+    - name: Run tests
+      run: cargo test --locked
     - name: Make deb package
       id: deb
       if: ${{ matrix.build_deb }}
