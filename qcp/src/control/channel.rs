@@ -542,6 +542,10 @@ mod test {
         }
     }
 
+    #[cfg_attr(cross_target_mingw, ignore)]
+    // TODO: Cross-compiled mingw code fails here in quinn::Endpoint::new
+    // with Endpoint Failed: OS Error 10045 (FormatMessageW() returned error 317) (os error 10045)
+    // Don't run this test on such cross builds for now.
     #[tokio::test]
     async fn happy_path() {
         let (pipe1, pipe2) = test_plumbing();
