@@ -46,7 +46,7 @@ fn help(_: Arguments) -> Result<()> {
     let mut display: Vec<_> = TASKS.iter().collect();
     display.sort_by_key(|(verb, _, _)| *verb);
     for (verb, _, msg) in display {
-        println!("  {verb:0$}  {msg}", longest);
+        println!("  {verb:longest$}  {msg}");
     }
     Ok(())
 }
