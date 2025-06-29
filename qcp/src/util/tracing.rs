@@ -153,16 +153,19 @@ where
     }
 }
 
-/// Abstraction of setup_tracing()
-pub(crate) trait SetupTracingFunction {
-    fn run(
-        _trace_level: &str,
-        _display: Option<&MultiProgress>,
-        _filename: Option<&String>,
-        _time_format: TimeFormat,
-        _colour: bool,
-    ) -> anyhow::Result<()>;
+pub(crate) enum ConsoleTraceType {
+    /// Trace directly to console
+    Standard,
+    /// Trace via Indicatif. Note that a [`SetupFn`] will consume this enum, so you may need to clone the [`MultiProgress`] (which is cheap, it's a reference type really)
+    Indicatif(MultiProgress),
+    /// Do not print traces anywhere
+    #[allow(dead_code)] // this is used by tests
+    None,
 }
+
+/// Function type for [`setup`]
+pub(crate) type SetupFn =
+    fn(&str, ConsoleTraceType, Option<&String>, TimeFormat, bool) -> anyhow::Result<()>;
 
 /// Set up rust tracing, to console (via an optional `MultiProgress`) and optionally to file.
 ///
@@ -174,35 +177,12 @@ pub(crate) trait SetupTracingFunction {
 /// **CAUTION:** If this function fails, tracing won't be set up; callers must take extra care to report the error.
 ///
 /// **NOTE:** You can only run this once per process. A global bool prevents re-running.
-pub(crate) struct RealSetupTracing {}
-impl SetupTracingFunction for RealSetupTracing {
-    #[allow(clippy::unnecessary_wraps)]
-    fn run(
-        trace_level: &str,
-        display: Option<&MultiProgress>,
-        filename: Option<&String>,
-        time_format: TimeFormat,
-        colours: bool,
-    ) -> anyhow::Result<()> {
-        if is_initialized() {
-            tracing::warn!("tracing::setup called a second time (ignoring)");
-            return Ok(());
-        }
-        TRACING_INITIALIZED.store(true, Ordering::Relaxed);
-
-        let layers = create_layers(trace_level, display, filename, time_format, colours)?;
-        tracing_subscriber::registry().with(layers).init();
-
-        Ok(())
-    }
-}
-
 pub(crate) fn setup(
     trace_level: &str,
-    display: Option<&MultiProgress>,
-    filename: Option<&String>,
+    display: ConsoleTraceType,
+    log_file: Option<&String>,
     time_format: TimeFormat,
-    colours: bool,
+    ansi_colours: bool,
 ) -> anyhow::Result<()> {
     if is_initialized() {
         tracing::warn!("tracing::setup called a second time (ignoring)");
@@ -210,18 +190,18 @@ pub(crate) fn setup(
     }
     TRACING_INITIALIZED.store(true, Ordering::Relaxed);
 
-    let layers = create_layers(trace_level, display, filename, time_format, colours)?;
+    let layers = setup_inner(trace_level, display, log_file, time_format, ansi_colours)?;
     tracing_subscriber::registry().with(layers).init();
 
     Ok(())
 }
 
-fn create_layers(
+pub(crate) fn setup_inner(
     trace_level: &str,
-    display: Option<&MultiProgress>,
-    filename: Option<&String>,
+    display: ConsoleTraceType,
+    log_file: Option<&String>,
     time_format: TimeFormat,
-    colours: bool,
+    ansi_colours: bool,
 ) -> anyhow::Result<
     Vec<Box<dyn tracing_subscriber::Layer<tracing_subscriber::Registry> + Send + Sync>>,
 > {
@@ -233,29 +213,30 @@ fn create_layers(
     // If we used the environment variable, show log targets; if we did not, we're only logging qcp, so do not show targets.
 
     match display {
-        None => {
+        ConsoleTraceType::None => (),
+        ConsoleTraceType::Standard => {
             layers.push(make_tracing_layer(
                 std::io::stderr,
                 filter.filter,
                 time_format,
                 filter.used_env,
-                colours,
+                ansi_colours,
             ));
         }
-        Some(mp) => {
+        ConsoleTraceType::Indicatif(mp) => {
             layers.push(make_tracing_layer(
                 ProgressWriter::wrap(mp),
                 filter.filter,
                 time_format,
                 filter.used_env,
-                colours,
+                ansi_colours,
             ));
         }
     }
 
     //////// File output
 
-    if let Some(filename) = filename {
+    if let Some(filename) = log_file {
         let out_file = Arc::new(File::create(filename).context("Failed to open log file")?);
         let filter = if std::env::var(LOG_FILE_DETAIL_ENV_VAR).is_ok() {
             FilterResult {
@@ -289,8 +270,8 @@ pub(crate) fn is_initialized() -> bool {
 struct ProgressWriter(MultiProgress);
 
 impl ProgressWriter {
-    fn wrap(display: &MultiProgress) -> Mutex<Self> {
-        Mutex::new(Self(display.clone()))
+    fn wrap(display: MultiProgress) -> Mutex<Self> {
+        Mutex::new(Self(display))
     }
 }
 
@@ -320,8 +301,11 @@ mod test {
     use rusty_fork::rusty_fork_test;
     use tracing_subscriber::EnvFilter;
 
-    use super::{create_layers, setup};
-    use crate::{Parameters, util::TimeFormat};
+    use super::{setup, setup_inner};
+    use crate::{
+        Parameters,
+        util::{TimeFormat, tracing::ConsoleTraceType},
+    };
 
     use littertray::LitterTray;
 
@@ -346,7 +330,14 @@ mod test {
     #[test]
     fn test_create_layers_with_console_output() {
         let mp = MultiProgress::new();
-        let layers = create_layers("info", Some(&mp), None, TimeFormat::Local, false).unwrap();
+        let layers = setup_inner(
+            "info",
+            ConsoleTraceType::Indicatif(mp),
+            None,
+            TimeFormat::Local,
+            false,
+        )
+        .unwrap();
         assert_eq!(layers.len(), 1); // Only one layer for console output
     }
 
@@ -354,15 +345,27 @@ mod test {
     fn test_create_layers_with_file_output() {
         LitterTray::run(|_| {
             let filename = String::from("test.log");
-            let layers =
-                create_layers("info", None, Some(&filename), TimeFormat::Utc, false).unwrap();
+            let layers = setup_inner(
+                "info",
+                ConsoleTraceType::Standard,
+                Some(&filename),
+                TimeFormat::Utc,
+                false,
+            )
+            .unwrap();
             assert_eq!(layers.len(), 2); // One for console, one for file
         });
     }
 
     #[test]
     fn test_create_layers_with_invalid_level() {
-        let result = create_layers("invalid_level", None, None, TimeFormat::Utc, false);
+        let result = setup_inner(
+            "invalid_level",
+            ConsoleTraceType::None,
+            None,
+            TimeFormat::Utc,
+            false,
+        );
         assert!(result.is_err());
     }
 
@@ -379,7 +382,7 @@ mod test {
     fn test_progress_writer() {
         use std::io::Write as _;
         let mp = MultiProgress::new();
-        let mux = super::ProgressWriter::wrap(&mp);
+        let mux = super::ProgressWriter::wrap(mp);
         let mut writer = mux.lock().unwrap();
         let msg = "Test message";
         let bytes_written = writer.write(msg.as_bytes()).unwrap();
@@ -390,7 +393,7 @@ mod test {
     fn test_progress_writer_hidden() {
         use std::io::Write as _;
         let mp = MultiProgress::with_draw_target(ProgressDrawTarget::hidden());
-        let mux = super::ProgressWriter::wrap(&mp);
+        let mux = super::ProgressWriter::wrap(mp);
         let mut writer = mux.lock().unwrap();
         let msg = "Test message";
         let bytes_written = writer.write(msg.as_bytes()).unwrap();
@@ -402,20 +405,18 @@ mod test {
     rusty_fork_test! {
         #[test]
         fn test_setup_initialization() {
-            let result1 = setup("info", None, None, TimeFormat::Utc, false);
+            let result1 = setup("info", ConsoleTraceType::None, None, TimeFormat::Utc, false);
             assert!(result1.is_ok());
 
-            let result2 = setup("info", None, None, TimeFormat::Utc, false);
+            let result2 = setup("info", ConsoleTraceType::None, None, TimeFormat::Utc, false);
             assert!(result2.is_ok()); // Second call should succeed but be ignored
         }
 
         #[test]
         fn setup_tracing() {
-            use super::RealSetupTracing;
-            use super::SetupTracingFunction as _;
-            RealSetupTracing::run("debug", None, None, TimeFormat::Utc, false).unwrap();
+            super::setup("debug", ConsoleTraceType::None, None, TimeFormat::Utc, false).unwrap();
             // a second call must succeed (albeit with a warning)
-            RealSetupTracing::run("debug", None, None, TimeFormat::Utc, false).unwrap();
+            super::setup("debug", ConsoleTraceType::None, None, TimeFormat::Utc, false).unwrap();
         }
     }
 }
