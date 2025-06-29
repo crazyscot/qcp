@@ -19,6 +19,30 @@ fn main() {
             target_os = "windows",
             debug_assertions
         ) },
+        mingw: { all(
+            target_os = "windows",
+            target_env = "gnu"
+        ) },
+    }
+
+    // Tricky!
+    // In a build script, actually evaluating cfg attribs (not via cfg_aliases) gives
+    // answers relating to the compiling _host_.
+    //
+    // This is normally considered harmful, as it is misleading.
+    // https://github.com/rust-lang/rust-clippy/issues/9419 refers.
+    //
+    // However we can use this property to detect, at compile time, whether
+    // we're cross compiling for an awkward combination and need to modify our test suite.
+    //
+    // Also note that you cannot use previously-defined cfg_aliases in a later cfg_aliases block.
+    if cfg!(all(target_os = "windows", target_env = "gnu")) {
+        // We are building in a mingw environment, so do NOT set cfg alias cross_target_mingw
+    } else {
+        // We are not building in a mingw environment
+        cfg_aliases! {
+            cross_target_mingw: { all (target_os = "windows", target_env = "gnu") }
+        }
     }
 }
 

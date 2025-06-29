@@ -114,6 +114,10 @@ mod test {
     // channel.rs already has mocks and Control.run_server() is already tested.
     // For this test, we only really care that the main loop in this unit does something sensible.
 
+    #[cfg_attr(cross_target_mingw, ignore)]
+    // TODO: Cross-compiled mingw code fails here in quinn::Endpoint::new
+    // with Endpoint Failed: OS Error 10045 (FormatMessageW() returned error 317) (os error 10045)
+    // Don't run this test on such cross builds for now.
     #[tokio::test]
     async fn control_channel_basic() {
         let mut manager = Manager::standard(None);
