@@ -506,7 +506,7 @@ mod test {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "not a real test"]
     fn dump_local_config() {
         let path = Platform::user_ssh_config().unwrap();
         let parser = Parser::for_path(&path, true).unwrap();
