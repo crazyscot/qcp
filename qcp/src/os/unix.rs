@@ -39,6 +39,11 @@ use std::path::PathBuf;
 pub struct UnixPlatform {}
 
 impl super::AbstractPlatform for UnixPlatform {
+    /// Location of the system ssh config file.
+    fn system_ssh_dir_path() -> Option<PathBuf> {
+        Some("/etc/ssh".into())
+    }
+
     fn system_ssh_config() -> Option<PathBuf> {
         Some("/etc/ssh/ssh_config".into())
     }

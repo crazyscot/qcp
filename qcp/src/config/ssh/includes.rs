@@ -6,6 +6,8 @@ use glob::{MatchOptions, glob_with};
 use std::path::{MAIN_SEPARATOR, PathBuf};
 use std::sync::LazyLock;
 
+use crate::os::{AbstractPlatform as _, Platform};
+
 static HOME_PREFIX: LazyLock<String> = LazyLock::new(|| format!("~{MAIN_SEPARATOR}"));
 
 fn expand_home_directory(path: &str) -> Result<PathBuf> {
@@ -41,6 +43,7 @@ fn expand_home_directory(path: &str) -> Result<PathBuf> {
 
 /// Wildcard matching and ~ expansion for Include directives
 pub fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>> {
+    // 1. Expand ~
     let mut path = if arg.starts_with('~') {
         anyhow::ensure!(
             is_user,
@@ -50,22 +53,26 @@ pub fn find_include_files(arg: &str, is_user: bool) -> Result<Vec<String>> {
     } else {
         PathBuf::from(arg)
     };
+    // 2. Expand relative paths to the relevant directory
     if !path.is_absolute() {
         if is_user {
-            let Some(home) = dirs::home_dir() else {
+            // Unix: $HOME/.ssh/
+            // Windows: %userprofile%/.ssh/
+            let Some(mut buf) = dirs::home_dir() else {
                 anyhow::bail!("could not determine home directory");
             };
-            let mut buf = home;
             buf.push(".ssh");
             buf.push(path);
             path = buf;
         } else {
-            let mut buf = PathBuf::from("/etc/ssh/");
+            let Some(mut buf) = Platform::system_ssh_dir_path() else {
+                anyhow::bail!("could not determine system ssh config directory");
+            };
             buf.push(path);
             path = buf;
         }
     }
-
+    // 3. Apply wildcards
     let mut result = Vec::new();
     let options = MatchOptions {
         case_sensitive: true,
@@ -127,7 +134,7 @@ mod test {
     #[test]
     fn relative_paths() {
         let d = find_include_files("nonexistent-really----", false).expect("");
-        assert!(d.is_empty());
+        assert_eq!(d, Vec::<String>::new());
         let d = find_include_files("nonexistent-really----", true).expect("");
         assert!(d.is_empty());
     }
