@@ -54,12 +54,7 @@ pub struct WindowsPlatform {}
 impl super::AbstractPlatform for WindowsPlatform {
     /// System ssh config file. On Windows this is `%ProgramData%\ssh\ssh_config`
     fn system_ssh_config() -> Option<PathBuf> {
-        let Ok(progdata) = std::env::var("ProgramData") else {
-            return None;
-        };
-        let mut pb = PathBuf::new();
-        pb.push(progdata);
-        pb.push("ssh");
+        let mut pb = WindowsPlatform::system_ssh_dir_path()?;
         pb.push("ssh_config");
         Some(pb)
     }
@@ -89,6 +84,16 @@ impl super::AbstractPlatform for WindowsPlatform {
         let mut p: PathBuf = PathBuf::from(progdata);
         p.push("qcp");
         p.push(BASE_CONFIG_FILENAME);
+        Some(p)
+    }
+
+    /// Location of the system ssh config file. On Windows this is `%ProgramData%\ssh`
+    fn system_ssh_dir_path() -> Option<PathBuf> {
+        let Ok(progdata) = std::env::var("ProgramData") else {
+            return None;
+        };
+        let mut p: PathBuf = PathBuf::from(progdata);
+        p.push("ssh");
         Some(p)
     }
 

@@ -206,6 +206,9 @@ pub trait AbstractPlatform {
     /// The absolute path to the system configuration file, if one is defined on this platform.
     fn system_config_path() -> Option<PathBuf>;
 
+    /// Location of the system ssh config file, if one is defined on this platform.
+    fn system_ssh_dir_path() -> Option<PathBuf>;
+
     /// Implementation of `--help-buffers` mode.
     ///
     /// This is a help mode for the sysadmin.
