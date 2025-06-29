@@ -5,7 +5,7 @@ use crate::cli::styles::use_colours;
 use crate::config::Manager;
 use crate::control::ControlChannelServerInterface;
 use crate::protocol::common::{ReceivingStream, SendingStream};
-use crate::util::RealSetupTracing;
+use crate::util::setup_tracing;
 
 use anyhow::Context as _;
 use human_repr::HumanDuration;
@@ -45,7 +45,7 @@ async fn server_main_inner<
     manager: &mut Manager,
 ) -> anyhow::Result<()> {
     let result = control
-        .run_server(remote_ip, manager, RealSetupTracing {}, use_colours())
+        .run_server(remote_ip, manager, setup_tracing, use_colours())
         .await?;
     let endpoint = result.endpoint;
 
@@ -103,7 +103,6 @@ mod test {
     use crate::config::Manager;
     use crate::control::{MockControlChannelServerInterface, ServerResult};
     use crate::server::server_main_inner;
-    use crate::util::RealSetupTracing;
 
     use quinn::{Endpoint, EndpointConfig};
     use tokio_test::io::Mock as MockStream;
@@ -137,7 +136,7 @@ mod test {
                 predicate::always(),
             )
             .times(1)
-            .returning(|_ip, mgr, _setup_tracing: RealSetupTracing, _colour| {
+            .returning(|_ip, mgr, _setup_tracing, _colour| {
                 let runtime = quinn::default_runtime().unwrap();
 
                 let endpoint = Endpoint::new(
