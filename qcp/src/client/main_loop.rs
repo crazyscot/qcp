@@ -35,7 +35,7 @@ fn setup_tracing(
 ) -> anyhow::Result<()> {
     util::setup_tracing(
         util::trace_level(parameters),
-        Some(display),
+        util::ConsoleTraceType::Indicatif(display.clone()),
         parameters.log_file.as_ref(),
         time_format,
         colours,

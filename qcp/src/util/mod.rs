@@ -22,8 +22,8 @@ pub use serialization::SerializeAsString;
 
 mod tracing;
 pub(crate) use tracing::{
-    RealSetupTracing, SetupTracingFunction, TimeFormat, is_initialized as tracing_is_initialised,
-    setup as setup_tracing, trace_level,
+    ConsoleTraceType, SetupFn as TracingSetupFn, TimeFormat,
+    is_initialized as tracing_is_initialised, setup as setup_tracing, trace_level,
 };
 
 mod port_range;
