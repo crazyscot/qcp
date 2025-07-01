@@ -31,7 +31,7 @@ cfg-if = { workspace = true }
 clap = { workspace = true }
 colorchoice = { workspace = true }
 console = { workspace = true }
-derive-deftly = "1.0.1"
+derive-deftly = "1.1.0"
 derive_more = { version = "2.0.1", features = [
     "constructor",
     "debug",
@@ -48,11 +48,11 @@ futures-util = { version = "0.3.31", default-features = false }
 gethostname = "1.0.2"
 glob = "0.3.2"
 heck = "0.5.0"
-homedir = "0.3.4"
+homedir = "0.3.6"
 human-repr = "1.1.0"
-indicatif = { version = "0.17.11", features = ["tokio"] }
+indicatif = { version = "0.17.12", features = ["tokio"] }
 lessify = "0.5.0"
-mimalloc = "0.1.46"
+mimalloc = "0.1.47"
 num-format = { version = "0.4.4" }
 num-traits = "0.2.19"
 quinn = { version = "0.11.8", default-features = false, features = [
@@ -70,7 +70,7 @@ static_assertions = "1.1.0"
 struct-field-names-as-array = "0.3.0"
 strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
-tabled = "0.19.0"
+tabled = "0.20.0"
 thiserror = "2.0.12"
 tokio = { version = "1.45.1", default-features = true, features = [
     "fs",
@@ -86,8 +86,8 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
 wildmatch = "2.4.0"
 
 [dev-dependencies]
-assertables = "9.5.2"
-clap_mangen = "0.2.26"
+assertables = "9.8.0"
+clap_mangen = "0.2.27"
 either = "1.15.0"
 json = "0.12.4"
 littertray = { workspace = true, features = ["async"] }

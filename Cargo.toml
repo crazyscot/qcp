@@ -4,12 +4,12 @@ resolver = "2"
 package.edition = "2024"
 
 [workspace.dependencies]
-anstream = { version = "0.6.18", default-features = false }
-anstyle = { version = "1.0.10", default-features = false }
+anstream = { version = "0.6.19", default-features = false }
+anstyle = { version = "1.0.11", default-features = false }
 anyhow = "1.0.98"
-cfg-if = "1.0.0"
-clap = { version = "4.5.39", features = ["wrap_help", "derive", "cargo", "help", "string"] }
-colorchoice = "1.0.3"
+cfg-if = "1.0.1"
+clap = { version = "4.5.40", features = ["wrap_help", "derive", "cargo", "help", "string"] }
+colorchoice = "1.0.4"
 console = { version = "0.15.11", default-features = false }
 littertray = "0.2.0"
 rusty-fork = "0.3.0"
