@@ -48,7 +48,7 @@ futures-util = { version = "0.3.31", default-features = false }
 gethostname = "1.0.2"
 glob = "0.3.2"
 heck = "0.5.0"
-homedir = "0.3.4"
+homedir = "=0.3.4"
 human-repr = "1.1.0"
 indicatif = { version = "0.17.12", features = ["tokio"] }
 lessify = "0.5.0"
