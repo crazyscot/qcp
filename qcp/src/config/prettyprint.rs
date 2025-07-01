@@ -135,7 +135,7 @@ impl Display for DisplayAdapter<'_> {
         let mut writable = Table::new(output);
         let _ = writable.with(crate::styles::TABLE_STYLE.clone());
         if use_colours() {
-            let _ = writable.modify(Rows::single(1), host_colour);
+            let _ = writable.modify(Rows::one(1), host_colour);
         }
         write!(f, "{writable}")
     }
