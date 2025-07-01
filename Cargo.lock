@@ -319,19 +319,6 @@ checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
 name = "console"
-version = "0.15.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "054ccb5b10f9f2cbf51eb355ca1d05c2d279ce1804688d0db74b4733a5aeafd8"
-dependencies = [
- "encode_unicode",
- "libc",
- "once_cell",
- "unicode-width",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "console"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e09ced7ebbccb63b4c65413d821f2e00ce54c5ca4514ddc6b3c892fdbcbc69d"
@@ -740,7 +727,7 @@ version = "0.17.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4adb2ee6ad319a912210a36e56e3623555817bcc877a7e6e8802d1d69c4d8056"
 dependencies = [
- "console 0.16.0",
+ "console",
  "portable-atomic",
  "tokio",
  "unicode-width",
@@ -1244,7 +1231,7 @@ dependencies = [
  "clap",
  "clap_mangen",
  "colorchoice",
- "console 0.15.11",
+ "console",
  "derive-deftly",
  "derive_more",
  "dirs",
@@ -1302,7 +1289,7 @@ dependencies = [
  "assertables",
  "cfg-if",
  "colorchoice",
- "console 0.15.11",
+ "console",
  "dunce",
  "littertray",
  "pretty_assertions",

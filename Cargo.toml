@@ -10,7 +10,7 @@ anyhow = "1.0.98"
 cfg-if = "1.0.1"
 clap = { version = "4.5.40", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 colorchoice = "1.0.4"
-console = { version = "0.15.11" }
+console = { version = "0.16.0" }
 littertray = "0.2.0"
 rusty-fork = "0.3.0"
 tempfile = { version = "3.20.0", default-features = false }
