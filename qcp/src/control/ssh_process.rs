@@ -129,8 +129,8 @@ where
 
     let mut encoded = String::new();
     for byte in data.as_ref() {
-        // Encode each byte as a two-digit hex number, with a leading zero if necessary.
-        write!(encoded, "\\x{byte:02x}").expect("failed to write to encoded string");
+        // Encode each byte as an octal number (osx /bin/echo doesn't grok hex)
+        write!(encoded, "\\0{byte:o}").expect("failed to write to encoded string");
     }
     eprintln!("Fake client will echo -e {encoded}");
 
