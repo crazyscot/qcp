@@ -11,5 +11,5 @@ pub(crate) use ssh_process::create;
 
 #[cfg(test)]
 pub(crate) use channel::{MockControlChannelServerInterface, ServerResult};
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) use ssh_process::create_fake;

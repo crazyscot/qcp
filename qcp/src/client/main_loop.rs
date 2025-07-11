@@ -6,7 +6,10 @@ use crate::{
     client::progress::SPINNER_TEMPLATE,
     config::{Configuration, Configuration_Optional, Manager},
     control::{ControlChannel, create, create_endpoint},
-    protocol::control::{ClosedownReportV1, ServerMessageV1},
+    protocol::{
+        common::{ReceivingStream, SendReceivePair, SendingStream},
+        control::{ClosedownReportV1, ServerMessageV1},
+    },
     session::CommandStats,
     util::{
         self, Credentials, lookup_host_by_family,
@@ -18,7 +21,7 @@ use crate::{
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use quinn::{Connection, Endpoint};
+use quinn::Endpoint;
 use std::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use tokio::{
     self,
@@ -47,6 +50,12 @@ pub(crate) async fn client_main(
     Client::new(manager, display, parameters)?.run().await
 }
 
+#[derive(Default, Debug, derive_more::Constructor)]
+struct RequestResult {
+    success: bool,
+    stats: CommandStats,
+}
+
 struct Client {
     manager: Manager,
     display: MultiProgress,
@@ -64,9 +73,22 @@ struct PrepResult {
 
 type ControlChannelType = ControlChannel<ChildStdin, ChildStdout>;
 
-struct ControlResult {
+struct QcpConnection {
     ssh_client: ProcessWrapper,
     control: ControlChannelType,
+    endpoint: Option<Endpoint>,
+}
+
+impl TryFrom<ProcessWrapper> for QcpConnection {
+    type Error = anyhow::Error;
+    fn try_from(mut client: ProcessWrapper) -> Result<Self> {
+        let control = ControlChannel::new(client.stream_pair()?);
+        Ok(Self {
+            ssh_client: client,
+            control,
+            endpoint: None,
+        })
+    }
 }
 
 impl Client {
@@ -120,8 +142,20 @@ impl Client {
         };
 
         // Control channel ---------------
-        let mut ctrl_result = self.create_control_channel(&prep_result, &working_config)?;
-        let server_message = ctrl_result
+        self.spinner.set_message("Opening control channel");
+        self.spinner.disable_steady_tick(); // otherwise the spinner messes with ssh passphrase prompting; as we're using tokio spinner.suspend() isn't helpful
+        self.timers.next("control channel");
+
+        let ssh_client = create(
+            &self.display,
+            &working_config,
+            &self.parameters,
+            prep_result.job_spec.remote_host(),
+            prep_result.remote_address.into(),
+        )?;
+        let mut qcp_conn = QcpConnection::try_from(ssh_client)?;
+
+        let server_message = qcp_conn
             .control
             .run_client(
                 &self.credentials,
@@ -131,7 +165,6 @@ impl Client {
             )
             .await?;
 
-        // Data channel -------------------
         let config = self
             .manager
             .get::<Configuration>()
@@ -158,39 +191,38 @@ impl Client {
             self.create_quic_endpoint(&prep_result, &config, &server_message, server_address_port)?;
 
         debug!("Opening QUIC connection to {server_address_port:?}");
-        debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
         let connection = timeout(
             config.timeout_duration(),
             endpoint.connect(server_address_port, &server_message.name)?,
         )
         .await
         .context("UDP connection to QUIC endpoint timed out")??;
+        qcp_conn.endpoint = Some(endpoint);
 
         // Show time! ---------------------
 
         self.spinner.set_message("Transferring data");
         self.timers.next(SHOW_TIME);
+        let stream_pair =
+            SendReceivePair::from(connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?);
         let result = self
             .manage_request(
-                &connection,
+                stream_pair,
                 prep_result.job_spec,
                 &config,
                 self.parameters.quiet,
             )
             .await;
-        let command_stats = match result {
-            Err(b) | Ok(b) => b,
-        };
 
         // Closedown ----------------------
-        let remote_stats = self.closedown(&config, ctrl_result, endpoint).await?;
+        let remote_stats = self.closedown(&config, qcp_conn).await?;
 
         // Post-transfer chatter -----------
         if !self.parameters.quiet {
             let transport_time = self.timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
             crate::util::stats::process_statistics(
                 &connection.stats(),
-                command_stats,
+                result.stats,
                 transport_time,
                 remote_stats,
                 &config,
@@ -202,7 +234,7 @@ impl Client {
             info!("Elapsed time by phase:\n{}", self.timers);
         }
         self.display.clear()?;
-        Ok(result.is_ok())
+        Ok(result.success)
     }
 
     pub(crate) fn prep(
@@ -246,29 +278,6 @@ impl Client {
         })
     }
 
-    fn create_control_channel(
-        &mut self,
-        prep_result: &PrepResult,
-        working_config: &Configuration_Optional,
-    ) -> Result<ControlResult> {
-        self.spinner.set_message("Opening control channel");
-        self.spinner.disable_steady_tick(); // otherwise the spinner messes with ssh passphrase prompting; as we're using tokio spinner.suspend() isn't helpful
-        self.timers.next("control channel");
-
-        let mut ssh_client = create(
-            &self.display,
-            working_config,
-            &self.parameters,
-            prep_result.job_spec.remote_host(),
-            prep_result.remote_address.into(),
-        )?;
-        let control = ControlChannel::new(ssh_client.stream_pair()?);
-        Ok(ControlResult {
-            ssh_client,
-            control,
-        })
-    }
-
     fn create_quic_endpoint(
         &mut self,
         prep_result: &PrepResult,
@@ -287,25 +296,31 @@ impl Client {
             prep_result.job_spec.throughput_mode(),
             false,
         )?;
+        debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
         Ok(endpoint)
     }
 
     async fn closedown(
         &mut self,
         config: &Configuration,
-        mut ctrl_result: ControlResult, // ctrl_result is consumed
-        endpoint: Endpoint,             // endpoint is consumed
+        mut conn: QcpConnection, // ctrl_result is consumed
     ) -> anyhow::Result<ClosedownReportV1> {
         self.timers.next("shutdown");
         self.spinner.set_message("Shutting down");
         // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
-        endpoint.close(1u8.into(), "finished".as_bytes());
-        let remote_stats = ctrl_result.control.read_closedown_report().await?;
+        let endpoint = conn.endpoint.take();
+        if let Some(ref ep) = endpoint {
+            trace!("Closing QUIC endpoint");
+            ep.close(0u32.into(), "finished".as_bytes());
+        }
+        let remote_stats = conn.control.read_closedown_report().await?;
 
-        let control_fut = ctrl_result.ssh_client.close();
-        let _ = timeout(config.timeout_duration(), endpoint.wait_idle())
-            .await
-            .inspect_err(|_| warn!("QUIC shutdown timed out")); // otherwise ignore errors
+        let control_fut = conn.ssh_client.close();
+        if let Some(ep) = endpoint {
+            let _ = timeout(config.timeout_duration(), ep.wait_idle())
+                .await
+                .inspect_err(|_| warn!("QUIC shutdown timed out")); // otherwise ignore errors
+        }
         trace!("QUIC closed; waiting for control channel");
         let _ = timeout(config.timeout_duration(), control_fut)
             .await
@@ -320,72 +335,45 @@ impl Client {
     /// Do whatever it is we were asked to.
     /// On success: returns statistics about the transfer.
     /// On error: returns the transfer statistics, as far as we know, up to the point of failure
-    async fn manage_request(
+    async fn manage_request<S, R>(
         &self,
-        connection: &Connection,
+        stream_pair: SendReceivePair<S, R>,
         copy_spec: CopyJobSpec,
         config: &Configuration,
         quiet: bool,
-    ) -> Result<CommandStats, CommandStats> {
-        let mut tasks = tokio::task::JoinSet::new();
-        let connection = connection.clone();
-        let config = config.clone();
+    ) -> RequestResult
+    where
+        S: SendingStream + 'static,
+        R: ReceivingStream + 'static,
+    {
+        use crate::session;
+
         let display = self.display.clone();
         let spinner = self.spinner.clone();
-        let _jh = tasks.spawn(async move {
-            use crate::session;
 
-            // This async block returns a Result<u64>
-            let sp = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
-            // Called function returns its payload size.
-            // This async block reports on errors.
+        let (mut handler, span) = if copy_spec.source.user_at_host.is_some() {
+            (
+                session::Get::boxed(stream_pair, None),
+                trace_span!("GET", filename = copy_spec.source.filename.clone()),
+            )
+        } else {
+            (
+                session::Put::boxed(stream_pair, None),
+                trace_span!("PUT", filename = copy_spec.source.filename.clone()),
+            )
+        };
+        let result = handler
+            .send(&copy_spec, display, spinner, config, quiet)
+            .instrument(span)
+            .await;
 
-            if copy_spec.source.user_at_host.is_some() {
-                let mut imp = session::Get::boxed(sp.into(), None);
-                imp.send(&copy_spec, display, spinner, &config, quiet)
-                    .instrument(trace_span!("GET", filename = copy_spec.source.filename))
-                    .await
-            } else {
-                let mut imp = session::Put::boxed(sp.into(), None);
-                imp.send(&copy_spec, display, spinner, &config, quiet)
-                    .instrument(trace_span!("PUT", filename = copy_spec.source.filename))
-                    .await
-            }
-        });
-
-        let mut stats = CommandStats::new();
-        let mut success = true;
-        loop {
-            let Some(result) = tasks.join_next().await else {
-                break;
-            };
-            // The first layer of possible errors are Join errors
-            let result = match result {
-                Ok(r) => r,
-                Err(err) => {
-                    // This is either a panic, or a cancellation.
-                    if let Ok(reason) = err.try_into_panic() {
-                        // Resume the panic on the main task
-                        std::panic::resume_unwind(reason);
-                    }
-                    Err(anyhow::anyhow!(
-                        "unexpected task join failure (shouldn't happen)"
-                    ))
-                }
-            };
-
-            // The second layer of possible errors are failures in the protocol. Continue with other jobs as far as possible.
-            match result {
-                Ok(st) => {
-                    stats.fold(st);
-                }
-                Err(e) => {
-                    error!("{e}");
-                    success = false;
-                }
+        match result {
+            Ok(st) => RequestResult::new(true, st),
+            Err(e) => {
+                error!("{e}");
+                RequestResult::new(false, CommandStats::new())
             }
         }
-        if success { Ok(stats) } else { Err(stats) }
     }
 }
 
@@ -394,16 +382,20 @@ impl Client {
 mod test {
     use indicatif::MultiProgress;
     use std::{net::Ipv4Addr, str::FromStr};
+    use tokio::io::AsyncWriteExt;
+
+    #[cfg(unix)]
+    use crate::control::create_fake;
 
     use crate::{
         Configuration, FileSpec, Parameters,
-        client::main_loop::{Client, ControlResult},
+        client::main_loop::{Client, QcpConnection},
         config::{Configuration_Optional, Manager},
-        control::{ControlChannel, create_fake},
         protocol::{
             common::ProtocolMessage as _,
             control::{ClosedownReport, ClosedownReportV1},
         },
+        util::test_protocol::test_plumbing,
     };
 
     fn make_uut<F: FnOnce(&mut Manager, &mut Parameters)>(f: F, src: &str, dest: &str) -> Client {
@@ -445,6 +437,8 @@ mod test {
             .unwrap_err();
     }
 
+    #[cfg(unix)] // this test depends on create_fake, which is not implemented on Windows
+    #[cfg_attr(target_os = "macos", ignore)]
     #[tokio::test]
     async fn endpoint_create_close() {
         let mut uut = make_uut(|_, _| (), "127.0.0.1:file", LOCAL_FILE);
@@ -475,15 +469,81 @@ mod test {
         fake_report.to_writer_framed(&mut buf).unwrap();
         eprintln!("Fake report: {buf:?}");
 
-        let mut ssh_client = create_fake(&buf);
-        let control = ControlChannel::new(ssh_client.stream_pair().unwrap());
-        let ctrl_result = ControlResult {
-            ssh_client,
-            control,
-        };
+        let ssh_client = create_fake(&buf);
+        let mut qcp_conn = QcpConnection::try_from(ssh_client).unwrap();
+        qcp_conn.endpoint = Some(endpoint);
 
-        let report = uut.closedown(&config, ctrl_result, endpoint).await.unwrap();
+        let report = uut.closedown(&config, qcp_conn).await.unwrap();
         assert_eq!(report, ClosedownReportV1::default());
         eprintln!("Closedown report: {report:?}");
+    }
+
+    #[tokio::test]
+    async fn handle_get_succeeding() {
+        use littertray::LitterTray;
+        const TEST_DATA: &[u8] = b"test";
+        let mut uut = make_uut(|_, _| (), "127.0.0.1:file", "outfile");
+        let working = Configuration_Optional::default();
+        let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
+        let mut plumbing = test_plumbing();
+
+        let manage_fut = uut.manage_request(
+            plumbing.0,
+            prep_result.job_spec.clone(),
+            Configuration::system_default(),
+            false,
+        );
+
+        // We are not really testing the protocol here, that is done in get.rs / put.rs.
+        // But we are testing the main loop behaviour, so we need to send a valid response.
+        // We will verify that the UUT created the file.
+        // We need to send a Response, FileHeader, file data, then FileTrailer.
+        let mut send_buf = Vec::new();
+        crate::protocol::session::Response::V1(crate::protocol::session::ResponseV1 {
+            status: crate::protocol::session::Status::Ok,
+            message: None,
+        })
+        .to_writer_framed(&mut send_buf)
+        .unwrap();
+        crate::protocol::session::FileHeader::new_v1(TEST_DATA.len() as u64, "outfile")
+            .to_writer_framed(&mut send_buf)
+            .unwrap();
+        send_buf.extend_from_slice(TEST_DATA);
+        crate::protocol::session::FileTrailer::V1
+            .to_writer_framed(&mut send_buf)
+            .unwrap();
+        let send_fut = plumbing.1.send.write_all(&send_buf);
+
+        // litter tray tidies up after the written file
+        let r = LitterTray::try_with_async(async |_| {
+            let (a, b) = tokio::join!(send_fut, manage_fut);
+            let contents = std::fs::read("outfile")?;
+            assert_eq!(contents, TEST_DATA);
+            a.unwrap();
+            Ok(b)
+        })
+        .await
+        .unwrap();
+        println!("Result: {r:?}");
+        assert!(r.success);
+        assert_eq!(r.stats.payload_bytes, TEST_DATA.len() as u64);
+    }
+
+    #[tokio::test]
+    async fn handle_put_failing() {
+        let mut uut = make_uut(|_, _| (), "/tmp/file", "127.0.0.1:file");
+        let working = Configuration_Optional::default();
+        let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
+        let mut plumbing = test_plumbing();
+        plumbing.1.send.shutdown().await.unwrap(); // this causes the handler to error out
+
+        let manage_fut = uut.manage_request(
+            plumbing.0,
+            prep_result.job_spec.clone(),
+            Configuration::system_default(),
+            false,
+        );
+        let r = manage_fut.await;
+        println!("Result: {r:?}");
     }
 }
