@@ -13,6 +13,7 @@ mod cert;
 pub(crate) use cert::Credentials;
 
 pub(crate) mod io;
+pub(crate) mod process;
 pub(crate) mod socket;
 pub(crate) mod stats;
 pub(crate) mod time;
