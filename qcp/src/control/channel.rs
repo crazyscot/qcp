@@ -46,12 +46,7 @@ pub(crate) trait ControlChannelServerInterface<
         colours: bool,
     ) -> anyhow::Result<ServerResult>;
 
-    async fn run_server_inner(
-        &mut self,
-        remote_ip: Option<String>,
-        manager: &mut Manager,
-        greeting: &ClientGreeting,
-    ) -> anyhow::Result<ServerResult>;
+    async fn run_server_inner(&mut self, manager: &mut Manager) -> anyhow::Result<ServerResult>;
 
     async fn send_closedown_report(&mut self, stats: &ConnectionStats) -> Result<()>;
 }
@@ -380,24 +375,18 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
             colours,
         )?;
         // Now we can use the tracing system!
-
-        self.run_server_inner(remote_ip, manager, &remote_greeting)
-            .instrument(tracing::error_span!("Server").or_current())
-            .await
-    }
-
-    async fn run_server_inner(
-        &mut self,
-        remote_ip: Option<String>,
-        manager: &mut Manager,
-        remote_greeting: &ClientGreeting,
-    ) -> anyhow::Result<ServerResult> {
         debug!(
             "client IP is {}",
             remote_ip.as_deref().map_or("none", |v| v)
         );
         debug!("got client greeting {remote_greeting:?}");
 
+        self.run_server_inner(manager)
+            .instrument(tracing::error_span!("Server").or_current())
+            .await
+    }
+
+    async fn run_server_inner(&mut self, manager: &mut Manager) -> anyhow::Result<ServerResult> {
         // PHASE 3: MESSAGES
         // PHASE 3A: Read client message
         let message1 = self.server_read_client_message().await?;
