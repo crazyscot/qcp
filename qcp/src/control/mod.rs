@@ -3,11 +3,13 @@
 
 mod channel;
 mod endpoint;
-mod process;
+mod ssh_process;
 
 pub(crate) use channel::{ControlChannel, ControlChannelServerInterface, stdio_channel};
 pub(crate) use endpoint::create_endpoint;
-pub(crate) use process::Ssh as ClientSsh;
+pub(crate) use ssh_process::create;
 
 #[cfg(test)]
 pub(crate) use channel::{MockControlChannelServerInterface, ServerResult};
+#[cfg(test)]
+pub(crate) use ssh_process::create_fake;

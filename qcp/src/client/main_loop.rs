@@ -5,11 +5,12 @@ use crate::{
     cli::styles::use_colours,
     client::progress::SPINNER_TEMPLATE,
     config::{Configuration, Configuration_Optional, Manager},
-    control::{ClientSsh, ControlChannel, create_endpoint},
+    control::{ControlChannel, create, create_endpoint},
     protocol::control::{ClosedownReportV1, ServerMessageV1},
     session::CommandStats,
     util::{
         self, Credentials, lookup_host_by_family,
+        process::ProcessWrapper,
         time::{Stopwatch, StopwatchChain},
     },
 };
@@ -64,7 +65,7 @@ struct PrepResult {
 type ControlChannelType = ControlChannel<ChildStdin, ChildStdout>;
 
 struct ControlResult {
-    ssh_client: ClientSsh,
+    ssh_client: ProcessWrapper,
     control: ControlChannelType,
 }
 
@@ -254,7 +255,7 @@ impl Client {
         self.spinner.disable_steady_tick(); // otherwise the spinner messes with ssh passphrase prompting; as we're using tokio spinner.suspend() isn't helpful
         self.timers.next("control channel");
 
-        let mut ssh_client = ClientSsh::new(
+        let mut ssh_client = create(
             &self.display,
             working_config,
             &self.parameters,
@@ -398,7 +399,7 @@ mod test {
         Configuration, FileSpec, Parameters,
         client::main_loop::{Client, ControlResult},
         config::{Configuration_Optional, Manager},
-        control::{ClientSsh, ControlChannel},
+        control::{ControlChannel, create_fake},
         protocol::{
             common::ProtocolMessage as _,
             control::{ClosedownReport, ClosedownReportV1},
@@ -474,7 +475,7 @@ mod test {
         fake_report.to_writer_framed(&mut buf).unwrap();
         eprintln!("Fake report: {buf:?}");
 
-        let mut ssh_client = ClientSsh::fake(&buf);
+        let mut ssh_client = create_fake(&buf);
         let control = ControlChannel::new(ssh_client.stream_pair().unwrap());
         let ctrl_result = ControlResult {
             ssh_client,

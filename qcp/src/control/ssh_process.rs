@@ -1,0 +1,257 @@
+//! Subprocess management (client side)
+// (c) 2024-2025 Ross Younger
+
+use std::process::Stdio;
+use tokio::io::BufReader;
+
+use anyhow::{Context as _, Result};
+use indicatif::MultiProgress;
+use tokio::io::AsyncBufReadExt;
+use tracing::debug;
+
+use crate::client::Parameters;
+use crate::config::{Configuration, Configuration_Optional};
+use crate::{cli::styles::maybe_strip_color, protocol::control::ConnectionType};
+
+use crate::util::process::ProcessWrapper;
+
+fn ssh_cli_args(
+    connection_type: ConnectionType,
+    ssh_hostname: &str,
+    config: &Configuration_Optional,
+) -> Vec<String> {
+    let mut args = Vec::new();
+    let defaults = Configuration::system_default();
+
+    // Connection type
+    args.push(
+        match connection_type {
+            ConnectionType::Ipv4 => "-4",
+            ConnectionType::Ipv6 => "-6",
+        }
+        .to_owned(),
+    );
+
+    // Remote user
+    if let Some(username) = &config.remote_user {
+        // N.B. remote_user in config may be populated as a result of user@host syntax on the command line.
+        // That takes priority over any value in config (hence, also over the --remote-user option, which would arguably be an error if it was inconsistent).
+        if !username.is_empty() {
+            args.push("-l".to_owned());
+            args.push(username.clone());
+        }
+    }
+
+    // Other SSH options
+    args.extend_from_slice(
+        &config
+            .ssh_options
+            .as_ref()
+            .unwrap_or(&defaults.ssh_options)
+            .to_vec_owned(),
+    );
+
+    // Hostname
+    args.push(ssh_hostname.to_owned());
+
+    // Subsystem or process (must appear after hostname!)
+    args.extend_from_slice(
+        &if config.ssh_subsystem.unwrap_or(false) {
+            ["-s", "qcp"]
+        } else {
+            ["qcp", "--server"]
+        }
+        .map(String::from),
+    );
+
+    args
+}
+
+/// Constructor
+pub(crate) fn create(
+    display: &MultiProgress,
+    working_config: &Configuration_Optional,
+    parameters: &Parameters,
+    ssh_hostname: &str,
+    connection_type: ConnectionType,
+) -> Result<ProcessWrapper> {
+    let defaults = Configuration::system_default();
+
+    let mut server = tokio::process::Command::new(
+        working_config
+            .ssh
+            .as_deref()
+            .unwrap_or_else(|| &defaults.ssh),
+    );
+
+    let _ = server
+        .args(ssh_cli_args(connection_type, ssh_hostname, working_config))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .kill_on_drop(true);
+    if !parameters.quiet {
+        let _ = server.stderr(Stdio::piped());
+    } // else inherit
+    debug!("spawning command: {:?}", server);
+    let mut wrapper = ProcessWrapper::spawn(server)
+        .context("Could not launch control connection to remote server")?;
+
+    // Whatever the remote outputs, send it to our output in a way that doesn't mess things up.
+    if !parameters.quiet {
+        let stderr = wrapper.stderr();
+        let Some(stderr) = stderr else {
+            anyhow::bail!("could not get stderr of remote process");
+        };
+        let cloned = display.clone();
+        let _reader = tokio::spawn(async move {
+            let mut reader = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                let line = maybe_strip_color(&line);
+                // Calling cloned.println() sometimes messes up; there seems to be a concurrency issue.
+                // But we don't need to worry too much about that. Just write it out.
+                cloned.suspend(|| eprintln!("{line}"));
+            }
+        });
+    }
+    Ok(wrapper)
+}
+
+#[cfg(test)]
+#[cfg(unix)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+/// Creates a fake client for testing purposes.
+/// It returns a given output stream.
+pub(crate) fn create_fake<B>(data: &B) -> ProcessWrapper
+where
+    B: AsRef<[u8]> + Send + 'static,
+{
+    use std::fmt::Write;
+
+    let mut encoded = String::new();
+    for byte in data.as_ref() {
+        // Encode each byte as a two-digit hex number, with a leading zero if necessary.
+        write!(encoded, "\\x{byte:02x}").expect("failed to write to encoded string");
+    }
+    eprintln!("Fake client will echo -e {encoded}");
+
+    let mut process = tokio::process::Command::new("/bin/echo");
+    let _ = process.args(["-en", &encoded]);
+    ProcessWrapper::spawn(process).expect("failed to start fake ssh client")
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod test {
+    use indicatif::MultiProgress;
+
+    use crate::control::ControlChannel;
+    use crate::{client::Parameters, config::Manager};
+
+    use super::{Configuration_Optional, ConnectionType, create, ssh_cli_args};
+
+    fn vec_contains(v: &[String], s: &str) -> bool {
+        v.iter().any(|x| x == s)
+    }
+
+    // this is O(n^2) but that doesn't matter as we're only using it for short slices
+    fn vec_subslice<T: PartialEq>(mut haystack: &[T], needle: &[T]) -> bool {
+        if needle.is_empty() {
+            return true;
+        }
+        while !haystack.is_empty() {
+            if haystack.starts_with(needle) {
+                return true;
+            }
+            haystack = &haystack[1..];
+        }
+        false
+    }
+
+    // this is O(n^2) but that doesn't matter as we're only using it for short slices
+    fn vec_subslice_strings(haystack: &[String], needle1: &[&str]) -> bool {
+        let needle = needle1.iter().map(|s| String::from(*s)).collect::<Vec<_>>();
+        vec_subslice(haystack, &needle)
+    }
+
+    #[tokio::test]
+    #[cfg_attr(target_os = "windows", ignore)]
+    async fn ssh_no_such_host_requires_ssh_on_path() {
+        let mp = MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden());
+        let manager = Manager::without_files(None);
+        let params = Parameters::default();
+        let cfg = manager.get::<Configuration_Optional>().unwrap_or_default();
+        let mut child = create(
+            &mp,
+            &cfg,
+            &params,
+            "no-such-host.invalid",
+            crate::protocol::control::ConnectionType::Ipv4,
+        )
+        .unwrap();
+
+        // There isn't, at present, a signal that the ssh connection failed. But we see it soon enough when we look for the banner.
+        let mut control = ControlChannel::new(child.stream_pair().unwrap());
+        let e = control.wait_for_banner().await.unwrap_err();
+        assert!(e.to_string().contains("failed to connect"));
+        child.close().await.unwrap();
+        drop(child);
+    }
+
+    #[test]
+    fn connection_type() {
+        let cfg = Configuration_Optional::default();
+        // ipv4
+        let args = ssh_cli_args(ConnectionType::Ipv4, "", &cfg);
+        assert!(vec_contains(&args, "-4"));
+        assert!(!vec_contains(&args, "-6"));
+        // ipv6
+        let args = ssh_cli_args(ConnectionType::Ipv6, "", &cfg);
+        assert!(vec_contains(&args, "-6"));
+        assert!(!vec_contains(&args, "-4"));
+    }
+
+    #[test]
+    fn username() {
+        // negative case
+        let args = ssh_cli_args(ConnectionType::Ipv4, "", &Configuration_Optional::default());
+        assert!(!vec_contains(&args, "-l"));
+
+        // positive case
+        let cfg1 = Configuration_Optional {
+            remote_user: Some("xyzy".to_owned()),
+            ..Default::default()
+        };
+        let args = ssh_cli_args(ConnectionType::Ipv4, "", &cfg1);
+        assert!(vec_subslice_strings(&args, &["-l", "xyzy"]));
+    }
+
+    #[test]
+    fn hostname_ssh_opts() {
+        let xopts = ["--abc", "def", "--ghi", "jkl"];
+        let cfg1 = Configuration_Optional {
+            ssh_options: Some(xopts.map(String::from).to_vec().into()),
+            ..Default::default()
+        };
+        let args = ssh_cli_args(ConnectionType::Ipv4, "my_host", &cfg1);
+        assert!(vec_contains(&args, "my_host"));
+        assert!(vec_subslice_strings(&args, &xopts));
+    }
+
+    #[test]
+    fn subsystem_mode() {
+        let host = "myserver";
+        let args = ssh_cli_args(
+            ConnectionType::Ipv4,
+            host,
+            &Configuration_Optional::default(),
+        );
+        assert!(vec_subslice_strings(&args, &["qcp", "--server"]));
+
+        let cfg1 = Configuration_Optional {
+            ssh_subsystem: Some(true),
+            ..Default::default()
+        };
+        let args1 = ssh_cli_args(ConnectionType::Ipv4, host, &cfg1);
+        assert!(vec_subslice_strings(&args1, &["-s", "qcp"]));
+    }
+}
