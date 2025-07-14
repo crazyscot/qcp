@@ -17,7 +17,7 @@ littertray = { workspace = true }
 rusty-fork = { workspace = true }
 tempfile = { workspace = true }
 pretty_assertions = "1.4.1"
-assertables = "9.8.0"
+assertables = "9.8.1"
 static_str_ops = "0.1.2"
 dunce = "1.0.5"
 
