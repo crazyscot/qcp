@@ -31,7 +31,7 @@ cfg-if = { workspace = true }
 clap = { workspace = true }
 colorchoice = { workspace = true }
 console = { workspace = true }
-derive-deftly = "1.1.0"
+derive-deftly = "1.2.0"
 derive_more = { version = "2.0.1", features = [
     "constructor",
     "debug",
@@ -50,7 +50,7 @@ glob = "0.3.2"
 heck = "0.5.0"
 homedir = "=0.3.4"
 human-repr = "1.1.0"
-indicatif = { version = "0.17.12", features = ["tokio"] }
+indicatif = { version = "0.18.0", features = ["tokio"] }
 lessify = "0.5.0"
 mimalloc = "0.1.47"
 num-format = { version = "0.4.4" }
@@ -60,7 +60,7 @@ quinn = { version = "0.11.8", default-features = false, features = [
     "rustls",
     "ring",
 ] }
-rcgen = { version = "0.13.2" }
+rcgen = { version = "0.14.2" }
 rustix = { version = "1.0.7", features = ["net", "fs", "process"] }
 rustls-pki-types = "1.12.0"
 serde = { version = "1.0.219", features = ["derive"] }
@@ -72,7 +72,7 @@ strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
 tabled = "0.20.0"
 thiserror = "2.0.12"
-tokio = { version = "1.45.1", default-features = true, features = [
+tokio = { version = "1.46.1", default-features = true, features = [
     "fs",
     "io-std",
     "macros",
@@ -86,8 +86,8 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
 wildmatch = "2.4.0"
 
 [dev-dependencies]
-assertables = "9.8.0"
-clap_mangen = "0.2.27"
+assertables = "9.8.1"
+clap_mangen = "0.2.28"
 either = "1.15.0"
 json = "0.12.4"
 littertray = { workspace = true, features = ["async"] }
