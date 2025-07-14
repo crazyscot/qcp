@@ -31,7 +31,7 @@ impl Credentials {
         let raw = rcgen::generate_simple_self_signed([hostname.clone()])?;
         Ok(Credentials {
             certificate: raw.cert.der().clone(),
-            keypair: rustls_pki_types::PrivateKeyDer::Pkcs8(raw.key_pair.serialize_der().into()),
+            keypair: rustls_pki_types::PrivateKeyDer::Pkcs8(raw.signing_key.serialize_der().into()),
             hostname,
         })
     }
