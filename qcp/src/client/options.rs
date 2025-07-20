@@ -56,6 +56,11 @@ pub struct Parameters {
     #[arg(long, action, help_heading("Debug"), display_order(0))]
     pub remote_debug: bool,
 
+    /// Enables super-detailed trace output from the remote endpoint
+    /// (this may interfere with transfer speeds)
+    #[arg(hide = true, long, action, help_heading("Debug"), display_order(0))]
+    pub remote_trace: bool,
+
     /// Output timing profile data after completion
     #[arg(long, action, help_heading("Output"), display_order(0))]
     pub profile: bool,

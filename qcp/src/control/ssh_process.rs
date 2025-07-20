@@ -19,6 +19,7 @@ fn ssh_cli_args(
     connection_type: ConnectionType,
     ssh_hostname: &str,
     config: &Configuration_Optional,
+    remote_trace: bool,
 ) -> Vec<String> {
     let mut args = Vec::new();
     let defaults = Configuration::system_default();
@@ -54,6 +55,10 @@ fn ssh_cli_args(
     // Hostname
     args.push(ssh_hostname.to_owned());
 
+    if remote_trace {
+        args.push("RUST_LOG=qcp=trace".to_owned());
+    }
+
     // Subsystem or process (must appear after hostname!)
     args.extend_from_slice(
         &if config.ssh_subsystem.unwrap_or(false) {
@@ -85,7 +90,12 @@ pub(crate) fn create(
     );
 
     let _ = server
-        .args(ssh_cli_args(connection_type, ssh_hostname, working_config))
+        .args(ssh_cli_args(
+            connection_type,
+            ssh_hostname,
+            working_config,
+            parameters.remote_trace,
+        ))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .kill_on_drop(true);
@@ -201,11 +211,11 @@ mod test {
     fn connection_type() {
         let cfg = Configuration_Optional::default();
         // ipv4
-        let args = ssh_cli_args(ConnectionType::Ipv4, "", &cfg);
+        let args = ssh_cli_args(ConnectionType::Ipv4, "", &cfg, false);
         assert!(vec_contains(&args, "-4"));
         assert!(!vec_contains(&args, "-6"));
         // ipv6
-        let args = ssh_cli_args(ConnectionType::Ipv6, "", &cfg);
+        let args = ssh_cli_args(ConnectionType::Ipv6, "", &cfg, false);
         assert!(vec_contains(&args, "-6"));
         assert!(!vec_contains(&args, "-4"));
     }
@@ -213,7 +223,12 @@ mod test {
     #[test]
     fn username() {
         // negative case
-        let args = ssh_cli_args(ConnectionType::Ipv4, "", &Configuration_Optional::default());
+        let args = ssh_cli_args(
+            ConnectionType::Ipv4,
+            "",
+            &Configuration_Optional::default(),
+            false,
+        );
         assert!(!vec_contains(&args, "-l"));
 
         // positive case
@@ -221,7 +236,7 @@ mod test {
             remote_user: Some("xyzy".to_owned()),
             ..Default::default()
         };
-        let args = ssh_cli_args(ConnectionType::Ipv4, "", &cfg1);
+        let args = ssh_cli_args(ConnectionType::Ipv4, "", &cfg1, false);
         assert!(vec_subslice_strings(&args, &["-l", "xyzy"]));
     }
 
@@ -232,7 +247,7 @@ mod test {
             ssh_options: Some(xopts.map(String::from).to_vec().into()),
             ..Default::default()
         };
-        let args = ssh_cli_args(ConnectionType::Ipv4, "my_host", &cfg1);
+        let args = ssh_cli_args(ConnectionType::Ipv4, "my_host", &cfg1, false);
         assert!(vec_contains(&args, "my_host"));
         assert!(vec_subslice_strings(&args, &xopts));
     }
@@ -244,6 +259,7 @@ mod test {
             ConnectionType::Ipv4,
             host,
             &Configuration_Optional::default(),
+            false,
         );
         assert!(vec_subslice_strings(&args, &["qcp", "--server"]));
 
@@ -251,7 +267,7 @@ mod test {
             ssh_subsystem: Some(true),
             ..Default::default()
         };
-        let args1 = ssh_cli_args(ConnectionType::Ipv4, host, &cfg1);
+        let args1 = ssh_cli_args(ConnectionType::Ipv4, host, &cfg1, false);
         assert!(vec_subslice_strings(&args1, &["-s", "qcp"]));
     }
 }
