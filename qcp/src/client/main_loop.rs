@@ -510,7 +510,7 @@ mod test {
         // We need to send a Response, FileHeader, file data, then FileTrailer.
         let mut send_buf = Vec::new();
         crate::protocol::session::Response::V1(crate::protocol::session::ResponseV1 {
-            status: crate::protocol::session::Status::Ok,
+            status: crate::protocol::session::Status::Ok.into(),
             message: None,
         })
         .to_writer_framed(&mut send_buf)
