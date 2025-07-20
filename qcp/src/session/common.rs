@@ -60,28 +60,6 @@ pub(super) fn progress_bar_for(
     ))
 }
 
-/// Maps a non-OK status into an error.
-///
-/// `context` is a lazily-evaluated function that provides a message to include in the context string.
-pub(super) fn check_response<F>(response: ResponseV1, context: F) -> anyhow::Result<()>
-where
-    F: FnOnce() -> String,
-{
-    if response.status == Status::Ok {
-        Ok(())
-    } else {
-        let st = Status::try_from(response.status)?;
-        Err(anyhow::Error::new(st).context(format!(
-            "{} from {}{}",
-            st,
-            context(),
-            response
-                .message
-                .map_or_else(String::new, |e| format!(" with message: {e}"))
-        )))
-    }
-}
-
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {

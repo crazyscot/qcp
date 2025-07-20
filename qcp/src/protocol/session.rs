@@ -171,14 +171,34 @@ pub struct PutArgs {
     pub filename: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Display)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, thiserror::Error)]
+#[error(transparent)]
 /// Response packet
 pub enum Response {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
     V1(ResponseV1),
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor)]
+impl Response {
+    pub(crate) fn status(&self) -> Uint {
+        match self {
+            Response::V1(r) => r.status,
+        }
+    }
+
+    /// Wraps this struct up as a Result
+    pub(crate) fn into_result(self) -> anyhow::Result<Self> {
+        let st = self.status();
+        if st == Status::Ok {
+            return Ok(self);
+        }
+        Err(anyhow::Error::new(self))
+    }
+}
+
+#[derive(
+    Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor, thiserror::Error,
+)]
 /// Version 1 of [`Response`]
 ///
 /// This is an enum to provide for forward compatibility.
