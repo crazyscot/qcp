@@ -61,7 +61,9 @@ use std::fmt::Display;
 
 use super::common::ProtocolMessage;
 
-/// Machine-readable codes advising of the status of an operation
+/// Machine-readable codes advising of the status of an operation.
+///
+/// See also [`Status::to_string`] which copes correctly with unrecognised status values.
 #[derive(
     Serialize,
     Deserialize,
@@ -72,11 +74,15 @@ use super::common::ProtocolMessage;
     Copy,
     thiserror::Error,
     strum_macros::Display,
+    strum_macros::FromRepr,
 )]
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub enum Status {
     // Note that this enum is serialized without serde_repr, so explicit discriminants are not used on the wire.
     // This also means that the ordering and meaning of existing items cannot be changed without breaking compatibility.
+    //
+    // CAUTION: CompatibilityLevel 1 panics when unmarshalling statuses above 7
     Ok = 0,
     FileNotFound = 1,
     IncorrectPermissions = 2,
@@ -85,6 +91,45 @@ pub enum Status {
     DiskFull = 5,
     NotYetImplemented = 6,
     ItIsADirectory = 7,
+    // CAUTION: CompatibilityLevel 1 panics when unmarshalling statuses above 7
+}
+
+impl From<Status> for Uint {
+    fn from(value: Status) -> Self {
+        Self(value as u64)
+    }
+}
+
+impl TryFrom<Uint> for Status {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Uint) -> Result<Self, Self::Error> {
+        #[allow(clippy::cast_possible_truncation)]
+        Status::from_repr(value.0 as usize).ok_or_else(|| anyhow::anyhow!("unknown status code"))
+    }
+}
+
+impl Status {
+    /// String conversion function for a Uint that holds a Status value
+    #[must_use]
+    pub fn to_string(value: Uint) -> String {
+        Status::try_from(value).map_or_else(
+            |_| format!("Unknown status code {}", value.0),
+            |st| st.to_string(),
+        )
+    }
+}
+
+impl PartialEq<Uint> for Status {
+    fn eq(&self, other: &Uint) -> bool {
+        *self as u64 == other.0
+    }
+}
+
+impl PartialEq<Status> for Uint {
+    fn eq(&self, other: &Status) -> bool {
+        self.0 == *other as u64
+    }
 }
 
 /// A command from client to server.
@@ -126,7 +171,7 @@ pub struct PutArgs {
     pub filename: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Display)]
 /// Response packet
 pub enum Response {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
@@ -138,8 +183,9 @@ pub enum Response {
 ///
 /// This is an enum to provide for forward compatibility.
 pub struct ResponseV1 {
-    /// Outcome of the operation
-    pub status: Status,
+    /// Outcome of the operation.
+    /// This is a [`Status`] code, but as of CompatibilityLevel 2 it may be outside of the set of values we know.
+    pub status: Uint,
     /// A human-readable message giving more information, if any is pertinent
     pub message: Option<String>,
 }
@@ -149,9 +195,10 @@ impl ProtocolMessage for Response {
 
 impl Display for ResponseV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = Status::to_string(self.status);
         match &self.message {
-            Some(msg) => write!(f, "{:?} with message {}", self.status, msg),
-            None => write!(f, "{:?}", self.status),
+            Some(msg) => write!(f, "{str} with message {msg}"),
+            None => write!(f, "{str}"),
         }
     }
 }
@@ -205,6 +252,7 @@ impl ProtocolMessage for FileTrailer {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
+    use assertables::assert_contains;
     use pretty_assertions::assert_eq;
     use serde_bare::Uint;
 
@@ -218,12 +266,12 @@ mod test {
     #[test]
     fn display() {
         let r = ResponseV1 {
-            status: Status::Ok,
+            status: Status::Ok.into(),
             message: Some("hi".to_string()),
         };
         assert_eq!(format!("{r}"), "Ok with message hi");
         let r = ResponseV1 {
-            status: Status::Ok,
+            status: Status::Ok.into(),
             message: None,
         };
         assert_eq!(format!("{r}"), "Ok");
@@ -249,7 +297,7 @@ mod test {
     #[test]
     fn serialize_response() {
         let resp = Response::V1(ResponseV1 {
-            status: Status::ItIsADirectory,
+            status: Status::ItIsADirectory.into(),
             message: Some("nope".to_string()),
         });
         let wire = resp.to_vec().unwrap();
@@ -296,7 +344,7 @@ mod test {
     #[test]
     fn wire_marshalling_response_v1() {
         let resp = Response::V1(ResponseV1 {
-            status: Status::IoError,
+            status: Status::IoError.into(),
             message: Some("hi".to_string()),
         });
         let wire = resp.to_vec().unwrap();
@@ -321,5 +369,28 @@ mod test {
         let wire = trail.to_vec().unwrap();
         let expected = b"\x00".to_vec(); // V1 has no contents
         assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn unknown_status_doesnt_crash() {
+        // hand-created: an outrageously large Status value (2,097,151)
+        let wire = &[0u8, 255, 255, 127, 0];
+
+        let deser = Response::from_slice(wire).unwrap();
+        eprintln!("{deser:?}");
+    }
+
+    #[test]
+    fn status_equality() {
+        let st = Status::DiskFull;
+        let u = Uint::from(st);
+        assert_eq!(st, u);
+        assert_eq!(u, st);
+    }
+
+    #[test]
+    fn unknown_status_to_string() {
+        let u = Uint(2u64.pow(63));
+        assert_contains!(Status::to_string(u), "Unknown status code");
     }
 }
