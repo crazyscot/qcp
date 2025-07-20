@@ -47,6 +47,7 @@ async fn server_main_inner<
     let result = control
         .run_server(remote_ip, manager, setup_tracing, use_colours())
         .await?;
+    let _span = tracing::error_span!("[Server]").entered();
     let endpoint = result.endpoint;
 
     let mut tasks = JoinSet::new();

@@ -400,7 +400,7 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
         debug!("got client greeting {remote_greeting:?}");
 
         self.run_server_inner(manager, remote_greeting.compatibility.into())
-            .instrument(tracing::error_span!("Server").or_current())
+            .instrument(tracing::error_span!("[Server]").or_current())
             .await
     }
 
