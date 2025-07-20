@@ -3,7 +3,7 @@
 
 use crate::{
     config::Configuration,
-    protocol::control::ConnectionType,
+    protocol::control::{CompatibilityLevel, ConnectionType},
     transport::ThroughputMode,
     util::{self, Credentials},
 };
@@ -28,6 +28,7 @@ pub(crate) fn create_endpoint(
     config: &Configuration,
     mode: ThroughputMode,
     server: bool,
+    compat: CompatibilityLevel,
 ) -> Result<(quinn::Endpoint, Option<String>)> {
     let _ = span!(Level::TRACE, "create_endpoint").entered();
     let mut root_store = RootCertStore::empty();
@@ -41,7 +42,7 @@ pub(crate) fn create_endpoint(
         tls_config.max_early_data_size = u32::MAX;
         let qsc = QuicServerConfig::try_from(tls_config)?;
         let mut server_cfg = quinn::ServerConfig::with_crypto(Arc::new(qsc));
-        let _ = server_cfg.transport_config(crate::transport::create_config(config, mode)?);
+        let _ = server_cfg.transport_config(crate::transport::create_config(config, mode, compat)?);
 
         (None, Some(server_cfg))
     } else {
@@ -52,7 +53,7 @@ pub(crate) fn create_endpoint(
         );
         let mut client_cfg =
             quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
-        let _ = client_cfg.transport_config(crate::transport::create_config(config, mode)?);
+        let _ = client_cfg.transport_config(crate::transport::create_config(config, mode, compat)?);
 
         (Some(client_cfg), None)
     };

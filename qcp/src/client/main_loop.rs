@@ -8,7 +8,7 @@ use crate::{
     control::{ControlChannel, create, create_endpoint},
     protocol::{
         common::{ReceivingStream, SendReceivePair, SendingStream},
-        control::{ClosedownReportV1, ServerMessageV1},
+        control::{ClosedownReportV1, CompatibilityLevel, ServerMessageV1},
     },
     session::CommandStats,
     util::{
@@ -187,8 +187,13 @@ impl Client {
             std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
         };
 
-        let endpoint =
-            self.create_quic_endpoint(&prep_result, &config, &server_message, server_address_port)?;
+        let endpoint = self.create_quic_endpoint(
+            &prep_result,
+            &config,
+            &server_message,
+            server_address_port,
+            qcp_conn.control.selected_compat,
+        )?;
 
         debug!("Opening QUIC connection to {server_address_port:?}");
         let connection = timeout(
@@ -284,6 +289,7 @@ impl Client {
         config: &Configuration,
         server_message: &ServerMessageV1,
         server_address_port: SocketAddr,
+        compat: CompatibilityLevel,
     ) -> anyhow::Result<Endpoint> {
         self.spinner.enable_steady_tick(Duration::from_millis(150));
         self.spinner.set_message("Establishing data channel");
@@ -295,6 +301,7 @@ impl Client {
             config,
             prep_result.job_spec.throughput_mode(),
             false,
+            compat,
         )?;
         debug!("Local endpoint address is {:?}", endpoint.local_addr()?);
         Ok(endpoint)
@@ -441,6 +448,8 @@ mod test {
     #[cfg_attr(target_os = "macos", ignore)]
     #[tokio::test]
     async fn endpoint_create_close() {
+        use crate::protocol::control::CompatibilityLevel;
+
         let mut uut = make_uut(|_, _| (), "127.0.0.1:file", LOCAL_FILE);
         let working = Configuration_Optional::default();
         let config = Configuration::system_default().clone();
@@ -460,6 +469,7 @@ mod test {
                 &config,
                 &server_message,
                 server_address_port.into(),
+                CompatibilityLevel::V1,
             )
             .unwrap();
         assert!(endpoint.local_addr().is_ok());
