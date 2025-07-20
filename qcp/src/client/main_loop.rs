@@ -377,7 +377,13 @@ impl Client {
         match result {
             Ok(st) => RequestResult::new(true, st),
             Err(e) => {
-                error!("{e}");
+                if let Some(src) = e.source() {
+                    // Some error conditions come with an anyhow Context.
+                    // We want to output one tidy line, so glue them together.
+                    error!("{e}: {src}");
+                } else {
+                    error!("{e}");
+                }
                 RequestResult::new(false, CommandStats::new())
             }
         }
