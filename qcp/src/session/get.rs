@@ -1,7 +1,7 @@
 //! GET command
 // (c) 2024-5 Ross Younger
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -12,7 +12,7 @@ use super::{CommandStats, SessionCommandImpl};
 
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::{Command, FileHeader, FileTrailer, GetArgs, Response, Status};
-use crate::session::common::{check_response, progress_bar_for, send_response};
+use crate::session::common::{progress_bar_for, send_response};
 use crate::util::io::open_file;
 
 pub(crate) struct Get<S: SendingStream, R: ReceivingStream> {
@@ -54,9 +54,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
 
         // TODO protocol timeout?
         trace!("await response");
-        let response = Response::from_reader_async_framed(&mut self.stream.recv).await?;
-        let Response::V1(response) = response;
-        check_response(response, || format!("GET ({filename})"))?;
+        let _ = Response::from_reader_async_framed(&mut self.stream.recv)
+            .await?
+            .into_result()
+            .with_context(|| format!("GET {filename} failed"))?;
 
         let header = FileHeader::from_reader_async_framed(&mut self.stream.recv).await?;
         trace!("{header:?}");

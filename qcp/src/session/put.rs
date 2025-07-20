@@ -1,7 +1,7 @@
 //! PUT command
 // (c) 2024-5 Ross Younger
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use async_trait::async_trait;
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -11,7 +11,7 @@ use super::{CommandStats, SessionCommandImpl};
 
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::{Command, FileHeader, FileTrailer, PutArgs, Response, Status};
-use crate::session::common::{check_response, progress_bar_for, send_response};
+use crate::session::common::{progress_bar_for, send_response};
 
 pub(crate) struct Put<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
@@ -78,9 +78,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             .await?;
 
         trace!("await response");
-        let response = Response::from_reader_async_framed(&mut self.stream.recv).await?;
-        let Response::V1(response) = response;
-        check_response(response, || format!("PUT ({src_filename})"))?;
+        let _ = Response::from_reader_async_framed(&mut self.stream.recv)
+            .await?
+            .into_result()
+            .with_context(|| format!("PUT {src_filename} failed"))?;
 
         // A server-side abort might happen part-way through a large transfer.
         trace!("send payload");
@@ -412,7 +413,8 @@ mod test {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "s:/dev/", false).await?;
             let r1 = r1.unwrap_err();
-            let msg = r1.to_string();
+            let msg = r1.root_cause().to_string();
+
             if cfg!(unix) {
                 assert_contains!(msg, "Permission denied");
                 assert_eq!(Status::from(r1), Status::IncorrectPermissions);
@@ -432,7 +434,7 @@ mod test {
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "s:/dev/full", false).await?;
-            let msg = r1.unwrap_err().to_string();
+            let msg = r1.unwrap_err().root_cause().to_string();
             if cfg!(target_os = "macos") {
                 assert_contains!(msg, "Permission denied");
             } else if cfg!(unix) {
