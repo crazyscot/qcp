@@ -40,7 +40,6 @@ mod tests {
     };
 
     use super::handle_stream;
-    use assertables::assert_matches;
     use tokio::io::simplex;
     use tokio_test::io::Builder;
 
@@ -66,13 +65,10 @@ mod tests {
         let resp = Response::from_reader_async_framed(&mut out_read)
             .await
             .unwrap();
-        assert_matches!(
-            resp,
-            Response::V1(ResponseV1 {
-                status: Status::FileNotFound,
-                .. // message is OS specific
-            })
-        );
+
+        let Response::V1(ResponseV1 { status, .. }) = resp;
+        assert_eq!(status, Status::FileNotFound);
+        // message is OS specific, so we don't check it here
     }
 
     #[tokio::test]
@@ -83,7 +79,7 @@ mod tests {
         let mut send_buf = Vec::new();
         put_cmd.to_writer_framed(&mut send_buf).unwrap();
 
-        let expected = Response::V1(ResponseV1::new(Status::DirectoryDoesNotExist, None));
+        let expected = Response::V1(ResponseV1::new(Status::DirectoryDoesNotExist.into(), None));
         let mut expect_buf = Vec::new();
         expected.to_writer_framed(&mut expect_buf).unwrap();
 
