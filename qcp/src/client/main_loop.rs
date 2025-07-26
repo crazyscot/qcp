@@ -8,7 +8,7 @@ use crate::{
     control::{ControlChannel, create, create_endpoint},
     protocol::{
         common::{ReceivingStream, SendReceivePair, SendingStream},
-        control::{ClosedownReportV1, CompatibilityLevel, ServerMessageV1},
+        control::{ClosedownReportV1, Compatibility, ServerMessageV1},
     },
     session::CommandStats,
     util::{
@@ -289,7 +289,7 @@ impl Client {
         config: &Configuration,
         server_message: &ServerMessageV1,
         server_address_port: SocketAddr,
-        compat: CompatibilityLevel,
+        compat: Compatibility,
     ) -> anyhow::Result<Endpoint> {
         self.spinner.enable_steady_tick(Duration::from_millis(150));
         self.spinner.set_message("Establishing data channel");
@@ -454,7 +454,7 @@ mod test {
     #[cfg_attr(target_os = "macos", ignore)]
     #[tokio::test]
     async fn endpoint_create_close() {
-        use crate::protocol::control::CompatibilityLevel;
+        use crate::protocol::control::Compatibility;
 
         let mut uut = make_uut(|_, _| (), "127.0.0.1:file", LOCAL_FILE);
         let working = Configuration_Optional::default();
@@ -475,7 +475,7 @@ mod test {
                 &config,
                 &server_message,
                 server_address_port.into(),
-                CompatibilityLevel::Level(1),
+                Compatibility::Level(1),
             )
             .unwrap();
         assert!(endpoint.local_addr().is_ok());
