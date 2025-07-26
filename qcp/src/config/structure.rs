@@ -88,7 +88,6 @@ pub struct Configuration {
     /// See also [`EngineeringQuantity`](https://docs.rs/engineering-repr/latest/engineering_repr/struct.EngineeringQuantity.html).
     ///
     #[arg(
-        short('b'),
         long,
         alias("rx-bw"),
         display_order(1),
@@ -122,7 +121,6 @@ if (for example) you expect to fill a 1Gbit ethernet connection,
     ///
     /// See also [`EngineeringQuantity`](https://docs.rs/engineering-repr/latest/engineering_repr/struct.EngineeringQuantity.html).
     #[arg(
-        short('B'),
         long,
         alias("tx-bw"),
         display_order(1),
@@ -144,7 +142,6 @@ If not specified or 0, uses the value of `rx`.
     /// The expected network Round Trip time to the target system, in milliseconds.
     /// [default: 300]
     #[arg(
-        short('r'),
         long,
         help_heading("Network tuning"),
         display_order(10),
@@ -200,26 +197,14 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     /// For example: `12345`, `20000-20100`
     ///
     /// If unspecified, uses any available UDP port.
-    #[arg(
-        short = 'p',
-        long,
-        value_name("M-N"),
-        help_heading("Connection"),
-        display_order(0)
-    )]
+    #[arg(long, value_name("M-N"), help_heading("Connection"), display_order(0))]
     pub port: PortRange,
 
     /// Connection timeout for the QUIC endpoints [seconds; default 5]
     ///
     /// This needs to be long enough for your network connection, but short enough to provide
     /// a timely indication that UDP may be blocked.
-    #[arg(
-        short,
-        long,
-        value_name("sec"),
-        help_heading("Connection"),
-        display_order(0)
-    )]
+    #[arg(long, value_name("sec"), help_heading("Connection"), display_order(0))]
     pub timeout: u16,
 
     /// Size of the UDP kernel buffer in bytes.
@@ -362,7 +347,6 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"),
     /// Specifies the time format to use when printing messages to the console or to file
     /// [default: local]
     #[arg(
-        short = 'T',
         long,
         value_name("FORMAT"),
         help_heading("Output"),

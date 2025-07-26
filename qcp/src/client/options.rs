@@ -15,7 +15,7 @@ pub struct Parameters {
     ///
     /// This has the same effect as setting `RUST_LOG=qcp=debug` in the environment.
     /// If present, `RUST_LOG` overrides this option.
-    #[arg(short, long, action, help_heading("Debug"), display_order(0))]
+    #[arg(long, action, help_heading("Debug"), display_order(0))]
     pub debug: bool,
 
     /// Log to a file
@@ -23,7 +23,6 @@ pub struct Parameters {
     /// By default the log receives everything printed to stderr.
     /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
     #[arg(
-        short('L'),
         long,
         action,
         value_name("FILE"),
