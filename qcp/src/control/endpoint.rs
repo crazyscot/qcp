@@ -3,7 +3,7 @@
 
 use crate::{
     config::Configuration,
-    protocol::control::{CompatibilityLevel, ConnectionType},
+    protocol::control::{Compatibility, ConnectionType},
     transport::ThroughputMode,
     util::{self, Credentials},
 };
@@ -28,7 +28,7 @@ pub(crate) fn create_endpoint(
     config: &Configuration,
     mode: ThroughputMode,
     server: bool,
-    compat: CompatibilityLevel,
+    compat: Compatibility,
 ) -> Result<(quinn::Endpoint, Option<String>)> {
     let _ = span!(Level::TRACE, "create_endpoint").entered();
     let mut root_store = RootCertStore::empty();

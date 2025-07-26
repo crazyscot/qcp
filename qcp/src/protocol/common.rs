@@ -21,7 +21,7 @@
 //! This is on top of the general protocol extension trick of using unions (in Rust, enums with contents)
 //! as described in section 4 of [BARE].
 //! This must itself be used with care:  older versions of the software do not understand any newer enum values,
-//! so would choke on them. This is why the control channel includes [`CompatibilityLevel`](crate::protocol::control::CompatibilityLevel).
+//! so would choke on them. This is why the control channel includes [`Compatibility` level](crate::protocol::control::Compatibility).
 //!
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 //! [serde_bare]: https://docs.rs/serde_bare/latest/serde_bare/

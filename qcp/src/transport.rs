@@ -16,7 +16,7 @@ use crate::{
     config::{self, Configuration, Configuration_Optional, Manager},
     protocol::{
         compat::Feature,
-        control::{ClientMessageV1, CompatibilityLevel, CongestionController},
+        control::{ClientMessageV1, Compatibility, CongestionController},
     },
     util::PortRange,
 };
@@ -51,7 +51,7 @@ pub enum ThroughputMode {
 pub fn create_config(
     params: &Configuration,
     mode: ThroughputMode,
-    compat: CompatibilityLevel,
+    compat: Compatibility,
 ) -> Result<(Arc<TransportConfig>, Arc<dyn DebugControllerFactory>)> {
     let mut mtu_cfg = MtuDiscoveryConfig::default();
     let _ = mtu_cfg.upper_bound(params.max_mtu);
@@ -367,7 +367,7 @@ mod tests {
     use crate::{
         Configuration,
         config::Manager,
-        protocol::control::{CompatibilityLevel, PortRange_OnWire},
+        protocol::control::{Compatibility, PortRange_OnWire},
         transport::{Configuration_Optional, combine_bandwidth_configurations},
         util::PortRange,
     };
@@ -375,7 +375,7 @@ mod tests {
     use super::{ThroughputMode, create_config};
 
     fn process_config(cfg: &Configuration, mode: ThroughputMode) -> (String, String) {
-        let (tc, congestion) = create_config(cfg, mode, CompatibilityLevel::Level(2)).unwrap();
+        let (tc, congestion) = create_config(cfg, mode, Compatibility::Level(2)).unwrap();
         (format!("{tc:#?}"), format!("{congestion:#?}"))
     }
 
@@ -423,8 +423,7 @@ mod tests {
         let mut cfg = Configuration::system_default().clone();
         cfg.congestion = crate::protocol::control::CongestionController::NewReno.into();
 
-        let e =
-            create_config(&cfg, ThroughputMode::Both, CompatibilityLevel::Level(1)).unwrap_err();
+        let e = create_config(&cfg, ThroughputMode::Both, Compatibility::Level(1)).unwrap_err();
         eprintln!("{e}");
         assert_contains!(e.to_string(), "Remote host does not support NewReno");
     }

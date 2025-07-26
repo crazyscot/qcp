@@ -74,8 +74,7 @@ pub const OLD_BANNER: &str = "qcp-server-1\n";
 /// The protocol compatibility version implemented by this crate
 pub(crate) const OUR_COMPATIBILITY_NUMERIC: u16 = 2;
 /// The protocol compatibility version implemented by this crate
-pub const OUR_COMPATIBILITY_LEVEL: CompatibilityLevel =
-    CompatibilityLevel::Level(OUR_COMPATIBILITY_NUMERIC);
+pub const OUR_COMPATIBILITY_LEVEL: Compatibility = Compatibility::Level(OUR_COMPATIBILITY_NUMERIC);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // COMPATIBILITY
@@ -103,7 +102,7 @@ pub const OUR_COMPATIBILITY_LEVEL: CompatibilityLevel =
 /// </div>
 ///
 #[derive(Clone, Copy, Debug, Default, derive_more::Display, PartialEq, Serialize, Deserialize)]
-pub enum CompatibilityLevel {
+pub enum Compatibility {
     /// Indicates that we do not (yet) know the peer's compatibility level.
     ///
     /// This value should never be seen on the wire. The set of supported features is undefined.
@@ -127,22 +126,22 @@ pub enum CompatibilityLevel {
     Level(u16),
 }
 
-impl From<CompatibilityLevel> for u16 {
-    fn from(value: CompatibilityLevel) -> Self {
+impl From<Compatibility> for u16 {
+    fn from(value: Compatibility) -> Self {
         match value {
-            CompatibilityLevel::Level(v) => v,
-            CompatibilityLevel::Unknown | CompatibilityLevel::Newer => 0,
+            Compatibility::Level(v) => v,
+            Compatibility::Unknown | Compatibility::Newer => 0,
         }
     }
 }
 
-impl From<u16> for CompatibilityLevel {
+impl From<u16> for Compatibility {
     fn from(value: u16) -> Self {
         if value > OUR_COMPATIBILITY_NUMERIC {
             // If the value is greater than our compatibility level, we treat it as "newer"
-            CompatibilityLevel::Newer
+            Compatibility::Newer
         } else {
-            CompatibilityLevel::Level(value)
+            Compatibility::Level(value)
         }
     }
 }
@@ -677,7 +676,7 @@ mod test {
         protocol::{
             common::ProtocolMessage,
             control::{
-                ClientMessageV1, ClosedownReport, CompatibilityLevel, CongestionController,
+                ClientMessageV1, ClosedownReport, Compatibility, CongestionController,
                 ConnectionType, ServerGreeting, ServerMessageV1,
             },
         },
@@ -989,14 +988,14 @@ mod test {
     #[test]
     fn compat_level_from_wire() {
         let cases = &[
-            (0u16, CompatibilityLevel::Level(0)),
-            (1, CompatibilityLevel::Level(1)),
-            (2, CompatibilityLevel::Level(2)),
-            (32768, CompatibilityLevel::Newer),
-            (65535, CompatibilityLevel::Newer),
+            (0u16, Compatibility::Level(0)),
+            (1, Compatibility::Level(1)),
+            (2, Compatibility::Level(2)),
+            (32768, Compatibility::Newer),
+            (65535, Compatibility::Newer),
         ];
         for (wire, expected) in cases {
-            let level: CompatibilityLevel = (*wire).into();
+            let level: Compatibility = (*wire).into();
             assert_eq!(
                 level, *expected,
                 "wire {wire} should be {expected:?} but got {level}"

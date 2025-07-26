@@ -21,7 +21,7 @@ use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair,
 use crate::protocol::compat::Feature;
 use crate::protocol::control::{
     BANNER, ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport, ClosedownReportV1,
-    CompatibilityLevel, CongestionController, ConnectionType, OLD_BANNER, OUR_COMPATIBILITY_LEVEL,
+    Compatibility, CongestionController, ConnectionType, OLD_BANNER, OUR_COMPATIBILITY_LEVEL,
     OUR_COMPATIBILITY_NUMERIC, ServerFailure, ServerGreeting, ServerMessage, ServerMessageV1,
 };
 use crate::transport::combine_bandwidth_configurations;
@@ -49,7 +49,7 @@ pub(crate) trait ControlChannelServerInterface<
     async fn run_server_inner(
         &mut self,
         manager: &mut Manager,
-        compat: CompatibilityLevel,
+        compat: Compatibility,
     ) -> anyhow::Result<ServerResult>;
 
     async fn send_closedown_report(&mut self, stats: &ConnectionStats) -> Result<()>;
@@ -59,7 +59,7 @@ pub(crate) trait ControlChannelServerInterface<
 pub(crate) struct ControlChannel<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
     /// The selected compatibility level for the connection
-    pub selected_compat: CompatibilityLevel,
+    pub selected_compat: Compatibility,
 }
 
 impl SendingStream for Stdout {}
@@ -86,7 +86,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     pub(crate) fn new(stream: SendReceivePair<S, R>) -> Self {
         Self {
             stream,
-            selected_compat: CompatibilityLevel::Unknown,
+            selected_compat: Compatibility::Unknown,
         }
     }
 
@@ -117,7 +117,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     }
 
     // STATIC METHOD
-    fn choose_compatibility_level(ours: u16, theirs: u16) -> CompatibilityLevel {
+    fn choose_compatibility_level(ours: u16, theirs: u16) -> Compatibility {
         // Reporting older/newer compatibility levels is useful for debugging.
         use std::cmp::Ordering::{Equal, Greater, Less};
         let (d, result) = match theirs.cmp(&ours) {
@@ -411,7 +411,7 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
     async fn run_server_inner(
         &mut self,
         manager: &mut Manager,
-        compat: CompatibilityLevel,
+        compat: Compatibility,
     ) -> anyhow::Result<ServerResult> {
         // PHASE 3: MESSAGES
         // PHASE 3A: Read client message

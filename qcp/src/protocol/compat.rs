@@ -4,7 +4,7 @@
 
 use heck::ToUpperCamelCase;
 
-use super::control::CompatibilityLevel;
+use super::control::Compatibility;
 
 // This macro exists to make it ergonomic to add more features.
 // See the feature definition list below.
@@ -35,28 +35,28 @@ macro_rules! def_enum {
 // This macro invocation generates the feature definition list (the Feature struct):
 
 def_enum!(
-    /// A utility mapping features by their symbolic name to their [`CompatibilityLevel`].
+    /// A utility mapping features by their symbolic name to their [`Compatibility`] level.
     ///
     /// This structure acts like an enum, but has extra crunchy flavour.
     ///
     /// ```
-    /// use qcp::protocol::{control::CompatibilityLevel, compat::Feature};
-    /// assert_eq!(Feature::BASIC_PROTOCOL.level(), CompatibilityLevel::Level(1));
+    /// use qcp::protocol::{control::Compatibility, compat::Feature};
+    /// assert_eq!(Feature::BASIC_PROTOCOL.level(), Compatibility::Level(1));
     /// assert_eq!(Feature::BASIC_PROTOCOL.name(), "BASIC_PROTOCOL");
     /// ```
 
-    pub Feature => CompatibilityLevel {
+    pub Feature => Compatibility {
         /// The original base protocol introduced in qcp v0.3.0
-        BASIC_PROTOCOL => CompatibilityLevel::Level(1),
+        BASIC_PROTOCOL => Compatibility::Level(1),
         /// Support for the `NewReno` congestion control algorithm
-        NEW_RENO => CompatibilityLevel::Level(2),
+        NEW_RENO => Compatibility::Level(2),
     }
 );
 
 impl Feature {
     /// Returns the compatibility level for a feature
     #[must_use]
-    pub const fn level(self) -> CompatibilityLevel {
+    pub const fn level(self) -> Compatibility {
         self.0
     }
 
@@ -73,14 +73,14 @@ impl Feature {
     }
 }
 
-impl CompatibilityLevel {
+impl Compatibility {
     #[must_use]
     /// Does this level support that feature?
     pub fn supports(self, feature: Feature) -> bool {
         match self {
-            CompatibilityLevel::Unknown => false,
-            CompatibilityLevel::Newer => true,
-            CompatibilityLevel::Level(l) => l >= feature.level().into(),
+            Compatibility::Unknown => false,
+            Compatibility::Newer => true,
+            Compatibility::Level(l) => l >= feature.level().into(),
         }
     }
 }
@@ -110,7 +110,7 @@ pub(crate) fn pretty_list() -> tabled::Table {
 
 #[cfg(test)]
 mod test {
-    use crate::protocol::control::CompatibilityLevel;
+    use crate::protocol::control::Compatibility;
 
     use super::Feature;
     use heck::ToUpperCamelCase as _;
@@ -135,11 +135,11 @@ mod test {
 
     #[test]
     fn supports() {
-        assert!(CompatibilityLevel::Level(1).supports(Feature::BASIC_PROTOCOL));
-        assert!(CompatibilityLevel::Newer.supports(Feature::BASIC_PROTOCOL));
-        assert!(!CompatibilityLevel::Unknown.supports(Feature::BASIC_PROTOCOL));
+        assert!(Compatibility::Level(1).supports(Feature::BASIC_PROTOCOL));
+        assert!(Compatibility::Newer.supports(Feature::BASIC_PROTOCOL));
+        assert!(!Compatibility::Unknown.supports(Feature::BASIC_PROTOCOL));
 
-        assert!(!CompatibilityLevel::Level(1).supports(Feature::NEW_RENO));
-        assert!(CompatibilityLevel::Level(2).supports(Feature::NEW_RENO));
+        assert!(!Compatibility::Level(1).supports(Feature::NEW_RENO));
+        assert!(Compatibility::Level(2).supports(Feature::NEW_RENO));
     }
 }
