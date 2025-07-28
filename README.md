@@ -17,11 +17,11 @@ high-performance remote file copy utility for long-distance internet connections
 ### News
 
 - **(New in 0.4)**
-  * Added builds for [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html), [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html) and BSD
-  * New features: Explicit username with `-l <login-name>`; ssh subsystem mode
+  - Added builds for [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html), [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html) and BSD
+  - New features: Explicit username with `-l <login-name>`; ssh subsystem mode
 - **(New in 0.3)**
-  * Negotiate transport setting by combining configuration from both sides
-  * Protocol encoding changed to [BARE], removing the dependency on capnp.
+  - Negotiate transport setting by combining configuration from both sides
+  - Protocol encoding changed to [BARE], removing the dependency on capnp.
 
 For a full list of changes, see the [changelog].
 
@@ -29,61 +29,62 @@ For a full list of changes, see the [changelog].
 
 At the time of writing, qcp has only been tested with the OpenSSH server and client.
 
-| Platform         | CPU architecture | Status |
-| --------         | ------ | ----- |
-| Debian, Ubuntu   | x86_64, aarch64 | Well tested |
-| Debian, Ubuntu   | Others | Untested, should work |
-| NixOS            | x86_64 | Well tested |
-| NixOS            | aarch64 | Untested, should work |
-| Other Linux      | x86_64, aarch64 | Only indirectly tested** |
-| OSX              | x86_64 | Tested |
-| OSX              | aarch64 | Untested, should work |
-| FreeBSD          | x86_64 | Buildable as of 31/3/25, but untested |
-| NetBSD           | | Ought to be buildable* |
-| OpenBSD          | | Ought to be buildable* |
-| Windows 11       | x86_64 | Tested |
+| Platform       | CPU architecture | Status                                |
+| -------------- | ---------------- | ------------------------------------- |
+| Debian, Ubuntu | x86_64, aarch64  | Well tested                           |
+| Debian, Ubuntu | Others           | Untested, should work                 |
+| NixOS          | x86_64           | Well tested                           |
+| NixOS          | aarch64          | Untested, should work                 |
+| Other Linux    | x86_64, aarch64  | Only indirectly tested\*\*            |
+| OSX            | x86_64           | Tested                                |
+| OSX            | aarch64          | Untested, should work                 |
+| FreeBSD        | x86_64           | Buildable as of 31/3/25, but untested |
+| NetBSD         |                  | Ought to be buildable\*               |
+| OpenBSD        |                  | Ought to be buildable\*               |
+| Windows 11     | x86_64           | Tested                                |
 
-*_Note that the *BSD family are not tier 1 Rust platforms, so there is no guarantee that things will work properly. As of 31/3/25 some of these platforms have cross-compilation issues; I haven't tried native compilation._
+*\_Note that the *BSD family are not tier 1 Rust platforms, so there is no guarantee that things will work properly. As of 31/3/25 some of these platforms have cross-compilation issues; I haven't tried native compilation.\_
 
-** _The binaries in the tarballs are the exact same binaries found in the Debian/Ubuntu packages. They are static-linked, independent of kernel and libc._
+\*\* _The binaries in the tarballs are the exact same binaries found in the Debian/Ubuntu packages. They are static-linked, independent of kernel and libc._
 
 ## 🧰 Getting Started
 
-* You must have ssh access to the target machine.
-* You must also be able to connect to the target on a given UDP port.
+- You must have ssh access to the target machine.
+- You must also be able to connect to the target on a given UDP port.
   - If the local machine is behind connection-tracking NAT, things usually work just fine. This is the case for the vast majority of home and business network connections.
   - If the target is behind a firewall, you need to configure the firewall so at least some small set of UDP ports is
     accessible, and **not subject to network port translation**.
     (You can configure qcp to use a particular port range if you need to; see `--port` / `--remote-port`.)
     - In different terms: The target machine will bind to a random UDP port, and advise its peer (via ssh)
       of its choice of port number.
-* Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine,
+- Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine,
   or you need to set up `SshSubsystem` mode.
-  * Check the platform-specific notes: [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html),
+  - Check the platform-specific notes: [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html),
     [Linux/other Unix](https://docs.rs/qcp/latest/qcp/doc/unix/index.html),
     [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html)
-* Try it out! Use `qcp` where you would `scp`, e.g. `qcp myfile some-server:some-directory/`
-* Browse the tuning options in [Configuration](https://docs.rs/qcp/latest/qcp/struct.Configuration.html)
-* Set up a [config](config) file that tunes for your network connection. (You might find the `--stats` option useful when experimenting.)
+- Try it out! Use `qcp` where you would `scp`, e.g. `qcp myfile some-server:some-directory/`
+- Browse the tuning options in [Configuration](https://docs.rs/qcp/latest/qcp/struct.Configuration.html)
+- Set up a [config](config) file that tunes for your network connection. (You might find the `--stats` option useful when experimenting.)
 
 ### Installing by package
 
 These can be found on the [latest release](https://github.com/crazyscot/qcp/releases/latest) page.
 
-| Platform |  CPU  | Packaging   |
-| -------- | ----- | ------- |
-| Debian & Ubuntu | x86_64, aarch64 | Deb packages |
-| Other Linux | x86_64, aarch64 | Use the unknown-linux-musl tarballs (they are cross-platform, static linked) |
-| Nix | * | Flakes are provided: `nix shell 'github:crazyscot/qcp?dir=nix'` |
-| NixOS | * | In progress; refer to [pr#361923](https://github.com/NixOS/nixpkgs/pull/361923) |
-| OSX  | x86_64, aarch64 | Tarball (code signing TBD) |
-| Windows | x86_64 | Zipfile (code signing TBD) |
+| Platform        | CPU             | Packaging                                                                       |
+| --------------- | --------------- | ------------------------------------------------------------------------------- |
+| Debian & Ubuntu | x86_64, aarch64 | Deb packages                                                                    |
+| Other Linux     | x86_64, aarch64 | Use the unknown-linux-musl tarballs (they are cross-platform, static linked)    |
+| Nix             | \*              | Flakes are provided: `nix shell 'github:crazyscot/qcp?dir=nix'`                 |
+| NixOS           | \*              | In progress; refer to [pr#361923](https://github.com/NixOS/nixpkgs/pull/361923) |
+| OSX             | x86_64, aarch64 | Tarball (code signing TBD)                                                      |
+| Windows         | x86_64          | Zipfile (code signing TBD)                                                      |
 
 ### Building from source
 
 Prerequisites:
-* Rust toolchain (see the next section if you don't know how to install this)
-* A C compiler that the [cc crate](https://docs.rs/cc/latest/cc/#compile-time-requirements) can use
+
+- Rust toolchain (see the next section if you don't know how to install this)
+- A C compiler that the [cc crate](https://docs.rs/cc/latest/cc/#compile-time-requirements) can use
 
 You can install the package from source in one step using `cargo`:
 
@@ -95,9 +96,9 @@ Or, if you prefer, clone the source repository in the usual way, then `cargo bui
 
 #### If you are new to Rust and don't have the tools installed
 
-* Install the `rustup` tool via your package manager, or see [Rust installation](https://www.rust-lang.org/tools/install)
-* `rustup toolchain install stable`
-* `cargo install --locked qcp`
+- Install the `rustup` tool via your package manager, or see [Rust installation](https://www.rust-lang.org/tools/install)
+- `rustup toolchain install stable`
+- `cargo install --locked qcp`
 
 ## ⚙️ Usage
 
@@ -119,14 +120,14 @@ testfile ███████████████████████�
 
 Things you should know:
 
-* **qcp uses the ssh binary on your system to connect to the target machine**.
-ssh will check the remote host key and prompt you for a password or passphrase in the usual way.
+- **qcp uses the ssh binary on your system to connect to the target machine**.
+  ssh will check the remote host key and prompt you for a password or passphrase in the usual way.
 
-* **qcp will read your ssh config file** to resolve any Hostname aliases you may have defined there.
-The idea is, if you can `ssh` to a host, you should also be able to `qcp` to it.
-However, some particularly complicated ssh config files may be too much for qcp to understand.
-(In particular, `Match` directives are not currently supported.)
-In that case, you can use `--ssh-config` to provide an alternative configuration (or set it in your qcp configuration file).
+- **qcp will read your ssh config file** to resolve any Hostname aliases you may have defined there.
+  The idea is, if you can `ssh` to a host, you should also be able to `qcp` to it.
+  However, some particularly complicated ssh config files may be too much for qcp to understand.
+  (In particular, `Match` directives are not currently supported.)
+  In that case, you can use `--ssh-config` to provide an alternative configuration (or set it in your qcp configuration file).
 
 #### Tuning
 
@@ -139,7 +140,6 @@ For example, if you have 300Mbit/s (37.5MB/s) download and 100Mbit/s (12.5MB/s) 
 ```bash
 qcp my-server:/tmp/testfile /tmp/ --rx 37.5M --tx 12.5M
 ```
-
 
 Performance tuning can be a tricky subject. See the [performance] documentation, and our recommended approach to
 [building a configuration].
@@ -157,13 +157,12 @@ Rx 37.5M
 Tx 12.5M
 ```
 
-
 ## 📖 How qcp works
 
 The brief version:
 
 1. We ssh to the remote machine and run `qcp --server` there (with no further args, i.e. you can use `command="qcp --server"` in your authorized_keys file)
-   * there is also an option to use ssh subsystem mode, if you prefer to set that up
+   - there is also an option to use ssh subsystem mode, if you prefer to set that up
 1. Both sides generate a TLS key and exchange self-signed certs over the ssh pipe between them
 1. We use those certs to set up a QUIC session between the two
 1. We transfer files over QUIC
@@ -226,22 +225,22 @@ Most notably, [Quinn] is a pure-Rust implementation of the [QUIC] protocol, with
 If you're a business and need a formal invoice for your accountant, my freelancing company can issue the paperwork.
 For this, and any other commercial enquiries please get in touch, to `qcp@crazyscot.com`. We would be pleased to discuss commercial terms for:
 
-* Alternative licensing
-* Support
-* Sponsoring feature development
+- Alternative licensing
+- Support
+- Sponsoring feature development
 
 ## 💡 Future Directions
 
 Some ideas for the future, in no particular order:
 
-* File checksum/hash checking/reporting
-* Support for copying multiple files (e.g. shell globs or `scp -r`)
-* Firewall/NAT traversal
-* Interactive file transfer (akin to `ftp`)
-* Smart file copy using the `rsync` protocol or similar (send only the sections you need to)
-* Graphical interface for ftp mode
-* Bind a daemon to a fixed port, for better firewall/NAT traversal properties but at the cost of having to implement user authentication.
-* _The same thing we do every night, Pinky. We try to take over the world!_
+- File checksum/hash checking/reporting
+- Support for copying multiple files (e.g. shell globs or `scp -r`)
+- Firewall/NAT traversal
+- Interactive file transfer (akin to `ftp`)
+- Smart file copy using the `rsync` protocol or similar (send only the sections you need to)
+- Graphical interface for ftp mode
+- Bind a daemon to a fixed port, for better firewall/NAT traversal properties but at the cost of having to implement user authentication.
+- _The same thing we do every night, Pinky. We try to take over the world!_
 
 See also the [issues list].
 

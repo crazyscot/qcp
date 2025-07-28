@@ -21,7 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Update readme - ([f797e7d](https://github.com/crazyscot/qcp/commit/f797e7d8a32be7a53688de1d4f961c25261d484f))
 
-
 ## [0.4.1](https://github.com/crazyscot/qcp/compare/qcp-v0.4.0...qcp-v0.4.1)
 
 ### ⛰️ Features
@@ -39,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🎨 Styling
 
-- *(windows)* Change table style so it doesn't output mojibake when sent to more - ([65b6a9f](https://github.com/crazyscot/qcp/commit/65b6a9fef74f1363d64868e9efb11eb466d72936))
+- _(windows)_ Change table style so it doesn't output mojibake when sent to more - ([65b6a9f](https://github.com/crazyscot/qcp/commit/65b6a9fef74f1363d64868e9efb11eb466d72936))
 
 ### 🧪 Testing
 
@@ -48,13 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🏗️ Build, packaging & CI
 
-- *(safety)* Forbid unsafe rust in the qcp main crate - ([dca4765](https://github.com/crazyscot/qcp/commit/dca4765f9572493aa6e54db24d7d008d6b88f689))
+- _(safety)_ Forbid unsafe rust in the qcp main crate - ([dca4765](https://github.com/crazyscot/qcp/commit/dca4765f9572493aa6e54db24d7d008d6b88f689))
 - Switch off coveralls - ([946e026](https://github.com/crazyscot/qcp/commit/946e0267093a2a062e4f853d8fcafa2c1b524d25))
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(safety)* Remove unsafe code, add safety policy - ([094193d](https://github.com/crazyscot/qcp/commit/094193ddbc9b79bc49853e2805f6d3fb1c4810d5))
-- *(test)* Fix test leaving stray files in source tree - ([8745dbb](https://github.com/crazyscot/qcp/commit/8745dbb5ba839a9a507addbeb07f4ff63d2117f5))
+- _(safety)_ Remove unsafe code, add safety policy - ([094193d](https://github.com/crazyscot/qcp/commit/094193ddbc9b79bc49853e2805f6d3fb1c4810d5))
+- _(test)_ Fix test leaving stray files in source tree - ([8745dbb](https://github.com/crazyscot/qcp/commit/8745dbb5ba839a9a507addbeb07f4ff63d2117f5))
 - Many internal rearrangements for readability and testability
 - `LitterTray` is now a separate crate - ([b67d4bb](https://github.com/crazyscot/qcp/commit/b67d4bb6ce75ea538406a66ca80c29b63af08aac))
 - Mark some structs and functions as public to support an external testing crate - ([30a24ba](https://github.com/crazyscot/qcp/commit/30a24ba099aa29cb2ca31e6547f08c9880d9a2a6))
@@ -74,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⛰️ Features
 
-- *(config)* Support ~/.config/qcp/qcp.conf on unix - ([799d2ba](https://github.com/crazyscot/qcp/commit/799d2bae647510b2d79f10ccef538505429da600))
+- _(config)_ Support ~/.config/qcp/qcp.conf on unix - ([799d2ba](https://github.com/crazyscot/qcp/commit/799d2bae647510b2d79f10ccef538505429da600))
 - Add Windows build - ([b4af92a](https://github.com/crazyscot/qcp/commit/b4af92a573237a1e7cbbb18c771ea84a5172df10))
 - [**breaking**] Add -l login-name (same short-option as ssh) - ([d7fd7d0](https://github.com/crazyscot/qcp/commit/d7fd7d06de4c584589ba6a0c245a5d843c837062))
 - Platform support for OSX and BSD family ([#71](https://github.com/crazyscot/qcp/pull/71)) - ([3302685](https://github.com/crazyscot/qcp/commit/3302685d91515bf4fcdf0ca9e28c860d7ff2a125))
@@ -84,11 +83,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Bug Fixes
 
-- *(cosmetic)* Remove struct verbiage from debug output - ([dcfe102](https://github.com/crazyscot/qcp/commit/dcfe10212af093ed22fbd1bb7438287eff56c51c))
-- *(cosmetic)* When compatibility levels are equal, don't say that one is newer - ([5312a3a](https://github.com/crazyscot/qcp/commit/5312a3a75f7d29a36d5f7649c1332df54a41b68f))
-- *(protocol)* Improve reliability of Put pre-transfer check - ([acc3d1a](https://github.com/crazyscot/qcp/commit/acc3d1aa6b4c19722ad66dac59a71d4033c93a7c))
-- *(test)* Occasional random test failure - ([28663a3](https://github.com/crazyscot/qcp/commit/28663a3a5b86c61f1eab538095732c1fa8282c0e))
-- *(test)* Make tracing::setup idempotent - ([92afb90](https://github.com/crazyscot/qcp/commit/92afb9043cccd15655203485f76f421e78341dbb))
+- _(cosmetic)_ Remove struct verbiage from debug output - ([dcfe102](https://github.com/crazyscot/qcp/commit/dcfe10212af093ed22fbd1bb7438287eff56c51c))
+- _(cosmetic)_ When compatibility levels are equal, don't say that one is newer - ([5312a3a](https://github.com/crazyscot/qcp/commit/5312a3a75f7d29a36d5f7649c1332df54a41b68f))
+- _(protocol)_ Improve reliability of Put pre-transfer check - ([acc3d1a](https://github.com/crazyscot/qcp/commit/acc3d1aa6b4c19722ad66dac59a71d4033c93a7c))
+- _(test)_ Occasional random test failure - ([28663a3](https://github.com/crazyscot/qcp/commit/28663a3a5b86c61f1eab538095732c1fa8282c0e))
+- _(test)_ Make tracing::setup idempotent - ([92afb90](https://github.com/crazyscot/qcp/commit/92afb9043cccd15655203485f76f421e78341dbb))
 - User@host syntax on command line - ([fa0eecd](https://github.com/crazyscot/qcp/commit/fa0eecd0130393d708fb8c646526f4c273dee13c))
 - Report i/o errors from Put more reliably - ([783e0d5](https://github.com/crazyscot/qcp/commit/783e0d55dcfcac6a6992832f0dd7cfe4f9b1c954))
 - Remove TOCTTOU bug in Put destination checks - ([90977f3](https://github.com/crazyscot/qcp/commit/90977f3eb796d4de8d7c2fc2567bf6e3a86a93f7))
@@ -105,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🧪 Testing
 
-- *(fix)* Make test_progress_bar_for() CI-proof - ([e5b3dde](https://github.com/crazyscot/qcp/commit/e5b3ddea3db7c2e3462f4e3be8a6770b81c89ce7))
+- _(fix)_ Make test_progress_bar_for() CI-proof - ([e5b3dde](https://github.com/crazyscot/qcp/commit/e5b3ddea3db7c2e3462f4e3be8a6770b81c89ce7))
 - Improve unit test coverage in utils - ([3f40c8f](https://github.com/crazyscot/qcp/commit/3f40c8f99d4b7c55ad19077a93101a33f5e6e025))
 - Refactor control/process.rs for testability - ([f74870b](https://github.com/crazyscot/qcp/commit/f74870b360e4a8647a702150d52e10eddaf74217))
 - Use nightly toolchain for coverage; exclude test modules from analysis ([#43](https://github.com/crazyscot/qcp/pull/43)) - ([ee40c66](https://github.com/crazyscot/qcp/commit/ee40c663af74c1512e6c603c5b1e00bc7a9aebec))
@@ -151,20 +150,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move CopyJobSpec sharable construction logic into a constructor - ([9535e49](https://github.com/crazyscot/qcp/commit/9535e492ca487e1bbff145842ba3fc5d74b7f5df))
 - Move CongestionController(Type) into protocol - ([73b46ec](https://github.com/crazyscot/qcp/commit/73b46ecfcd46b29b676344779a238eee11be71fe))
 
-
 ## [0.3.3](https://github.com/crazyscot/qcp/compare/v0.3.2...v0.3.3)
 
 ### 🛡️ Security
 
 - bump ring from 0.17.11 to 0.17.13 to address potential overflow panic - ([06cd47b](https://github.com/crazyscot/qcp/commit/06cd47b))
 
-
 ## [0.3.2](https://github.com/crazyscot/qcp/compare/v0.3.1...v0.3.2)
 
 ### 🏗️ Build, packaging & CI
 
 - Fix readme in Cargo.toml - ([9e16c80](https://github.com/crazyscot/qcp/commit/9e16c80359b9508dd46651384971bb58b9acb210))
-
 
 ## [0.3.1](https://github.com/crazyscot/qcp/compare/v0.3.0...v0.3.1)
 
@@ -258,7 +254,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Align return codes from cli_main, server_main and client_main - ([7f2b243](https://github.com/crazyscot/qcp/commit/7f2b24316f04d87b975c18fd8db61da93cdf57aa))
 - SshConfigError uses thiserror to implement standard Error - ([16ef7ed](https://github.com/crazyscot/qcp/commit/16ef7ed8c7133c8625df85f171e3a0befcb382f7))
 
-
 ## [0.2.0](https://github.com/crazyscot/qcp/compare/v0.1.3...v0.2.0)
 
 ### ⛰️ Features
@@ -300,7 +295,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Bug Fixes
 
-- *(deps)* Bump rustls from 0.23.16 to 0.23.18 ([#15](https://github.com/crazyscot/qcp/pull/15)) - ([e333abc](https://github.com/crazyscot/qcp/commit/e333abc230528f2172cc2bf9605c5a5b2357d9fc))
+- _(deps)_ Bump rustls from 0.23.16 to 0.23.18 ([#15](https://github.com/crazyscot/qcp/pull/15)) - ([e333abc](https://github.com/crazyscot/qcp/commit/e333abc230528f2172cc2bf9605c5a5b2357d9fc))
 
 ### 📚 Documentation
 
@@ -308,8 +303,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(build)* Fix autopublish of Debian packages - ([74b3ea6](https://github.com/crazyscot/qcp/commit/74b3ea6a7be2da3093d4a75a1e92b29946d203ad))
-
+- _(build)_ Fix autopublish of Debian packages - ([74b3ea6](https://github.com/crazyscot/qcp/commit/74b3ea6a7be2da3093d4a75a1e92b29946d203ad))
 
 ## [0.1.2](https://github.com/crazyscot/qcp/compare/v0.1.1...v0.1.2)
 
@@ -321,7 +315,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix release workflow syntax - ([294bac3](https://github.com/crazyscot/qcp/commit/294bac32071f936e677bc4224b71ae5257975c99))
 - Make build script less panicky - ([0d3ab56](https://github.com/crazyscot/qcp/commit/0d3ab56ffdf21acc49df39b715cada9fde9b14b3))
-
 
 ## [0.1.1](https://github.com/crazyscot/qcp/compare/v0.1.0...v0.1.1)
 
@@ -351,12 +344,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(ci)* Align ci and release workflows - ([d16d38a](https://github.com/crazyscot/qcp/commit/d16d38a7aeb7629a76151ae4eb69d1d1b28cd671))
+- _(ci)_ Align ci and release workflows - ([d16d38a](https://github.com/crazyscot/qcp/commit/d16d38a7aeb7629a76151ae4eb69d1d1b28cd671))
 - Remove spurious cache key - ([7e64feb](https://github.com/crazyscot/qcp/commit/7e64feb030ef65d979e59b891ac68ee43414e89d))
 - Build debian package - ([435b6b5](https://github.com/crazyscot/qcp/commit/435b6b587adb0581cec36caccbcf5a8048b0403c))
 - Add aarch64 build ([#7](https://github.com/crazyscot/qcp/pull/7)) - ([863eb71](https://github.com/crazyscot/qcp/commit/863eb71a24a7f08f35c342e554b3b87fb0bbf751))
 - Tidy up CI, add release workflow ([#6](https://github.com/crazyscot/qcp/pull/6)) - ([dedfe22](https://github.com/crazyscot/qcp/commit/dedfe225f1c3c626380f6c28001ac641d1ca0ffe))
-
 
 ## [0.1.0]
 
@@ -375,4 +367,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Output statistics in human-friendly format - ([321a92d](https://github.com/crazyscot/qcp/commit/321a92d4e3aefed53c8af2867b0ee26a74c81801))
 - Dynamically update spinner tick rate as a function of throughput - ([b62e0e7](https://github.com/crazyscot/qcp/commit/b62e0e7ec12f20eaa1af200cae2f9f687a7c91df))
-

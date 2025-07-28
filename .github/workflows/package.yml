@@ -19,53 +19,53 @@ jobs:
     strategy:
       matrix:
         include:
-        - build: linux-x86_64-musl
-          host: ubuntu-latest
-          target: x86_64-unknown-linux-musl
-          rust: $_QCP_RUST_PACKAGING_VERSION
-          build_deb: true
-          cross: true
-          pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
-        - build: linux-aarch64-musl
-          host: ubuntu-latest
-          target: aarch64-unknown-linux-musl
-          rust: $_QCP_RUST_PACKAGING_VERSION
-          build_deb: true
-          cross: true
-          pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
-        - build: apple-x86_64
-          host: macos-latest
-          target: x86_64-apple-darwin
-          rust: $_QCP_RUST_PACKAGING_VERSION
-          build_deb: false
-          cross: false
-        - build: apple-aarch64
-          host: macos-latest
-          target: aarch64-apple-darwin
-          rust: $_QCP_RUST_PACKAGING_VERSION
-          build_deb: false
-          cross: false
-        # freebsd cross-builds as of 31 Mar 2025 but is untested.
-        #- build: freebsd-x86_64
-        #  host: ubuntu-latest
-        #  target: x86_64-unknown-freebsd
-        #  rust: $_QCP_RUST_PACKAGING_VERSION
-        #  build_deb: false
-        #  cross: true
-        # netbsd rust support is tier 2; as of 31 Mar 2025 the crossbuild fails to link (cannot find -lexecinfo).
-        # openbsd rust support is tier 3; as of 31 Mar 2025 it has no stable or nightly build.
-        #- build: windows-x86_64
-        #  host: windows-latest
-        #  target: x86_64-pc-windows-msvc
-        #  rust: stable
-        #  build_deb: false
-        #  cross: false
-        - build: windows-x86_64-mingw
-          host: ubuntu-latest
-          target: x86_64-pc-windows-gnu
-          rust: stable
-          build_deb: false
-          cross: true
+          - build: linux-x86_64-musl
+            host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            rust: $_QCP_RUST_PACKAGING_VERSION
+            build_deb: true
+            cross: true
+            pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
+          - build: linux-aarch64-musl
+            host: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            rust: $_QCP_RUST_PACKAGING_VERSION
+            build_deb: true
+            cross: true
+            pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
+          - build: apple-x86_64
+            host: macos-latest
+            target: x86_64-apple-darwin
+            rust: $_QCP_RUST_PACKAGING_VERSION
+            build_deb: false
+            cross: false
+          - build: apple-aarch64
+            host: macos-latest
+            target: aarch64-apple-darwin
+            rust: $_QCP_RUST_PACKAGING_VERSION
+            build_deb: false
+            cross: false
+          # freebsd cross-builds as of 31 Mar 2025 but is untested.
+          #- build: freebsd-x86_64
+          #  host: ubuntu-latest
+          #  target: x86_64-unknown-freebsd
+          #  rust: $_QCP_RUST_PACKAGING_VERSION
+          #  build_deb: false
+          #  cross: true
+          # netbsd rust support is tier 2; as of 31 Mar 2025 the crossbuild fails to link (cannot find -lexecinfo).
+          # openbsd rust support is tier 3; as of 31 Mar 2025 it has no stable or nightly build.
+          #- build: windows-x86_64
+          #  host: windows-latest
+          #  target: x86_64-pc-windows-msvc
+          #  rust: stable
+          #  build_deb: false
+          #  cross: false
+          - build: windows-x86_64-mingw
+            host: ubuntu-latest
+            target: x86_64-pc-windows-gnu
+            rust: stable
+            build_deb: false
+            cross: true
     runs-on: ${{ matrix.host }}
     env:
       BINARY_ARTIFACT: ${{ format('qcp-binary-{0}', matrix.target) }}
@@ -73,80 +73,83 @@ jobs:
       PACKAGE_ZIP: ${{ contains(matrix.target, 'windows') && 'all' || 'none' }}
       PACKAGE_TAR: ${{ contains(matrix.target, 'windows') && 'none' || 'all' }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-            # this action is used in multiple places
-      with:
-        toolchain: ${{ matrix.rust }}
-        targets: ${{ matrix.target }}
-    - name: Set up rust cross toolchain
-      uses: taiki-e/setup-cross-toolchain-action@0123528f956f923e7a476f4cc04882bc005e7c89 # v1.29.1
-      with:
-        target: ${{ matrix.target }}
-    - name: Additional rust tools
-      uses: taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
-            # this action is used in multiple places
-      with:
-        tool: cargo-cyclonedx${{ matrix.build_deb && ',cargo-deb' || ''}}
-        checksum: true
-    - name: Install binutils-multiarch (cross builds only)
-      if: startsWith(matrix.host, 'ubuntu') && matrix.cross
-      run: |
-        export DEBIAN_FRONTEND=noninteractive
-        sudo apt-get update
-        sudo apt-get -y --no-install-recommends install binutils-multiarch
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses:
+          dtolnay/rust-toolchain@master
+          # this action is used in multiple places
+        with:
+          toolchain: ${{ matrix.rust }}
+          targets: ${{ matrix.target }}
+      - name: Set up rust cross toolchain
+        uses: taiki-e/setup-cross-toolchain-action@0123528f956f923e7a476f4cc04882bc005e7c89 # v1.29.1
+        with:
+          target: ${{ matrix.target }}
+      - name: Additional rust tools
+        uses:
+          taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
+          # this action is used in multiple places
+        with:
+          tool: cargo-cyclonedx${{ matrix.build_deb && ',cargo-deb' || ''}}
+          checksum: true
+      - name: Install binutils-multiarch (cross builds only)
+        if: startsWith(matrix.host, 'ubuntu') && matrix.cross
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo apt-get -y --no-install-recommends install binutils-multiarch
 
-    ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-    # 31 Mar 2025: Disabled cacheing.
-    # Full cacheing with `cache-targets` saves 30-40s per platform, but at a high space cost.
-    # Cacheing with cache-targets: false is a net slowdown.
+      ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
+      # 31 Mar 2025: Disabled cacheing.
+      # Full cacheing with `cache-targets` saves 30-40s per platform, but at a high space cost.
+      # Cacheing with cache-targets: false is a net slowdown.
 
-    - name: Generate CycloneDX SBOM
-      run: cargo cyclonedx --target ${{ matrix.target }}
-    - name: Build binary package
-      uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c # v1.27.0
-      id: build-binary
-      with:
-        bin: qcp
-        dry-run: true
-        dry-run-intended: true
-        ref: refs/tags/dry-run # silence a warning
-        token: ${{ secrets.GITHUB_TOKEN }} # Needs write permission on release
-        target: ${{ matrix.target }}
-        include: "\
-          README.md,LICENSE,CHANGELOG.md,\
-          qcp/qcp.cdx.xml,\
-          qcp/misc/qcp.conf,\
-          qcp/misc/qcp_sshd.conf,\
-          qcp/misc/qcp.1,qcp/misc/qcp_config.5\
-          ${{ matrix.pack_extra }}"
-        # NOTE: No trailing comma before pack_extra
-        # (Not all platforms have any pack_extra files)
-        leading-dir: true
-        locked: true
-        tar: ${{ env.PACKAGE_TAR }}
-        zip: ${{ env.PACKAGE_ZIP }}
-    - name: Upload binary package to CI result
-      # always try to do this, it allows the package to be checked
-      if: success() || failure()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      with:
-        name: ${{ env.BINARY_ARTIFACT }}
-        path: ${{ steps.build-binary.outputs.archive }}.${{ env.PACKAGE_ZIP == 'all' && 'zip' || 'tar.gz' }}
-    - name: Run tests
-      run: cargo test --locked
-    - name: Make deb package
-      id: deb
-      if: ${{ matrix.build_deb }}
-      env:
-        # Compute the flag to pass to the script
-        RELEASE_FLAG: ${{ inputs.release && '--release' || '--no-release' }}
-      run: scripts/make-debian-package $RELEASE_FLAG ${{ matrix.target }}
-        # this script sets the output `deb`
-    - name: Upload deb artifact to CI result
-      if: ${{ matrix.build_deb }}
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-      with:
-        name: ${{ env.DEB_ARTIFACT }}
-        path: ${{ steps.deb.outputs.deb }}
+      - name: Generate CycloneDX SBOM
+        run: cargo cyclonedx --target ${{ matrix.target }}
+      - name: Build binary package
+        uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c # v1.27.0
+        id: build-binary
+        with:
+          bin: qcp
+          dry-run: true
+          dry-run-intended: true
+          ref: refs/tags/dry-run # silence a warning
+          token: ${{ secrets.GITHUB_TOKEN }} # Needs write permission on release
+          target: ${{ matrix.target }}
+          include: "\
+            README.md,LICENSE,CHANGELOG.md,\
+            qcp/qcp.cdx.xml,\
+            qcp/misc/qcp.conf,\
+            qcp/misc/qcp_sshd.conf,\
+            qcp/misc/qcp.1,qcp/misc/qcp_config.5\
+            ${{ matrix.pack_extra }}"
+          # NOTE: No trailing comma before pack_extra
+          # (Not all platforms have any pack_extra files)
+          leading-dir: true
+          locked: true
+          tar: ${{ env.PACKAGE_TAR }}
+          zip: ${{ env.PACKAGE_ZIP }}
+      - name: Upload binary package to CI result
+        # always try to do this, it allows the package to be checked
+        if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.BINARY_ARTIFACT }}
+          path: ${{ steps.build-binary.outputs.archive }}.${{ env.PACKAGE_ZIP == 'all' && 'zip' || 'tar.gz' }}
+      - name: Run tests
+        run: cargo test --locked
+      - name: Make deb package
+        id: deb
+        if: ${{ matrix.build_deb }}
+        env:
+          # Compute the flag to pass to the script
+          RELEASE_FLAG: ${{ inputs.release && '--release' || '--no-release' }}
+        run:
+          scripts/make-debian-package $RELEASE_FLAG ${{ matrix.target }}
+          # this script sets the output `deb`
+      - name: Upload deb artifact to CI result
+        if: ${{ matrix.build_deb }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.DEB_ARTIFACT }}
+          path: ${{ steps.deb.outputs.deb }}
