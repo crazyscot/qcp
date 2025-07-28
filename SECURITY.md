@@ -4,11 +4,11 @@
 
 This project is currently in an experimental phase, signified by major version number `0`.
 
-|  Versions  | Supported                   |
-| :--------: | --------------------------- |
-| 0.4.x      | :white_check_mark: Active   |
-| 0.3.x      | Sunset                      |
-| < 0.3      | :x:  No longer maintained   |
+| Versions | Supported                 |
+| :------: | ------------------------- |
+|  0.4.x   | :white_check_mark: Active |
+|  0.3.x   | Sunset                    |
+|  < 0.3   | :x: No longer maintained  |
 
 ## Reporting a Vulnerability
 
@@ -19,13 +19,13 @@ PGP/GPG encryption to this mailbox is accepted, using keys with fingerprint [002
 
 Please include the requested information listed below (as much as you can provide) to help us better understand the nature and scope of the possible issue:
 
-  * Type of issue (e.g. buffer overflow, information leakage, cryptographic attack)
-  * Full paths of source file(s) related to the manifestation of the issue
-  * The location of the affected source code (tag/branch/commit or direct URL)
-  * Any special configuration required to reproduce the issue
-  * Step-by-step instructions to reproduce the issue
-  * Proof-of-concept or exploit code (if possible)
-  * Impact of the issue, including how an attacker might exploit the issue
+- Type of issue (e.g. buffer overflow, information leakage, cryptographic attack)
+- Full paths of source file(s) related to the manifestation of the issue
+- The location of the affected source code (tag/branch/commit or direct URL)
+- Any special configuration required to reproduce the issue
+- Step-by-step instructions to reproduce the issue
+- Proof-of-concept or exploit code (if possible)
+- Impact of the issue, including how an attacker might exploit the issue
 
 We will acknowledge reports ASAP. However, this is a spare-time project, so we cannot guarantee a timescale for a detailed response.
 
