@@ -20,6 +20,8 @@ rustls-log = ["quinn/rustls-log"]
 ## This protects against various heap vulnerabilities, though comes at a performance cost.
 ## Extremely high bandwidth environments may wish to experiment with this for performance.
 secure-alloc = ["mimalloc/secure"]
+## Builds test helpers. This is intended only for use by qcp-unsafe-tests.
+unstable-test-helpers = []
 
 [dependencies]
 anstream = { workspace = true }
@@ -42,6 +44,7 @@ derive_more = { version = "2.0.1", features = [
 ] }
 dirs = "6.0.0"
 document-features = "0.2.11"
+either = "1.15.0"
 engineering-repr = { version = "1.1.0", features = ["serde"] }
 figment = { version = "0.10.19", features = ["env"] }
 futures-util = { version = "0.3.31", default-features = false }
@@ -72,15 +75,7 @@ strum = { version = "0.27.2", features = ["derive"] }
 strum_macros = "0.27.2"
 tabled = "0.20.0"
 thiserror = "2.0.12"
-tokio = { version = "1.47.0", default-features = true, features = [
-    "fs",
-    "io-std",
-    "macros",
-    "process",
-    "rt",
-    "time",
-    "sync",
-] }
+tokio = { workspace = true }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "chrono"] }
 wildmatch = "2.4.0"
@@ -88,7 +83,6 @@ wildmatch = "2.4.0"
 [dev-dependencies]
 assertables = "9.8.1"
 clap_mangen = "0.2.29"
-either = "1.15.0"
 json = "0.12.4"
 littertray = { workspace = true, features = ["async"] }
 mockall = "0.13.1"

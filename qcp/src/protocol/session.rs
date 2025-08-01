@@ -120,6 +120,31 @@ impl Status {
     }
 }
 
+// ergonomic convenience
+impl From<anyhow::Error> for Status {
+    fn from(e: anyhow::Error) -> Self {
+        if let Some(st) = e.downcast_ref::<Status>() {
+            return *st;
+        }
+        if let Some(r) = e.downcast_ref::<Response>() {
+            let s = r.status();
+            if let Ok(st) = Status::try_from(s) {
+                return st;
+            }
+            // this is test code, it's OK to panic
+            panic!("Unknown status code {}", s.0)
+        }
+        panic!("Expected a Status or a Response");
+    }
+}
+
+// ergonomic convenience
+impl<R: std::fmt::Debug> From<anyhow::Result<R>> for Status {
+    fn from(r: anyhow::Result<R>) -> Self {
+        Self::from(r.unwrap_err())
+    }
+}
+
 impl PartialEq<Uint> for Status {
     fn eq(&self, other: &Uint) -> bool {
         *self as u64 == other.0

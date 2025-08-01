@@ -126,7 +126,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         meter.stop().await;
 
         let response = Response::from_reader_async_framed(&mut self.stream.recv).await?;
-        let Response::V1(response) = response;
+        #[allow(irrefutable_let_patterns)]
+        let Response::V1(response) = response else {
+            todo!()
+        };
         if response.status != Status::Ok {
             anyhow::bail!(format!(
                 "PUT ({src_filename}) failed on completion check: {response}"
@@ -180,7 +183,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         };
 
         let header = FileHeader::from_reader_async_framed(&mut self.stream.recv).await?;
-        let FileHeader::V1(header) = header;
+        #[allow(irrefutable_let_patterns)]
+        let FileHeader::V1(header) = header else {
+            todo!()
+        };
 
         debug!("PUT {} -> {destination}", &header.filename);
         if append_filename {
@@ -247,10 +253,13 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use crate::{
+        Configuration,
         client::CopyJobSpec,
-        protocol::session::{Command, Status},
-        session::{CommandStats, Put, test::*},
-        util::test_protocol::test_plumbing,
+        protocol::{
+            session::{Command, Status},
+            test_helpers::{new_test_plumbing, read_from_stream},
+        },
+        session::{CommandStats, Put},
     };
     use littertray::LitterTray;
 
@@ -265,15 +274,22 @@ mod test {
         file2: &str,
         sender_bails: bool,
     ) -> Result<(Result<CommandStats>, Result<()>)> {
-        let (pipe1, mut pipe2) = test_plumbing();
+        let (pipe1, mut pipe2) = new_test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2).unwrap();
         let mut sender = Put::boxed(pipe1, None);
-        let mut sender_fut = sender.send_test(&spec, None);
+        let sender_fut = sender.send(
+            &spec,
+            indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
+            indicatif::ProgressBar::hidden(),
+            Configuration::system_default(),
+            true,
+        );
+        tokio::pin!(sender_fut);
 
         // The first difference between Get and Put is that in the error cases for Put, the sending future
         // might finish quickly with an error.
         // (Put sender does not currently return error codes. One day...)
-        let result = read_from_plumbing(&mut pipe2.recv, &mut sender_fut).await;
+        let result = read_from_stream(&mut pipe2.recv, &mut sender_fut).await;
         if sender_bails {
             let e = result.expect_right("sender should have completed early");
             anyhow::ensure!(e.is_err(), "sender should have bailed");
@@ -452,7 +468,7 @@ mod test {
 
     #[tokio::test]
     async fn logic_error_trap() {
-        let (_pipe1, pipe2) = test_plumbing();
+        let (_pipe1, pipe2) = new_test_plumbing();
         assert!(Put::boxed(pipe2, None).handle().await.is_err());
     }
 }

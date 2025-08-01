@@ -1,10 +1,24 @@
-## Prerequisites
+## Development notes
+
+### rust-analyzer (VS Code) issues
+
+The rust-analyzer plugin for Visual Studio Code comes bundled with a specific version of rust-analyzer.
+
+As this project has an older MSRV, sometimes the newer analyzer doesn't quite work properly.
+
+Therefore we set an explicit local path to rust-analyzer in `.vscode/settings.json`. To make this work, you will need to install it for your toolchain:
+
+    rustup component add rust-analyzer
+
+## Releases
+
+### Prerequisites
 
 - `git config tag.gpgsign true`
 - Consider setting this `--global`
 - Consider also `git config commit.gpgsign true`
 
-## Creating a release
+### Creating a release
 
 - Check and update dependencies as required.
 - Confirm top-level docs have been updated for any changes since the last release.
@@ -37,7 +51,7 @@
     - Pre-compute the release hash (v0.3.0 is the release in this example) and replace the `fetchFromGithub.hash` value to the output SRI: `nix hash to-sri --type sha256 "$(nix-prefetch-url --unpack 'https://github.com/crazyscot/qcp/archive/v0.3.0.tar.gz')"`.
     - Run a test build with previous hashes or `lib.fakeHash` set for `cargoHash` and place the expected hash in place.
 
-## Adding sub-crates
+### Adding sub-crates
 
 If you add a new crate that should not be published to crates.io, ensure it's marked
 as `release = false` in release-plz.toml.

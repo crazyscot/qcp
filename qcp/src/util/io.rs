@@ -44,7 +44,6 @@ pub(crate) async fn create_truncate_file(
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
-    #![allow(dead_code)]
     use std::path::PathBuf;
 
     use super::create_truncate_file;

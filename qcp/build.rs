@@ -44,6 +44,19 @@ fn main() {
             cross_target_mingw: { all (target_os = "windows", target_env = "gnu") }
         }
     }
+    //dump_build_env();
+}
+
+#[allow(dead_code)] // Used for debugging config issues
+fn dump_build_env() {
+    for (key, value) in std::env::vars() {
+        if key.starts_with("CARGO_CFG_") {
+            println!("{key}: {value:?}");
+        }
+    }
+    // This panic! is used to ensure Cargo prints the output
+    // of the build script to the console.
+    panic!("build script output above");
 }
 
 fn process_version_string() {
