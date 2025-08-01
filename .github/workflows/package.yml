@@ -17,6 +17,7 @@ env:
 jobs:
   package:
     strategy:
+      fail-fast: false # useful for testing
       matrix:
         include:
           - build: linux-x86_64-musl
