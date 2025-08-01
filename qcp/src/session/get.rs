@@ -61,7 +61,11 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
 
         let header = FileHeader::from_reader_async_framed(&mut self.stream.recv).await?;
         trace!("{header:?}");
-        let FileHeader::V1(header) = header;
+
+        #[allow(irrefutable_let_patterns)]
+        let FileHeader::V1(header) = header else {
+            todo!()
+        };
 
         let mut file = crate::util::io::create_truncate_file(dest, &header).await?;
 
@@ -153,22 +157,32 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use crate::{
+        Configuration,
         client::CopyJobSpec,
-        protocol::session::{Command, Status},
-        session::{CommandStats, Get, test::*},
-        util::test_protocol::test_plumbing,
+        protocol::{
+            session::{Command, Status},
+            test_helpers::{new_test_plumbing, read_from_stream},
+        },
+        session::{CommandStats, Get},
     };
     use either::Left;
     use littertray::LitterTray;
 
     /// Run a GET to completion, return the results from sender & receiver.
     async fn test_get_main(file1: &str, file2: &str) -> Result<(Result<CommandStats>, Result<()>)> {
-        let (pipe1, mut pipe2) = test_plumbing();
+        let (pipe1, mut pipe2) = new_test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2).unwrap();
         let mut sender = Get::boxed(pipe1, None);
-        let mut fut = sender.send_test(&spec, None);
+        let fut = sender.send(
+            &spec,
+            indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
+            indicatif::ProgressBar::hidden(),
+            Configuration::system_default(),
+            true,
+        );
+        tokio::pin!(fut);
 
-        let Left(result) = read_from_plumbing(&mut pipe2.recv, &mut fut).await else {
+        let Left(result) = read_from_stream(&mut pipe2.recv, &mut fut).await else {
             bail!("Get sender should not have bailed")
         };
         let Command::Get(args) = result? else {
@@ -240,7 +254,7 @@ mod test {
 
     #[tokio::test]
     async fn logic_error_trap() {
-        let (_pipe1, pipe2) = test_plumbing();
+        let (_pipe1, pipe2) = new_test_plumbing();
         assert!(Get::boxed(pipe2, None).handle().await.is_err());
     }
 }

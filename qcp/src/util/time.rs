@@ -90,14 +90,6 @@ pub(crate) struct StopwatchChain {
 }
 
 impl StopwatchChain {
-    /// Convenience method: constructs and starts a stopwatch chain
-    #[must_use]
-    #[allow(dead_code)]
-    pub(crate) fn new_running(name: &str) -> Self {
-        let mut r = Self::default();
-        r.next(name);
-        r
-    }
     /// Stops the current stopwatch (if there is one), adds a new stopwatch to the chain and starts it.
     pub(crate) fn next(&mut self, name: &str) {
         let new1 = match self.watches.last_mut() {
@@ -190,11 +182,5 @@ mod tests {
         c.next("a");
         c.stop();
         c.next("b");
-    }
-
-    #[test]
-    fn new_running() {
-        let c = StopwatchChain::new_running("timer1");
-        assert!(c.find("timer1").is_some());
     }
 }

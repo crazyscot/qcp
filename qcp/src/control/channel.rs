@@ -505,8 +505,9 @@ mod test {
                 SendingStream,
             },
             control::{ClosedownReportV1, ConnectionType, OLD_BANNER, ServerMessageV1},
+            test_helpers::new_test_plumbing,
         },
-        util::{Credentials, PortRange, TimeFormat, test_protocol::test_plumbing},
+        util::{Credentials, PortRange, TimeFormat},
     };
     use anyhow::Result;
     use pretty_assertions::assert_eq;
@@ -564,7 +565,7 @@ mod test {
     // Don't run this test on such cross builds for now.
     #[tokio::test]
     async fn happy_path() {
-        let (pipe1, pipe2) = test_plumbing();
+        let (pipe1, pipe2) = new_test_plumbing();
 
         let mut cli = TestClient::new(pipe1);
         cli.params.remote_config = true;
@@ -588,7 +589,7 @@ mod test {
 
     #[tokio::test]
     async fn old_banner() {
-        let (pipe1, mut pipe2) = test_plumbing();
+        let (pipe1, mut pipe2) = new_test_plumbing();
         let mut cli = TestClient::new(pipe1);
         let cli_fut = cli.go();
         pipe2.send.write_all(OLD_BANNER.as_bytes()).await.unwrap();
@@ -601,7 +602,7 @@ mod test {
 
     #[tokio::test]
     async fn banner_junk() {
-        let (pipe1, mut pipe2) = test_plumbing();
+        let (pipe1, mut pipe2) = new_test_plumbing();
         let mut cli = TestClient::new(pipe1);
         let cli_fut = cli.go();
         pipe2
@@ -623,7 +624,7 @@ mod test {
 
     #[tokio::test]
     async fn negotiation_fails() {
-        let (pipe1, pipe2) = test_plumbing();
+        let (pipe1, pipe2) = new_test_plumbing();
 
         let mut cli = TestClient::with_prefs(pipe1, |mgr| {
             mgr.merge_provider(fake_cli_with_port(11111, 11111));
@@ -643,7 +644,7 @@ mod test {
 
     #[tokio::test]
     async fn client_message_junk() {
-        let (mut pipe1, pipe2) = test_plumbing();
+        let (mut pipe1, pipe2) = new_test_plumbing();
 
         let mut server = ControlChannel::new(pipe2);
         let fut = server.server_read_client_message();
@@ -659,7 +660,7 @@ mod test {
 
     #[tokio::test]
     async fn client_message_illegal() {
-        let (mut pipe1, pipe2) = test_plumbing();
+        let (mut pipe1, pipe2) = new_test_plumbing();
 
         let mut server = ControlChannel::new(pipe2);
         let fut = server.server_read_client_message();
@@ -697,7 +698,7 @@ mod test {
                 .await?;
             cli.client.client_read_server_message().await
         }
-        let (pipe1, pipe2) = test_plumbing();
+        let (pipe1, pipe2) = new_test_plumbing();
 
         let mut cli = TestClient::new(pipe1);
 

@@ -111,3 +111,7 @@ pub mod common;
 pub mod compat;
 pub mod control;
 pub mod session;
+
+#[cfg(any(test, feature = "unstable-test-helpers"))]
+#[cfg_attr(coverage_nightly, coverage(off))]
+pub(crate) mod test_helpers;

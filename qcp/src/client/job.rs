@@ -113,7 +113,7 @@ impl CopyJobSpec {
         })
     }
 
-    #[cfg(test)]
+    #[allow(dead_code)] // used by tests and qcp-unsafe-tests
     pub(crate) fn from_parts(source: &str, destination: &str) -> anyhow::Result<Self> {
         let source = FileSpec::from_str(source)?;
         let destination = FileSpec::from_str(destination)?;

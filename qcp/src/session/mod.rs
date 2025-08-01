@@ -6,11 +6,11 @@ mod common;
 mod get;
 mod put;
 
-#[cfg(test)]
-#[cfg_attr(coverage_nightly, coverage(off))]
-mod test;
-
 pub(crate) use {get::Get, put::Put};
+
+#[cfg(feature = "unstable-test-helpers")]
+#[allow(unused_imports)] // Selectively exported by qcp::test_helpers
+pub(crate) use get::test_shared;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -19,8 +19,11 @@ use indicatif::{MultiProgress, ProgressBar};
 use crate::{client::CopyJobSpec, config::Configuration};
 
 #[derive(Debug, Default, Copy, Clone)]
+/// Internal statistics for a completed command
 pub(crate) struct CommandStats {
+    /// Total number of payload bytes sent
     pub payload_bytes: u64,
+    /// Peak transfer rate observed (in bytes per second); this is not terribly accurate at the moment, particularly on PUT commands
     pub peak_transfer_rate: u64,
 }
 
@@ -53,24 +56,4 @@ pub(crate) trait SessionCommandImpl: Send {
     ///
     /// If the command has arguments, the object constructor is expected to set them up.
     async fn handle(&mut self) -> Result<()>;
-
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    #[cfg(test)]
-    /// Syntactic sugar for unit tests.
-    /// This is a wrapper to send() with some fixed arguments common to testing.
-    async fn send_test(
-        &mut self,
-        spec: &CopyJobSpec,
-        config: Option<&Configuration>,
-    ) -> Result<CommandStats> {
-        let config = config.unwrap_or_else(|| Configuration::system_default());
-        self.send(
-            spec,
-            indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
-            indicatif::ProgressBar::hidden(),
-            config,
-            true,
-        )
-        .await
-    }
 }

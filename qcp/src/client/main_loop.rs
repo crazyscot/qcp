@@ -407,8 +407,8 @@ mod test {
         protocol::{
             common::ProtocolMessage as _,
             control::{ClosedownReport, ClosedownReportV1},
+            test_helpers::new_test_plumbing,
         },
-        util::test_protocol::test_plumbing,
     };
 
     fn make_uut<F: FnOnce(&mut Manager, &mut Parameters)>(f: F, src: &str, dest: &str) -> Client {
@@ -501,7 +501,7 @@ mod test {
         let mut uut = make_uut(|_, _| (), "127.0.0.1:file", "outfile");
         let working = Configuration_Optional::default();
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
-        let mut plumbing = test_plumbing();
+        let mut plumbing = new_test_plumbing();
 
         let manage_fut = uut.manage_request(
             plumbing.0,
@@ -550,7 +550,7 @@ mod test {
         let mut uut = make_uut(|_, _| (), "/tmp/file", "127.0.0.1:file");
         let working = Configuration_Optional::default();
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
-        let mut plumbing = test_plumbing();
+        let mut plumbing = new_test_plumbing();
         plumbing.1.send.shutdown().await.unwrap(); // this causes the handler to error out
 
         let manage_fut = uut.manage_request(
