@@ -402,13 +402,9 @@ mod test {
 
     use crate::{
         Configuration, FileSpec, Parameters,
-        client::main_loop::{Client, QcpConnection},
+        client::main_loop::Client,
         config::{Configuration_Optional, Manager},
-        protocol::{
-            common::ProtocolMessage as _,
-            control::{ClosedownReport, ClosedownReportV1},
-            test_helpers::new_test_plumbing,
-        },
+        protocol::{common::ProtocolMessage as _, test_helpers::new_test_plumbing},
     };
 
     fn make_uut<F: FnOnce(&mut Manager, &mut Parameters)>(f: F, src: &str, dest: &str) -> Client {
@@ -454,7 +450,9 @@ mod test {
     #[cfg_attr(target_os = "macos", ignore)]
     #[tokio::test]
     async fn endpoint_create_close() {
+        use crate::client::main_loop::QcpConnection;
         use crate::protocol::control::Compatibility;
+        use crate::protocol::control::{ClosedownReport, ClosedownReportV1};
 
         let mut uut = make_uut(|_, _| (), "127.0.0.1:file", LOCAL_FILE);
         let working = Configuration_Optional::default();
