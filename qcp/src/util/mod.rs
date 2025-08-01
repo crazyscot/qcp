@@ -33,9 +33,5 @@ pub use port_range::PortRange;
 mod optionalify;
 pub use optionalify::{derive_deftly_template_Optionalify, insert_if_some};
 
-#[cfg(test)]
-#[cfg_attr(coverage_nightly, coverage(off))]
-pub(crate) mod test_protocol;
-
 mod vec_or_string;
 pub use vec_or_string::VecOrString;
