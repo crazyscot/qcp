@@ -111,6 +111,8 @@ pub mod common;
 pub mod compat;
 pub mod control;
 pub mod session;
+mod variant;
+pub use variant::{Variant, VariantConversionFailed, VariantList, VariantMap};
 
 #[cfg(any(test, feature = "unstable-test-helpers"))]
 #[cfg_attr(coverage_nightly, coverage(off))]
