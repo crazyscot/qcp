@@ -44,6 +44,7 @@ derive_more = { version = "2.0.1", features = [
 ] }
 dirs = "6.0.0"
 document-features = "0.2.11"
+dtype_variant = "=0.0.14"
 either = "1.15.0"
 engineering-repr = { version = "1.1.0", features = ["serde"] }
 figment = { version = "0.10.19", features = ["env"] }
@@ -51,6 +52,7 @@ futures-util = { version = "0.3.31", default-features = false }
 gethostname = "1.0.2"
 glob = "0.3.2"
 heck = "0.5.0"
+hex = "0.4.3"
 homedir = "=0.3.4"
 human-repr = "1.1.0"
 indicatif = { version = "0.18.0", features = ["tokio"] }
@@ -58,6 +60,7 @@ lessify = "0.5.0"
 mimalloc = "0.1.47"
 num-format = { version = "0.4.4" }
 num-traits = "0.2.19"
+paste = "1.0.15"
 quinn = { version = "0.11.8", default-features = false, features = [
     "runtime-tokio",
     "rustls",
