@@ -3,10 +3,26 @@
 
 use std::{
     cmp::max,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use human_repr::HumanDuration;
+
+/// Extension trait for std::time::SystemTime
+pub(crate) trait SystemTimeExt {
+    fn from_unix(t: u64) -> Self;
+    fn to_unix(self) -> u64;
+}
+
+impl SystemTimeExt for SystemTime {
+    fn from_unix(t: u64) -> Self {
+        UNIX_EPOCH + Duration::from_secs(t)
+    }
+    fn to_unix(self) -> u64 {
+        self.duration_since(UNIX_EPOCH)
+            .map_or_else(|_| 0, |d| d.as_secs())
+    }
+}
 
 #[derive(Debug, Default, Clone)]
 /// A simple named stopwatch.
@@ -128,6 +144,10 @@ impl std::fmt::Display for StopwatchChain {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
+    use std::time::SystemTime;
+
+    use crate::util::time::SystemTimeExt as _;
+
     use super::{Stopwatch, StopwatchChain};
     #[test]
     fn new_stopwatch_is_running() {
@@ -182,5 +202,12 @@ mod tests {
         c.next("a");
         c.stop();
         c.next("b");
+    }
+
+    #[test]
+    fn time_conversions() {
+        let st = SystemTime::from_unix(0);
+        assert_eq!(st, SystemTime::UNIX_EPOCH);
+        assert_eq!(st.to_unix(), 0);
     }
 }
