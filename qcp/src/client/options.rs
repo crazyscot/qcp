@@ -76,6 +76,10 @@ pub struct Parameters {
     #[arg(long, help_heading("Configuration"), display_order(0))]
     pub remote_config: bool,
 
+    /// Preserves file modification times and permissions as far as possible.
+    #[arg(short, long)]
+    pub preserve: bool,
+
     // JOB SPECIFICAION ====================================================================
     // (POSITIONAL ARGUMENTS!)
     /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
@@ -103,7 +107,7 @@ impl TryFrom<&Parameters> for CopyJobSpec {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
             .clone();
-        CopyJobSpec::try_new(source, destination)
+        CopyJobSpec::try_new(source, destination, args.preserve)
     }
 }
 

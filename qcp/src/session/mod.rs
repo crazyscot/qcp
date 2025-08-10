@@ -20,7 +20,8 @@ use crate::{client::CopyJobSpec, config::Configuration};
 
 #[derive(Debug, Default, Copy, Clone)]
 /// Internal statistics for a completed command
-pub(crate) struct CommandStats {
+#[allow(unreachable_pub)] // Selectively exported by qcp::test_helpers
+pub struct CommandStats {
     /// Total number of payload bytes sent
     pub payload_bytes: u64,
     /// Peak transfer rate observed (in bytes per second); this is not terribly accurate at the moment, particularly on PUT commands

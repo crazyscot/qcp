@@ -50,6 +50,10 @@ def_enum!(
         BASIC_PROTOCOL => Compatibility::Level(1),
         /// Support for the `NewReno` congestion control algorithm
         NEW_RENO => Compatibility::Level(2),
+        /// Support for preserving file metadata
+        PRESERVE => Compatibility::Level(2),
+        /// Get2 command
+        FILEHEADER2_FILETRAILER2_GET2_PUT2 => Compatibility::Level(2),
     }
 );
 

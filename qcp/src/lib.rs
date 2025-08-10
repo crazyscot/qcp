@@ -136,3 +136,12 @@ mod version;
 pub use derive_deftly;
 // Use the current version of derive_deftly here:
 derive_deftly::template_export_semver_check!("0.14.0");
+
+/// Helper functions and structs exported for qcp-unsafe-tests.
+///
+/// **This module should be regarded as unstable and subject to modification without notice**.
+/// By keeping unsafe tests in a separate crate, we can forbid unsafe_code in qcp proper.
+#[cfg(feature = "unstable-test-helpers")]
+pub mod test_helpers {
+    pub use crate::session::test_shared::test_getx_main;
+}
