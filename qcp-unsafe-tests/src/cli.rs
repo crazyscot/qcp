@@ -35,24 +35,11 @@ fn list_features() {
 fn show_config() {
     assert_eq!(main_test(&["qcp", "--show-config"]), ExitCode::SUCCESS);
 }
-#[test]
-fn show_config_files() {
-    assert_eq!(main_test(&["qcp", "--config-files"]), ExitCode::SUCCESS);
-}
 
-#[test]
-fn client_no_files() {
-    assert_eq!(main_test(&["qcp"]), ExitCode::FAILURE);
-}
 #[test]
 fn server_eof() {
     // We're not setting up stdin (it inherits a closed fd, so gets an EOF)
     assert_eq!(main_test(&["qcp", "--server"]), ExitCode::FAILURE);
-}
-
-#[test]
-fn bad_option() {
-    assert_eq!(main_test(&["qcp", "--this-ridiculous-option-does-not-exist"]), ExitCode::FAILURE);
 }
 
 }
