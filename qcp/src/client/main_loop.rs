@@ -23,7 +23,7 @@ use crate::{
 use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use quinn::Endpoint;
+use quinn::{Connection as QuinnConnection, Endpoint};
 use std::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use tokio::{
     self,
@@ -79,6 +79,7 @@ struct QcpConnection {
     ssh_client: ProcessWrapper,
     control: ControlChannelType,
     endpoint: Option<Endpoint>,
+    server_message: ServerMessageV1,
 }
 
 impl TryFrom<ProcessWrapper> for QcpConnection {
@@ -88,6 +89,7 @@ impl TryFrom<ProcessWrapper> for QcpConnection {
         Ok(Self {
             ssh_client: client,
             control,
+            server_message: ServerMessageV1::default(),
             endpoint: None,
         })
     }
@@ -120,7 +122,6 @@ impl Client {
     /// `true` if the requested operation succeeded.
     ///
     // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
-    #[allow(clippy::too_many_lines)] // TODO
     pub(crate) async fn run(&mut self) -> anyhow::Result<bool> {
         self.timers.next("Setup");
 
@@ -145,40 +146,10 @@ impl Client {
         };
 
         // Control channel ---------------
-        self.spinner.set_message("Opening control channel");
-        self.spinner.disable_steady_tick(); // otherwise the spinner messes with ssh passphrase prompting; as we're using tokio spinner.suspend() isn't helpful
-        self.timers.next("control channel");
-
-        let ssh_client = create(
-            &self.display,
-            &working_config,
-            &self.parameters,
-            prep_result.job_spec.remote_host(),
-            prep_result.remote_address.into(),
-        )?;
-        let mut qcp_conn = QcpConnection::try_from(ssh_client)?;
-
-        let server_message = qcp_conn
-            .control
-            .run_client(
-                &self.credentials,
-                prep_result.remote_address.into(),
-                &mut self.manager,
-                &self.parameters,
-            )
-            .await?;
-
-        let config = self
-            .manager
-            .get::<Configuration>()
-            .context("assembling final client configuration from server message")?;
-
-        // Are any warnings necessary?
-        if prep_result.job_spec.preserve
-            && !qcp_conn.control.selected_compat.supports(Feature::PRESERVE)
-        {
-            warn!("--preserve requested, but remote does not support this option");
-        }
+        let (config, mut qcp_conn) = self
+            .establish_control_channel(&working_config, &prep_result)
+            .await
+            .context("establishing control channel")?;
 
         // Dry run mode ends here! -------
         if self.parameters.dry_run {
@@ -192,27 +163,9 @@ impl Client {
 
         // Data channel ------------------
 
-        let server_address_port = match prep_result.remote_address {
-            std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, server_message.port).into(),
-            std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
-        };
-
-        let endpoint = self.create_quic_endpoint(
-            &prep_result,
-            &config,
-            &server_message,
-            server_address_port,
-            qcp_conn.control.selected_compat,
-        )?;
-
-        debug!("Opening QUIC connection to {server_address_port:?}");
-        let connection = timeout(
-            config.timeout_duration(),
-            endpoint.connect(server_address_port, &server_message.name)?,
-        )
-        .await
-        .context("UDP connection to QUIC endpoint timed out")??;
-        qcp_conn.endpoint = Some(endpoint);
+        let connection = self
+            .establish_data_channel(&prep_result, &config, &mut qcp_conn)
+            .await?;
 
         // Show time! ---------------------
 
@@ -292,6 +245,79 @@ impl Client {
             remote_address,
             job_spec,
         })
+    }
+
+    async fn establish_control_channel(
+        &mut self,
+        working_config: &Configuration_Optional,
+        prep_result: &PrepResult,
+    ) -> anyhow::Result<(Configuration, QcpConnection)> {
+        self.spinner.set_message("Opening control channel");
+        self.spinner.disable_steady_tick(); // otherwise the spinner messes with ssh passphrase prompting; as we're using tokio spinner.suspend() isn't helpful
+        self.timers.next("control channel");
+
+        let ssh_client = create(
+            &self.display,
+            working_config,
+            &self.parameters,
+            prep_result.job_spec.remote_host(),
+            prep_result.remote_address.into(),
+        )?;
+        let mut qcp_conn = QcpConnection::try_from(ssh_client)?;
+
+        qcp_conn.server_message = qcp_conn
+            .control
+            .run_client(
+                &self.credentials,
+                prep_result.remote_address.into(),
+                &mut self.manager,
+                &self.parameters,
+            )
+            .await?;
+
+        let config = self
+            .manager
+            .get::<Configuration>()
+            .context("assembling final client configuration from server message")?;
+
+        // Are any warnings necessary?
+        if prep_result.job_spec.preserve
+            && !qcp_conn.control.selected_compat.supports(Feature::PRESERVE)
+        {
+            warn!("--preserve requested, but remote does not support this option");
+        }
+        Ok((config, qcp_conn))
+    }
+
+    async fn establish_data_channel(
+        &mut self,
+        prep_result: &PrepResult,
+        config: &Configuration,
+        qcp_conn: &mut QcpConnection,
+    ) -> anyhow::Result<QuinnConnection> {
+        let server_message = &qcp_conn.server_message;
+        let server_address_port = match prep_result.remote_address {
+            std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, server_message.port).into(),
+            std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
+        };
+
+        let endpoint = self.create_quic_endpoint(
+            prep_result,
+            config,
+            server_message,
+            server_address_port,
+            qcp_conn.control.selected_compat,
+        )?;
+
+        debug!("Opening QUIC connection to {server_address_port:?}");
+        let connection = timeout(
+            config.timeout_duration(),
+            endpoint.connect(server_address_port, &server_message.name)?,
+        )
+        .await
+        .context("UDP connection to QUIC endpoint timed out")??;
+        qcp_conn.endpoint = Some(endpoint);
+        Ok(connection)
     }
 
     fn create_quic_endpoint(
