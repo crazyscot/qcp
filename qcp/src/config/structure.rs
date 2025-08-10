@@ -283,7 +283,6 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
         long,
         help_heading("Connection"),
         group("ip address"),
-        //value_parser(clap::builder::EnumValueParser::<AddressFamily>::new().map(AddressFamily::from)),
         display_order(0)
     )]
     pub address_family: AddressFamily,
@@ -305,14 +304,15 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
         short = 'S',
         value_name("ssh-option"),
         allow_hyphen_values(true),
-        value_parser(clap::value_parser!(String)),
         display_order(0),
         help_heading("Connection"),
-        long_help(r"
+        long_help(
+            r"
 Provides an additional option or argument to pass to the ssh client. [default: none]
 
 On the command line, you must repeat `-S` for each argument.
-For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"),
+For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
+        )
     )]
     pub ssh_options: VecOrString,
 
@@ -364,7 +364,7 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"),
     ///
     /// This option is really intended to be used in a qcp configuration file.
     /// On the command line, you can repeat `--ssh-config file` as many times as needed.
-    #[arg(long, value_name("FILE"), help_heading("Connection"), display_order(0), value_parser(clap::value_parser!(String)))]
+    #[arg(long, value_name("FILE"), help_heading("Connection"), display_order(0))]
     pub ssh_config: VecOrString,
 
     /// Ssh subsystem mode
