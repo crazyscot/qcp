@@ -8,7 +8,9 @@ use crate::{
     control::{ControlChannel, create, create_endpoint},
     protocol::{
         common::{ReceivingStream, SendReceivePair, SendingStream},
+        compat::Feature,
         control::{ClosedownReportV1, Compatibility, ServerMessageV1},
+        session::{CommandParam, Get2Args},
     },
     session::CommandStats,
     util::{
@@ -118,6 +120,7 @@ impl Client {
     /// `true` if the requested operation succeeded.
     ///
     // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
+    #[allow(clippy::too_many_lines)] // TODO
     pub(crate) async fn run(&mut self) -> anyhow::Result<bool> {
         self.timers.next("Setup");
 
@@ -170,6 +173,13 @@ impl Client {
             .get::<Configuration>()
             .context("assembling final client configuration from server message")?;
 
+        // Are any warnings necessary?
+        if prep_result.job_spec.preserve
+            && !qcp_conn.control.selected_compat.supports(Feature::PRESERVE)
+        {
+            warn!("--preserve requested, but remote does not support this option");
+        }
+
         // Dry run mode ends here! -------
         if self.parameters.dry_run {
             info!("Dry run mode selected, not connecting to data channel");
@@ -216,6 +226,7 @@ impl Client {
                 prep_result.job_spec,
                 &config,
                 self.parameters.quiet,
+                qcp_conn.control.selected_compat,
             )
             .await;
 
@@ -348,6 +359,7 @@ impl Client {
         copy_spec: CopyJobSpec,
         config: &Configuration,
         quiet: bool,
+        compat: Compatibility,
     ) -> RequestResult
     where
         S: SendingStream + 'static,
@@ -359,14 +371,18 @@ impl Client {
         let spinner = self.spinner.clone();
 
         let (mut handler, span) = if copy_spec.source.user_at_host.is_some() {
+            let mut args = Get2Args::default();
+            if copy_spec.preserve {
+                args.options.push(CommandParam::PreserveMetadata.into());
+            }
             (
-                session::Get::boxed(stream_pair, None),
-                trace_span!("GET", filename = copy_spec.source.filename.clone()),
+                session::Get::boxed(stream_pair, Some(args), compat),
+                trace_span!("GETx", filename = copy_spec.source.filename.clone()),
             )
         } else {
             (
-                session::Put::boxed(stream_pair, None),
-                trace_span!("PUT", filename = copy_spec.source.filename.clone()),
+                session::Put::boxed(stream_pair, None, compat),
+                trace_span!("PUTx", filename = copy_spec.source.filename.clone()),
             )
         };
         let result = handler
@@ -506,6 +522,7 @@ mod test {
             prep_result.job_spec.clone(),
             Configuration::system_default(),
             false,
+            crate::protocol::control::Compatibility::Level(1),
         );
 
         // We are not really testing the protocol here, that is done in get.rs / put.rs.
@@ -556,6 +573,7 @@ mod test {
             prep_result.job_spec.clone(),
             Configuration::system_default(),
             false,
+            crate::protocol::control::Compatibility::Level(1),
         );
         let r = manage_fut.await;
         println!("Result: {r:?}");

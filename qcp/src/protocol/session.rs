@@ -55,15 +55,26 @@
 //! [quic]: https://quicwg.github.io/
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 
+use int_enum::IntEnum;
 use serde::{Deserialize, Serialize};
 use serde_bare::Uint;
-use std::fmt::Display;
+use tracing::debug;
+
+use std::{fmt::Display, fs::Metadata as FsMetadata, marker::PhantomData, time::SystemTime};
+
+use crate::{
+    protocol::{Variant, compat::Feature, control::Compatibility},
+    util::{FsMetadataExt as _, time::SystemTimeExt as _},
+};
 
 use super::common::ProtocolMessage;
 
 /// Machine-readable codes advising of the status of an operation.
 ///
 /// See also [`Status::to_string`] which copes correctly with unrecognised status values.
+///
+/// Note that this enum is serialized without serde_repr, so explicit discriminants cannot meaningfully be used.
+/// This also means that the ordering and meaning of existing items cannot be changed without breaking compatibility.
 #[derive(
     Serialize,
     Deserialize,
@@ -79,9 +90,6 @@ use super::common::ProtocolMessage;
 #[allow(missing_docs)]
 #[non_exhaustive]
 pub enum Status {
-    // Note that this enum is serialized without serde_repr, so explicit discriminants are not used on the wire.
-    // This also means that the ordering and meaning of existing items cannot be changed without breaking compatibility.
-    //
     // CAUTION: CompatibilityLevel 1 panics when unmarshalling statuses above 7
     Ok = 0,
     FileNotFound = 1,
@@ -157,18 +165,229 @@ impl PartialEq<Status> for Uint {
     }
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////
+// ADDITIONAL OPTIONS AND METADATA
+
+/// Marker trait for enums that can be used in [`TaggedData`].
+///
+/// These enums need:
+/// * to be declared with `#[repr(u64)]`
+/// * to implement [`Display`] (typically via [`strum_macros::Display`])
+pub trait DataTag: Into<u64> + TryFrom<u64> + ToString {
+    /// Create a new [`TaggedData`] instance with the given variant and data.
+    ///
+    /// If no data is required (the Variant is empty), you can also use `TaggedData::from(enum)`.
+    fn with_variant(self, data: Variant) -> TaggedData<Self>
+    where
+        Self: Sized,
+    {
+        TaggedData::new(self, data)
+    }
+
+    /// Renders [`Variant`] data for tag-specific debug.
+    ///
+    /// The default implementation calls directly to Debug. See [`DataTag::debug_data_inner`], which may be overridden for any special output (e.g. octal) that makes sense for the enum.
+    #[must_use]
+    fn debug_data(value: u64, data: &Variant) -> String {
+        Self::try_from(value).map_or_else(|_| format!("{data:?}"), |tag| tag.debug_data_inner(data))
+    }
+    /// Renders [`Variant`] data for tag-specific debug.
+    ///
+    /// The default implementation calls directly to Debug, but may be overridden for any special output (e.g. octal) that makes sense for the enum.
+    #[must_use]
+    fn debug_data_inner(&self, data: &Variant) -> String {
+        format!("{data:?}")
+    }
+}
+impl DataTag for CommandParam {}
+
+impl<E: DataTag> From<E> for TaggedData<E> {
+    fn from(value: E) -> Self {
+        TaggedData::new(value, Variant::Empty)
+    }
+}
+
+#[allow(dead_code)] // false positive
+fn last_component(tn: &'static str) -> &'static str {
+    tn.rsplit("::").next().unwrap_or(tn)
+}
+
+/// A tagging enum with its attached data.
+///
+/// To make an enum capable of being used in this struct, implement the [`DataTag`] trait and declare `#[repr(u64)]`.
+#[derive(Serialize, Deserialize, PartialEq, Clone, derive_more::Debug)]
+pub struct TaggedData<E: DataTag> {
+    /// Option tag
+    #[debug("{}::{}", last_component(std::any::type_name::<E>()),
+        E::try_from(tag.0).map_or_else(|_| format!("UNKNOWN_{}", tag.0), |f| f.to_string()))]
+    tag: Uint,
+    /// Option data
+    #[debug("{}", E::debug_data(tag.0, data))]
+    pub data: Variant,
+    #[debug(ignore)]
+    phantom: PhantomData<E>,
+}
+
+impl<E: DataTag> TaggedData<E> {
+    /// Standard constructor (but for better ergonomics, see [`DataTag::with_variant`])
+    #[must_use]
+    pub fn new(option: E, data: Variant) -> Self {
+        Self {
+            tag: Uint(option.into()),
+            data,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Accessor for the option tag.
+    /// In the event that the tag is unknown to enum `E` (i.e. from a newer protocol version), returns `None`.
+    #[must_use]
+    pub fn tag(&self) -> Option<E>
+    where
+        E: TryFrom<u64>,
+    {
+        E::try_from(self.tag.0).ok()
+    }
+
+    #[cfg(test)]
+    #[cfg_attr(coverage_nightly, coverage(off))]
+    /// Test constructor, allows struct to be constructed with an invalid tag
+    pub(crate) fn new_raw(opt: u64) -> Self {
+        Self {
+            tag: Uint(opt),
+            data: Variant::Empty,
+            phantom: PhantomData,
+        }
+    }
+}
+
+/// Options for commands which take [`Variant`] parameters. (These travel together, as [`TaggedData`].)
+///
+/// Options are generally only valid on certain commands.
+/// Refer to the documentation of the relevant command for details of which enum values are valid where.
+///
+/// Note that this enum is serialized without serde_repr for forwards compatibility.
+/// Therefore, explicit discriminants cannot meaningfully be used.
+/// This also means that the ordering and meaning of existing items cannot be changed without breaking compatibility.
+///
+/// Unknown enum members may be ignored or cause an error.
+///
+/// Introduced in qcp 0.5 with `VersionCompatibility=V2`.
+///
+#[derive(PartialEq, Eq, Debug, Clone, Copy, IntEnum, Default, strum_macros::Display)]
+#[repr(u64)]
+#[non_exhaustive]
+pub enum CommandParam {
+    /// Invalid option tag. Used for convenience, will not be seen on the wire.
+    #[default]
+    Invalid,
+
+    /// Preserve file metadata (modes, access and modification times) as far as possible.
+    ///
+    /// The associated [`Variant`] data is empty (ignored).
+    ///
+    /// Introduced in qcp 0.5 with `VersionCompatibility=V2`.
+    PreserveMetadata,
+}
+
+/// Extensible file metadata. These travel with a Variant, as [`TaggedData`].
+///
+/// Note that this enum is serialized without serde_repr, so explicit discriminants cannot meaningfully be used.
+/// This also means that the ordering and meaning of existing items cannot be changed without breaking compatibility.
+///
+/// Refer to the documentation of the containing struct for details of which enum values are valid where.
+#[derive(
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    Debug,
+    IntEnum,
+    Default,
+    strum_macros::Display,
+)]
+#[repr(u64)]
+#[non_exhaustive]
+pub enum MetadataAttr {
+    /// Invalid metadata tag. Used for convenience, will not be seen on the wire.
+    #[default]
+    Invalid,
+
+    /// Unix file mode bits to apply _before_ writing the file, as an integer. For example 0o644.
+    ///
+    /// Variant data is Unsigned.
+    ///
+    /// If `ModeBits` are not given, the file will be created using the process's umask.
+    ///
+    /// Introduced in qcp 0.5 with `VersionCompatibility=V2`.
+    ModeBits,
+    /// Access time to apply to the file, as a Unix timestamp. This may be a 64-bit quantity.
+    ///
+    /// Variant data is Unsigned.
+    ///
+    /// If not specified, the file will be created with the current time.
+    ///
+    /// Introduced in qcp 0.5 with `VersionCompatibility=V2`.
+    AccessTime,
+    /// Modification time to apply to the file, as a Unix timestamp. This may be a 64-bit quantity.
+    ///
+    /// Variant data is Unsigned.
+    ///
+    /// If not specified, the file will be created with the current time.
+    ///
+    /// Introduced in qcp 0.5 with `VersionCompatibility=V2`.
+    ModificationTime,
+}
+impl DataTag for MetadataAttr {
+    fn debug_data_inner(&self, data: &Variant) -> String {
+        match self {
+            MetadataAttr::ModeBits => match data {
+                Variant::Unsigned(mode) => format!("0{:0>3o}", mode.0), // Show octal mode bits
+                _ => format!("{data:?}"),
+            },
+            _ => format!("{data:?}"),
+        }
+    }
+}
+
+impl MetadataAttr {
+    /// Convenience constructor for Metadata::AccessTime
+    #[must_use]
+    pub fn new_atime(t: SystemTime) -> TaggedData<MetadataAttr> {
+        Self::AccessTime.with_variant(Variant::unsigned(t.to_unix()))
+    }
+    /// Convenience constructor for Metadata::Mode
+    #[must_use]
+    pub fn new_mode(m: u32) -> TaggedData<MetadataAttr> {
+        Self::ModeBits.with_variant(Variant::unsigned(m))
+    }
+    /// Convenience constructor for Metadata::SystemTime
+    #[must_use]
+    pub fn new_mtime(t: SystemTime) -> TaggedData<MetadataAttr> {
+        Self::ModificationTime.with_variant(Variant::unsigned(t.to_unix()))
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
 /// A command from client to server.
 ///
 /// The server must respond with a Response before anything else can happen on this connection.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, strum_macros::Display)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, strum_macros::Display)]
 pub enum Command {
     /// Retrieves a file. This may fail if the file does not exist or the user doesn't have read permission.
+    ///
+    /// This version does not support file metadata.
+    ///
     /// * Client ➡️ Server: `Get` command
     /// * S➡️C: [`Response`], [`FileHeader`], file data, [`FileTrailer`].
     /// * Client closes the stream after transfer.
     /// * If the client needs to abort transfer, it closes the stream.
     /// * If the server needs to abort transfer, it closes the stream.
     Get(GetArgs),
+
     /// Sends a file. This may fail for permissions or if the containing directory doesn't exist.
     /// * Client ➡️ Server: `Put` command
     /// * S➡️C: [`Response`] (to the command)
@@ -179,6 +398,33 @@ pub enum Command {
     ///
     /// If the server needs to abort the transfer, it may send a Response explaining why, then close the stream.
     Put(PutArgs),
+
+    /// Retrieves a file, with additional (extensible) options.
+    ///
+    /// This command was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+    ///
+    /// This may fail if the file does not exist or the user doesn't have read permission.
+    /// * Client ➡️ Server: `Get` command
+    /// * S➡️C: [`Response`], [`FileHeader`], file data, [`FileTrailer`].
+    /// * Client closes the stream after transfer.
+    /// * If the client needs to abort transfer, it closes the stream.
+    /// * If the server needs to abort transfer, it closes the stream.
+    Get2(Get2Args),
+
+    /// Sends a file, with additional (extensible) options.
+    ///
+    /// This command was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+    ///
+    ///  This may fail for permissions or if the containing directory doesn't exist.
+    /// * Client ➡️ Server: `Put` command
+    /// * S➡️C: [`Response`] (to the command)
+    /// * (if not OK - close stream or send another command)
+    /// * C➡️S: [`FileHeader`], file data, [`FileTrailer`]
+    /// * S➡️C: [`Response`] (showing transfer status)
+    /// * Then close the stream.
+    ///
+    /// If the server needs to abort the transfer, it may send a Response explaining why, then close the stream.
+    Put2(Put2Args),
 }
 impl ProtocolMessage for Command {}
 
@@ -189,11 +435,61 @@ pub struct GetArgs {
     pub filename: String,
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
+/// Arguments for the `GET2` command.
+/// This was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+pub struct Get2Args {
+    /// This is a file name only, without any directory components
+    pub filename: String,
+
+    /// Extended options for the GET command
+    ///
+    /// Supported options: [`CommandParam::PreserveMetadata`]
+    pub options: Vec<TaggedData<CommandParam>>,
+}
+impl From<GetArgs> for Get2Args {
+    fn from(v1: GetArgs) -> Self {
+        Self {
+            filename: v1.filename,
+            options: vec![],
+        }
+    }
+}
+impl Get2Args {
+    /// Retrieve a reference to the option data for the given tag, if it is present
+    pub(crate) fn option(&self, opt: CommandParam) -> Option<&Variant> {
+        self.options
+            .iter()
+            .find(|op| op.tag.0 == u64::from(opt))
+            .map(|td| &td.data)
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 /// Arguments for the `PUT` command
 pub struct PutArgs {
     /// This is a file name only, without any directory components
     pub filename: String,
+}
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
+/// Arguments for the `PUT2` command.
+/// This was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+pub struct Put2Args {
+    /// This is a file name only, without any directory components
+    pub filename: String,
+
+    /// Extended options for the PUT command
+    ///
+    /// Supported options: [`CommandParam::PreserveMetadata`]
+    pub options: Vec<TaggedData<CommandParam>>,
+}
+impl From<PutArgs> for Put2Args {
+    fn from(v1: PutArgs) -> Self {
+        Self {
+            filename: v1.filename,
+            options: vec![],
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, thiserror::Error)]
@@ -248,13 +544,18 @@ impl Display for ResponseV1 {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 /// File Header packet. Metadata sent before file data.
 ///
 /// This is an enum to provide for forward compatibility.
 pub enum FileHeader {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
     V1(FileHeaderV1),
+    /// This version was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+    V2(FileHeaderV2),
+}
+impl ProtocolMessage for FileHeader {
+    const WIRE_ENCODING_LIMIT: u32 = 65_536;
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
@@ -266,8 +567,26 @@ pub struct FileHeaderV1 {
     /// Name of the file. This is a filename only, without any directory component.
     pub filename: String,
 }
-impl ProtocolMessage for FileHeader {
-    const WIRE_ENCODING_LIMIT: u32 = 65_536;
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+/// Version 2 of [`FileHeader`]
+pub struct FileHeaderV2 {
+    /// Size of the data that follows.
+    /// This is a variable-length word.
+    pub size: Uint,
+    /// Name of the file. This is a filename only, without any directory component.
+    pub filename: String,
+
+    /// Additional metadata to apply to the file.
+    /// Valid keys are:
+    /// - Mode
+    ///   Note that the writing process needs to write to the file, so write permission
+    ///   is implicitly added. This can be fixed, if needed, by providing a Mode in the
+    ///   [`FileTrailer`].
+    ///
+    /// N.B. AccessTime and ModificationTime are not valid here. They can only be provided
+    /// in the [`FileTrailer`].
+    pub metadata: Vec<TaggedData<MetadataAttr>>,
 }
 
 impl FileHeader {
@@ -279,19 +598,99 @@ impl FileHeader {
             filename: filename.to_string(),
         })
     }
+    /// Convenience constructor
+    #[must_use]
+    pub fn new_v2(size: u64, filename: &str, metadata: Vec<TaggedData<MetadataAttr>>) -> Self {
+        FileHeader::V2(FileHeaderV2 {
+            size: Uint(size),
+            filename: filename.to_string(),
+            metadata,
+        })
+    }
+    pub(crate) fn for_file(
+        compat: Compatibility,
+        meta: &FsMetadata,
+        protocol_filename: &str,
+    ) -> Self {
+        if compat.supports(Feature::FILEHEADER2_FILETRAILER2_GET2_PUT2) {
+            debug!("Using v2 file header/trailer");
+            // Always send mode bits, try to get the permissions as close to correct as possible
+            let qcpmeta = meta.to_tagged_data(false);
+            debug!("Header metadata: {qcpmeta:?}");
+            FileHeader::new_v2(meta.len(), protocol_filename, qcpmeta)
+        } else {
+            debug!("Using v1 file header/trailer");
+            FileHeader::new_v1(meta.len(), protocol_filename)
+        }
+    }
+}
+impl From<FileHeaderV1> for FileHeaderV2 {
+    fn from(other: FileHeaderV1) -> Self {
+        Self {
+            size: other.size,
+            filename: other.filename,
+            metadata: vec![],
+        }
+    }
+}
+impl From<FileHeader> for FileHeaderV2 {
+    fn from(value: FileHeader) -> Self {
+        match value {
+            FileHeader::V2(hdr) => hdr,
+            FileHeader::V1(hdr) => hdr.into(),
+        }
+    }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[repr(u8)]
 /// File Trailer packet. Metadata sent after file data.
 ///
 /// This is an enum to provide for forward compatibility.
 pub enum FileTrailer {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
-    /// It has no contents. Future versions may introduce some sort of checksum.
-    V1 = 1,
+    /// It has no contents.
+    V1 = 0,
+    /// This version was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+    V2(FileTrailerV2),
 }
 impl ProtocolMessage for FileTrailer {
     const WIRE_ENCODING_LIMIT: u32 = 65_536;
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Default)]
+/// Version 2 of [`FileTrailer`]
+pub struct FileTrailerV2 {
+    /// Additional metadata to apply to the file.
+    /// Valid keys are:
+    /// - Mode
+    /// - AccessTime. If unspecified, the time will be set by the receiving OS.
+    /// - ModificationTime. If unspecified, the time will be set by the receiving OS.
+    pub metadata: Vec<TaggedData<MetadataAttr>>,
+}
+impl From<FileTrailer> for FileTrailerV2 {
+    fn from(value: FileTrailer) -> Self {
+        match value {
+            FileTrailer::V2(t) => t,
+            FileTrailer::V1 => FileTrailerV2::default(),
+        }
+    }
+}
+
+impl FileTrailer {
+    pub(crate) fn for_file(compat: Compatibility, meta: &FsMetadata, preserve: bool) -> Self {
+        if compat.supports(Feature::FILEHEADER2_FILETRAILER2_GET2_PUT2) {
+            let metadata = if preserve {
+                meta.to_tagged_data(true)
+            } else {
+                Vec::new()
+            };
+            debug!("Trailer metadata: {metadata:?}");
+            FileTrailer::V2(FileTrailerV2 { metadata })
+        } else {
+            FileTrailer::V1
+        }
+    }
 }
 
 #[cfg(test)]
@@ -302,8 +701,9 @@ mod test {
     use serde_bare::Uint;
 
     use crate::protocol::{
+        Variant,
         common::ProtocolMessage,
-        session::{FileHeader, FileTrailer},
+        session::{DataTag, FileHeader, FileTrailer, FileTrailerV2, MetadataAttr, TaggedData},
     };
 
     use super::{Command, FileHeaderV1, Response, ResponseV1, Status};
@@ -324,7 +724,7 @@ mod test {
     #[test]
     fn ctor() {
         let h = FileHeader::new_v1(42, "myfile");
-        let FileHeader::V1(h) = h;
+        let FileHeader::V1(h) = h else { panic!() };
         assert_eq!(h.size.0, 42);
         assert_eq!(h.filename, "myfile");
     }
@@ -407,6 +807,13 @@ mod test {
         let expected = b"\x00\xb9`\x06myfile".to_vec();
         assert_eq!(wire, expected);
     }
+    #[test]
+    fn wire_marshalling_file_header_v2() {
+        let head = FileHeader::new_v2(12345, "myfile", vec![MetadataAttr::new_mode(0o644)]);
+        let wire = head.to_vec().unwrap();
+        let expected = b"\x01\xb9`\x06myfile\x01\x01\x03\xa4\x03".to_vec();
+        assert_eq!(wire, expected);
+    }
 
     #[test]
     fn wire_marshalling_file_trailer_v1() {
@@ -414,6 +821,29 @@ mod test {
         let wire = trail.to_vec().unwrap();
         let expected = b"\x00".to_vec(); // V1 has no contents
         assert_eq!(wire, expected);
+
+        let mut buf = Vec::new();
+        trail.to_writer_framed(&mut buf).unwrap();
+        eprintln!("{buf:?}");
+        assert_eq!(buf.len(), 5);
+    }
+
+    #[test]
+    fn wire_marshalling_file_trailer_v2() {
+        let trail = FileTrailer::V2(FileTrailerV2 {
+            metadata: vec![
+                MetadataAttr::new_mode(0o644),
+                MetadataAttr::AccessTime.with_variant(1_700_000_000u64.into()),
+                MetadataAttr::ModificationTime.with_variant(42u64.into()),
+            ],
+        });
+        let wire = trail.to_vec().unwrap();
+        let expected = b"\x01\x03\x01\x03\xa4\x03\x02\x03\x80\xe2\xcf\xaa\x06\x03\x03*".to_vec();
+        assert_eq!(wire, expected);
+
+        let mut buf = Vec::new();
+        trail.to_writer_framed(&mut buf).unwrap();
+        eprintln!("{buf:?}");
     }
 
     #[test]
@@ -437,5 +867,21 @@ mod test {
     fn unknown_status_to_string() {
         let u = Uint(2u64.pow(63));
         assert_contains!(Status::to_string(u), "Unknown status code");
+    }
+
+    #[test]
+    fn metadata_debug_render() {
+        let t = MetadataAttr::ModeBits.with_variant(Variant::unsigned(0o644u32));
+        let s = format!("{t:?}");
+        eprintln!("case 1: {s}");
+        assert!(s.contains("MetadataAttr::ModeBits"));
+        assert!(s.contains("data: 0644"));
+
+        // Unknown enum reprs may arise from newer protocol versions
+        let t = TaggedData::<MetadataAttr>::new_raw(99999);
+        let s = format!("{t:?}");
+        eprintln!("case 2: {s}");
+        assert!(s.contains("MetadataAttr::UNKNOWN_99999"));
+        assert!(s.contains("data: Empty"));
     }
 }
