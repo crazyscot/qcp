@@ -93,11 +93,16 @@ pub struct CopyJobSpec {
     /// The `[user@]host` part of whichever of the source or destination contained one.
     /// (There can be only one.)
     pub(crate) user_at_host: String,
+    pub(crate) preserve: bool,
 }
 
 impl CopyJobSpec {
     /// standard constructor
-    pub(crate) fn try_new(source: FileSpec, destination: FileSpec) -> anyhow::Result<Self> {
+    pub(crate) fn try_new(
+        source: FileSpec,
+        destination: FileSpec,
+        preserve: bool,
+    ) -> anyhow::Result<Self> {
         if !(source.user_at_host.is_none() ^ destination.user_at_host.is_none()) {
             anyhow::bail!("One file argument must be remote");
         }
@@ -110,14 +115,19 @@ impl CopyJobSpec {
             source,
             destination,
             user_at_host,
+            preserve,
         })
     }
 
     #[allow(dead_code)] // used by tests and qcp-unsafe-tests
-    pub(crate) fn from_parts(source: &str, destination: &str) -> anyhow::Result<Self> {
+    pub(crate) fn from_parts(
+        source: &str,
+        destination: &str,
+        preserve: bool,
+    ) -> anyhow::Result<Self> {
         let source = FileSpec::from_str(source)?;
         let destination = FileSpec::from_str(destination)?;
-        Self::try_new(source, destination)
+        Self::try_new(source, destination, preserve)
     }
 
     /// What direction of data flow should we optimise for?

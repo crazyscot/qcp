@@ -53,6 +53,8 @@ pub(crate) trait ControlChannelServerInterface<
     ) -> anyhow::Result<ServerResult>;
 
     async fn send_closedown_report(&mut self, stats: &ConnectionStats) -> Result<()>;
+
+    fn compat(&self) -> Compatibility;
 }
 
 /// Real control channel
@@ -489,6 +491,10 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
         )
         .await?;
         Ok(())
+    }
+
+    fn compat(&self) -> Compatibility {
+        self.selected_compat
     }
 }
 

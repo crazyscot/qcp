@@ -599,6 +599,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "file-mode"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773ea145485772b8d354624b32adbe20e776353d3e48c7b03ef44e3455e9815c"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "flate2"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -810,6 +819,18 @@ name = "inlinable_string"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8fae54786f62fb2918dcfae3d568594e50eb9b5c25bf04371af6fe7516452fb"
+
+[[package]]
+name = "int-enum"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e366a1634cccc76b4cfd3e7580de9b605e4d93f1edac48d786c1f867c0def495"
+dependencies = [
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "io-uring"
@@ -1327,6 +1348,7 @@ dependencies = [
  "either",
  "engineering-repr",
  "figment",
+ "file-mode",
  "futures-util",
  "gethostname",
  "glob",
@@ -1335,6 +1357,7 @@ dependencies = [
  "homedir",
  "human-repr",
  "indicatif",
+ "int-enum",
  "json",
  "lessify",
  "littertray",
@@ -1381,12 +1404,15 @@ dependencies = [
  "colorchoice",
  "console",
  "dunce",
+ "libc",
  "littertray",
  "pretty_assertions",
  "qcp",
  "rusty-fork",
  "static_str_ops",
  "tempfile",
+ "tokio",
+ "tokio-test",
 ]
 
 [[package]]

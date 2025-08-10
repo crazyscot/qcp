@@ -10,3 +10,5 @@ mod manager;
 mod ssh_includes;
 mod styles;
 mod test_windows;
+#[cfg(unix)]
+mod unix_umask;

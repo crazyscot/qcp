@@ -12,6 +12,11 @@ pub(crate) use dns::lookup_host_by_family;
 mod cert;
 pub(crate) use cert::Credentials;
 
+mod file_ext;
+pub(crate) use file_ext::FileExt;
+mod metadata_ext;
+pub(crate) use metadata_ext::FsMetadataExt;
+
 pub(crate) mod io;
 pub(crate) mod process;
 pub(crate) mod socket;

@@ -4,11 +4,15 @@
 use crate::protocol::common::{
     ProtocolMessage as _, ReceivingStream, SendReceivePair, SendingStream,
 };
+use crate::protocol::control::Compatibility;
 use crate::protocol::session::Command;
 
 use tracing::{Instrument as _, trace, trace_span};
 
-pub(super) async fn handle_stream<W, R>(mut sp: SendReceivePair<W, R>) -> anyhow::Result<()>
+pub(super) async fn handle_stream<W, R>(
+    mut sp: SendReceivePair<W, R>,
+    compat: Compatibility,
+) -> anyhow::Result<()>
 where
     R: ReceivingStream + 'static, // AsyncRead + Unpin + Send,
     W: SendingStream + 'static,   // AsyncWrite + Unpin + Send,
@@ -20,11 +24,19 @@ where
     let (span, mut handler) = match packet {
         Command::Get(args) => (
             trace_span!("SERVER:GET", filename = args.filename.clone()),
-            session::Get::boxed(sp, Some(args)),
+            session::Get::boxed(sp, Some(args.into()), compat),
         ),
         Command::Put(args) => (
             trace_span!("SERVER:PUT", filename = args.filename.clone()),
-            session::Put::boxed(sp, Some(args)),
+            session::Put::boxed(sp, Some(args.into()), compat),
+        ),
+        Command::Get2(args) => (
+            trace_span!("SERVER:GET2", filename = args.filename.clone()),
+            session::Get::boxed(sp, Some(args), compat),
+        ),
+        Command::Put2(args) => (
+            trace_span!("SERVER:PUT2", filename = args.filename.clone()),
+            session::Put::boxed(sp, Some(args), compat),
         ),
     };
 
@@ -36,6 +48,7 @@ where
 mod tests {
     use crate::protocol::{
         common::{ProtocolMessage, SendReceivePair},
+        control::Compatibility,
         session::{Command, GetArgs, PutArgs, Response, ResponseV1, Status},
     };
 
@@ -58,9 +71,12 @@ mod tests {
 
         let (mut out_read, out_write) = simplex(1024);
 
-        handle_stream(SendReceivePair::from((out_write, mock_recv)))
-            .await
-            .unwrap();
+        handle_stream(
+            SendReceivePair::from((out_write, mock_recv)),
+            Compatibility::Level(1),
+        )
+        .await
+        .unwrap();
 
         let resp = Response::from_reader_async_framed(&mut out_read)
             .await
@@ -92,7 +108,11 @@ mod tests {
             .write(&expect_buf[4..])
             .build();
 
-        let result = handle_stream(SendReceivePair::from((mock_send, mock_recv))).await;
+        let result = handle_stream(
+            SendReceivePair::from((mock_send, mock_recv)),
+            Compatibility::Level(1),
+        )
+        .await;
         assert!(result.is_ok());
     }
 }

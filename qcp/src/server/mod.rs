@@ -49,6 +49,7 @@ async fn server_main_inner<
         .await?;
     let _span = tracing::error_span!("[Server]").entered();
     let endpoint = result.endpoint;
+    let compat = control.compat();
 
     let mut tasks = JoinSet::new();
 
@@ -63,7 +64,7 @@ async fn server_main_inner<
         .context("Timed out waiting for QUIC connection")?
     {
         let _ = tasks.spawn(async move {
-            let result = connection::handle_incoming(conn).await;
+            let result = connection::handle_incoming(conn, compat).await;
             match result {
                 Err(e) => error!("inward stream failed: {reason}", reason = e.to_string()),
                 Ok(conn_stats) => {
@@ -155,11 +156,15 @@ mod test {
                     endpoint,
                 })
             });
-        let _expect = mock_control
+        let _ = mock_control
             .expect_send_closedown_report()
             .with(predicate::always())
             .times(1)
             .returning(|_| Ok(()));
+        let _ = mock_control
+            .expect_compat()
+            .times(1)
+            .returning(|| crate::protocol::control::Compatibility::Level(1));
 
         server_main_inner(mock_control, Some(hostname.into()), &mut manager)
             .await

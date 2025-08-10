@@ -2,7 +2,10 @@
 // (c) 2024 Ross Younger
 
 use super::handle_stream;
-use crate::protocol::common::{ReceivingStream as QcpRS, SendReceivePair, SendingStream as QcpSS};
+use crate::protocol::{
+    common::{ReceivingStream as QcpRS, SendReceivePair, SendingStream as QcpSS},
+    control::Compatibility,
+};
 
 use async_trait::async_trait;
 use quinn::ConnectionStats;
@@ -34,12 +37,16 @@ impl Connection<quinn::SendStream, quinn::RecvStream> for quinn::Connection {
 }
 
 #[cfg_attr(coverage_nightly, coverage(off))] // This is a thin adaptor, not worth testing
-pub(super) async fn handle_incoming(i: quinn::Incoming) -> anyhow::Result<ConnectionStats> {
-    handle_inner(i.await?).await
+pub(super) async fn handle_incoming(
+    i: quinn::Incoming,
+    compat: Compatibility,
+) -> anyhow::Result<ConnectionStats> {
+    handle_inner(i.await?, compat).await
 }
 
 async fn handle_inner<SS: QcpSS + 'static, RS: QcpRS + 'static, C: Connection<SS, RS>>(
     connection: C,
+    compat: Compatibility,
 ) -> anyhow::Result<ConnectionStats> {
     debug!(
         "accepted QUIC connection from {}",
@@ -67,7 +74,7 @@ async fn handle_inner<SS: QcpSS + 'static, RS: QcpRS + 'static, C: Connection<SS
             };
             trace!("opened stream");
             let _j = tokio::spawn(async move {
-                if let Err(e) = handle_stream(sp).await {
+                if let Err(e) = handle_stream(sp, compat).await {
                     error!("stream handler failed: {e}");
                 }
             });
@@ -82,7 +89,7 @@ async fn handle_inner<SS: QcpSS + 'static, RS: QcpRS + 'static, C: Connection<SS
 mod tests {
     use std::net::{Ipv4Addr, SocketAddrV4};
 
-    use crate::server::connection::handle_inner;
+    use crate::{protocol::control::Compatibility, server::connection::handle_inner};
 
     use super::Connection;
 
@@ -140,7 +147,7 @@ mod tests {
     #[tokio::test]
     async fn timeout() {
         let mc = MockConnection::err(quinn::ConnectionError::TimedOut);
-        let e = handle_inner(mc).await.unwrap_err();
+        let e = handle_inner(mc, Compatibility::Level(1)).await.unwrap_err();
         assert_contains!(e.to_string(), "timed out");
     }
     #[tokio::test]
@@ -150,7 +157,7 @@ mod tests {
             frame_type: None,
             reason: "no".into(),
         }));
-        let s = handle_inner(mc).await.unwrap();
+        let s = handle_inner(mc, Compatibility::Level(1)).await.unwrap();
         assert_eq!(s.path.sent_packets, 0);
     }
 
@@ -160,7 +167,7 @@ mod tests {
             ok_count: 1.into(),
             ..Default::default()
         };
-        let s = handle_inner(mc).await.unwrap();
+        let s = handle_inner(mc, Compatibility::Level(1)).await.unwrap();
         assert_eq!(s.path.sent_packets, 0);
     }
 }
