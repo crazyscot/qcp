@@ -111,7 +111,11 @@ pub mod common;
 pub mod compat;
 pub mod control;
 pub mod session;
+
+mod data_tag;
 mod variant;
+
+pub use data_tag::{DataTag, TaggedData};
 pub use variant::{Variant, VariantConversionFailed, VariantList, VariantMap};
 
 #[cfg(any(test, feature = "unstable-test-helpers"))]

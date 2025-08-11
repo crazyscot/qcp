@@ -31,6 +31,9 @@ use bytes::BytesMut;
 use serde_bare::error::Error as sbError;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+/////////////////////////////////////////////////////////////////////////////////////////////
+// STREAM TYPEDEFS
+
 pub(crate) trait SendingStream: AsyncWrite + Send + Unpin {}
 impl SendingStream for quinn::SendStream {}
 
@@ -59,6 +62,9 @@ impl<S: SendingStream, R: ReceivingStream> From<(S, R)> for SendReceivePair<S, R
         }
     }
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+// WIRE MESSAGE FRAMING
 
 /// Framing header used on the wire for protocol messages
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Default, Clone, Copy)]
@@ -208,6 +214,8 @@ where
         }
     }
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
