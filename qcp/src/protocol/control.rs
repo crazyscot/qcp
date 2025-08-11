@@ -43,10 +43,7 @@
 //! [quic]: https://quicwg.github.io/
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 
-use std::{
-    fmt::Display,
-    net::{IpAddr, SocketAddr},
-};
+use std::net::{IpAddr, SocketAddr};
 
 use anyhow::anyhow;
 use figment::{
@@ -75,6 +72,21 @@ pub const OLD_BANNER: &str = "qcp-server-1\n";
 pub(crate) const OUR_COMPATIBILITY_NUMERIC: u16 = 2;
 /// The protocol compatibility version implemented by this crate
 pub const OUR_COMPATIBILITY_LEVEL: Compatibility = Compatibility::Level(OUR_COMPATIBILITY_NUMERIC);
+
+////////////////////////////////////////////////////////////////////////////////////////
+// Display helpers
+
+use engineering_repr::EngineeringQuantity as EQ;
+
+fn display_opt_uint(bandwidth: Option<&Uint>) -> String {
+    bandwidth.map_or_else(|| "None".into(), |u| EQ::<u64>::from(u.0).to_string())
+}
+
+fn display_opt<T: std::fmt::Display>(value: Option<&T>) -> String {
+    value
+        .as_ref()
+        .map_or_else(|| "None".into(), |v| format!("{v}"))
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // COMPATIBILITY
@@ -266,8 +278,11 @@ impl From<CongestionController> for figment::value::Value {
 /// N.B. This type is structurally identical to, but distinct from,
 /// [`crate::util::PortRange`] so that it can have different serialization
 /// semantics.
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(
+    Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Default, derive_more::Display,
+)]
 #[allow(non_camel_case_types)]
+#[display("{}-{}", begin, end)]
 pub struct PortRange_OnWire {
     /// The first port of the range
     pub begin: u16,
@@ -300,12 +315,6 @@ impl From<PortRange_OnWire> for CliPortRange {
             begin: other.begin,
             end: other.end,
         }
-    }
-}
-
-impl Display for PortRange_OnWire {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}", self.begin, self.end)
     }
 }
 
@@ -370,11 +379,24 @@ pub enum ClientMessage {
 }
 impl ProtocolMessage for ClientMessage {}
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(
+    Clone, Serialize, Deserialize, PartialEq, Eq, Default, derive_more::Debug, derive_more::Display,
+)]
+#[display(
+    "connection {connection_type}, port {}, ToClient {}, ToServer {}, rtt {}, congestion {}/{}, timeout {}, cert...",
+    display_opt(port.as_ref()),
+    display_opt_uint(bandwidth_to_client.as_ref()),
+    display_opt_uint(bandwidth_to_server.as_ref()),
+    display_opt(rtt.as_ref()),
+    display_opt(congestion.as_ref()),
+    display_opt_uint(initial_congestion_window.as_ref()),
+    display_opt(timeout.as_ref())
+)]
 /// Version 1 of the client control parameters message.
 /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
 pub struct ClientMessageV1 {
     /// Client's self-signed certificate (DER)
+    #[debug(ignore)]
     pub cert: Vec<u8>,
     /// The connection type to use (the type of socket we want the server to bind)
     pub connection_type: ConnectionType,
@@ -448,23 +470,6 @@ impl ClientMessageV1 {
     }
 }
 
-impl Display for ClientMessageV1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "type {}, port {:?}, ToClient {:?}, ToServer {:?}, rtt {:?}, congestion {:?}/{:?}, timeout {:?}",
-            self.connection_type,
-            self.port,
-            self.bandwidth_to_client,
-            self.bandwidth_to_server,
-            self.rtt,
-            self.congestion,
-            self.initial_congestion_window,
-            self.timeout
-        )
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////
 // SERVER MESSAGE
 
@@ -485,13 +490,14 @@ pub enum ServerMessage {
 }
 impl ProtocolMessage for ServerMessage {}
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, derive_more::Debug, Default)]
 /// Version 1 of the message from server to client.
 /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
 pub struct ServerMessageV1 {
     /// UDP port the server has bound to
     pub port: u16,
     /// Server's self-signed certificate (DER)
+    #[debug(ignore)]
     pub cert: Vec<u8>,
     /// Name in the server cert (this saves us having to unpick it from the certificate)
     pub name: String,
@@ -551,7 +557,7 @@ impl Provider for ServerMessageV1 {
 /// A special type of message indicating that an error occurred and the connection cannot proceed.
 ///
 /// Protocol Version Compatibility: V1
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, derive_more::Display)]
 pub enum ServerFailure {
     /// The server failed to understand control channel traffic received from the client.
     ///
@@ -561,29 +567,19 @@ pub enum ServerFailure {
     /// The string within explains why.
     ///
     /// Protocol Version Compatibility: V1
+    #[display("Negotiation Failed: {_0}")]
     NegotiationFailed(String),
     /// The QUIC endpoint could not be set up.
     /// The string within contains more detail.
     ///
     /// Protocol Version Compatibility: V1
+    #[display("Endpoint Failed: {_0}")]
     EndpointFailed(String),
     /// An unknown error occurred. This is a catch-all for forward compatibility.
     ///
     /// Protocol Version Compatibility: V1
+    #[display("Unknown error: {_0}")]
     Unknown(String),
-}
-
-impl Display for ServerFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        #[allow(clippy::enum_glob_use)]
-        use ServerFailure::*;
-        match self {
-            Malformed => f.write_str("Malformed"),
-            NegotiationFailed(msg) => write!(f, "Negotiation Failed: {msg}"),
-            EndpointFailed(msg) => write!(f, "Endpoint Failed: {msg}"),
-            Unknown(msg) => write!(f, "Unknown error: {msg}"),
-        }
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -603,40 +599,31 @@ impl ProtocolMessage for ClosedownReport {}
 
 /// Version 1 of the closedown report.
 /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Default, Copy, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Default, Copy, Clone, derive_more::Debug)]
 pub struct ClosedownReportV1 {
     /// Final congestion window
+    #[debug("{}", cwnd.0)]
     pub cwnd: Uint,
     /// Number of packets sent
+    #[debug("{}", sent_packets.0)]
     pub sent_packets: Uint,
     /// Number of packets lost
+    #[debug("{}", lost_packets.0)]
     pub lost_packets: Uint,
     /// Number of bytes lost
+    #[debug("{}", lost_bytes.0)]
     pub lost_bytes: Uint,
     /// Number of congestion events detected
+    #[debug("{}", congestion_events.0)]
     pub congestion_events: Uint,
     /// Number of black holes detected
+    #[debug("{}", black_holes.0)]
     pub black_holes: Uint,
     /// Number of bytes sent
+    #[debug("{}", sent_bytes.0)]
     pub sent_bytes: Uint,
     /// Extension field, reserved for future expansion; for now, must be set to 0
     pub extension: u8,
-}
-
-impl std::fmt::Debug for ClosedownReportV1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "cwnd: {}, sent_packets: {}, lost_packets: {}, lost_bytes: {}, congestion_events: {}, black_holes: {}, sent_bytes: {}",
-            self.cwnd.0,
-            self.sent_packets.0,
-            self.lost_packets.0,
-            self.lost_bytes.0,
-            self.congestion_events.0,
-            self.black_holes.0,
-            self.sent_bytes.0
-        )
-    }
 }
 
 impl From<&ConnectionStats> for ClosedownReportV1 {
@@ -848,7 +835,8 @@ mod test {
         //println!("{deser:#?}");
 
         let disp = format!("{cmsg}");
-        assert!(disp.contains("PortRange_OnWire { begin: 123, end: 456 }"));
+        eprintln!("{disp}");
+        assert!(disp.contains("123-456"));
 
         assert_matches!(
             deser,
