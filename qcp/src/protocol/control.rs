@@ -50,6 +50,8 @@ use figment::{
     Profile, Provider,
     value::{Dict, Map},
 };
+use int_enum::IntEnum;
+use num_traits::AsPrimitive;
 use quinn::ConnectionStats;
 use serde::{Deserialize, Serialize};
 use serde_bare::Uint;
@@ -58,6 +60,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use super::common::ProtocolMessage;
 use crate::{
     config::Configuration_Optional,
+    protocol::{DataTag, TaggedData, Variant, display_vec_td},
     util::{Credentials, PortRange as CliPortRange, serialization::SerializeAsString},
 };
 
@@ -365,7 +368,7 @@ impl ProtocolMessage for ServerGreeting {
 ////////////////////////////////////////////////////////////////////////////////////////
 // CLIENT MESSAGE
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default, derive_more::Display)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug, Default, derive_more::Display)]
 /// The control parameters send from client to server.
 pub enum ClientMessage {
     /// Special value indicating an endpoint has not yet read the remote `ClientMessage`.
@@ -375,22 +378,23 @@ pub enum ClientMessage {
     ToFollow, // 0
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
     /// On the wire this is encoded with enum discriminant 1.
-    V1(ClientMessageV1), //
+    V1(ClientMessageV1),
 }
 impl ProtocolMessage for ClientMessage {}
 
 #[derive(
-    Clone, Serialize, Deserialize, PartialEq, Eq, Default, derive_more::Debug, derive_more::Display,
+    Clone, Serialize, Deserialize, PartialEq, Default, derive_more::Debug, derive_more::Display,
 )]
 #[display(
-    "connection {connection_type}, port {}, ToClient {}, ToServer {}, rtt {}, congestion {}/{}, timeout {}, cert...",
+    "connection {connection_type}, port {}, ToClient {}, ToServer {}, rtt {}, congestion {}/{}, timeout {}, cert..., attrs {}",
     display_opt(port.as_ref()),
     display_opt_uint(bandwidth_to_client.as_ref()),
     display_opt_uint(bandwidth_to_server.as_ref()),
     display_opt(rtt.as_ref()),
     display_opt(congestion.as_ref()),
     display_opt_uint(initial_congestion_window.as_ref()),
-    display_opt(timeout.as_ref())
+    display_opt(timeout.as_ref()),
+    display_vec_td(attributes),
 )]
 /// Version 1 of the client control parameters message.
 /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
@@ -418,8 +422,100 @@ pub struct ClientMessageV1 {
     /// Connection timeout for the QUIC endpoints, in seconds
     pub timeout: Option<u16>,
 
-    /// Extension field, reserved for future expansion; for now, must be set to 0
-    pub extension: u8,
+    /// Optional extended attributes
+    ///
+    /// If it is mandatory for the server to action a given attribute, it MUST NOT be sent in this field.
+    /// Instead, use a later version of the `ClientMessage`.
+    ///
+    /// This field was added in qcp 0.5 with `VersionCompatibility=V2`.
+    /// Prior to Compatibility::Level(2) this was a reserved u8, which was required to be set to 0.
+    /// If length 0, it looks the same on the wire.
+    /// If length >0, earlier versions ignore the attributes.
+    pub attributes: Vec<TaggedData<ClientMessageAttributes>>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug, Default)]
+/// The control parameters send from client to server.
+enum OriginalClientMessage {
+    #[default]
+    #[serde(skip_serializing)]
+    ToFollow,
+    V1(OriginalClientMessageV1),
+}
+impl ProtocolMessage for OriginalClientMessage {}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Default, derive_more::Debug)]
+struct OriginalClientMessageV1 {
+    cert: Vec<u8>,
+    connection_type: ConnectionType,
+    port: Option<PortRange_OnWire>,
+    show_config: bool,
+    bandwidth_to_server: Option<Uint>,
+    bandwidth_to_client: Option<Uint>,
+    rtt: Option<u16>,
+    congestion: Option<CongestionController>,
+    initial_congestion_window: Option<Uint>,
+    timeout: Option<u16>,
+    extension: u8,
+}
+
+/// Extension attributes for the client message
+///
+/// This enum was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+#[derive(strum_macros::Display, Clone, Copy, Debug, IntEnum, PartialEq)]
+#[non_exhaustive]
+#[repr(u64)]
+pub enum ClientMessageAttributes {
+    /// Indicates an invalid attribute.
+    Invalid = 0,
+    /// The intended direction of data flow for the connection.
+    /// This is a value from [`Direction`], stored as [`crate::protocol::Variant::Unsigned`].
+    DirectionOfTravel,
+}
+impl DataTag for ClientMessageAttributes {
+    fn debug_data(&self, data: &Variant) -> String {
+        match self {
+            ClientMessageAttributes::Invalid => "Invalid".into(),
+            ClientMessageAttributes::DirectionOfTravel => {
+                Direction::from_repr(data.coerce_unsigned().as_())
+                    .unwrap_or(Direction::Both)
+                    .to_string()
+            }
+        }
+    }
+}
+
+/// Direction of data flow for the connection.
+///
+/// This enum was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+#[derive(
+    strum_macros::Display, Clone, Copy, Debug, PartialEq, Eq, strum_macros::FromRepr, Default,
+)]
+#[allow(missing_docs)]
+pub enum Direction {
+    #[default]
+    Both,
+    ClientToServer,
+    ServerToClient,
+}
+impl From<Direction> for Variant {
+    fn from(value: Direction) -> Self {
+        Variant::unsigned(value as u64)
+    }
+}
+impl From<&Variant> for Direction {
+    /// An infallible, type-coercing conversion.
+    /// If the Variant is an unexpected type, returns the default (`Both`).
+    fn from(value: &Variant) -> Self {
+        Direction::from_repr(value.coerce_unsigned().as_()).unwrap_or_default()
+    }
+}
+impl From<Option<&Variant>> for Direction {
+    /// An infallible, type-coercing conversion.
+    /// If the Variant is an unexpected type, returns the default (`Both`).
+    fn from(value: Option<&Variant>) -> Self {
+        value.map_or(Direction::default(), Direction::from)
+    }
 }
 
 impl ClientMessage {
@@ -435,6 +531,16 @@ impl ClientMessage {
             remote_config,
             my_config,
         ))
+    }
+
+    pub(crate) fn set_direction(&mut self, direction: Direction) {
+        match self {
+            ClientMessage::ToFollow => (),
+            ClientMessage::V1(msg) => msg.attributes.push(
+                ClientMessageAttributes::DirectionOfTravel
+                    .with_variant(Variant::unsigned(direction as u64)),
+            ),
+        }
     }
 }
 
@@ -465,7 +571,7 @@ impl ClientMessageV1 {
                 .map(|u| Uint(u64::from(u))),
             timeout: my_config.timeout,
 
-            extension: 0,
+            attributes: vec![],
         }
     }
 }
@@ -653,7 +759,7 @@ mod test {
     };
 
     use assertables::assert_matches;
-    use pretty_assertions::assert_eq;
+    use pretty_assertions::{assert_eq, assert_str_eq};
     use quinn::ConnectionStats;
     use serde::{Deserialize, Serialize};
     use serde_bare::Uint;
@@ -661,11 +767,14 @@ mod test {
     use crate::{
         config::{Configuration, Configuration_Optional, Manager},
         protocol::{
+            DataTag, TaggedData,
             common::ProtocolMessage,
             control::{
-                ClientMessageV1, ClosedownReport, Compatibility, CongestionController,
-                ConnectionType, ServerGreeting, ServerMessageV1,
+                ClientMessageAttributes, ClientMessageV1, ClosedownReport, Compatibility,
+                CongestionController, ConnectionType, Direction, OriginalClientMessage,
+                OriginalClientMessageV1, ServerGreeting, ServerMessageV1,
             },
+            display_vec_td,
         },
         util::{Credentials, PortRange as CliPortRange, serialization::SerializeAsString},
     };
@@ -838,6 +947,7 @@ mod test {
         eprintln!("{disp}");
         assert!(disp.contains("123-456"));
 
+        let _empty: Vec<TaggedData<ClientMessageAttributes>> = vec![];
         assert_matches!(
             deser,
             ClientMessage::V1(ClientMessageV1 {
@@ -855,7 +965,7 @@ mod test {
                 congestion: Some(CongestionController::Bbr),
                 initial_congestion_window: Some(Uint(12345)),
                 timeout: Some(432),
-                extension: 0,
+                attributes: _empty,
             })
         );
     }
@@ -1073,5 +1183,65 @@ mod test {
         let wire = msg.to_vec().unwrap();
         let expected = b"\x01*AB\xde\xf0\x1b,1\x86\xa4<\x00".to_vec();
         assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn display_clientmessage_attrs() {
+        let d = ClientMessageAttributes::DirectionOfTravel
+            .with_variant(Direction::ClientToServer.into());
+        let cm = ClientMessage::V1(ClientMessageV1 {
+            attributes: vec![d.clone()],
+            ..Default::default()
+        });
+        // Debug
+        let s = format!("{d:?}");
+        eprintln!("{s}");
+        assert_str_eq!(
+            s,
+            "TaggedData { tag: ClientMessageAttributes::DirectionOfTravel, data: ClientToServer, .. }"
+        );
+        let s = format!("{cm:?}");
+        eprintln!("{s}");
+        assert!(s.contains("ClientMessageAttributes::DirectionOfTravel, data: ClientToServer"));
+
+        // Display
+        let s = display_vec_td(&vec![d.clone()]);
+        eprintln!("{s}");
+        assert_str_eq!(s, "[DirectionOfTravel:ClientToServer]");
+        let s = format!("{d}");
+        eprintln!("{s}");
+        assert_str_eq!(s, "(DirectionOfTravel, ClientToServer)");
+        let s = format!("{cm}");
+        eprintln!("{s}");
+        assert!(s.contains("[DirectionOfTravel:ClientToServer]"));
+    }
+
+    #[test]
+    fn clientmessagev1_attrs_backwards_compat() {
+        let d = ClientMessageAttributes::DirectionOfTravel
+            .with_variant(Direction::ClientToServer.into());
+        let cm = ClientMessage::V1(ClientMessageV1 {
+            attributes: vec![d.clone()],
+            ..Default::default()
+        });
+        let wire = cm.to_vec().unwrap();
+        let decode = OriginalClientMessage::from_slice(&wire).unwrap();
+        // This is really a no-crash test.
+        assert_eq!(
+            decode,
+            OriginalClientMessage::V1(OriginalClientMessageV1 {
+                cert: vec![],
+                connection_type: ConnectionType::Ipv4,
+                port: None,
+                show_config: false,
+                bandwidth_to_server: None,
+                bandwidth_to_client: None,
+                rtt: None,
+                congestion: None,
+                initial_congestion_window: None,
+                timeout: None,
+                extension: 1, // Earlier versions ignore this field, so if the assert passes we're good.
+            })
+        );
     }
 }
