@@ -118,6 +118,30 @@ impl<E: DataTag> TaggedData<E> {
     }
 }
 
+/// Helper trait for finding tagged data in collections
+pub trait FindTag<E>: std::iter::IntoIterator
+where
+    E: DataTag,
+    u64: From<E>,
+{
+    /// Looks up the given tag in this collection.
+    /// Returns the associated variant data, if one was found.
+    fn find_tag(&self, tag: E) -> Option<&Variant>;
+}
+
+impl<E> FindTag<E> for Vec<TaggedData<E>>
+where
+    E: DataTag,
+    u64: From<E>,
+{
+    fn find_tag(&self, tag: E) -> Option<&Variant> {
+        let wanted = u64::from(tag);
+        self.iter()
+            .find(|item| item.tag_raw() == wanted)
+            .map(|item| &item.data)
+    }
+}
+
 /// Helper function for implementing Display on Vec<TaggedData<E>>
 pub(crate) fn display_vec_td<E: DataTag>(v: &Vec<TaggedData<E>>) -> String {
     if v.is_empty() {

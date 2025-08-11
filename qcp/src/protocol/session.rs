@@ -365,15 +365,6 @@ impl From<GetArgs> for Get2Args {
         }
     }
 }
-impl Get2Args {
-    /// Retrieve a reference to the option data for the given tag, if it is present
-    pub(crate) fn option(&self, opt: CommandParam) -> Option<&Variant> {
-        self.options
-            .iter()
-            .find(|op| op.tag_raw() == u64::from(opt))
-            .map(|td| &td.data)
-    }
-}
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 /// Arguments for the `PUT` command
