@@ -1,7 +1,8 @@
 //! Extension traits for tokio::fs::File and related structures
 // (c) 2025 Ross Younger
 
-use crate::protocol::session::{FileHeaderV2, MetadataAttr, TaggedData};
+use crate::protocol::TaggedData;
+use crate::protocol::session::{FileHeaderV2, MetadataAttr};
 use crate::util::time::SystemTimeExt as _;
 
 use std::time::SystemTime;
