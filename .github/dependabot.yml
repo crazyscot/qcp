@@ -21,7 +21,8 @@ updates:
     # Workflow files stored in the default location of `.github/workflows`. (You don't need to specify `/.github/workflows` for `directory`. You can use `directory: "/"`.)
     directory: "/"
     schedule:
-      interval: "monthly"
+      # This isn't so much to get update notifications, as it is to get security notifications.
+      interval: "yearly"
     target-branch: "dev"
     commit-message:
       prefix: "chore(ci)"
