@@ -139,6 +139,7 @@ pub type VariantMap = BTreeMap<String, Variant>;
 ///   * [`as_map`](#method.as_map)
 #[derive(
     DType,
+    Default,
     Serialize,
     Deserialize,
     PartialEq,
@@ -150,6 +151,7 @@ pub type VariantMap = BTreeMap<String, Variant>;
 pub enum Variant {
     /// The unit type `()`, used for empty or no-value cases.
     #[display("()")]
+    #[default]
     Empty,
     /// True or false
     Boolean(bool),
