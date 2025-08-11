@@ -88,7 +88,7 @@ wildmatch = "2.4.0"
 file-mode = "0.1.2"
 
 [dev-dependencies]
-assertables = "9.8.1"
+assertables = "9.8.2"
 clap_mangen = "0.2.29"
 json = "0.12.4"
 littertray = { workspace = true, features = ["async"] }

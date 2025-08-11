@@ -10,7 +10,7 @@ qcp = { path = "../qcp", features = ["unstable-test-helpers"] }
 
 anstream = { workspace = true }
 anstyle = { workspace = true }
-assertables = "9.8.1"
+assertables = "9.8.2"
 cfg-if = { workspace = true }
 colorchoice = { workspace = true }
 console = { workspace = true }
