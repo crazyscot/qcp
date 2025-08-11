@@ -16,7 +16,7 @@ use crate::{
     config::{self, Configuration, Configuration_Optional, Manager},
     protocol::{
         compat::Feature,
-        control::{ClientMessageV1, Compatibility, CongestionController},
+        control::{ClientMessageV1, Compatibility, CongestionController, Direction},
     },
     util::PortRange,
 };
@@ -36,14 +36,27 @@ const META_NEGOTIATED: &str = "config resolution logic";
 
 /// Specifies whether to configure to maximise transmission throughput, receive throughput, or both.
 /// Specifying `Both` for a one-way data transfer will work, but wastes kernel memory.
-#[derive(Copy, Clone, Debug, PartialEq, strum_macros::Display)]
+#[derive(Copy, Clone, Debug, PartialEq, strum_macros::Display, Default)]
 pub enum ThroughputMode {
     /// We expect to send a lot but not receive
     Tx,
     /// We expect to receive a lot but not send much
     Rx,
     /// We expect to send and receive, or we don't know
+    #[default]
     Both,
+}
+
+impl ThroughputMode {
+    /// Converts a `Direction`, when received in server mode, to a `ThroughputMode`.
+    #[must_use]
+    pub fn for_server(direction: Direction) -> Self {
+        match direction {
+            Direction::ClientToServer => ThroughputMode::Rx,
+            Direction::ServerToClient => ThroughputMode::Tx,
+            Direction::Both => ThroughputMode::Both,
+        }
+    }
 }
 
 /// Creates a `quinn::TransportConfig` for the endpoint setup.

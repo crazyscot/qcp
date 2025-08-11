@@ -272,6 +272,7 @@ impl Client {
                 prep_result.remote_address.into(),
                 &mut self.manager,
                 &self.parameters,
+                prep_result.job_spec.direction(),
             )
             .await?;
 
