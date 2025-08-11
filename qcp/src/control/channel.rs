@@ -17,14 +17,16 @@ use tracing::{Instrument as _, debug, error, info, trace, warn};
 use crate::client::Parameters;
 use crate::config::{Configuration, Configuration_Optional, Manager};
 use crate::control::create_endpoint;
+use crate::protocol::FindTag as _;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::control::{
-    BANNER, ClientGreeting, ClientMessage, ClientMessageV1, ClosedownReport, ClosedownReportV1,
-    Compatibility, CongestionController, ConnectionType, OLD_BANNER, OUR_COMPATIBILITY_LEVEL,
-    OUR_COMPATIBILITY_NUMERIC, ServerFailure, ServerGreeting, ServerMessage, ServerMessageV1,
+    BANNER, ClientGreeting, ClientMessage, ClientMessageAttributes, ClientMessageV1,
+    ClosedownReport, ClosedownReportV1, Compatibility, CongestionController, ConnectionType,
+    Direction, OLD_BANNER, OUR_COMPATIBILITY_LEVEL, OUR_COMPATIBILITY_NUMERIC, ServerFailure,
+    ServerGreeting, ServerMessage, ServerMessageV1,
 };
-use crate::transport::combine_bandwidth_configurations;
+use crate::transport::{ThroughputMode, combine_bandwidth_configurations};
 use crate::util::{Credentials, TimeFormat, TracingSetupFn};
 
 #[cfg(test)]
@@ -164,6 +166,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         connection_type: ConnectionType,
         parameters: &Parameters,
         config: &Configuration_Optional,
+        direction: Direction,
     ) -> Result<()> {
         // FUTURE: Select the client message version to send based on server's compatibility level.
 
@@ -177,12 +180,13 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
             );
         }
 
-        let message = ClientMessage::new(
+        let mut message = ClientMessage::new(
             credentials,
             connection_type,
             parameters.remote_config,
             config,
         );
+        message.set_direction(direction);
         debug!("Our client message: {message}");
         self.send(message, "client message").await
     }
@@ -212,6 +216,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         connection_type: ConnectionType,
         manager: &mut Manager,
         parameters: &Parameters,
+        direction: Direction,
     ) -> Result<ServerMessageV1> {
         trace!("opening control channel");
 
@@ -226,8 +231,14 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
 
         // PHASE 3: EXCHANGE OF MESSAGES
         let working = manager.get::<Configuration_Optional>().unwrap_or_default();
-        self.client_send_message(credentials, connection_type, parameters, &working)
-            .await?;
+        self.client_send_message(
+            credentials,
+            connection_type,
+            parameters,
+            &working,
+            direction,
+        )
+        .await?;
 
         trace!("waiting for server message");
         let message1 = self.client_read_server_message().await?;
@@ -451,13 +462,19 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
 
         // PHASE 3C: Create the QUIC endpoint
         let credentials = Credentials::generate()?;
+        let direction = Direction::from(
+            message1
+                .attributes
+                .find_tag(ClientMessageAttributes::DirectionOfTravel),
+        );
+        trace!("Direction of travel: {direction}");
+
         let (endpoint, warning) = match create_endpoint(
             &credentials,
             &message1.cert,
             message1.connection_type,
             &config,
-            // we have no way to know what the client will request, so must configure for both
-            crate::transport::ThroughputMode::Both,
+            ThroughputMode::for_server(direction),
             true,
             compat,
         ) {
@@ -510,7 +527,7 @@ mod test {
                 MessageHeader, ProtocolMessage as _, ReceivingStream, SendReceivePair,
                 SendingStream,
             },
-            control::{ClosedownReportV1, ConnectionType, OLD_BANNER, ServerMessageV1},
+            control::{ClosedownReportV1, ConnectionType, Direction, OLD_BANNER, ServerMessageV1},
             test_helpers::new_test_plumbing,
         },
         util::{Credentials, PortRange, TimeFormat},
@@ -561,6 +578,7 @@ mod test {
                 ConnectionType::Ipv4,
                 &mut self.manager,
                 &self.params,
+                crate::protocol::control::Direction::Both,
             )
         }
     }
@@ -700,6 +718,7 @@ mod test {
                     ConnectionType::Ipv4,
                     &Parameters::default(),
                     &cfg,
+                    Direction::Both,
                 )
                 .await?;
             cli.client.client_read_server_message().await

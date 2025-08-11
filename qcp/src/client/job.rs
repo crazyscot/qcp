@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use crate::transport::ThroughputMode;
+use crate::{protocol::control::Direction, transport::ThroughputMode};
 
 /// Strips the optional user@ part off a hostname
 fn hostname_of(user_at_host: &str) -> &str {
@@ -149,6 +149,14 @@ impl CopyJobSpec {
     #[cfg_attr(coverage_nightly, coverage(off))]
     pub(crate) fn remote_user(&self) -> Option<&str> {
         username_of(&self.user_at_host)
+    }
+
+    pub(crate) fn direction(&self) -> Direction {
+        if self.source.user_at_host.is_some() {
+            Direction::ServerToClient
+        } else {
+            Direction::ClientToServer
+        }
     }
 }
 
