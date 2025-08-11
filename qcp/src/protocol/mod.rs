@@ -115,6 +115,7 @@ pub mod session;
 mod data_tag;
 mod variant;
 
+pub(crate) use data_tag::display_vec_td;
 pub use data_tag::{DataTag, TaggedData};
 pub use variant::{Variant, VariantConversionFailed, VariantList, VariantMap};
 

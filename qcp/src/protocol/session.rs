@@ -63,7 +63,9 @@ use tracing::debug;
 use std::{fmt::Display, fs::Metadata as FsMetadata, time::SystemTime};
 
 use crate::{
-    protocol::{DataTag, TaggedData, Variant, compat::Feature, control::Compatibility},
+    protocol::{
+        DataTag, TaggedData, Variant, compat::Feature, control::Compatibility, display_vec_td,
+    },
     util::{FsMetadataExt as _, time::SystemTimeExt as _},
 };
 
@@ -249,7 +251,7 @@ pub enum MetadataAttr {
     ModificationTime,
 }
 impl DataTag for MetadataAttr {
-    fn debug_data_inner(&self, data: &Variant) -> String {
+    fn debug_data(&self, data: &Variant) -> String {
         match self {
             MetadataAttr::ModeBits => match data {
                 Variant::Unsigned(mode) => format!("0{:0>3o}", mode.0), // Show octal mode bits
@@ -524,7 +526,7 @@ impl FileHeader {
             debug!("Using v2 file header/trailer");
             // Always send mode bits, try to get the permissions as close to correct as possible
             let qcpmeta = meta.to_tagged_data(false);
-            debug!("Header metadata: {qcpmeta:?}");
+            debug!("Header metadata: {}", display_vec_td(&qcpmeta));
             FileHeader::new_v2(meta.len(), protocol_filename, qcpmeta)
         } else {
             debug!("Using v1 file header/trailer");
@@ -593,7 +595,7 @@ impl FileTrailer {
             } else {
                 Vec::new()
             };
-            debug!("Trailer metadata: {metadata:?}");
+            debug!("Trailer metadata: {}", display_vec_td(&metadata));
             FileTrailer::V2(FileTrailerV2 { metadata })
         } else {
             FileTrailer::V1
