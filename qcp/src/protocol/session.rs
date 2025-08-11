@@ -60,10 +60,10 @@ use serde::{Deserialize, Serialize};
 use serde_bare::Uint;
 use tracing::debug;
 
-use std::{fmt::Display, fs::Metadata as FsMetadata, marker::PhantomData, time::SystemTime};
+use std::{fmt::Display, fs::Metadata as FsMetadata, time::SystemTime};
 
 use crate::{
-    protocol::{Variant, compat::Feature, control::Compatibility},
+    protocol::{DataTag, TaggedData, Variant, compat::Feature, control::Compatibility},
     util::{FsMetadataExt as _, time::SystemTimeExt as _},
 };
 
@@ -168,99 +168,6 @@ impl PartialEq<Status> for Uint {
 /////////////////////////////////////////////////////////////////////////////////////////////
 // ADDITIONAL OPTIONS AND METADATA
 
-/// Marker trait for enums that can be used in [`TaggedData`].
-///
-/// These enums need:
-/// * to be declared with `#[repr(u64)]`
-/// * to implement [`Display`] (typically via [`strum_macros::Display`])
-pub trait DataTag: Into<u64> + TryFrom<u64> + ToString {
-    /// Create a new [`TaggedData`] instance with the given variant and data.
-    ///
-    /// If no data is required (the Variant is empty), you can also use `TaggedData::from(enum)`.
-    fn with_variant(self, data: Variant) -> TaggedData<Self>
-    where
-        Self: Sized,
-    {
-        TaggedData::new(self, data)
-    }
-
-    /// Renders [`Variant`] data for tag-specific debug.
-    ///
-    /// The default implementation calls directly to Debug. See [`DataTag::debug_data_inner`], which may be overridden for any special output (e.g. octal) that makes sense for the enum.
-    #[must_use]
-    fn debug_data(value: u64, data: &Variant) -> String {
-        Self::try_from(value).map_or_else(|_| format!("{data:?}"), |tag| tag.debug_data_inner(data))
-    }
-    /// Renders [`Variant`] data for tag-specific debug.
-    ///
-    /// The default implementation calls directly to Debug, but may be overridden for any special output (e.g. octal) that makes sense for the enum.
-    #[must_use]
-    fn debug_data_inner(&self, data: &Variant) -> String {
-        format!("{data:?}")
-    }
-}
-impl DataTag for CommandParam {}
-
-impl<E: DataTag> From<E> for TaggedData<E> {
-    fn from(value: E) -> Self {
-        TaggedData::new(value, Variant::Empty)
-    }
-}
-
-#[allow(dead_code)] // false positive
-fn last_component(tn: &'static str) -> &'static str {
-    tn.rsplit("::").next().unwrap_or(tn)
-}
-
-/// A tagging enum with its attached data.
-///
-/// To make an enum capable of being used in this struct, implement the [`DataTag`] trait and declare `#[repr(u64)]`.
-#[derive(Serialize, Deserialize, PartialEq, Clone, derive_more::Debug)]
-pub struct TaggedData<E: DataTag> {
-    /// Option tag
-    #[debug("{}::{}", last_component(std::any::type_name::<E>()),
-        E::try_from(tag.0).map_or_else(|_| format!("UNKNOWN_{}", tag.0), |f| f.to_string()))]
-    tag: Uint,
-    /// Option data
-    #[debug("{}", E::debug_data(tag.0, data))]
-    pub data: Variant,
-    #[debug(ignore)]
-    phantom: PhantomData<E>,
-}
-
-impl<E: DataTag> TaggedData<E> {
-    /// Standard constructor (but for better ergonomics, see [`DataTag::with_variant`])
-    #[must_use]
-    pub fn new(option: E, data: Variant) -> Self {
-        Self {
-            tag: Uint(option.into()),
-            data,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Accessor for the option tag.
-    /// In the event that the tag is unknown to enum `E` (i.e. from a newer protocol version), returns `None`.
-    #[must_use]
-    pub fn tag(&self) -> Option<E>
-    where
-        E: TryFrom<u64>,
-    {
-        E::try_from(self.tag.0).ok()
-    }
-
-    #[cfg(test)]
-    #[cfg_attr(coverage_nightly, coverage(off))]
-    /// Test constructor, allows struct to be constructed with an invalid tag
-    pub(crate) fn new_raw(opt: u64) -> Self {
-        Self {
-            tag: Uint(opt),
-            data: Variant::Empty,
-            phantom: PhantomData,
-        }
-    }
-}
-
 /// Options for commands which take [`Variant`] parameters. (These travel together, as [`TaggedData`].)
 ///
 /// Options are generally only valid on certain commands.
@@ -289,6 +196,7 @@ pub enum CommandParam {
     /// Introduced in qcp 0.5 with `VersionCompatibility=V2`.
     PreserveMetadata,
 }
+impl DataTag for CommandParam {}
 
 /// Extensible file metadata. These travel with a Variant, as [`TaggedData`].
 ///
@@ -460,7 +368,7 @@ impl Get2Args {
     pub(crate) fn option(&self, opt: CommandParam) -> Option<&Variant> {
         self.options
             .iter()
-            .find(|op| op.tag.0 == u64::from(opt))
+            .find(|op| op.tag_raw() == u64::from(opt))
             .map(|td| &td.data)
     }
 }

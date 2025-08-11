@@ -1,7 +1,7 @@
 //! Extension trait for std::fs::Metadata
 // (c) 2025 Ross Younger
 
-use crate::protocol::session::{MetadataAttr, TaggedData};
+use crate::protocol::{TaggedData, session::MetadataAttr};
 
 /// Extension trait for `std::fs::Metadata``
 pub(crate) trait FsMetadataExt: std::marker::Sized {
