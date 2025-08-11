@@ -116,7 +116,7 @@ mod data_tag;
 mod variant;
 
 pub(crate) use data_tag::display_vec_td;
-pub use data_tag::{DataTag, TaggedData};
+pub use data_tag::{DataTag, FindTag, TaggedData};
 pub use variant::{Variant, VariantConversionFailed, VariantList, VariantMap};
 
 #[cfg(any(test, feature = "unstable-test-helpers"))]

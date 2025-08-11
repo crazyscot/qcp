@@ -49,7 +49,8 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> Get<S, R> {
 impl<S: SendingStream, R: ReceivingStream> Get<S, R> {
     /// Accessor
     pub(crate) fn find_option(&self, opt: CommandParam) -> Option<&Variant> {
-        self.args.as_ref().and_then(|a| a.option(opt))
+        use crate::protocol::FindTag as _;
+        self.args.as_ref().and_then(|a| a.options.find_tag(opt))
     }
 }
 
