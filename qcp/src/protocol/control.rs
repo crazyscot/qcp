@@ -61,6 +61,7 @@ use super::common::ProtocolMessage;
 use crate::{
     config::Configuration_Optional,
     protocol::{DataTag, TaggedData, Variant, display_vec_td},
+    transport::ThroughputMode,
     util::{Credentials, PortRange as CliPortRange, serialization::SerializeAsString},
 };
 
@@ -515,6 +516,22 @@ impl From<Option<&Variant>> for Direction {
     /// If the Variant is an unexpected type, returns the default (`Both`).
     fn from(value: Option<&Variant>) -> Self {
         value.map_or(Direction::default(), Direction::from)
+    }
+}
+impl Direction {
+    pub(crate) fn server_mode(self) -> ThroughputMode {
+        match self {
+            Direction::ClientToServer => ThroughputMode::Rx,
+            Direction::ServerToClient => ThroughputMode::Tx,
+            Direction::Both => ThroughputMode::Both,
+        }
+    }
+    pub(crate) fn client_mode(self) -> ThroughputMode {
+        match self {
+            Direction::ClientToServer => ThroughputMode::Tx,
+            Direction::ServerToClient => ThroughputMode::Rx,
+            Direction::Both => ThroughputMode::Both,
+        }
     }
 }
 

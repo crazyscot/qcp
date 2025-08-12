@@ -337,7 +337,7 @@ impl Client {
             &server_message.cert,
             server_address_port.into(),
             config,
-            prep_result.job_spec.throughput_mode(),
+            prep_result.job_spec.direction().client_mode(),
             false,
             compat,
         )?;
