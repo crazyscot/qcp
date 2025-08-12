@@ -82,14 +82,16 @@ pub const OUR_COMPATIBILITY_LEVEL: Compatibility = Compatibility::Level(OUR_COMP
 
 use engineering_repr::EngineeringQuantity as EQ;
 
-fn display_opt_uint(bandwidth: Option<&Uint>) -> String {
-    bandwidth.map_or_else(|| "None".into(), |u| EQ::<u64>::from(u.0).to_string())
+fn display_opt_uint(label: &str, bandwidth: Option<&Uint>) -> String {
+    bandwidth.map_or_else(String::new, |u| {
+        format!(", {label}: {}", EQ::<u64>::from(u.0))
+    })
 }
 
-fn display_opt<T: std::fmt::Display>(value: Option<&T>) -> String {
+fn display_opt<T: std::fmt::Display>(label: &str, value: Option<&T>) -> String {
     value
         .as_ref()
-        .map_or_else(|| "None".into(), |v| format!("{v}"))
+        .map_or_else(String::new, |v| format!(", {label}: {v}"))
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -386,15 +388,16 @@ impl ProtocolMessage for ClientMessage {}
 #[derive(
     Clone, Serialize, Deserialize, PartialEq, Default, derive_more::Debug, derive_more::Display,
 )]
+// We define a complicated Display here for efficiency; omit fields which are None.
 #[display(
-    "connection {connection_type}, port {}, ToClient {}, ToServer {}, rtt {}, congestion {}/{}, timeout {}, cert..., attrs {}",
-    display_opt(port.as_ref()),
-    display_opt_uint(bandwidth_to_client.as_ref()),
-    display_opt_uint(bandwidth_to_server.as_ref()),
-    display_opt(rtt.as_ref()),
-    display_opt(congestion.as_ref()),
-    display_opt_uint(initial_congestion_window.as_ref()),
-    display_opt(timeout.as_ref()),
+    "{connection_type}{}{}{}{}{}{}{}, attributes {}",
+    display_opt("remote port", port.as_ref()),
+    display_opt_uint("bw to client", bandwidth_to_client.as_ref()),
+    display_opt_uint("bw to server", bandwidth_to_server.as_ref()),
+    display_opt("RTT", rtt.as_ref()),
+    display_opt("congestion algorithm ", congestion.as_ref()),
+    display_opt_uint("cwnd ", initial_congestion_window.as_ref()),
+    display_opt("timeout", timeout.as_ref()),
     display_vec_td(attributes),
 )]
 /// Version 1 of the client control parameters message.
