@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 
-use crate::{protocol::control::Direction, transport::ThroughputMode};
+use crate::protocol::control::Direction;
 
 /// Strips the optional user@ part off a hostname
 fn hostname_of(user_at_host: &str) -> &str {
@@ -130,15 +130,6 @@ impl CopyJobSpec {
         Self::try_new(source, destination, preserve)
     }
 
-    /// What direction of data flow should we optimise for?
-    pub(crate) fn throughput_mode(&self) -> ThroughputMode {
-        if self.source.user_at_host.is_some() {
-            ThroughputMode::Rx
-        } else {
-            ThroughputMode::Tx
-        }
-    }
-
     /// The hostname portion of whichever of the arguments contained one.
     pub(crate) fn remote_host(&self) -> &str {
         hostname_of(&self.user_at_host)
@@ -166,6 +157,8 @@ mod test {
     type Res = anyhow::Result<()>;
     use engineering_repr::EngineeringQuantity;
     use pretty_assertions::assert_eq;
+
+    use crate::{CopyJobSpec, protocol::control::Direction, transport::ThroughputMode};
 
     use super::FileSpec;
     use std::str::FromStr;
@@ -228,5 +221,20 @@ mod test {
         // same mechanism that clap uses
         let q = "1k".parse::<EngineeringQuantity<u64>>().unwrap();
         assert_eq!(u64::from(q), 1000);
+    }
+
+    #[test]
+    fn direction() {
+        let js = CopyJobSpec::from_parts("server:file", "file", false).unwrap();
+        assert_eq!(js.direction(), Direction::ServerToClient);
+        assert_eq!(js.direction().server_mode(), ThroughputMode::Tx);
+        assert_eq!(js.direction().client_mode(), ThroughputMode::Rx);
+        let js = CopyJobSpec::from_parts("file", "server:file", false).unwrap();
+        assert_eq!(js.direction(), Direction::ClientToServer);
+        assert_eq!(js.direction().server_mode(), ThroughputMode::Rx);
+        assert_eq!(js.direction().client_mode(), ThroughputMode::Tx);
+        let dir = Direction::Both;
+        assert_eq!(dir.server_mode(), ThroughputMode::Both);
+        assert_eq!(dir.client_mode(), ThroughputMode::Both);
     }
 }

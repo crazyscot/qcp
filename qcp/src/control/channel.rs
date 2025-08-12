@@ -26,7 +26,7 @@ use crate::protocol::control::{
     Direction, OLD_BANNER, OUR_COMPATIBILITY_LEVEL, OUR_COMPATIBILITY_NUMERIC, ServerFailure,
     ServerGreeting, ServerMessage, ServerMessageV1,
 };
-use crate::transport::{ThroughputMode, combine_bandwidth_configurations};
+use crate::transport::combine_bandwidth_configurations;
 use crate::util::{Credentials, TimeFormat, TracingSetupFn};
 
 #[cfg(test)]
@@ -474,7 +474,7 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
             &message1.cert,
             message1.connection_type,
             &config,
-            ThroughputMode::for_server(direction),
+            direction.server_mode(),
             true,
             compat,
         ) {
