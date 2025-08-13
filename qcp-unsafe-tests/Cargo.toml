@@ -10,7 +10,7 @@ qcp = { path = "../qcp", features = ["unstable-test-helpers"] }
 
 anstream = { workspace = true }
 anstyle = { workspace = true }
-assertables = "9.8.1"
+assertables = "9.8.2"
 cfg-if = { workspace = true }
 colorchoice = { workspace = true }
 console = { workspace = true }
@@ -24,7 +24,7 @@ tokio = { workspace = true }
 tokio-test = "0.4.4"
 
 [target.'cfg(unix)'.dev-dependencies]
-libc = "0.2.174"
+libc = "0.2.175"
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(coverage_nightly)'] }

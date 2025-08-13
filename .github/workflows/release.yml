@@ -15,6 +15,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: write # necessary to publish to releases
     steps:

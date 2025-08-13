@@ -132,7 +132,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         if let Some(d) = d {
             debug!("Remote compatibility level {theirs} is {d} than ours {ours}");
         }
-        debug!("selected compatibility level {result}");
+        debug!("Selected compatibility level {result}");
         result.into()
     }
 
@@ -187,13 +187,13 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
             config,
         );
         message.set_direction(direction);
-        debug!("Our client message: {message}");
+        debug!("Our client message: {{ {message} }}");
         self.send(message, "client message").await
     }
 
     async fn client_read_server_message(&mut self) -> Result<ServerMessageV1> {
         let message = self.recv::<ServerMessage>("server message").await?;
-        trace!("Got server message {message:?}");
+        debug!("Received server message: {message:?}");
         // FUTURE: ServerMessage V2 will require more logic to unpack the message contents.
         let message1 = match message {
             ServerMessage::V1(m) => m,
@@ -227,7 +227,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         let remote_greeting = self
             .client_exchange_greetings(parameters.remote_debug)
             .await?;
-        debug!("got server greeting {remote_greeting:?}");
+        debug!("Received server greeting: {remote_greeting:?}");
 
         // PHASE 3: EXCHANGE OF MESSAGES
         let working = manager.get::<Configuration_Optional>().unwrap_or_default();
@@ -414,7 +414,7 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
             "client IP is {}",
             remote_ip.as_deref().map_or("none", |v| v)
         );
-        debug!("got client greeting {remote_greeting:?}");
+        debug!("Received client greeting: {remote_greeting:?}");
 
         self.run_server_inner(manager, remote_greeting.compatibility.into())
             .instrument(tracing::error_span!("[Server]").or_current())
@@ -436,7 +436,7 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
             message1.cert.len(),
             message1.connection_type,
         );
-        //debug!("client msg {message1:?}");
+        debug!("Received client message: {message1}");
         if message1.show_config {
             info!(
                 "Static configuration:\n{}",
