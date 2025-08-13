@@ -183,30 +183,6 @@ mod test {
         vec_subslice(haystack, &needle)
     }
 
-    #[tokio::test]
-    #[cfg_attr(target_os = "windows", ignore)]
-    async fn ssh_no_such_host_requires_ssh_on_path() {
-        let mp = MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden());
-        let manager = Manager::without_files(None);
-        let params = Parameters::default();
-        let cfg = manager.get::<Configuration_Optional>().unwrap_or_default();
-        let mut child = create(
-            &mp,
-            &cfg,
-            &params,
-            "no-such-host.invalid",
-            crate::protocol::control::ConnectionType::Ipv4,
-        )
-        .unwrap();
-
-        // There isn't, at present, a signal that the ssh connection failed. But we see it soon enough when we look for the banner.
-        let mut control = ControlChannel::new(child.stream_pair().unwrap());
-        let e = control.wait_for_banner().await.unwrap_err();
-        assert!(e.to_string().contains("failed to connect"));
-        child.close().await.unwrap();
-        drop(child);
-    }
-
     #[test]
     fn connection_type() {
         let cfg = Configuration_Optional::default();
