@@ -16,6 +16,7 @@ env:
 
 jobs:
   package:
+    timeout-minutes: 30
     strategy:
       fail-fast: false # useful for testing
       matrix:
