@@ -152,12 +152,7 @@ where
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use indicatif::MultiProgress;
-
-    use crate::control::ControlChannel;
-    use crate::{client::Parameters, config::Manager};
-
-    use super::{Configuration_Optional, ConnectionType, create, ssh_cli_args};
+    use super::{Configuration_Optional, ConnectionType, ssh_cli_args};
 
     fn vec_contains(v: &[String], s: &str) -> bool {
         v.iter().any(|x| x == s)

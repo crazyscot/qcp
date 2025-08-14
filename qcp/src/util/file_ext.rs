@@ -96,6 +96,13 @@ impl FileExt for TokioFile {
     ) -> anyhow::Result<(TokioFile, std::fs::Metadata), tokio::io::Error> {
         let fh: TokioFile = TokioFile::open(path).await?;
         let meta = fh.metadata().await?;
+        // Disallow reading from non-regular files (sockets, device nodes)
+        if !meta.is_file() && !meta.is_dir() {
+            return Err(tokio::io::Error::new(
+                tokio::io::ErrorKind::Unsupported,
+                "Source is not a regular file",
+            ));
+        }
         Ok((fh, meta))
     }
 
@@ -111,6 +118,9 @@ impl FileExt for TokioFile {
             // if it's a file, proceed (overwriting)
             if meta.is_dir() {
                 dest_path.push(header.filename.clone());
+            } else if !meta.is_file() {
+                // Disallow writing to pre-existing non-regular files (sockets, device nodes)
+                anyhow::bail!("Destination path exists but is not a regular file");
             }
         } // error ignored; file doesn't exist is perfectly OK with us :-)
         let mut options = tokio::fs::OpenOptions::new();
@@ -194,7 +204,7 @@ impl FileExt for TokioFile {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
-    #![allow(unused_variables)] // windows
+    #![allow(dead_code)] // windows
     use std::path::PathBuf;
 
     use crate::protocol::session::FileHeaderV2;
