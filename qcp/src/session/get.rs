@@ -451,4 +451,31 @@ mod test {
     async fn compat_v1_v1() {
         compat_get(1, 1, false).await;
     }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn device_nodes_disallowed() {
+        // Get from a device node
+        LitterTray::try_with_async(async |_| {
+            let (r1, r2) = test_getx_main("srv:/dev/null", "file", 2, 2, true).await?;
+            assert!(r1.is_err_and(|e| e.root_cause().to_string().contains("not a regular file")));
+            assert!(r2.is_ok());
+            let _meta_err = std::fs::metadata("created/file").unwrap_err();
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        // Get to a device node
+        LitterTray::try_with_async(async |tray| {
+            let _ = tray.create_text("file", "hi there")?;
+            let (r1, r2) = test_getx_main("srv:file", "/dev/null", 2, 2, true).await?;
+            assert!(r1.is_err_and(|e| e.root_cause().to_string().contains("not a regular file")));
+            assert!(r2.is_ok());
+            let _meta_err = std::fs::metadata("created/file").unwrap_err();
+            Ok(())
+        })
+        .await
+        .unwrap();
+    }
 }
