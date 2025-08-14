@@ -219,7 +219,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             Ok(f) => f,
             Err(e) => {
                 let str = e.to_string();
-                error!("Could not write to destination: {str}");
+                debug!("Could not write to destination: {str}");
                 let st = if str.contains("Permission denied") {
                     Status::IncorrectPermissions
                 } else if str.contains("Is a directory") {
@@ -504,28 +504,6 @@ mod test {
     }
 
     #[tokio::test]
-    async fn write_fail_io_error() -> Result<()> {
-        let contents = "oops";
-        LitterTray::try_with_async(async |tray| {
-            let _ = tray.create_text("file1", contents)?;
-            let (r1, r2) = test_put_main("file1", "s:/dev/full", false).await?;
-            let msg = r1.unwrap_err().root_cause().to_string();
-            if cfg!(target_os = "macos") {
-                assert_contains!(msg, "Permission denied");
-            } else if cfg!(unix) {
-                assert_contains!(msg, "No space left on device");
-            } else if cfg!(windows) {
-                assert_contains!(msg, "Invalid handle");
-            } else {
-                panic!("Unknown OS test case; is `{msg}` appropriate?");
-            }
-            assert!(r2.is_ok());
-            Ok(())
-        })
-        .await
-    }
-
-    #[tokio::test]
     async fn logic_error_trap() {
         let (_pipe1, pipe2) = new_test_plumbing();
         assert!(
@@ -627,5 +605,30 @@ mod test {
     #[tokio::test]
     async fn compat_v1_v1() {
         compat_put(1, 1, false).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn device_nodes_disallowed() {
+        // Put to a device node
+        LitterTray::try_with_async(async |tray| {
+            let _ = tray.create_text("file", "aaaa")?;
+            let (r1, r2) = test_putx_main("file", "srv:/dev/null", 2, 2, false, false).await?;
+            assert!(r1.is_err_and(|e| e.root_cause().to_string().contains("not a regular file")));
+            assert!(r2.is_ok());
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        // Put from a device node
+        LitterTray::try_with_async(async |_| {
+            let (r1, r2) = test_putx_main("/dev/null", "srv:file", 2, 2, true, false).await?;
+            assert!(r1.is_err_and(|e| e.root_cause().to_string().contains("not a regular file")));
+            assert!(r2.is_ok());
+            Ok(())
+        })
+        .await
+        .unwrap();
     }
 }
