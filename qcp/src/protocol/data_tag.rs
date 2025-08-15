@@ -142,7 +142,7 @@ where
     }
 }
 
-/// Helper function for implementing Display on Vec<TaggedData<E>>
+/// Helper function for implementing Display on `Vec<TaggedData<E>>`
 pub(crate) fn display_vec_td<E: DataTag>(v: &Vec<TaggedData<E>>) -> String {
     if v.is_empty() {
         return "[]".into();
