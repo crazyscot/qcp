@@ -10,7 +10,7 @@ mod dns;
 pub(crate) use dns::lookup_host_by_family;
 
 mod cert;
-pub(crate) use cert::Credentials;
+pub use cert::Credentials;
 
 mod file_ext;
 pub(crate) use file_ext::FileExt;

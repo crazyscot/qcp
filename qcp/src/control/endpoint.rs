@@ -21,7 +21,7 @@ use tracing::{Level, span, trace, warn};
 /// * `credentials` are generated locally.
 /// * `peer_cert` comes from the control channel server message.
 /// * `destination` is the server's address (port from the control channel server message).
-pub(crate) fn create_endpoint(
+pub fn create_endpoint(
     credentials: &Credentials,
     peer_cert: &[u8], /*CertificateDer<'_>*/
     connection_type: ConnectionType,
