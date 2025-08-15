@@ -5,8 +5,9 @@ mod channel;
 mod endpoint;
 mod ssh_process;
 
-pub(crate) use channel::{ControlChannel, ControlChannelServerInterface, stdio_channel};
-pub(crate) use endpoint::create_endpoint;
+pub use channel::ControlChannel;
+pub(crate) use channel::{ControlChannelServerInterface, stdio_channel};
+pub use endpoint::create_endpoint;
 pub(crate) use ssh_process::create;
 
 #[cfg(test)]
