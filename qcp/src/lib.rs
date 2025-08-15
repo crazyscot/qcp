@@ -118,7 +118,7 @@ pub use client::{CopyJobSpec, FileSpec, Parameters};
 pub mod config;
 pub use config::structure::Configuration;
 
-pub(crate) mod control;
+pub mod control;
 pub mod protocol;
 mod server;
 pub(crate) use server::server_main;

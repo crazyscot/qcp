@@ -60,7 +60,8 @@ pub(crate) trait ControlChannelServerInterface<
 }
 
 /// Real control channel
-pub(crate) struct ControlChannel<S: SendingStream, R: ReceivingStream> {
+#[derive(Debug)]
+pub struct ControlChannel<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
     /// The selected compatibility level for the connection
     pub selected_compat: Compatibility,
