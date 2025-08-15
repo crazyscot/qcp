@@ -60,7 +60,7 @@ impl OpenOptionsExt for tokio::fs::OpenOptions {
 }
 
 #[async_trait]
-/// Extension trait for `tokio::fs::File``
+/// Extension trait for `tokio::fs::File`
 pub(crate) trait FileExt {
     /// Opens a local file for reading, returning a filehandle and metadata.
     async fn open_with_meta<P: AsRef<Path> + Send>(

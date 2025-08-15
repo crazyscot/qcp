@@ -3,7 +3,7 @@
 
 use crate::protocol::{TaggedData, session::MetadataAttr};
 
-/// Extension trait for `std::fs::Metadata``
+/// Extension trait for `std::fs::Metadata`
 pub(crate) trait FsMetadataExt: std::marker::Sized {
     /// Extract the Unix mode bits, or a facsimile
     fn mode(&self) -> u32;

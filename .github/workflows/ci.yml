@@ -62,7 +62,7 @@ jobs:
       - run: cargo clippy --locked
         name: Lint
         if: ${{ !cancelled() }}
-      - run: cargo doc --no-deps --locked
+      - run: cargo doc --no-deps --locked --document-private-items
         name: Documentation
         if: ${{ !cancelled() }}
 
