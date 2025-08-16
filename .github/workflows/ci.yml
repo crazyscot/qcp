@@ -23,15 +23,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
+      fail-fast: false # useful for testing
       matrix:
+        rust-version: [1.85.0, stable]
+        cache: [true]
         include:
-          # MSRV must pass all checks
-          - rust-version: 1.85.0 # MSRV
-            may-fail: false
-          # Latest stable is allowed to fail, this gives us a heads up
-          - rust-version: stable
-            may-fail: true
-    continue-on-error: ${{ matrix.may-fail }}
+          - rust-version: nightly
+            cache: false
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust ${{ matrix.rust-version }}
@@ -40,7 +38,7 @@ jobs:
           # this action is used in multiple places
         with:
           toolchain: ${{ matrix.rust-version }}
-          components: rustfmt,clippy
+          components: rustfmt,clippy,rust-src
 
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
       - uses:
@@ -49,21 +47,37 @@ jobs:
         with:
           key: ${{ matrix.rust-version }}
           cache-on-failure: true
-          cache-all-crates: true
+        if: ${{ matrix.cache }}
 
       # Within this workflow we will continue on error, to give
       # maximum information to the developer.
       - run: cargo fmt --all --check
-        name: Code style
         if: ${{ !cancelled() }}
-      - run: cargo build --locked
-        name: Build
+      - run: cargo clippy --locked --tests --workspace
         if: ${{ !cancelled() }}
-      - run: cargo clippy --locked
-        name: Lint
-        if: ${{ !cancelled() }}
-      - run: cargo doc --no-deps --locked --document-private-items
-        name: Documentation
+
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RUSTDOCFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          # update periodically
+          toolchain: nightly-2025-07-31
+          components: rust-src
+      - uses: dtolnay/install@cargo-docs-rs
+      ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
+      - uses:
+          Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
+          # this action is used in multiple places
+        with:
+          cache-on-failure: true
+      - run: cargo docs-rs -p qcp
+      # Continue on error for maximum information
+      - run: cargo doc -p qcp --no-deps --locked --document-private-items
         if: ${{ !cancelled() }}
 
   coverage:
@@ -76,8 +90,9 @@ jobs:
           dtolnay/rust-toolchain@master
           # this action is used in multiple places
         with:
-          toolchain: nightly-2025-03-31
-          components: llvm-tools-preview
+          # update periodically
+          toolchain: nightly-2025-07-31
+          components: llvm-tools-preview,rust-src
       - uses:
           taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
           # this action is used in multiple places
@@ -109,7 +124,14 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  build:
+  test:
     uses: ./.github/workflows/package.yml
+    needs: [checks, docs, coverage]
     with:
-      release: false
+      test: true
+
+  package:
+    uses: ./.github/workflows/package.yml
+    needs: [checks, docs, coverage]
+    with:
+      package: true
