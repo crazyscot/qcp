@@ -11,6 +11,7 @@ jobs:
   build:
     uses: ./.github/workflows/package.yml
     with:
+      package: true
       release: true
   publish:
     needs: build
@@ -19,7 +20,7 @@ jobs:
     permissions:
       contents: write # necessary to publish to releases
     steps:
-      - name: download artifacts
+      - name: download CI artifacts
         id: download1
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
@@ -27,7 +28,7 @@ jobs:
       - name: enumerate (debug)
         run: tree "${{ steps.download1.outputs.download-path }}"
         continue-on-error: true
-      - name: upload
+      - name: upload artifacts to gh release
         # Without a checkout, one must explicitly specify the repo to upload to (-R option).
         run: bash -xc 'gh release upload -R "${{ github.repository }}" "${{ github.ref_name }}" ./*'
         env:

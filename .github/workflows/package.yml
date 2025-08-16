@@ -1,116 +1,96 @@
-name: Packaging (called by CI and release)
+name: Cross-platform packaging and testing
 
 on:
   workflow_call:
     inputs:
-      release:
-        required: true
+      package:
         type: boolean
+        default: false
+      test:
+        type: boolean
+        default: false
+      release:
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
   CLICOLOR_FORCE: 1
   RUST_BACKTRACE: 1
   CARGO_INCREMENTAL: 0
-  _QCP_RUST_PACKAGING_VERSION: 1.86.0
 
 jobs:
-  package:
+  platform:
     timeout-minutes: 30
     strategy:
       fail-fast: false # useful for testing
       matrix:
         include:
-          - build: linux-x86_64-musl
-            host: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            rust: $_QCP_RUST_PACKAGING_VERSION
-            build_deb: true
-            cross: true
-            pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
-          - build: linux-aarch64-musl
-            host: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            rust: $_QCP_RUST_PACKAGING_VERSION
-            build_deb: true
-            cross: true
-            pack_extra: ",qcp/misc/20-qcp.conf" # Linux sysctl defs
-          - build: apple-x86_64
-            host: macos-latest
-            target: x86_64-apple-darwin
-            rust: $_QCP_RUST_PACKAGING_VERSION
-            build_deb: false
-            cross: false
-          - build: apple-aarch64
-            host: macos-latest
-            target: aarch64-apple-darwin
-            rust: $_QCP_RUST_PACKAGING_VERSION
-            build_deb: false
-            cross: false
+          - target: x86_64-unknown-linux-musl
+            host: ubuntu-24.04
+
+          - target: aarch64-unknown-linux-musl
+            host: ubuntu-24.04-arm
+
+          - target: x86_64-apple-darwin
+            host: macos-14
+          - target: aarch64-apple-darwin
+            host: macos-14
+
           # freebsd cross-builds as of 31 Mar 2025 but is untested.
-          #- build: freebsd-x86_64
-          #  host: ubuntu-latest
-          #  target: x86_64-unknown-freebsd
-          #  rust: $_QCP_RUST_PACKAGING_VERSION
-          #  build_deb: false
-          #  cross: true
+          #- target: x86_64-unknown-freebsd
+          #  host: ubuntu-24.04
+
           # netbsd rust support is tier 2; as of 31 Mar 2025 the crossbuild fails to link (cannot find -lexecinfo).
+
           # openbsd rust support is tier 3; as of 31 Mar 2025 it has no stable or nightly build.
-          #- build: windows-x86_64
-          #  host: windows-latest
-          #  target: x86_64-pc-windows-msvc
-          #  rust: stable
-          #  build_deb: false
-          #  cross: false
-          - build: windows-x86_64-mingw
-            host: ubuntu-latest
-            target: x86_64-pc-windows-gnu
-            rust: stable
-            build_deb: false
-            cross: true
+
+          #- target: x86_64-pc-windows-msvc
+          #  host: windows-2025
+          #- target: x86_64-pc-windows-gnullvm
+          #  host: ubuntu-24.04
+          - target: x86_64-pc-windows-gnu
+            host: ubuntu-24.04
+
     runs-on: ${{ matrix.host }}
     env:
-      BINARY_ARTIFACT: ${{ format('qcp-binary-{0}', matrix.target) }}
-      DEB_ARTIFACT: ${{ matrix.build_deb && format('qcp-deb-{0}', matrix.target) }}
-      PACKAGE_ZIP: ${{ contains(matrix.target, 'windows') && 'all' || 'none' }}
-      PACKAGE_TAR: ${{ contains(matrix.target, 'windows') && 'none' || 'all' }}
+      Q_BUILD_DEB: ${{ inputs.package && contains(matrix.target, 'linux') && '1' || '0' }}
+      Q_PACKAGE_ZIP: ${{ contains(matrix.target, 'windows') && 'all' || 'none' }}
+      Q_PACKAGE_TAR: ${{ contains(matrix.target, 'windows') && 'none' || 'all' }}
+      ##### Packaging variations per-platform
+      # Linux sysctl defs
+      Q_PACK_1: ${{ contains(matrix.target, 'linux') && ',qcp/misc/20-qcp.conf' || '' }}
+      # Man pages - Unix only
+      Q_PACK_2: ${{ !contains(matrix.target, 'windows') && ',qcp/misc/qcp.1,qcp/misc/qcp_config.5' || '' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
-        uses:
-          dtolnay/rust-toolchain@master
-          # this action is used in multiple places
-        with:
-          toolchain: ${{ matrix.rust }}
-          targets: ${{ matrix.target }}
-      - name: Set up rust cross toolchain
-        uses: taiki-e/setup-cross-toolchain-action@4c366193ea262ae0c17c6b79c3edc3d4f1394263 # v1.30.0
+      - uses: taiki-e/setup-cross-toolchain-action@4c366193ea262ae0c17c6b79c3edc3d4f1394263 # v1.30.0
         with:
           target: ${{ matrix.target }}
-      - name: Additional rust tools
+      - name: Additional rust tools for packaging
         uses:
           taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
           # this action is used in multiple places
         with:
-          tool: cargo-cyclonedx${{ matrix.build_deb && ',cargo-deb' || ''}}
+          tool: cargo-cyclonedx@0.5.7${{ env.Q_BUILD_DEB == '1' && ',cargo-deb@3.5.1' || ''}}
           checksum: true
-      - name: Install binutils-multiarch (cross builds only)
-        if: startsWith(matrix.host, 'ubuntu') && matrix.cross
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          sudo apt-get update
-          sudo apt-get -y --no-install-recommends install binutils-multiarch
+        if: inputs.package
 
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
       # 31 Mar 2025: Disabled cacheing.
       # Full cacheing with `cache-targets` saves 30-40s per platform, but at a high space cost.
       # Cacheing with cache-targets: false is a net slowdown.
 
-      - name: Generate CycloneDX SBOM
-        run: cargo cyclonedx --target ${{ matrix.target }}
+      - run: cargo test --locked
+        if: inputs.test
+
+      - run: cargo cyclonedx --target ${{ matrix.target }}
+        if: inputs.package
+
       - name: Build binary package
         uses: taiki-e/upload-rust-binary-action@3962470d6e7f1993108411bc3f75a135ec67fc8c # v1.27.0
         id: build-binary
+        if: inputs.package
         with:
           bin: qcp
           dry-run: true
@@ -122,27 +102,27 @@ jobs:
             README.md,LICENSE,CHANGELOG.md,\
             qcp/qcp.cdx.xml,\
             qcp/misc/qcp.conf,\
-            qcp/misc/qcp_sshd.conf,\
-            qcp/misc/qcp.1,qcp/misc/qcp_config.5\
-            ${{ matrix.pack_extra }}"
-          # NOTE: No trailing comma before pack_extra
-          # (Not all platforms have any pack_extra files)
+            qcp/misc/qcp_sshd.conf\
+            ${{ env.Q_PACK_1 }}\
+            ${{ env.Q_PACK_2 }}\
+            "
+          # NOTE: No trailing comma before any Q_PACK_* variables.
+          # (Not all platforms have any extra files to pack)
+          # Include a leading comma in the variables when needed.
           leading-dir: true
           locked: true
-          tar: ${{ env.PACKAGE_TAR }}
-          zip: ${{ env.PACKAGE_ZIP }}
+          tar: ${{ env.Q_PACKAGE_TAR }}
+          zip: ${{ env.Q_PACKAGE_ZIP }}
       - name: Upload binary package to CI result
-        # always try to do this, it allows the package to be checked
-        if: success() || failure()
+        if: ${{ inputs.package && ( success() || failure() ) }}
+        # always try to do this if packaging, it allows the package to be checked
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ env.BINARY_ARTIFACT }}
-          path: ${{ steps.build-binary.outputs.archive }}.${{ env.PACKAGE_ZIP == 'all' && 'zip' || 'tar.gz' }}
-      - name: Run tests
-        run: cargo test --locked
+          name: ${{ format('qcp-binary-{0}', matrix.target) }}
+          path: ${{ steps.build-binary.outputs.archive }}.${{ env.Q_PACKAGE_ZIP == 'all' && 'zip' || 'tar.gz' }}
       - name: Make deb package
         id: deb
-        if: ${{ matrix.build_deb }}
+        if: env.Q_BUILD_DEB == '1'
         env:
           # Compute the flag to pass to the script
           RELEASE_FLAG: ${{ inputs.release && '--release' || '--no-release' }}
@@ -150,8 +130,8 @@ jobs:
           scripts/make-debian-package $RELEASE_FLAG ${{ matrix.target }}
           # this script sets the output `deb`
       - name: Upload deb artifact to CI result
-        if: ${{ matrix.build_deb }}
+        if: env.Q_BUILD_DEB == '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ env.DEB_ARTIFACT }}
+          name: ${{ format('qcp-deb-{0}', matrix.target) }}
           path: ${{ steps.deb.outputs.deb }}
