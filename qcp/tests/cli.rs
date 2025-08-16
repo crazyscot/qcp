@@ -3,10 +3,7 @@ use std::process::ExitCode;
 
 use qcp::main as qcp_main;
 
-#[test]
-fn client_no_files() {
-    assert_eq!(qcp_main(["qcp"]), ExitCode::FAILURE);
-}
+use rusty_fork::rusty_fork_test;
 
 #[test]
 fn show_config_files() {
@@ -21,6 +18,13 @@ fn bad_option() {
     );
 }
 
+rusty_fork_test! {
+
+#[test]
+fn client_no_files() {
+    assert_eq!(qcp_main(["qcp"]), ExitCode::FAILURE);
+}
+
 #[test]
 fn ssh_fails() {
     assert_eq!(
@@ -33,4 +37,6 @@ fn ssh_fails() {
         ]),
         ExitCode::FAILURE
     );
+}
+
 }
