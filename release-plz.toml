@@ -7,7 +7,7 @@ git_release_body = """
 
 ### Download notes
 * Debian and Ubuntu users will likely find the .deb packages convenient.
-* Other Linux distributions, use `qcp-<ARCH>-unknown-linux-musl.tar.gz`. These are static musl binaries which should work on all distributions.
+* Other Linux distributions, use `qcp-linux-<ARCH>-musl.tar.gz`. These are static musl binaries which should work on all distributions.
 
 {% if remote.contributors %}
 ### Contributors
