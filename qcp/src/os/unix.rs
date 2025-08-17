@@ -22,7 +22,7 @@
 //!
 //! ## Packaging
 //!
-//! The released Linux binary images (named `qcp-<ARCH>-unknown-linux-musl.tar.gz`) should work with any
+//! The released Linux binary images (named `qcp-linux-<ARCH>-musl.tar.gz`) should work with any
 //! recent Linux kernel, independent of distribution.
 //! (They are statically linked against `musl`.)
 
