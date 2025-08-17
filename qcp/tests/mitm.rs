@@ -1,4 +1,4 @@
-//! Security testing - Man-in-the-Middle (MitM) attacks
+//! Security testing - Man-in-the-Middle (MITM) attacks
 // (c) 2025 Ross Younger
 
 use std::{
@@ -21,11 +21,11 @@ use qcp::{
 /// This simulates the scenario where either a rogue client attempts to connect to a server,
 /// or there is a Man in the Middle attack going on.
 ///
-/// * modify_certs_fn (closure type `F`): This closure is called with the original client
+/// * `modify_certs_fn` (closure type `F`): This closure is called with the original client
 ///   and server certificates. It is expected to return the same tuple, but may modify or replace
 ///   either of them. These certificates are passed to the QUIC endpoints as the `peer_cert` parameter.
 ///
-/// * check_fn (closure type `G`): This closure is called with the results of the client and server
+/// * `check_fn` (closure type `G`): This closure is called with the results of the client and server
 ///   QUIC connection attempts. It is expected to assert that the connections are in the expected state.
 async fn run_endpoint_connection<F, G>(modify_certs_fn: F, check_fn: G) -> anyhow::Result<()>
 where

@@ -20,7 +20,7 @@ impl VecOrString {
     #[must_use]
     pub fn to_vec_owned(&self) -> Vec<String> {
         match self {
-            VecOrString::String(s) => vec![s.to_string()],
+            VecOrString::String(s) => vec![s.clone()],
             VecOrString::Vec(v) => v.to_owned(),
         }
     }
@@ -30,7 +30,7 @@ impl VecOrString {
     pub fn to_vec(self) -> Vec<String> {
         match self {
             VecOrString::String(s) => {
-                vec![s.to_string()]
+                vec![s]
             }
             VecOrString::Vec(v) => v,
         }

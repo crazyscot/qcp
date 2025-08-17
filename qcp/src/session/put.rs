@@ -85,12 +85,12 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
                 options.push(CommandParam::PreserveMetadata.into());
             }
             Command::Put2(Put2Args {
-                filename: dest_filename.to_string(),
+                filename: dest_filename.clone(),
                 options,
             })
         } else {
             Command::Put(PutArgs {
-                filename: dest_filename.to_string(),
+                filename: dest_filename.clone(),
             })
         };
         cmd.to_writer_async_framed(&mut outbound).await?;
@@ -407,7 +407,10 @@ mod test {
             let msg = r1.unwrap_err().to_string();
             if cfg!(unix) {
                 assert_contains!(msg, "No such file or directory");
+            } else if cfg!(msvc) {
+                assert_contains!(msg, "The system cannot find the file specified");
             } else {
+                // mingw
                 assert_contains!(msg, "File not found");
             }
             assert!(r2.is_ok());
@@ -423,7 +426,10 @@ mod test {
             let msg = r1.unwrap_err().to_string();
             if cfg!(unix) {
                 assert_contains!(msg, "Source is a directory");
+            } else if cfg!(msvc) {
+                assert_contains!(msg, "The specified path is invalid");
             } else {
+                // mingw
                 assert_contains!(msg, "Access denied");
             }
             assert!(r2.is_ok());
@@ -491,8 +497,9 @@ mod test {
             let msg = r1.root_cause().to_string();
 
             if cfg!(unix) {
-                assert_contains!(msg, "Permission denied");
                 assert_eq!(Status::from(r1), Status::IncorrectPermissions);
+            } else if cfg!(msvc) {
+                assert_eq!(Status::from(r1), Status::DirectoryDoesNotExist);
             } else {
                 assert_contains!(msg, "Access denied");
                 assert_eq!(Status::from(r1), Status::IoError);
