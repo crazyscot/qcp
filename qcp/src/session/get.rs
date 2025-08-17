@@ -77,12 +77,12 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
                 options.push(CommandParam::PreserveMetadata.into());
             }
             Command::Get2(Get2Args {
-                filename: filename.to_string(),
+                filename: filename.clone(),
                 options,
             })
         } else {
             Command::Get(GetArgs {
-                filename: filename.to_string(),
+                filename: filename.clone(),
             })
         };
         trace!("send command: {cmd}");
