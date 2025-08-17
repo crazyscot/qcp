@@ -8,7 +8,7 @@ qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH SYNOPSIS
-\fBqcp\fR [\fB\-b\fR|\fB\-\-rx\fR] [\fB\-B\fR|\fB\-\-tx\fR] [\fB\-r\fR|\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-T\fR|\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-color\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-d\fR|\fB\-\-debug\fR] [\fB\-L\fR|\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
+\fBqcp\fR [\fB\-\-rx\fR] [\fB\-\-tx\fR] [\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-\-port\fR] [\fB\-\-timeout\fR] [\fB\-\-udp\-buffer\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-initial\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-color\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-\-list\-features\fR] [\fB\-\-debug\fR] [\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH DESCRIPTION
@@ -41,14 +41,17 @@ This is an experimental implementation of an experimental protocol. While it has
 .el .ds Aq '
 .SH OPTIONS
 .TP
-\fB\-\-color\fR=\fImode\fR
+\fB\-\-color\fR [\fI<mode>\fR]
 Colour mode for console output (default: auto)
 
 Passing `\-\-color` without a value is equivalent to `\-\-color always`.
 
-Note that color configuration is not shared with the remote system, so the color output from the remote system (log messages, remote\-config) will be coloured per the config file on the remote system.
+Note that color configuration is not shared with the remote system, so the color output
+from the remote system (log messages, remote\-config) will be coloured per the
+config file on the remote system.
 
-qcp also supports the `CLICOLOR`, `CLICOLOR_FORCE` and `NO_COLOR` environment variables. See [https://bixense.com/clicolors/](https://bixense.com/clicolors/) for more details.
+qcp also supports the `CLICOLOR`, `CLICOLOR_FORCE` and `NO_COLOR` environment variables.
+See https://bixense.com/clicolors/ for more details.
 
 CLI options take precedence over the configuration file, which takes precedence over environment variables.
 .br
@@ -64,6 +67,9 @@ never: Never use colours
 auto: Use colours only when writing to a terminal. This is the default behaviour
 .RE
 .TP
+\fB\-p\fR, \fB\-\-preserve\fR
+Preserves file modification times and permissions as far as possible
+.TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)
 .TP
@@ -76,30 +82,44 @@ Destination. This may be a file or directory. It may be local or remote.
 If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there.
 .SH "NETWORK TUNING"
 .TP
-\fB\-b\fR, \fB\-\-rx\fR=\fIbytes\fR
-The maximum network bandwidth we expect receiving data FROM the remote system. [default: 12.5M]
+\fB\-\-rx\fR \fI<bytes>\fR
 
-This parameter is always interpreted as the **local** bandwidth, whether operating in client or server mode.
+The maximum network bandwidth we expect receiving data FROM the remote system.
+[default: 12.5M]
 
-This may be specified directly as a number, or as an SI quantity like `10M` or `256k`. **Note that this is described in BYTES, not bits**; if (for example) you expect to fill a 1Gbit ethernet connection, 125M might be a suitable setting.
+This is the single most important configuration necessary for good performance!
+If you configure nothing else, at least set this to suit your network.
+
+This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode.
+
+This may be specified directly as a number, or as an SI quantity
+like `10M` or `256k`. Note that this is described in BYTES, not bits;
+if (for example) you expect to fill a 1Gbit ethernet connection,
+125M would be a suitable setting.
+        
 .TP
-\fB\-B\fR, \fB\-\-tx\fR=\fIbytes\fR
-The maximum network bandwidth we expect sending data TO the remote system, if it is different from the bandwidth FROM the system. (For example, when you are connected via an asymmetric last\-mile DSL or fibre profile.)
+\fB\-\-tx\fR \fI<bytes>\fR
 
-This parameter is always interpreted as the **local** bandwidth, whether operating in client or server mode.
+The maximum network bandwidth we expect sending data TO the remote system,
+if it is different from the bandwidth FROM the system.
+(For example, when you are connected via an asymmetric last\-mile DSL or fibre profile.)
 
+Specify as a number, or as an SI quantity (e.g. `10M`).
+
+This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode.
 If not specified or 0, uses the value of `rx`.
+
 .TP
-\fB\-r\fR, \fB\-\-rtt\fR=\fIms\fR
+\fB\-\-rtt\fR \fI<ms>\fR
 The expected network Round Trip time to the target system, in milliseconds. [default: 300]
 .TP
 \fB\-\-help\-buffers\fR
 Outputs additional information about kernel UDP buffer sizes and platform\-specific tips.
 
-This option cannot be used with any other option.
+Note that the recommendations are based on the `udp_buffer` field in your configuration, which you can also set on the CLI.
 .SH "ADVANCED NETWORK TUNING"
 .TP
-\fB\-\-congestion\fR=\fIalgorithm\fR
+\fB\-\-congestion\fR \fI<algorithm>\fR
 Specifies the congestion control algorithm to use. [default: cubic]
 .br
 
@@ -110,29 +130,81 @@ Specifies the congestion control algorithm to use. [default: cubic]
 cubic: The congestion algorithm TCP uses. This is good for most cases
 .IP \(bu 2
 bbr: (Use with caution!) An experimental algorithm created by Google, which increases goodput in some situations (particularly long and fat connections where the intervening buffers are shallow). However this comes at the cost of having more data in\-flight, and much greater packet retransmission. See `https://blog.apnic.net/2020/01/10/when\-to\-use\-and\-not\-use\-bbr/` for more discussion
+.IP \(bu 2
+new\-reno: The traditional "NewReno" congestion algorithm. This was the algorithm used in TCP before the introduction of Cubic
 .RE
 .TP
-\fB\-\-initial\-congestion\-window\fR=\fIbytes\fR
-_(Network wizards only!)_ The initial value for the sending congestion control window, in bytes. If unspecified, the active congestion control algorithm decides.
+\fB\-\-initial\-congestion\-window\fR \fI<bytes>\fR
+
+(Network wizards only!)
+
+The initial value for the sending congestion control window, in bytes.
+If unspecified, the active congestion control algorithm decides.
+
+Setting this value too high reduces performance!
 
 This may be specified directly as a number, or as an SI quantity like `10k`.
+.TP
+\fB\-\-udp\-buffer\fR \fI<bytes>\fR
+Size of the UDP kernel buffer in bytes.
 
-_Setting this value too high reduces performance!_
+Specify as an integer or as an SI quantity, e.g. 4M.
+
+The default, 4M, should be good for most cases. However there may be high\-bandwidth situations (10Gbps or more) where this becomes a bottleneck, or situations where you wish to restrict memory consumption.
+.TP
+\fB\-\-packet\-threshold\fR \fI<packets>\fR
+Packet reordering loss detection threshold
+
+The default, 3, should be good for most cases. See RFC 9002 s6.1 for more details.
+.TP
+\fB\-\-time\-threshold\fR \fI<multiples of RTT>\fR
+Time reordering loss detection threshold
+
+The default, 1.125, should be good for most cases. See RFC 9002 s6.1 for more details.
+.TP
+\fB\-\-initial\-mtu\fR \fI<bytes>\fR
+The maximum UDP payload size to use before initial MTU discovery has completed (default: 1200)
+
+QUIC runs dynamic Path MTU detection, so this option is not necessary.
+
+Setting it appropriately can speed up the initial transfer phase, particularly if jumbo frames are in use.
+
+Setting it higher than supported will cause very poor performance while QUIC deals with blackhole events and figures out what the network is actually capable of.
+.TP
+\fB\-\-min\-mtu\fR \fI<bytes>\fR
+The minimum MTU that the network is guaranteed to support.
+
+Unless you have very good control over all the network infrastructure in use, this setting is unlikely to help you. The default, 1200, is the protocol minimum.
+
+Setting this higher than the network actually supports will cause very poor performance and unpredictable effects; it may not be possible to complete a file transfer in a reasonable time.
+.TP
+\fB\-\-max\-mtu\fR \fI<bytes>\fR
+The maximum value that Path MTU discovery will search for (default: 1452)
+
+The maximum MTU only really affects the sending direction of the connection.
+
+If jumbo frames are possible with your end\-to\-end network connection, set this appropriately.
+
+The default is reasonably conservative. Depending on your network connection and any tunnelling or VPN in use, hosts connected by ethernet may be able to support a slightly higher maximum MTU.
+
+Some connections do not support even this MTU, so for best efficiency \- particularly with small file transfers \- it may be worth setting this lower to avoid the penalty caused by MTU detection triggering black hole behaviour.
+
+It is safe to set a high limit, but that may reduce efficiency as MTU discovery will take longer to complete.
 .SH CONNECTION
 .TP
-\fB\-p\fR, \fB\-\-port\fR=\fIM\-N\fR
+\fB\-\-port\fR \fI<M\-N>\fR
 Uses the given UDP port or range on the **local** endpoint. This can be useful when there is a firewall between the endpoints.
 
 For example: `12345`, `20000\-20100`
 
 If unspecified, uses any available UDP port.
 .TP
-\fB\-t\fR, \fB\-\-timeout\fR=\fIsec\fR
+\fB\-\-timeout\fR \fI<sec>\fR
 Connection timeout for the QUIC endpoints [seconds; default 5]
 
 This needs to be long enough for your network connection, but short enough to provide a timely indication that UDP may be blocked.
 .TP
-\fB\-\-address\-family\fR=\fIADDRESS_FAMILY\fR
+\fB\-\-address\-family\fR \fI<ADDRESS_FAMILY>\fR
 Forces use of a particular IP version when connecting to the remote. [default: any]
 .br
 
@@ -147,34 +219,36 @@ inet6: IPv6
 any: Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup
 .RE
 .TP
-\fB\-\-ssh\fR=\fIssh\-client\fR
+\fB\-\-ssh\fR \fI<ssh\-client>\fR
 Specifies the ssh client program to use [default: `ssh`]
 .TP
-\fB\-S\fR=\fIssh\-option\fR
+\fB\-S\fR \fI<ssh\-option>\fR
+
 Provides an additional option or argument to pass to the ssh client. [default: none]
 
-**On the command line** you must repeat `\-S` for each argument. For example, to pass `\-i /dev/null` to ssh, specify: `\-S \-i \-S /dev/null`
+On the command line, you must repeat `\-S` for each argument.
+For example, to pass `\-i /dev/null` to ssh, specify: `\-S \-i \-S /dev/null`
 .TP
-\fB\-P\fR, \fB\-\-remote\-port\fR=\fIM\-N\fR
+\fB\-P\fR, \fB\-\-remote\-port\fR \fI<M\-N>\fR
 Uses the given UDP port or range on the **remote** endpoint. This can be useful when there is a firewall between the endpoints.
 
 For example: `12345`, `20000\-20100`
 
 If unspecified, uses any available UDP port.
 .TP
-\fB\-l\fR, \fB\-\-remote\-user\fR=\fIlogin_name\fR
+\fB\-l\fR, \fB\-\-remote\-user\fR \fI<login_name>\fR
 Specifies the user on the remote machine to connect as.
 
 This is functionally the same as specifying a remote filename `user@host:file`. If unspecified, we leave it up to ssh to determine.
 .TP
-\fB\-\-ssh\-config\fR=\fIFILE\fR
+\fB\-\-ssh\-config\fR \fI<FILE>\fR
 Alternative ssh config file(s)
 
 By default, qcp reads your user and system ssh config files to look for Hostname aliases. In some cases the logic in qcp may not read them successfully; this is an escape hatch, allowing you to specify one or more alternative files to read instead (which may be empty, nonexistent or /dev/null).
 
 This option is really intended to be used in a qcp configuration file. On the command line, you can repeat `\-\-ssh\-config file` as many times as needed.
 .TP
-\fB\-\-ssh\-subsystem\fR=\fISSH_SUBSYSTEM\fR
+\fB\-\-ssh\-subsystem\fR[=\fI<SSH_SUBSYSTEM>\fR]
 Ssh subsystem mode
 
 This mode causes qcp to run `ssh <host> \-s qcp` instead of `ssh <host> qcp \-\-server`.
@@ -198,7 +272,7 @@ Forces use of IPv6
 This is a convenience alias for `\-\-address\-family inet6`
 .SH OUTPUT
 .TP
-\fB\-T\fR, \fB\-\-time\-format\fR=\fIFORMAT\fR
+\fB\-\-time\-format\fR \fI<FORMAT>\fR
 Specifies the time format to use when printing messages to the console or to file [default: local]
 .br
 
@@ -213,7 +287,7 @@ utc: UTC time, as "year\-month\-day HH:MM:SS"
 rfc3339: UTC time, in the format described in [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
 .RE
 .TP
-\fB\-L\fR, \fB\-\-log\-file\fR=\fIFILE\fR
+\fB\-\-log\-file\fR \fI<FILE>\fR
 Log to a file
 
 By default the log receives everything printed to stderr. To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
@@ -249,9 +323,15 @@ Connects to a remote server but does not actually transfer any files. This is us
 Outputs the server\*(Aqs configuration for this connection. (Unlike `\-\-show\-config`, this option does not prevent a file transfer. However, you can do so by selecting `\-\-dry\-run` mode.)
 
 The output shows both the server\*(Aqs _static_ configuration (by reading config files) and its _final_ configuration (taking account of the client\*(Aqs expressed preferences).
+.SH COMPATIBILITY
+.TP
+\fB\-\-list\-features\fR
+Outputs all known protocol features with their compatibility levels.
+
+This option cannot be used with any other option.
 .SH DEBUG
 .TP
-\fB\-d\fR, \fB\-\-debug\fR
+\fB\-\-debug\fR
 Enable detailed debug output
 
 This has the same effect as setting `RUST_LOG=qcp=debug` in the environment. If present, `RUST_LOG` overrides this option.
