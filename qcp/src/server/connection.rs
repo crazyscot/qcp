@@ -140,7 +140,7 @@ mod tests {
         }
 
         fn remote_address(&self) -> std::net::SocketAddr {
-            SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8765).into()
+            SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8765).into()
         }
     }
 

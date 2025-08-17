@@ -508,7 +508,7 @@ mod test {
             cert: server_cert.certificate.to_vec(),
             ..Default::default()
         };
-        let server_address_port = (Ipv4Addr::new(127, 0, 0, 1), 0);
+        let server_address_port = (Ipv4Addr::LOCALHOST, 0);
 
         let endpoint = uut
             .create_quic_endpoint(

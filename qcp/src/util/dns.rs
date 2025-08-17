@@ -45,6 +45,7 @@ mod tests {
         assert!(result.is_ipv4());
     }
     #[cfg_attr(target_os = "macos", ignore)] // GitHub OSX runners seem unable to look up ipv6.google.com?!
+    #[cfg_attr(msvc, ignore)] // GitHub Windows runners seem unable to look up ipv6.google.com?!
     #[tokio::test]
     async fn ipv6() {
         let result = lookup_host_by_family("ipv6.google.com", AddressFamily::Inet6).unwrap();

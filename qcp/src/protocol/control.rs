@@ -438,6 +438,7 @@ pub struct ClientMessageV1 {
     pub attributes: Vec<TaggedData<ClientMessageAttributes>>,
 }
 
+#[cfg(test)]
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug, Default)]
 /// The control parameters send from client to server.
 enum OriginalClientMessage {
@@ -446,8 +447,10 @@ enum OriginalClientMessage {
     ToFollow,
     V1(OriginalClientMessageV1),
 }
+#[cfg(test)]
 impl ProtocolMessage for OriginalClientMessage {}
 
+#[cfg(test)]
 #[derive(Clone, Serialize, Deserialize, PartialEq, Default, derive_more::Debug)]
 struct OriginalClientMessageV1 {
     cert: Vec<u8>,

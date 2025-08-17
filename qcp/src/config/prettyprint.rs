@@ -38,7 +38,7 @@ impl PrettyConfig {
 
     fn render_value(value: &Value) -> String {
         match value {
-            Value::String(_tag, s) => s.to_string(),
+            Value::String(_tag, s) => s.clone(),
             Value::Char(_tag, c) => c.to_string(),
             Value::Bool(_tag, b) => b.to_string(),
             Value::Num(_tag, num) => {

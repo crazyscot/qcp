@@ -23,6 +23,7 @@ fn main() {
             target_os = "windows",
             target_env = "gnu"
         ) },
+        msvc: { target_env = "msvc" },
     }
 
     // Tricky!
