@@ -28,14 +28,18 @@ jobs:
         include:
           - target: x86_64-unknown-linux-musl
             host: ubuntu-24.04
+            archive_fragment: linux-x86_64-musl
 
           - target: aarch64-unknown-linux-musl
             host: ubuntu-24.04-arm
+            archive_fragment: linux-aarch64-musl
 
           - target: x86_64-apple-darwin
             host: macos-14
+            archive_fragment: osx-x86_64
           - target: aarch64-apple-darwin
             host: macos-14
+            archive_fragment: osx-aarch64
 
           # freebsd cross-builds as of 31 Mar 2025 but is untested.
           #- target: x86_64-unknown-freebsd
@@ -51,6 +55,7 @@ jobs:
           #  host: ubuntu-24.04
           - target: x86_64-pc-windows-gnu
             host: ubuntu-24.04
+            archive_fragment: windows-x86_64-mingw
 
     runs-on: ${{ matrix.host }}
     env:
@@ -111,6 +116,7 @@ jobs:
           # Include a leading comma in the variables when needed.
           leading-dir: true
           locked: true
+          archive: $bin-${{ matrix.archive_fragment }}
           tar: ${{ env.Q_PACKAGE_TAR }}
           zip: ${{ env.Q_PACKAGE_ZIP }}
       - name: Upload binary package to CI result
@@ -118,7 +124,7 @@ jobs:
         # always try to do this if packaging, it allows the package to be checked
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ format('qcp-binary-{0}', matrix.target) }}
+          name: ${{ format('qcp-binary-{0}', matrix.archive_fragment) }}
           path: ${{ steps.build-binary.outputs.archive }}.${{ env.Q_PACKAGE_ZIP == 'all' && 'zip' || 'tar.gz' }}
       - name: Make deb package
         id: deb
@@ -133,5 +139,5 @@ jobs:
         if: env.Q_BUILD_DEB == '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ${{ format('qcp-deb-{0}', matrix.target) }}
+          name: ${{ format('qcp-deb-{0}', matrix.archive_fragment) }}
           path: ${{ steps.deb.outputs.deb }}
