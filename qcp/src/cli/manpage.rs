@@ -55,7 +55,7 @@ mod test {
         Ok(())
     }
 
-    fn usage(cmd: &clap::Command, w: &mut dyn Write) -> Result<(), std::io::Error> {
+    fn usage<W: Write>(cmd: &clap::Command, w: &mut W) -> Result<(), std::io::Error> {
         let mut roff = Roff::default();
         roff.control("SH", ["USAGE"]);
         roff.control("TP", []);
@@ -88,7 +88,7 @@ mod test {
         roff.to_writer(w)
     }
 
-    fn additional(w: &mut dyn Write) -> Result<(), std::io::Error> {
+    fn additional<W: Write>(w: &mut W) -> Result<(), std::io::Error> {
         let mut roff = Roff::default();
         roff.control("SH", ["EXIT STATUS"]);
         roff.control("TP", []);
