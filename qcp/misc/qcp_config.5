@@ -141,24 +141,24 @@ Specify a source and destination as if you were copying a file to/from a host to
 .IP
  $ qcp --show-config server234:some-file /tmp/
 
- ┌─────────────────────────┬─────────────┬───────────────────────────────┐
- │ field                   │ value       │ source                        │
- ├─────────────────────────┼─────────────┼───────────────────────────────┤
- │ (Remote host)           │ server234   │                               │
- │ AddressFamily           │ any         │ default                       │
- │ Congestion              │ Cubic       │ default                       │
- │ InitialCongestionWindow │ 0           │ default                       │
- │ Port                    │ 10000-12000 │ /home/xyz/.qcp.conf (line 26) │
- │ RemotePort              │ 0           │ default                       │
- │ Rtt                     │ 300         │ default                       │
- │ Rx                      │ 37M5        │ /home/xyz/.qcp.conf (line 22) │
- │ Ssh                     │ ssh         │ default                       │
- │ SshConfig               │ []          │ default                       │
- │ SshOptions              │ []          │ default                       │
- │ TimeFormat              │ UTC         │ /etc/qcp.conf (line 14)       │
- │ Timeout                 │ 5           │ default                       │
- │ Tx                      │ 12M5        │ /home/xyz/.qcp.conf (line 23) │
- └─────────────────────────┴─────────────┴───────────────────────────────┘
+ +-------------------------+-------------+-------------------------------+
+ | field                   | value       | source                        |
+ +-------------------------+-------------+-------------------------------+
+ | (Remote host)           | server234   |                               |
+ | AddressFamily           | any         | default                       |
+ | Congestion              | Cubic       | default                       |
+ | InitialCongestionWindow | 0           | default                       |
+ | Port                    | 10000-12000 | /home/xyz/.qcp.conf (line 26) |
+ | RemotePort              | 0           | default                       |
+ | Rtt                     | 300         | default                       |
+ | Rx                      | 37M5        | /home/xyz/.qcp.conf (line 22) |
+ | Ssh                     | ssh         | default                       |
+ | SshConfig               | []          | default                       |
+ | SshOptions              | []          | default                       |
+ | TimeFormat              | UTC         | /etc/qcp.conf (line 14)       |
+ | Timeout                 | 5           | default                       |
+ | Tx                      | 12M5        | /home/xyz/.qcp.conf (line 23) |
+ +-------------------------+-------------+-------------------------------+
 .RE
 
 Add `--remote-config` to the command line to have the server report its settings.
@@ -166,35 +166,35 @@ These come in two blocks, the \fIstatic\fR configuration and the \fIfinal\fR con
 .IP
  % qcp --remote-config server234:some-file /tmp/
  2025-02-10 09:26:02Z  INFO Server: Static configuration:
- ┌───────────────┬─────────────┬───────────────────────────────┐
- │ field         │ value       │ source                        │
- ├───────────────┼─────────────┼───────────────────────────────┤
- │ (Remote host) │ 10.22.55.77 │                               │
- │ Port          │ 10000-12000 │ /home/xyz/.qcp.conf (line 26) │
- │ Rtt           │ 1           │ /home/xyz/.qcp.conf (line 19) │
- │ Rx            │ 125M        │ /home/xyz/.qcp.conf (line 17) │
- │ TimeFormat    │ UTC         │ /home/xyz/.qcp.conf (line 25) │
- │ Tx            │ 125M        │ /home/xyz/.qcp.conf (line 18) │
- └───────────────┴─────────────┴───────────────────────────────┘
+ +---------------+-------------+-------------------------------+
+ | field         | value       | source                        |
+ +---------------+-------------+-------------------------------+
+ | (Remote host) | 10.22.55.77 |                               |
+ | Port          | 10000-12000 | /home/xyz/.qcp.conf (line 26) |
+ | Rtt           | 1           | /home/xyz/.qcp.conf (line 19) |
+ | Rx            | 125M        | /home/xyz/.qcp.conf (line 17) |
+ | TimeFormat    | UTC         | /home/xyz/.qcp.conf (line 25) |
+ | Tx            | 125M        | /home/xyz/.qcp.conf (line 18) |
+ +---------------+-------------+-------------------------------+
  2025-02-10 09:26:02Z  INFO Server: Final configuration:
- ┌─────────────────────────┬─────────────┬───────────────────────────────┐
- │ field                   │ value       │ source                        │
- ├─────────────────────────┼─────────────┼───────────────────────────────┤
- │ (Remote host)           │ 10.22.55.77 │                               │
- │ AddressFamily           │ any         │ default                       │
- │ Congestion              │ Cubic       │ default                       │
- │ InitialCongestionWindow │ 0           │ default                       │
- │ Port                    │ 10000-12000 │ /home/xyz/.qcp.conf (line 26) │
- │ RemotePort              │ 0           │ default                       │
- │ Rtt                     │ 1           │ /home/xyz/.qcp.conf (line 19) │
- │ Rx                      │ 123M        │ config resolution logic       │
- │ Ssh                     │ ssh         │ default                       │
- │ SshConfig               │ []          │ default                       │
- │ SshOptions              │ []          │ default                       │
- │ TimeFormat              │ UTC         │ /home/xyz/.qcp.conf (line 25) │
- │ Timeout                 │ 5           │ default                       │
- │ Tx                      │ 125M        │ /home/xyz/.qcp.conf (line 18) │
- └─────────────────────────┴─────────────┴───────────────────────────────┘
+ +-------------------------+-------------+-------------------------------+
+ | field                   | value       | source                        |
+ +-------------------------+-------------+-------------------------------+
+ | (Remote host)           | 10.22.55.77 |                               |
+ | AddressFamily           | any         | default                       |
+ | Congestion              | Cubic       | default                       |
+ | InitialCongestionWindow | 0           | default                       |
+ | Port                    | 10000-12000 | /home/xyz/.qcp.conf (line 26) |
+ | RemotePort              | 0           | default                       |
+ | Rtt                     | 1           | /home/xyz/.qcp.conf (line 19) |
+ | Rx                      | 123M        | config resolution logic       |
+ | Ssh                     | ssh         | default                       |
+ | SshConfig               | []          | default                       |
+ | SshOptions              | []          | default                       |
+ | TimeFormat              | UTC         | /home/xyz/.qcp.conf (line 25) |
+ | Timeout                 | 5           | default                       |
+ | Tx                      | 125M        | /home/xyz/.qcp.conf (line 18) |
+ +-------------------------+-------------+-------------------------------+
 .RE
 
 .SH TIPS AND TRAPS
