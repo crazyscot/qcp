@@ -11,7 +11,14 @@ use std::{
 };
 use tracing::{info, warn};
 
-use crate::{config::Configuration, protocol::control::ClosedownReportV1, session::CommandStats};
+use crate::{
+    config::Configuration,
+    protocol::{
+        Variant,
+        control::{ClosedownReportExtension, ClosedownReportV1},
+    },
+    session::CommandStats,
+};
 
 /// Human friendly output helper
 #[derive(Debug, Clone, Copy)]
@@ -56,7 +63,7 @@ pub(crate) fn process_statistics(
     stats: &ConnectionStats,
     command_stats: CommandStats,
     transport_time: Option<Duration>,
-    remote_stats: ClosedownReportV1,
+    remote_stats: &ClosedownReportV1,
     bandwidth: &Configuration,
     show_statistics: bool,
 ) {
@@ -111,12 +118,44 @@ pub(crate) fn process_statistics(
             bytes = remote_stats.lost_bytes.0.human_count_bytes(),
         );
     }
-
-    let sender_sent_bytes = cmp::max(stats.udp_tx.bytes, remote_stats.sent_bytes.0);
     if show_statistics {
+        advanced_statistics(stats, command_stats, remote_stats);
+    }
+    check_rtt(stats, bandwidth);
+}
+
+fn advanced_statistics(
+    stats: &ConnectionStats,
+    command_stats: CommandStats,
+    remote_stats: &ClosedownReportV1,
+) {
+    let sender_sent_bytes = cmp::max(stats.udp_tx.bytes, remote_stats.sent_bytes.0);
+    let locale = &num_format::Locale::en;
+    let payload_bytes = command_stats.payload_bytes;
+
+    {
+        use crate::protocol::FindTag as _;
+        use serde_bare::Uint;
+
         let cwnd = cmp::max(stats.path.cwnd, remote_stats.cwnd.0);
+        let not_reported = Variant::from("<not reported>");
+
+        let remote_pmtu: &Variant = remote_stats
+            .extension
+            .find_tag(ClosedownReportExtension::Pmtu)
+            .unwrap_or(&not_reported);
+
+        let remote_rtt = remote_stats
+            .extension
+            .find_tag(ClosedownReportExtension::Rtt);
+        // RTT is microseconds
+        let remote_rtt = if let Some(Variant::Unsigned(Uint(v))) = remote_rtt {
+            Duration::from_micros(*v).human_duration().to_string()
+        } else {
+            "<not reported>".into()
+        };
         info!(
-            "Path MTU {pmtu}, round-trip time {rtt}, final congestion window {cwnd}",
+            "Path MTU {pmtu} (remote: {remote_pmtu}), round-trip time {rtt} (remote: {remote_rtt}), final congestion window {cwnd}",
             pmtu = stats.path.current_mtu,
             rtt = stats.path.rtt.human_duration(),
             cwnd = cwnd.to_formatted_string(locale),
@@ -140,7 +179,9 @@ pub(crate) fn process_statistics(
             );
         }
     }
+}
 
+fn check_rtt(stats: &ConnectionStats, bandwidth: &Configuration) {
     // Warn when RTT is 10% worse than the configuration.
     // No, seriously, nobody is going to have an RTT exceeding 2^64 ms. Even 2^32 (~49 days) is beyond unlikely.
     // This calculation overflows at RTT (2^32 / 100) ms, or about 11.9 hours.
