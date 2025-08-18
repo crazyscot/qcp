@@ -89,6 +89,7 @@ file-mode = "0.1.2"
 
 [dev-dependencies]
 assertables = "9.8.2"
+clap-markdown = "0.1.5"
 clap_mangen = "0.2.29"
 json = "0.12.4"
 littertray = { workspace = true, features = ["async"] }
@@ -213,6 +214,11 @@ assets = [
     # gzip -9n < qcp/qcp.cdx.xml > qcp/qcp.cdx.xml.gz # done by make-debian-package
     [
         "qcp.cdx.xml.gz",
+        "usr/share/doc/qcp/",
+        "644",
+    ],
+    [
+        "misc/qcp.html",
         "usr/share/doc/qcp/",
         "644",
     ],

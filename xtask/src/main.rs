@@ -26,6 +26,11 @@ const TASKS: &[(&str, fn(Arguments) -> Result<()>, &str)] = &[
         "Generate licenses.html  (prerequisite: `cargo install about`)",
     ),
     ("dch", dch::changelog, "Generate the dummy debian changelog"),
+    (
+        "clidoc",
+        manpage::cli_doc,
+        "Generate CLI docs (prerequisite: `apt install markdown`)",
+    ),
     ("help", help, "Output help"),
 ];
 
