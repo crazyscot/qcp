@@ -559,10 +559,9 @@ impl ClientMessage {
     pub(crate) fn set_direction(&mut self, direction: Direction) {
         match self {
             ClientMessage::ToFollow => (),
-            ClientMessage::V1(msg) => msg.attributes.push(
-                ClientMessageAttributes::DirectionOfTravel
-                    .with_variant(Variant::unsigned(direction as u64)),
-            ),
+            ClientMessage::V1(msg) => msg
+                .attributes
+                .push(ClientMessageAttributes::DirectionOfTravel.with_unsigned(direction as u64)),
         }
     }
 }
@@ -771,12 +770,10 @@ impl From<&ConnectionStats> for ClosedownReportV1 {
         let rtt: u64 = ps.rtt.as_micros().try_into().unwrap_or(u64::MAX);
         let mut extension = vec![];
         if rtt != 0 {
-            extension.push(ClosedownReportExtension::Rtt.with_variant(Variant::unsigned(rtt)));
+            extension.push(ClosedownReportExtension::Rtt.with_unsigned(rtt));
         }
         if ps.current_mtu != 0 {
-            extension.push(
-                ClosedownReportExtension::Pmtu.with_variant(Variant::unsigned(ps.current_mtu)),
-            );
+            extension.push(ClosedownReportExtension::Pmtu.with_unsigned(ps.current_mtu));
         }
 
         Self {
