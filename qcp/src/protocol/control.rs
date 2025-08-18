@@ -573,6 +573,11 @@ impl ClientMessageV1 {
         remote_config: bool,
         my_config: &Configuration_Optional,
     ) -> Self {
+        use engineering_repr::EngineeringQuantity as EQ;
+        // Configuration_Optional seems a bit much for recent rust-analyzer, but the compiler doesn't mind it. Sop:
+        let rx: &Option<EQ<u64>> = &my_config.rx;
+        let icw: &Option<EQ<u64>> = &my_config.initial_congestion_window;
+
         Self {
             cert: credentials.certificate.to_vec(),
             connection_type,
@@ -583,14 +588,12 @@ impl ClientMessageV1 {
                 None | Some(0) => None,
                 Some(v) => Some(Uint(v)),
             },
-            bandwidth_to_client: my_config.rx.map(u64::from).map(Uint),
+            bandwidth_to_client: rx.map(|u| Uint(u64::from(u))),
             rtt: my_config.rtt,
             congestion: my_config
                 .congestion
                 .map(|o: SerializeAsString<CongestionController>| *o),
-            initial_congestion_window: my_config
-                .initial_congestion_window
-                .map(|u| Uint(u64::from(u))),
+            initial_congestion_window: icw.map(|u| Uint(u64::from(u))),
             timeout: my_config.timeout,
 
             attributes: vec![],
