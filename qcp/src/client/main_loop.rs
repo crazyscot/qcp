@@ -193,7 +193,7 @@ impl Client {
                 &connection.stats(),
                 result.stats,
                 transport_time,
-                remote_stats,
+                &remote_stats,
                 &config,
                 self.parameters.statistics,
             );

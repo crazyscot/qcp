@@ -714,7 +714,7 @@ pub enum ServerFailure {
 ////////////////////////////////////////////////////////////////////////////////////////
 // CLOSEDOWN REPORT
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 /// The statistics sent by the server when the job is done
 pub enum ClosedownReport {
     /// Special value that should never be seen on the wire
@@ -728,7 +728,7 @@ impl ProtocolMessage for ClosedownReport {}
 
 /// Version 1 of the closedown report.
 /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Default, Copy, Clone, derive_more::Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Default, Clone, derive_more::Debug)]
 pub struct ClosedownReportV1 {
     /// Final congestion window
     #[debug("{}", cwnd.0)]
@@ -751,13 +751,34 @@ pub struct ClosedownReportV1 {
     /// Number of bytes sent
     #[debug("{}", sent_bytes.0)]
     pub sent_bytes: Uint,
-    /// Extension field, reserved for future expansion; for now, must be set to 0
-    pub extension: u8,
+
+    /// Optional extended data
+    ///
+    /// If it is mandatory for the client to action a given attribute, it MUST NOT be sent in this field.
+    /// Instead, use a later version of the `ClosedownReport`.
+    ///
+    /// This field was added in qcp 0.5 with `VersionCompatibility=V2`.
+    /// Prior to Compatibility::Level(2) this was a reserved u8, which was required to be set to 0.
+    /// If length 0, it looks the same on the wire.
+    /// If length >0, earlier versions ignore the attributes.
+    pub extension: Vec<TaggedData<ClosedownReportExtension>>,
 }
 
 impl From<&ConnectionStats> for ClosedownReportV1 {
     fn from(stats: &ConnectionStats) -> Self {
         let ps = &stats.path;
+        // look, nobody will overrun u64 micros except on interstellar connections (but if so, they won't be using qcp)
+        let rtt: u64 = ps.rtt.as_micros().try_into().unwrap_or(u64::MAX);
+        let mut extension = vec![];
+        if rtt != 0 {
+            extension.push(ClosedownReportExtension::Rtt.with_variant(Variant::unsigned(rtt)));
+        }
+        if ps.current_mtu != 0 {
+            extension.push(
+                ClosedownReportExtension::Pmtu.with_variant(Variant::unsigned(ps.current_mtu)),
+            );
+        }
+
         Self {
             cwnd: Uint(ps.cwnd),
             sent_packets: Uint(ps.sent_packets),
@@ -766,10 +787,26 @@ impl From<&ConnectionStats> for ClosedownReportV1 {
             lost_bytes: Uint(ps.lost_bytes),
             congestion_events: Uint(ps.congestion_events),
             black_holes: Uint(ps.black_holes_detected),
-            extension: 0,
+            extension,
         }
     }
 }
+
+/// Extension attributes for the closedown report
+///
+/// This enum was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+#[derive(strum_macros::Display, Clone, Copy, Debug, IntEnum, PartialEq)]
+#[non_exhaustive]
+#[repr(u64)]
+pub enum ClosedownReportExtension {
+    /// Indicates an invalid attribute.
+    Invalid = 0,
+    /// The Path MTU for the connection, as measured by the server, in bytes
+    Pmtu = 1,
+    /// The Round Trip Time for the connection, as measured by the server, in microseconds
+    Rtt = 2,
+}
+impl DataTag for ClosedownReportExtension {}
 
 // //////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1060,7 +1097,7 @@ mod test {
             congestion_events: Uint(44),
             black_holes: Uint(22),
             sent_bytes: Uint(987_654),
-            extension: 0,
+            extension: vec![],
         });
         let wire = msg.to_vec().unwrap();
         let deser = ClosedownReport::from_slice(&wire).unwrap();
@@ -1201,7 +1238,7 @@ mod test {
             congestion_events: Uint(44),
             black_holes: Uint(49),
             sent_bytes: Uint(987_654),
-            extension: 0,
+            extension: vec![],
         });
         let wire = msg.to_vec().unwrap();
         let expected = b"\x01*AB\xde\xf0\x1b,1\x86\xa4<\x00".to_vec();
