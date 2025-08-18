@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/crazyscot/qcp/compare/v0.4.2...v0.5.0)
+
+### ⛰️ Features
+
+- [**breaking**] Make kernel UDP buffer size configurable - ([963541b](https://github.com/crazyscot/qcp/commit/963541bcd14d273d8f6604e2a8bf48be591f0b00))
+  - **Linux users:** This change may cause warnings about buffer sizes requiring you to reconfigure your sysctls. Run `qcp --help-buffers` and follow its advice.
+- [**breaking**] Remove some infrequently-used CLI short options - ([ecad214](https://github.com/crazyscot/qcp/commit/ecad21429c9dad6ca963bebcf0bafa19c1af0dfe))
+- Add remote PMTU and RTT to --stats output (via ClosedownReport) - ([92d8675](https://github.com/crazyscot/qcp/commit/92d867599f11324f86bfd9bf674f1c298ddbeebd))
+- --preserve option - ([24b8ef2](https://github.com/crazyscot/qcp/commit/24b8ef2943d1e54c310809c6a8b2506b06bba738))
+- Add hidden --remote-trace option - ([9b022a3](https://github.com/crazyscot/qcp/commit/9b022a3448e7b530c584943d6474510a1c232dc0))
+- Add NewReno congestion controller (protocol compat level 2) - ([e865a52](https://github.com/crazyscot/qcp/commit/e865a520140782db0e40b0de81d3d7e7a7ba61c4))
+- Initial, min and max MTU can be configured - ([4919ca4](https://github.com/crazyscot/qcp/commit/4919ca4428f0b8f02e9be311e42080174887862d))
+- Add packet loss detection thresholds as configurable settings - ([37e0f32](https://github.com/crazyscot/qcp/commit/37e0f329fd8415d4191855400c519e63195571e2))
+- _(meta)_ --list-features option - ([c768fc9](https://github.com/crazyscot/qcp/commit/c768fc91a12b1bd8db9b4b011ca4f89ba6a4f00e))
+- _(debug)_ Add the server's idea of MTU and RTT to --remote-debug - ([7161f6d](https://github.com/crazyscot/qcp/commit/7161f6d090cb666d8e43f354b1adb92141a81f44))
+- _(protocol)_ Introduce Variant type - ([908346a](https://github.com/crazyscot/qcp/commit/908346ac36741fe437377049f4b35c45349a6f35))
+- _(protocol)_ Add Compatibility level 2 - ([2d0c1ef](https://github.com/crazyscot/qcp/commit/2d0c1ef2381cdf3f8f373f1a81a273843be08064))
+
+### 🐛 Bug Fixes
+
+- Disallow reading from or writing to non-regular files (device nodes & sockets) - ([b2b036e](https://github.com/crazyscot/qcp/commit/b2b036e18c86132fb4c938633757cea81cac546f))
+- CLI --ssh-config & -S options - ([145bb5d](https://github.com/crazyscot/qcp/commit/145bb5d5ff57d5a975aa9b3aca966971dd171d1e))
+- Use correct system ssh config directory on Windows - ([6ec7001](https://github.com/crazyscot/qcp/commit/6ec70013ab76f11d04becbfbac90caad9a86a0ae))
+- Do not allow RTT to be set to 0 - ([e27baa3](https://github.com/crazyscot/qcp/commit/e27baa31131a2a36443de121350dafe125f40b28))
+- _(cli)_ Remove Markdown mark-up from --help output - ([6362bea](https://github.com/crazyscot/qcp/commit/6362bea74c25cd666e9e3ff8490ab408e833aafb))
+- _(protocol)_ Don't crash on receipt of an unrecognised Status enum - ([baecbaa](https://github.com/crazyscot/qcp/commit/baecbaaf6618e29dfc4d56f1b2411f8c7cf225eb))
+- _(protocol)_ Review and correct enum encoding - ([4a05d4a](https://github.com/crazyscot/qcp/commit/4a05d4a5f6c8d4d6cfd5995abff14c42b3ab1573))
+- _(test)_ DNS lookup sometimes failed on Windows CI - ([79ec010](https://github.com/crazyscot/qcp/commit/79ec0102e3cc84aa304ef2af6117df23ec223008))
+- _(ui)_ Don't report a peak rate of 0B/s on really fast transfers - ([d90364b](https://github.com/crazyscot/qcp/commit/d90364bb6b887c10a45552f9063033b287f13d90))
+
+### 📚 Documentation
+
+- Autogenerate CLI HTML doc - ([1163169](https://github.com/crazyscot/qcp/commit/11631697b41d772e1461393fbecdffb3d20164d9))
+- Tidy/polish Rust docs - ([c639856](https://github.com/crazyscot/qcp/commit/c639856c7982fdd5ee5c3b01375d87d58c01c077))
+
+### ⚡ Performance
+
+- Add direction-of-travel indicator to ClientMessage - ([9c4b2ed](https://github.com/crazyscot/qcp/commit/9c4b2ed686115a7ee3248922aa335530d2f5a319))
+- Set initial_rtt as 2x expected RTT - ([4866a98](https://github.com/crazyscot/qcp/commit/4866a98e65edb21fd71646f73835607d6d1f6ff5))
+- Use a larger send window, in line with Quinn's default tuning - ([03f6161](https://github.com/crazyscot/qcp/commit/03f6161a9a690b96e900a695613868d2e935e9bf))
+
+### 🎨 Styling
+
+- Improve consistency of control channel debug output - ([cfcd6a6](https://github.com/crazyscot/qcp/commit/cfcd6a6287b982b429f770dced6a4503083f5401))
+- Implement Display for TaggedData - ([1e10293](https://github.com/crazyscot/qcp/commit/1e1029352c8f695e1ae4f2a98aa58d694272a6aa))
+- Reduce excess verbiage when reporting FileNotFound or IncorrectPermissions errors - ([35d53ce](https://github.com/crazyscot/qcp/commit/35d53ce539a73c2652d999e8c3e8bb5fdbf3314e))
+- Make server-mode output more easily distinguishable - ([90d9659](https://github.com/crazyscot/qcp/commit/90d9659573130f0c926ec53e7a52ce749022a402))
+
+### 🧪 Testing
+
+- Add an integration test that simulates MITM attacks - ([f5e28f6](https://github.com/crazyscot/qcp/commit/f5e28f6fc21bd47bd024bef2c37946fc861c6e79))
+- Move some CLI tests into integration test area - ([8fe67f9](https://github.com/crazyscot/qcp/commit/8fe67f99eb85ac1936cb01e4772943610998fcb7))
+- Add wire marshalling regression tests for current protocol messages - ([51413ec](https://github.com/crazyscot/qcp/commit/51413eca7d0c8ad17b18ee85fda53923584c4149))
+- Fill-in coverage in transport.rs - ([cef4f47](https://github.com/crazyscot/qcp/commit/cef4f47be71b0e0d87be977a55688d55131368fb))
+- Fix compiler warnings on apple & windows - ([f3e90a2](https://github.com/crazyscot/qcp/commit/f3e90a232c4c84ad94455db0e30b24e83983c069))
+- Exercise the main CLI modes and parser - ([eda8d12](https://github.com/crazyscot/qcp/commit/eda8d1270833397c5e38810b606f809eab852b3d))
+- Add unit tests for the informational main modes - ([07fd94f](https://github.com/crazyscot/qcp/commit/07fd94fcacbcdd67db69e46ed2818f558540bae3))
+- Refactor server_main, add a unit test - ([ef7f8c3](https://github.com/crazyscot/qcp/commit/ef7f8c375cad93f7e4ab346f147530410f211a7c))
+- Refactoring server connection.handle_incoming, add a unit test - ([39be470](https://github.com/crazyscot/qcp/commit/39be470f2c0065b2995f4f5d521c720cb3d34c64))
+- Add unit tests for server::connection_info, server::stream - ([72a0812](https://github.com/crazyscot/qcp/commit/72a081264e2f1a3b606d84f60173a567d87be4b5))
+- Use pretty_assertions - ([12e41b6](https://github.com/crazyscot/qcp/commit/12e41b6d90eb104ffd1461bd34f9f00ee27c3f44))
+- _(windows)_ Improve Windows config file path checks - ([bd42133](https://github.com/crazyscot/qcp/commit/bd42133ff86c775354daa1af727831a1d78a7840))
+
+### 🏗️ Build, packaging & CI
+
+- Rename output artifact names to be more user friendly - ([ec40671](https://github.com/crazyscot/qcp/commit/ec406710e9e3ce8a9442776e5d2e4a8bbc6e3ad9))
+- Scaffolding & feature to expose internal test helpers for use by qcp-unsafe-tests - ([e947393](https://github.com/crazyscot/qcp/commit/e94739351b8ded5fd20c9dca6653e122229755b7))
+- Disable tests where they don't work on mingw cross-compiles - ([064a4c9](https://github.com/crazyscot/qcp/commit/064a4c998c985640006691dd4f0fe447e25be759))
+
+### ⚙️ Miscellaneous Tasks
+
+- _(ci,docs)_ Fix cargo doc --document-private items, add it to CI checks - ([8113e84](https://github.com/crazyscot/qcp/commit/8113e8496d2b6c5ddffa46af009e1bf18295b78e))
+- Use strum_macros:: consistently - ([8f1a39b](https://github.com/crazyscot/qcp/commit/8f1a39b2eca8f770b84238b5771ed07c941b4e82))
+- Use if cfg!() instead of cfg_if! where possible - ([a787101](https://github.com/crazyscot/qcp/commit/a787101bf17127384c922e7c53b832c4294cbc16))
+- Update template qcp.conf - ([594d8d7](https://github.com/crazyscot/qcp/commit/594d8d75626797f79b3923470f1c99429413a733))
+- Tidy `os` module exports, OS notes - ([36dbbac](https://github.com/crazyscot/qcp/commit/36dbbac11d61b3962ad79c4f81947176ed2bf6d0))
+
+### 🚜 Refactor
+
+- _(test)_ Make the test suite cross-platform - ([47ba293](https://github.com/crazyscot/qcp/commit/47ba293ba65a399d3ba81effdab36d697cf64c5d))
+- Add ergonomic constructors DataTag::with_unsigned,with_signed - ([af67621](https://github.com/crazyscot/qcp/commit/af67621b5c938b9cbcfafea6f95dce030ff2515e))
+- Improve ThroughputMode consistency - ([88e4f3e](https://github.com/crazyscot/qcp/commit/88e4f3e4ee9c21ef586ccb3a8c90d79237bb8390))
+- Add FindTag helper trait for Vec<TaggedData<>> - ([fb23c39](https://github.com/crazyscot/qcp/commit/fb23c39e96a86f937f317a74a342d6c475ba6356))
+- Use derive_more::{Debug,Display} in control protocol - ([a179046](https://github.com/crazyscot/qcp/commit/a1790465954e60ba515ffbf6fde3734d666571b6))
+- Move DataTag up a level so it can be common to both protocols - ([8d51685](https://github.com/crazyscot/qcp/commit/8d51685767cdffe169deb8a2dbc2b739959e790e))
+- Split up client main_loop a bit more for readability & testability - ([a0e4b6c](https://github.com/crazyscot/qcp/commit/a0e4b6c59c33d24094ba0feb961cf76952503bff))
+- Check_response() makes more sense as a function of Response - ([e24146f](https://github.com/crazyscot/qcp/commit/e24146ff32baaaaea2ece1eb1b4a8ab9b7496390))
+- Client_main for testability and simplicity ([37620bb](https://github.com/crazyscot/qcp/commit/37620bbde0dcacb7d5a7fdec7c9c8a8a07265fb2)) ([f175d24](https://github.com/crazyscot/qcp/commit/f175d24666025bcb8e721ca53c1688173a58e654))
+- Separate out process::Ssh into a generic ProcessWrapper and the ssh-specific parts - ([ecd1196](https://github.com/crazyscot/qcp/commit/ecd1196d855eb64000704e9aa5a56aea4a51b880))
+- Tracing::setup() arguments - ([79faa48](https://github.com/crazyscot/qcp/commit/79faa48c30fa4c4b9aa00d26fa7f74931ca5d88c))
+- Split apart server.rs for testability - ([31927fb](https://github.com/crazyscot/qcp/commit/31927fbc376e68ef9cc795cf4264cd597e62f616))
+- Setup_tracing becomes a struct with a trait - ([e2a782f](https://github.com/crazyscot/qcp/commit/e2a782fd624dbd7bcfdc36a742fa5fd1426df08d))
+- Use clap to create MainMode enum - ([49781fa](https://github.com/crazyscot/qcp/commit/49781fa1d2e2c918b643e7368bebe6f639fb6fe8))
+
 ## [0.4.2](https://github.com/crazyscot/qcp/compare/v0.4.1...v0.4.2)
 
 ### ⛰️ Features

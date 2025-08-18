@@ -4,11 +4,11 @@
 
 This project is currently in an experimental phase, signified by major version number `0`.
 
-| Versions | Supported                 |
-| :------: | ------------------------- |
-|  0.4.x   | :white_check_mark: Active |
-|  0.3.x   | Sunset                    |
-|  < 0.3   | :x: No longer maintained  |
+| Versions | Supported                              |
+| :------: | -------------------------------------- |
+|  0.5.x   | :white_check_mark: Active              |
+|  0.4.x   | :sunset: Sunset (important fixes only) |
+|  < 0.4   | :x: No longer maintained               |
 
 ## Reporting a Vulnerability
 
