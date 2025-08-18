@@ -1,7 +1,8 @@
 #!/bin/sh -e
 # args: [--release|--no-release] [<rust-target>]
-# prerequisites:
+# prerequisites (automatically run by CI job):
 #   cargo build --release
+#   cargo cyclonedx
 
 TARGET=$2
 if [ -z "$TARGET" ]; then
