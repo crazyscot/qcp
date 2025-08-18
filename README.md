@@ -16,14 +16,27 @@ high-performance remote file copy utility for long-distance internet connections
 
 ### News
 
+- **(New in 0.5)**
+  - The default UDP buffer size is now 4MB. _This may cause warnings until you have updated your sysctl.conf._
+  - New features: `--preserve`; `NewReno` congestion controller; `--list-features` meta feature
+  - New tuning options: UDP buffer size, MTU, packet loss detection thresholds
+  - Removed some infrequently-used CLI short options
 - **(New in 0.4)**
   - Added builds for [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html), [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html) and BSD
   - New features: Explicit username with `-l <login-name>`; ssh subsystem mode
 - **(New in 0.3)**
   - Negotiate transport setting by combining configuration from both sides
   - Protocol encoding changed to [BARE], removing the dependency on capnp.
+  - **0.3 was a total compatibility break** with earlier versions.
 
 For a full list of changes, see the [changelog].
+
+#### Compatibility
+
+The protocol has been designed to be backwards and forwards compatible (since the 0.3 compatibility break).
+
+Binaries which are different versions can interoperate, provided both sides support the required features.
+If you find they can't, or one side crashes, please report a bug.
 
 #### Platform support status
 
@@ -43,9 +56,9 @@ At the time of writing, qcp has only been tested with the OpenSSH server and cli
 | OpenBSD        |                  | Ought to be buildable\*               |
 | Windows 11     | x86_64           | Tested                                |
 
-*\_Note that the *BSD family are not tier 1 Rust platforms, so there is no guarantee that things will work properly. As of 31/3/25 some of these platforms have cross-compilation issues; I haven't tried native compilation.\_
+\* _Note that the \*BSD family are not tier 1 Rust platforms, so there is no guarantee that things will work properly. As of 31/3/25 some of these platforms have cross-compilation issues; I haven't tried native compilation._
 
-\*\* _The binaries in the tarballs are the exact same binaries found in the Debian/Ubuntu packages. They are static-linked, independent of kernel and libc._
+\*\* _The binaries in the tarballs are the exact same binaries found in the Debian/Ubuntu packages. They are static linked, independent of libc versions, should work with any recent kernel._
 
 ## 🧰 Getting Started
 
@@ -59,9 +72,11 @@ At the time of writing, qcp has only been tested with the OpenSSH server and cli
       of its choice of port number.
 - Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine,
   or you need to set up `SshSubsystem` mode.
-  - Check the platform-specific notes: [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html),
-    [Linux/other Unix](https://docs.rs/qcp/latest/qcp/doc/unix/index.html),
-    [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html)
+  - Check the platform-specific notes:
+    [OSX](https://docs.rs/qcp/latest/qcp/os/osx/index.html),
+    [Linux/other Unix](https://docs.rs/qcp/latest/qcp/os/unix/index.html),
+    [Windows](https://docs.rs/qcp/latest/qcp/os/windows/index.html)
+  - If upgrading, remember to upgrade both machines if you want to take advantage of newer protocol features.
 - Try it out! Use `qcp` where you would `scp`, e.g. `qcp myfile some-server:some-directory/`
 - Browse the tuning options in [Configuration](https://docs.rs/qcp/latest/qcp/struct.Configuration.html)
 - Set up a [config](config) file that tunes for your network connection. (You might find the `--stats` option useful when experimenting.)
@@ -74,8 +89,8 @@ These can be found on the [latest release](https://github.com/crazyscot/qcp/rele
 | --------------- | --------------- | ------------------------------------------------------------------------------- |
 | Debian & Ubuntu | x86_64, aarch64 | Deb packages                                                                    |
 | Other Linux     | x86_64, aarch64 | Use the unknown-linux-musl tarballs (they are cross-platform, static linked)    |
-| Nix             | \*              | Flakes are provided: `nix shell 'github:crazyscot/qcp?dir=nix'`                 |
-| NixOS           | \*              | In progress; refer to [pr#361923](https://github.com/NixOS/nixpkgs/pull/361923) |
+| Nix             | all             | Flakes are provided: `nix shell 'github:crazyscot/qcp?dir=nix'`                 |
+| NixOS           | all             | In progress; refer to [pr#361923](https://github.com/NixOS/nixpkgs/pull/361923) |
 | OSX             | x86_64, aarch64 | Tarball (code signing TBD)                                                      |
 | Windows         | x86_64          | Zipfile (code signing TBD)                                                      |
 
@@ -193,7 +208,7 @@ Bug reports and feature requests are welcome, please use the [issue] tracker.
 
 🚧 If you're thinking of contributing code, please read [CONTRIBUTING.md].
 
-#### Help wanted: MacOS/BSD/Windows
+#### Help wanted: Non-Linux platforms
 
 I'd particularly welcome performance reports here, as they are not platforms I use regularly.
 
@@ -201,19 +216,23 @@ I'd particularly welcome performance reports here, as they are not platforms I u
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 2.0.0.
 
+**We also consider a change to be a breaking if a user might have to change something they do,** even if the API remains compatible.
+
 In its initial experimental phase, the major number will be kept at 0.
 Breaking changes will be noted in the [changelog] and will trigger a minor version bump.
 
-The project will move to version 1.x when the protocol has stabilised. After 1.0, breaking changes will trigger a major version bump.
+Since 0.3 the protocol has been designed to be forwards and backwards compatible. In other words any two versions should be able to interoperate, provided they both support the required features.
+
+The project will move to version 1.x when the protocol has stabilised.
 
 ### Unsafe Rust
 
 Any uses of unsafe Rust will be kept to a bare minimum and carefully reviewed.
 
+Unsafe Rust is currently forbidden in the main qcp crate.
+
 Test code (protected by `#[cfg(test)]`) may be exempted from this policy.
 However we prefer that unsafe test code lives in the subcrate `qcp-unsafe-tests`.
-
-Therefore, unsafe Rust is currently forbidden in the main qcp crate.
 
 ## 💸 Supporting the project
 

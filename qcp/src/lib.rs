@@ -55,11 +55,10 @@
 //!       of its choice of port number.
 //! * Install the `qcp` binary on both machines. It needs to be in your `PATH` on the remote machine,
 //!   or you need to set up `SshSubsystem` mode.
-//!   * Check the platform-specific notes: [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html),
-//!     [Linux/other Unix](https://docs.rs/qcp/latest/qcp/doc/unix/index.html),
-//!     [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html)
+//!   * Check the platform-specific notes:
+//!     🍎 [OSX](os::osx), 🐧 [Linux & other Unix](os::unix), 🪟 [Windows](os::windows)
 //! * Try it out! Use `qcp` where you would `scp`, e.g. `qcp myfile some-server:some-directory/`
-//! * Browse the tuning options in [Configuration](https://docs.rs/qcp/latest/qcp/struct.Configuration.html)
+//! * Browse the tuning options in [Configuration]
 //! * Set up a [config](config) file that tunes for your network connection. (You might find the `--stats` option useful when experimenting.)
 //!
 //! ## 📖 How it works
