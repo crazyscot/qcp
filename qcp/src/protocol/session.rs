@@ -266,17 +266,17 @@ impl MetadataAttr {
     /// Convenience constructor for Metadata::AccessTime
     #[must_use]
     pub fn new_atime(t: SystemTime) -> TaggedData<MetadataAttr> {
-        Self::AccessTime.with_variant(Variant::unsigned(t.to_unix()))
+        Self::AccessTime.with_unsigned(t.to_unix())
     }
     /// Convenience constructor for Metadata::Mode
     #[must_use]
     pub fn new_mode(m: u32) -> TaggedData<MetadataAttr> {
-        Self::ModeBits.with_variant(Variant::unsigned(m))
+        Self::ModeBits.with_unsigned(m)
     }
     /// Convenience constructor for Metadata::SystemTime
     #[must_use]
     pub fn new_mtime(t: SystemTime) -> TaggedData<MetadataAttr> {
-        Self::ModificationTime.with_variant(Variant::unsigned(t.to_unix()))
+        Self::ModificationTime.with_unsigned(t.to_unix())
     }
 }
 
@@ -602,7 +602,6 @@ mod test {
     use serde_bare::Uint;
 
     use crate::protocol::{
-        Variant,
         common::ProtocolMessage,
         session::{DataTag, FileHeader, FileTrailer, FileTrailerV2, MetadataAttr, TaggedData},
     };
@@ -734,8 +733,8 @@ mod test {
         let trail = FileTrailer::V2(FileTrailerV2 {
             metadata: vec![
                 MetadataAttr::new_mode(0o644),
-                MetadataAttr::AccessTime.with_variant(1_700_000_000u64.into()),
-                MetadataAttr::ModificationTime.with_variant(42u64.into()),
+                MetadataAttr::AccessTime.with_unsigned(1_700_000_000u64),
+                MetadataAttr::ModificationTime.with_unsigned(42u64),
             ],
         });
         let wire = trail.to_vec().unwrap();
@@ -772,7 +771,7 @@ mod test {
 
     #[test]
     fn metadata_debug_render() {
-        let t = MetadataAttr::ModeBits.with_variant(Variant::unsigned(0o644u32));
+        let t = MetadataAttr::ModeBits.with_unsigned(0o644u32);
         let s = format!("{t:?}");
         eprintln!("case 1: {s}");
         assert!(s.contains("MetadataAttr::ModeBits"));

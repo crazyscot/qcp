@@ -25,6 +25,26 @@ pub trait DataTag: Into<u64> + TryFrom<u64> + ToString {
         TaggedData::new(self, data)
     }
 
+    /// Create a new [`TaggedData`] instance with the given variant and unsigned data.
+    ///
+    /// This is an ergonomic version of [`DataTag::with_variant`].
+    fn with_unsigned<V: Into<u64>>(self, data: V) -> TaggedData<Self>
+    where
+        Self: Sized,
+    {
+        TaggedData::new(self, Variant::unsigned(data.into()))
+    }
+
+    /// Create a new [`TaggedData`] instance with the given variant and signed data.
+    ///
+    /// This is an ergonomic version of [`DataTag::with_variant`].
+    fn with_signed<V: Into<i64>>(self, data: V) -> TaggedData<Self>
+    where
+        Self: Sized,
+    {
+        TaggedData::new(self, Variant::signed(data.into()))
+    }
+
     /// Renders [`Variant`] data belonging to this tag.
     ///
     /// This is a helper for `Display` and `Debug` on [`TaggedData`].
@@ -183,7 +203,7 @@ mod tests {
 
     #[test]
     fn tagged_data() {
-        let tagged = TestTag::First.with_variant(Variant::signed(42));
+        let tagged = TestTag::First.with_signed(42);
         let s = format!("{tagged:?}");
         assert_str_eq!(
             s,
@@ -228,7 +248,7 @@ mod tests {
     }
     #[test]
     fn tagged_data_custom_debug() {
-        let tagged = TestTagCustomDebug::Weasels.with_variant(Variant::signed(42));
+        let tagged = TestTagCustomDebug::Weasels.with_signed(42);
         let s = format!("{tagged:?}");
         assert_str_eq!(
             s,
