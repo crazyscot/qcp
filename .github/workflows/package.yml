@@ -107,6 +107,7 @@ jobs:
             README.md,LICENSE,CHANGELOG.md,\
             qcp/qcp.cdx.xml,\
             qcp/misc/qcp.conf,\
+            qcp/misc/qcp.html,\
             qcp/misc/qcp_sshd.conf\
             ${{ env.Q_PACK_1 }}\
             ${{ env.Q_PACK_2 }}\

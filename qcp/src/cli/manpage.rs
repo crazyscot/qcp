@@ -468,4 +468,19 @@ The system ssh configuration file
 .SH AUTHOR
 Ross Younger
 ";
+
+    #[test]
+    fn markdown() -> Result<()> {
+        let output = PathBuf::from(
+            std::env::var_os("QCP_MANPAGE_OUT_DIR")
+                .or_else(|| std::env::var_os("OUT_DIR"))
+                .ok_or(anyhow!("Neither QCP_MANPAGE_OUT_DIR nor OUT_DIR is set"))?,
+        )
+        .join("qcp.md");
+
+        let md = clap_markdown::help_markdown::<CliArgs>();
+        std::fs::write(&output, md)?;
+        println!("Wrote to {output:?}");
+        Ok(())
+    }
 }

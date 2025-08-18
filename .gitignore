@@ -7,4 +7,6 @@
 /nix/result
 /qcp/qcp.cdx.xml
 /qcp/qcp.cdx.xml.gz
+/qcp/misc/qcp.md
+/qcp-unsafe-tests/qcp-unsafe-tests.cdx.xml
 /xtask/xtask.cdx.xml
