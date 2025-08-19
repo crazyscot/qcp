@@ -10,7 +10,7 @@
 
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "qcp";
-  version = "0.4.2";
+  version = "0.5.0";
 
   # Tags required to fix the binary version
   GITHUB_REF_TYPE = "tag";
@@ -20,11 +20,11 @@ rustPlatform.buildRustPackage (finalAttrs: {
     owner = "crazyscot";
     repo = "qcp";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-SMu4Laqc9i4U5UgoILlKasWx6E642RscKapTf4WcglM=";
+    hash = "sha256-4r8XG6TNatBioQxgShKLhb+QH0ANaZB1SV4aprw/IF0=";
   };
 
   useFetchCargoVendor = true;
-  cargoHash = "sha256-+n7Big7gW4JxKq+cMOEo3slhokhoLnOc9tO7YmtnisU=";
+  cargoHash = "sha256-L654bVzFZoy2LamC5S4piia4IucOQJKuhVfatyzcXyc=";
 
   nativeBuildInputs = [ installShellFiles ];
 
@@ -44,6 +44,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
       # Permission checks in the sandbox appear to always fail
       "--skip=session::get::test::permission_denied"
       # Multiple network tests will fail in sanbox
+      "--skip=client::main_loop::test::endpoint_create_close"
       "--skip=util::dns::tests::ipv4"
       "--skip=util::dns::tests::ipv6"
       # Tracing attempts to access stdout and angers the sandbox

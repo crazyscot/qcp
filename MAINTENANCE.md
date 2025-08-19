@@ -50,6 +50,9 @@ Therefore we set an explicit local path to rust-analyzer in `.vscode/settings.js
     - Update tagged release version in `nix/default.nix`
     - Pre-compute the release hash (v0.3.0 is the release in this example) and replace the `fetchFromGithub.hash` value to the output SRI: `nix hash to-sri --type sha256 "$(nix-prefetch-url --unpack 'https://github.com/crazyscot/qcp/archive/v0.3.0.tar.gz')"`.
     - Run a test build with previous hashes or `lib.fakeHash` set for `cargoHash` and place the expected hash in place.
+      - `nix develop ./nix`
+      - `cd nix && nix build .`
+      - Edit or skip tests as appropriate, as not all of them will be able to succeed in the nix sandbox.
 
 ### Adding sub-crates
 
