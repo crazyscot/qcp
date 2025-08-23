@@ -75,7 +75,7 @@ jobs:
           # this action is used in multiple places
         with:
           cache-on-failure: true
-      - run: cargo docs-rs -p qcp
+      - run: cargo docs-rs -p qcp --locked
       # Continue on error for maximum information
       - run: cargo doc -p qcp --no-deps --locked --document-private-items
         if: ${{ !cancelled() }}
