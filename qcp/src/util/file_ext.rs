@@ -32,23 +32,23 @@ impl OpenOptionsExt for tokio::fs::OpenOptions {
         use crate::protocol::session::MetadataAttr;
 
         for md in qcp_meta {
-            if md.tag().unwrap_or_default() == MetadataAttr::ModeBits {
-                if let Some(m) = md.data.as_unsigned_ref() {
-                    // SAFETY: The file_mode crate calls `libc::umask()` which is potentially unsafe.
-                    // 1. It is a C binding, which is automatically considered unsafe.
-                    //    This is not a concern as this is a well-known libc function with well-known behaviour.
-                    // 2. The underlying syscall may modify program global state.
-                    //    However this library function does so in a safe way: it calls
-                    //    `umask(0)`, which does not modify anything. Therefore it is safe.
-                    //    (Curveball: `libc::set_umask()` is _not_ marked as unsafe, despite
-                    //     modifying program global state! But we don't call that.)
-                    let bits = (m & 0o777) as u32 & !file_mode::umask();
-                    tracing::debug!(
-                        "inbound file mode {m:03o}; umask {:03o} => creat mode {bits:03o}",
-                        file_mode::umask()
-                    );
-                    let _ = self.mode(bits);
-                }
+            if md.tag().unwrap_or_default() == MetadataAttr::ModeBits
+                && let Some(m) = md.data.as_unsigned_ref()
+            {
+                // SAFETY: The file_mode crate calls `libc::umask()` which is potentially unsafe.
+                // 1. It is a C binding, which is automatically considered unsafe.
+                //    This is not a concern as this is a well-known libc function with well-known behaviour.
+                // 2. The underlying syscall may modify program global state.
+                //    However this library function does so in a safe way: it calls
+                //    `umask(0)`, which does not modify anything. Therefore it is safe.
+                //    (Curveball: `libc::set_umask()` is _not_ marked as unsafe, despite
+                //     modifying program global state! But we don't call that.)
+                let bits = (m & 0o777) as u32 & !file_mode::umask();
+                tracing::debug!(
+                    "inbound file mode {m:03o}; umask {:03o} => creat mode {bits:03o}",
+                    file_mode::umask()
+                );
+                let _ = self.mode(bits);
             }
         }
     }

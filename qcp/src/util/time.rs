@@ -69,10 +69,10 @@ impl Stopwatch {
     /// Returns the elapsed duration so far
     #[must_use]
     pub(crate) fn elapsed(&self) -> Option<Duration> {
-        if let Some(start) = self.start_ {
-            if let Some(stop) = self.stop_ {
-                return Some(stop - start);
-            }
+        if let Some(start) = self.start_
+            && let Some(stop) = self.stop_
+        {
+            return Some(stop - start);
         }
         None
     }

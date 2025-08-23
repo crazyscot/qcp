@@ -202,12 +202,12 @@ impl Manager {
                 Configuration::FIELD_NAMES_AS_SLICE,
             )));
         }
-        if !self.data.contains(field) {
-            if let Some(d) = default {
-                return Ok(d);
-            }
-            // else continue on, the extraction raises an error
+        if !self.data.contains(field)
+            && let Some(d) = default
+        {
+            return Ok(d);
         }
+        // else continue on, the extraction raises an error
 
         self.data.extract_inner_lossy::<T>(field).map_err(|mut e| {
             if e.metadata.is_none() {
