@@ -51,12 +51,8 @@ impl Manager {
         }
         if apply_config_files {
             // N.B. This may leave data in a fused-error state, if a config file isn't parseable.
-            new1.add_config(
-                false,
-                "system",
-                Platform::system_config_path().as_ref(),
-                host,
-            );
+            let p: Option<PathBuf> = Platform::system_config_path();
+            new1.add_config(false, "system", p.as_ref(), host);
 
             for p in &Platform::user_config_paths() {
                 new1.add_config(true, "user", Some(p), host);
