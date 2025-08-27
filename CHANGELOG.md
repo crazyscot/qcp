@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1](https://github.com/crazyscot/qcp/compare/v0.5.0...v0.5.1)
+
+### 🐛 Bug Fixes
+
+- Debian postinst script edge case - ([4be84d9](https://github.com/crazyscot/qcp/commit/4be84d99b0c5d7282c525629eabf46baae0ba91f))
+
+
 ## [0.5.0](https://github.com/crazyscot/qcp/compare/v0.4.2...v0.5.0)
 
 ### ⛰️ Features
