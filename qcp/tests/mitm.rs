@@ -10,12 +10,15 @@ use rustls_pki_types::CertificateDer;
 use tokio::time::timeout;
 use x509_certificate::EcdsaCurve;
 
-use qcp::control::create_endpoint;
 use qcp::{
     Configuration,
     protocol::control::{Compatibility, ConnectionType},
     transport::ThroughputMode,
     util::Credentials,
+};
+use qcp::{
+    control::create_endpoint,
+    protocol::{DataTag, control::CredentialsType},
 };
 
 /// This simulates the scenario where either a rogue client attempts to connect to a server,
@@ -40,6 +43,8 @@ where
     // CLOSURE 1: Mess with the certificates.
     let (cli_cert_messed, srv_cert_messed) =
         modify_certs_fn(&client_credentials, &server_credentials);
+    let cli_cert_messed = CredentialsType::X509.with_variant(cli_cert_messed.to_vec().into());
+    let srv_cert_messed = CredentialsType::X509.with_variant(srv_cert_messed.to_vec().into());
 
     let (server_endpoint, _) = create_endpoint(
         &server_credentials,

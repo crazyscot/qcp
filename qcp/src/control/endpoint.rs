@@ -3,7 +3,10 @@
 
 use crate::{
     config::Configuration,
-    protocol::control::{Compatibility, ConnectionType},
+    protocol::{
+        TaggedData,
+        control::{Compatibility, ConnectionType, CredentialsType},
+    },
     transport::ThroughputMode,
     util::{self, Credentials},
 };
@@ -11,7 +14,11 @@ use crate::{
 use anyhow::Result;
 use num_traits::ToPrimitive;
 use quinn::crypto::rustls::{QuicClientConfig, QuicServerConfig};
-use quinn::rustls::server::WebPkiClientVerifier;
+use quinn::rustls::{
+    client::{AlwaysResolvesClientRawPublicKeys, ResolvesClientCert, WebPkiServerVerifier},
+    server::{AlwaysResolvesServerRawPublicKeys, ResolvesServerCert, WebPkiClientVerifier},
+    sign::CertifiedKey,
+};
 use quinn::{EndpointConfig, rustls};
 use rustls::RootCertStore;
 use std::sync::Arc;
@@ -23,7 +30,7 @@ use tracing::{Level, span, trace, warn};
 /// * `destination` is the server's address (port from the control channel server message).
 pub fn create_endpoint(
     credentials: &Credentials,
-    peer_cert: &[u8], /*CertificateDer<'_>*/
+    peer_cert: &TaggedData<CredentialsType>,
     connection_type: ConnectionType,
     config: &Configuration,
     mode: ThroughputMode,
@@ -32,13 +39,37 @@ pub fn create_endpoint(
 ) -> Result<(quinn::Endpoint, Option<String>)> {
     let _ = span!(Level::TRACE, "create_endpoint").entered();
     let mut root_store = RootCertStore::empty();
-    root_store.add(peer_cert.into())?;
+    let peer_cert_data = peer_cert.data.as_bytes_ref();
+    let Some(peer_cert_data) = peer_cert_data else {
+        anyhow::bail!("Invalid peer credentials");
+    };
+    match peer_cert.tag() {
+        Some(CredentialsType::X509) | Some(CredentialsType::Rfc7250) => (),
+        Some(CredentialsType::Invalid) | None => {
+            anyhow::bail!("Unknown peer credentials type {peer_cert}")
+        }
+    };
+    root_store.add(peer_cert_data.as_slice().into())?;
 
     let (client_config, server_config) = if server {
         let verifier = WebPkiClientVerifier::builder(root_store.into()).build()?;
-        let mut tls_config = rustls::ServerConfig::builder()
-            .with_client_cert_verifier(verifier)
-            .with_single_cert(credentials.cert_chain(), credentials.keypair.clone_key())?;
+        let mut tls_config = if true {
+            //### XXX WIP: refactor from here: add creds to control message, then match on it here
+            rustls::ServerConfig::builder()
+                .with_client_cert_verifier(verifier)
+                .with_single_cert(credentials.cert_chain(), credentials.keypair.clone_key())?
+        } else {
+            /*
+            let key = Arc::new(CertifiedKey::new(vec![], credentials.rfc7250.key.clone()));
+            let resolver: Arc<dyn ResolvesServerCert> =
+                Arc::new(AlwaysResolvesServerRawPublicKeys::new(key));
+
+            rustls::ServerConfig::builder()
+                .with_client_cert_verifier(verifier)
+                .with_cert_resolver(resolver)
+                */
+            todo!()
+        };
         tls_config.max_early_data_size = u32::MAX;
         let qsc = QuicServerConfig::try_from(tls_config)?;
         let mut server_cfg = quinn::ServerConfig::with_crypto(Arc::new(qsc));
@@ -47,11 +78,31 @@ pub fn create_endpoint(
 
         (None, Some(server_cfg))
     } else {
-        let tls_config = Arc::new(
-            rustls::ClientConfig::builder()
-                .with_root_certificates(root_store)
-                .with_client_auth_cert(credentials.cert_chain(), credentials.keypair.clone_key())?,
-        );
+        let tls_config = if true {
+            Arc::new(
+                rustls::ClientConfig::builder()
+                    .with_root_certificates(root_store)
+                    .with_client_auth_cert(
+                        credentials.cert_chain(),
+                        credentials.keypair.clone_key(),
+                    )?,
+            )
+        } else {
+            /*
+            let verifier = WebPkiServerVerifier::builder(root_store.into()).build()?;
+            let key = Arc::new(CertifiedKey::new(vec![], credentials.rfc7250.key.clone()));
+            let resolver: Arc<dyn ResolvesClientCert> =
+                Arc::new(AlwaysResolvesClientRawPublicKeys::new(key));
+
+            Arc::new(
+                rustls::ClientConfig::builder()
+                    .dangerous()
+                    .with_custom_certificate_verifier(verifier)
+                    .with_client_cert_resolver(resolver),
+            )
+            */
+            todo!()
+        };
         let mut client_cfg =
             quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls_config)?));
         let _ =

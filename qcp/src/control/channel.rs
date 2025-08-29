@@ -21,7 +21,7 @@ use crate::protocol::FindTag as _;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::control::{
-    BANNER, ClientGreeting, ClientMessage, ClientMessageAttributes, ClientMessageV1,
+    BANNER, ClientGreeting, ClientMessage, ClientMessage2Attributes, ClientMessageV2,
     ClosedownReport, ClosedownReportV1, Compatibility, CongestionController, ConnectionType,
     Direction, OLD_BANNER, OUR_COMPATIBILITY_LEVEL, OUR_COMPATIBILITY_NUMERIC, ServerFailure,
     ServerGreeting, ServerMessage, ServerMessageV1,
@@ -192,12 +192,12 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         self.send(message, "client message").await
     }
 
-    async fn client_read_server_message(&mut self) -> Result<ServerMessageV1> {
+    async fn client_read_server_message(&mut self) -> Result<ServerMessage> {
         let message = self.recv::<ServerMessage>("server message").await?;
         debug!("Received server message: {message:?}");
         // FUTURE: ServerMessage V2 will require more logic to unpack the message contents.
-        let message1 = match message {
-            ServerMessage::V1(m) => m,
+        match message {
+            ServerMessage::V1(_) => (),
             ServerMessage::Failure(f) => {
                 anyhow::bail!("server sent failure message: {f}");
             }
@@ -205,7 +205,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
                 anyhow::bail!("remote or logic error: unpacked unexpected ServerMessage::ToFollow")
             }
         };
-        Ok(message1)
+        Ok(message)
     }
 
     /// Runs the client side of the operation, end-to-end.
@@ -218,7 +218,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         manager: &mut Manager,
         parameters: &Parameters,
         direction: Direction,
-    ) -> Result<ServerMessageV1> {
+    ) -> Result<ServerMessage> {
         trace!("opening control channel");
 
         // PHASE 1: BANNER CHECK
@@ -242,7 +242,10 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         .await?;
 
         trace!("waiting for server message");
-        let message1 = self.client_read_server_message().await?;
+        let message = self.client_read_server_message().await?;
+        let ServerMessage::V1(ref message1) = message else {
+            anyhow::bail!("Only ServerMessage::v1 supported");
+        };
 
         manager.merge_provider(&message1);
         manager.apply_system_default(); // SOMEDAY: If we split config into two (bandwidth & options) this shouldn't be necessary.
@@ -250,7 +253,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         if !message1.warning.is_empty() {
             warn!("Remote endpoint warning: {}", &message1.warning);
         }
-        Ok(message1)
+        Ok(message)
     }
 
     pub(super) async fn wait_for_banner(&mut self) -> Result<()> {
@@ -322,7 +325,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         Ok(reply)
     }
 
-    async fn server_read_client_message(&mut self) -> Result<ClientMessageV1> {
+    async fn server_read_client_message(&mut self) -> Result<ClientMessageV2> {
         let client_message = match self.recv::<ClientMessage>("client message").await {
             Ok(cm) => cm,
             Err(e) => {
@@ -336,14 +339,15 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         };
 
         trace!("waiting for client message");
-        let message1 = match client_message {
-            ClientMessage::V1(m) => m,
+        let message = match client_message {
             ClientMessage::ToFollow => {
                 self.send_error(ServerFailure::Malformed).await?;
                 anyhow::bail!("remote or logic error: unpacked unexpected ClientMessage::ToFollow")
             }
+            ClientMessage::V1(m) => m.into(),
+            ClientMessage::V2(m) => m,
         };
-        Ok(message1)
+        Ok(message)
     }
 
     async fn server_send_message(
@@ -429,23 +433,23 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
     ) -> anyhow::Result<ServerResult> {
         // PHASE 3: MESSAGES
         // PHASE 3A: Read client message
-        let message1 = self.server_read_client_message().await?;
+        let message2 = self.server_read_client_message().await?;
 
         // PHASE 3B: Process client message
-        debug!(
-            "got client cert length {}, using {:?}",
-            message1.cert.len(),
-            message1.connection_type,
-        );
-        debug!("Received client message: {message1}");
-        if message1.show_config {
+        debug!("using {:?}", message2.connection_type,);
+        debug!("Received client message: {message2}");
+        let show_config = message2
+            .attributes
+            .find_tag(crate::protocol::control::ClientMessage2Attributes::OutputConfig)
+            .is_some();
+        if show_config {
             info!(
                 "Static configuration:\n{}",
                 manager.to_display_adapter::<Configuration>()
             );
         }
 
-        let config = match combine_bandwidth_configurations(manager, &message1) {
+        let config = match combine_bandwidth_configurations(manager, &message2) {
             Ok(cfg) => cfg,
             Err(e) => {
                 self.send_error(ServerFailure::NegotiationFailed(format!("{e}")))
@@ -454,7 +458,7 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
             }
         };
 
-        if message1.show_config {
+        if show_config {
             info!(
                 "Final configuration:\n{}",
                 manager.to_display_adapter::<Configuration>()
@@ -464,16 +468,16 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
         // PHASE 3C: Create the QUIC endpoint
         let credentials = Credentials::generate()?;
         let direction = Direction::from(
-            message1
+            message2
                 .attributes
-                .find_tag(ClientMessageAttributes::DirectionOfTravel),
+                .find_tag(ClientMessage2Attributes::DirectionOfTravel),
         );
         trace!("Direction of travel: {direction}");
 
         let (endpoint, warning) = match create_endpoint(
             &credentials,
-            &message1.cert,
-            message1.connection_type,
+            &message2.credentials,
+            message2.connection_type,
             &config,
             direction.server_mode(),
             true,
@@ -528,7 +532,7 @@ mod test {
                 MessageHeader, ProtocolMessage as _, ReceivingStream, SendReceivePair,
                 SendingStream,
             },
-            control::{ClosedownReportV1, ConnectionType, Direction, OLD_BANNER, ServerMessageV1},
+            control::{ClosedownReportV1, ConnectionType, Direction, OLD_BANNER, ServerMessage},
             test_helpers::new_test_plumbing,
         },
         util::{Credentials, PortRange, TimeFormat},
@@ -573,7 +577,7 @@ mod test {
             f(&mut rv.manager);
             rv
         }
-        fn go(&mut self) -> impl Future<Output = Result<ServerMessageV1>> {
+        fn go(&mut self) -> impl Future<Output = Result<ServerMessage>> {
             self.client.run_client(
                 &self.creds,
                 ConnectionType::Ipv4,
@@ -706,7 +710,7 @@ mod test {
 
         async fn broken_client<S: SendingStream, R: ReceivingStream>(
             cli: &mut TestClient<S, R>,
-        ) -> Result<ServerMessageV1> {
+        ) -> Result<ServerMessage> {
             let mut bad_creds = Credentials::generate()?;
             bad_creds.certificate = vec![1u8; 256].into();
             cli.client.wait_for_banner().await?;

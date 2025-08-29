@@ -60,7 +60,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use super::common::ProtocolMessage;
 use crate::{
     config::Configuration_Optional,
-    protocol::{DataTag, TaggedData, Variant, display_vec_td},
+    protocol::{DataTag, FindTag as _, TaggedData, Variant, display_vec_td},
     transport::ThroughputMode,
     util::{Credentials, PortRange as CliPortRange, serialization::SerializeAsString},
 };
@@ -382,6 +382,9 @@ pub enum ClientMessage {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
     /// On the wire this is encoded with enum discriminant 1.
     V1(ClientMessageV1),
+    /// This version was introduced in qcp XXX with `VersionCompatibility=V1XXX`.
+    /// On the wire this is encoded with enum discriminant 2.
+    V2(ClientMessageV2),
 }
 impl ProtocolMessage for ClientMessage {}
 
@@ -438,6 +441,92 @@ pub struct ClientMessageV1 {
     pub attributes: Vec<TaggedData<ClientMessageAttributes>>,
 }
 
+/// Extensible credentials tag
+///
+/// This enum was introduced in qcp 0.XXX with `VersionCompatibility=XXX`.
+#[derive(strum_macros::Display, Clone, Copy, Debug, Default, IntEnum, PartialEq)]
+#[non_exhaustive]
+#[repr(u64)]
+pub enum CredentialsType {
+    /// Indicates an invalid attribute.
+    Invalid = 0,
+    /// Standard X509 certificate.
+    /// Data is a `Variant::Bytes`
+    X509,
+    /// Raw (RFC7250) uncertified public key.
+    /// Data is a `Variant::Bytes`
+    #[default]
+    Rfc7250,
+}
+impl DataTag for CredentialsType {}
+
+#[derive(
+    Clone, Default, Serialize, Deserialize, PartialEq, derive_more::Debug, derive_more::Display,
+)]
+#[display("{connection_type}, attributes {}", display_vec_td(attributes))]
+/// Version 2 of the client control parameters message.
+/// This version was introduced in qcp XXX with `VersionCompatibility=VXXX`.
+pub struct ClientMessageV2 {
+    /// Client's self-signed certificate (DER)
+    //#[debug(ignore)]
+    pub credentials: TaggedData<CredentialsType>,
+
+    /// The connection type to use (the type of socket we want the server to bind)
+    pub connection_type: ConnectionType,
+
+    /// Optional fields
+    pub attributes: Vec<TaggedData<ClientMessage2Attributes>>,
+
+    /// Extension field, reserved for future expansion; for now, must be set to 0
+    pub extension: u8,
+}
+
+impl From<ClientMessageV1> for ClientMessageV2 {
+    fn from(v1: ClientMessageV1) -> Self {
+        let mut attributes = Vec::new();
+        if let Some(pr) = v1.port {
+            attributes.push(ClientMessage2Attributes::PortRangeStart.with_unsigned(pr.begin));
+            attributes.push(ClientMessage2Attributes::PortRangeEnd.with_unsigned(pr.end));
+        }
+        if v1.show_config {
+            attributes.push(ClientMessage2Attributes::OutputConfig.into());
+        }
+        if let Some(Uint(bw)) = v1.bandwidth_to_server {
+            attributes.push(ClientMessage2Attributes::BandwidthToServer.with_unsigned(bw));
+        }
+        if let Some(Uint(bw)) = v1.bandwidth_to_client {
+            attributes.push(ClientMessage2Attributes::BandwidthToClient.with_unsigned(bw));
+        }
+        if let Some(rtt) = v1.rtt {
+            attributes.push(ClientMessage2Attributes::RoundTripTime.with_unsigned(rtt));
+        }
+        if let Some(cc) = v1.congestion {
+            attributes
+                .push(ClientMessage2Attributes::CongestionControllerType.with_unsigned(cc as u64));
+        }
+        if let Some(Uint(icw)) = v1.initial_congestion_window {
+            attributes.push(ClientMessage2Attributes::InitialCongestionWindow.with_unsigned(icw));
+        }
+        if let Some(t) = v1.timeout {
+            attributes.push(ClientMessage2Attributes::QuicTimeout.with_unsigned(t));
+        }
+        if let Some(v) = v1
+            .attributes
+            .find_tag(ClientMessageAttributes::DirectionOfTravel)
+        {
+            attributes.push(ClientMessage2Attributes::DirectionOfTravel.with_variant(v.clone()));
+        }
+        Self {
+            credentials: CredentialsType::X509.with_variant(v1.cert.into()),
+            connection_type: v1.connection_type,
+            attributes,
+            extension: 0,
+        }
+    }
+}
+
+// XXX TODO: add ServerMessageV2 with CredentialsType and the optional stuff attributified
+
 #[cfg(test)]
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug, Default)]
 /// The control parameters send from client to server.
@@ -488,6 +577,69 @@ impl DataTag for ClientMessageAttributes {
                     .unwrap_or(Direction::Both)
                     .to_string()
             }
+        }
+    }
+}
+
+/// Extension attributes for `ClientMessageV2`
+///
+/// This enum was introduced in qcp 0.XXX with `VersionCompatibility=VXXX`.
+#[derive(strum_macros::Display, Clone, Copy, Debug, IntEnum, PartialEq)]
+#[non_exhaustive]
+#[repr(u64)]
+pub enum ClientMessage2Attributes {
+    /// Indicates an invalid attribute.
+    Invalid = 0,
+    /// The intended direction of data flow for the connection.
+    /// This is a value from [`Direction`], stored as [`crate::protocol::Variant::Unsigned`].
+    DirectionOfTravel,
+    /// Specifies the start of the port range we would like the server
+    /// to bind to.
+    /// Must always be used with `PortRangeEnd`.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    PortRangeStart,
+    /// Specifies the end of the port range we would like the server
+    /// to bind to.
+    /// Must always be used with `PortRangeStart`.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    PortRangeEnd,
+    /// Requests the server to output its config for this connection.
+    /// Data is Empty.
+    OutputConfig,
+    /// The requested bandwidth to use from client to server.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    BandwidthToServer,
+    /// The requested bandwidth to use from server to client (if None, use the same as bandwidth to server).
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    BandwidthToClient,
+    /// The network Round Trip Time, in milliseconds, to use in calculating the bandwidth delay product.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    RoundTripTime,
+    /// The congestion control algorithm to use.
+    /// This is a value from [`CongestionController`], stored as [`crate::protocol::Variant::Unsigned`].
+    CongestionControllerType,
+    /// The initial congestion window.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    InitialCongestionWindow,
+    /// Connection timeout for the QUIC endpoints, in seconds.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    QuicTimeout,
+}
+impl DataTag for ClientMessage2Attributes {
+    fn debug_data(&self, data: &Variant) -> String {
+        match self {
+            ClientMessage2Attributes::Invalid => "Invalid".into(),
+            ClientMessage2Attributes::DirectionOfTravel => {
+                Direction::from_repr(data.coerce_unsigned().as_())
+                    .unwrap_or(Direction::Both)
+                    .to_string()
+            }
+            ClientMessage2Attributes::CongestionControllerType => {
+                CongestionController::from_repr(data.coerce_unsigned().as_())
+                    .unwrap_or(CongestionController::default())
+                    .to_string()
+            }
+            _ => format!("{data:?}"),
         }
     }
 }
@@ -562,6 +714,9 @@ impl ClientMessage {
             ClientMessage::V1(msg) => msg
                 .attributes
                 .push(ClientMessageAttributes::DirectionOfTravel.with_unsigned(direction as u64)),
+            ClientMessage::V2(msg) => msg
+                .attributes
+                .push(ClientMessage2Attributes::DirectionOfTravel.with_unsigned(direction as u64)),
         }
     }
 }

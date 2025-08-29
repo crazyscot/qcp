@@ -77,7 +77,9 @@ fn last_component(tn: &'static str) -> &'static str {
 /// A tagging enum with its attached data.
 ///
 /// To make an enum capable of being used in this struct, implement the [`DataTag`] trait and declare `#[repr(u64)]`.
-#[derive(Serialize, Deserialize, PartialEq, Clone, derive_more::Debug, derive_more::Display)]
+#[derive(
+    Serialize, Deserialize, PartialEq, Clone, Default, derive_more::Debug, derive_more::Display,
+)]
 #[display("({}, {})", self.tag_str(), E::debug_data_u64(tag.0, data))]
 pub struct TaggedData<E: DataTag> {
     /// Option tag
