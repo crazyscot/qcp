@@ -12,10 +12,7 @@
         "./Cargo.toml"
     ],
     "rust-analyzer.showUnlinkedFileNotification": false,
-
-    // rustup component add rust-analyzer
-    "rust-analyzer.server.path": "${userHome}/.cargo/bin/rust-analyzer",
-
+    // rustup component add rust-analyzer // "rust-analyzer.server.path": "${userHome}/.cargo/bin/rust-analyzer",
     // "rust-analyzer.cargo.features": ["unstable-test-helpers"],
     "editor.formatOnSave": true
 }
