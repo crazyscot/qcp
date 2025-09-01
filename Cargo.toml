@@ -7,13 +7,13 @@ package.edition = "2024"
 anstream = { version = "0.6.20", default-features = false }
 anstyle = { version = "1.0.11", default-features = false }
 anyhow = "1.0.99"
-cfg-if = "1.0.1"
-clap = { version = "4.5.45", features = ["wrap_help", "derive", "cargo", "help", "string"] }
+cfg-if = "1.0.3"
+clap = { version = "4.5.46", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 colorchoice = "1.0.4"
 console = { version = "0.16.0" }
 littertray = "0.2.1"
 rusty-fork = "0.3.0"
-tempfile = { version = "3.20.0", default-features = false }
+tempfile = { version = "3.21.0", default-features = false }
 tokio = { version = "1.47.1", default-features = true, features = [
     "fs",
     "io-std",

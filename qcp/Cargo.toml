@@ -59,11 +59,11 @@ human-repr = "1.1.0"
 indicatif = { version = "0.18.0", features = ["tokio"] }
 int-enum = "1.2.0"
 lessify = "0.5.0"
-mimalloc = "0.1.47"
+mimalloc = "0.1.48"
 num-format = { version = "0.4.4" }
 num-traits = "0.2.19"
 paste = "1.0.15"
-quinn = { version = "0.11.8", default-features = false, features = [
+quinn = { version = "0.11.9", default-features = false, features = [
     "runtime-tokio",
     "rustls",
     "ring",
@@ -98,7 +98,7 @@ mockall = "0.13.1"
 pretty_assertions = "1.4.1"
 roff = "0.2.2"
 rusty-fork = { workspace = true }
-serde_json = "1.0.142"
+serde_json = "1.0.143"
 serde_test = "1.0.177"
 tempfile = { workspace = true }
 tokio-test = "0.4.4"
