@@ -2,7 +2,7 @@
 name = "qcp"
 description = "Secure remote file copy utility which uses the QUIC protocol over UDP"
 rust-version = "1.85.0"
-version = "0.5.1"
+version = "0.5.2"
 edition.workspace = true
 authors = ["Ross Younger <qcp@crazyscot.com>"]
 license = "AGPL-3.0-or-later"

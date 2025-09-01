@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2](https://github.com/crazyscot/qcp/compare/v0.5.1...v0.5.2)
+
+### 🛡️ Security
+
+- Bump tracing-subscriber from 0.3.19 to 0.3.20 - ([7af8577](https://github.com/crazyscot/qcp/commit/7af85772b68265d96b9861ac7e20d9dd1a91fe3d))
+
+
 ## [0.5.1](https://github.com/crazyscot/qcp/compare/v0.5.0...v0.5.1)
 
 ### 🏗️ Build, packaging & CI
