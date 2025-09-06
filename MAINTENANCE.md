@@ -6,9 +6,11 @@ The rust-analyzer plugin for Visual Studio Code comes bundled with a specific ve
 
 As this project has an older MSRV, sometimes the newer analyzer doesn't quite work properly.
 
-Therefore we set an explicit local path to rust-analyzer in `.vscode/settings.json`. To make this work, you will need to install it for your toolchain:
+The recommended fix for this is:
 
-    rustup component add rust-analyzer
+- rustup component add rust-analyzer
+- Add this to `~/.config/Code/User/settings.json:`:
+  - `"rust-analyzer.server.path": "${userHome}/.cargo/bin/rust-analyzer"`
 
 ## Releases
 
