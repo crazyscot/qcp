@@ -189,7 +189,6 @@ impl TryFrom<&CliArgs> for Manager {
 mod test {
     use std::str::FromStr;
 
-    use figment::Provider;
     use pretty_assertions::assert_eq;
     use rusty_fork::rusty_fork_test;
 
@@ -220,7 +219,7 @@ mod test {
         }
     }
 
-    fn config_user(user: &str) -> impl Provider {
+    fn config_user(user: &str) -> Source {
         let mut prov = Source::new("test");
         prov.add("remote_user", user.into());
         prov

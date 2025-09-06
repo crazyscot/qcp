@@ -135,7 +135,7 @@ impl Parameters {
     /// * -l username  # same as for ssh/scp
     /// * `user@host:file`
     /// * our configuration file
-    pub(crate) fn remote_user_as_config(&self) -> impl figment::Provider {
+    pub(crate) fn remote_user_as_config(&self) -> ConfigSource {
         let mut cfg = ConfigSource::new(META_JOBSPEC);
         let src = self.source.as_ref().and_then(FileSpec::remote_user);
         let dest = self.destination.as_ref().and_then(FileSpec::remote_user);
