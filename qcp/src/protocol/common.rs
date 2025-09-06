@@ -141,7 +141,7 @@ where
     fn from_reader_async<R>(
         reader: &mut R,
         size: u32,
-    ) -> impl std::future::Future<Output = Result<Self, Error>> + Send
+    ) -> impl Future<Output = Result<Self, Error>> + Send
     where
         R: AsyncReadExt + std::marker::Unpin + Send,
     {
@@ -173,7 +173,7 @@ where
     /// This function checks the struct's [`WIRE_ENCODING_LIMIT`](Self::WIRE_ENCODING_LIMIT).
     fn from_reader_async_framed<R>(
         reader: &mut R,
-    ) -> impl std::future::Future<Output = Result<Self, Error>> + Send
+    ) -> impl Future<Output = Result<Self, Error>> + Send
     where
         R: AsyncReadExt + std::marker::Unpin + Send,
     {
@@ -202,7 +202,7 @@ where
     fn to_writer_async_framed<W>(
         &self,
         writer: &mut W,
-    ) -> impl std::future::Future<Output = Result<(), Error>> + Send
+    ) -> impl Future<Output = Result<(), Error>> + Send
     where
         W: AsyncWriteExt + std::marker::Unpin + Send,
     {
