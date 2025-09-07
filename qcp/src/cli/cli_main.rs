@@ -35,9 +35,9 @@ where
     cli_inner(args)
         .inspect_err(|e| {
             if crate::util::tracing_is_initialised() {
-                tracing::error!("{e}");
+                tracing::error!("{e:#}");
             } else {
-                format!("{ERROR}Error:{RESET} {e}", ERROR = error()).output_paged();
+                format!("{ERROR}Error:{RESET} {e:#}", ERROR = error()).output_paged();
             }
         })
         .map_or(ExitCode::FAILURE, |success| match success {

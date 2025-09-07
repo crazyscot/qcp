@@ -149,7 +149,7 @@ impl Client {
         let (config, mut qcp_conn) = self
             .establish_control_channel(&working_config, &prep_result)
             .await
-            .context("establishing control channel")?;
+            .context("while establishing control channel")?;
 
         // Dry run mode ends here! -------
         if self.parameters.dry_run {
