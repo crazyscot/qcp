@@ -7,9 +7,10 @@ use crate::{
     config::{Configuration, Configuration_Optional, Manager},
     control::{ControlChannel, create, create_endpoint},
     protocol::{
+        TaggedData,
         common::{ReceivingStream, SendReceivePair, SendingStream},
         compat::Feature,
-        control::{ClosedownReportV1, Compatibility, ServerMessageV1},
+        control::{ClosedownReportV1, Compatibility, CredentialsType, ServerMessageV2},
         session::{CommandParam, Get2Args},
     },
     session::CommandStats,
@@ -79,7 +80,7 @@ struct QcpConnection {
     ssh_client: ProcessWrapper,
     control: ControlChannelType,
     endpoint: Option<Endpoint>,
-    server_message: ServerMessageV1,
+    server_message: ServerMessageV2,
 }
 
 impl TryFrom<ProcessWrapper> for QcpConnection {
@@ -89,7 +90,7 @@ impl TryFrom<ProcessWrapper> for QcpConnection {
         Ok(Self {
             ssh_client: client,
             control,
-            server_message: ServerMessageV1::default(),
+            server_message: ServerMessageV2::default(),
             endpoint: None,
         })
     }
@@ -273,6 +274,7 @@ impl Client {
                 &mut self.manager,
                 &self.parameters,
                 prep_result.job_spec.direction(),
+                None,
             )
             .await?;
 
@@ -296,16 +298,16 @@ impl Client {
         config: &Configuration,
         qcp_conn: &mut QcpConnection,
     ) -> anyhow::Result<QuinnConnection> {
-        let server_message = &qcp_conn.server_message;
+        let message1 = &qcp_conn.server_message;
         let server_address_port = match prep_result.remote_address {
-            std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, server_message.port).into(),
-            std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, server_message.port, 0, 0).into(),
+            std::net::IpAddr::V4(ip) => SocketAddrV4::new(ip, message1.port).into(),
+            std::net::IpAddr::V6(ip) => SocketAddrV6::new(ip, message1.port, 0, 0).into(),
         };
 
         let endpoint = self.create_quic_endpoint(
             prep_result,
             config,
-            server_message,
+            &message1.credentials,
             server_address_port,
             qcp_conn.control.selected_compat,
         )?;
@@ -313,7 +315,7 @@ impl Client {
         debug!("Opening QUIC connection to {server_address_port:?}");
         let connection = timeout(
             config.timeout_duration(),
-            endpoint.connect(server_address_port, &server_message.name)?,
+            endpoint.connect(server_address_port, &message1.common_name)?,
         )
         .await
         .context("UDP connection to QUIC endpoint timed out")??;
@@ -325,7 +327,7 @@ impl Client {
         &mut self,
         prep_result: &PrepResult,
         config: &Configuration,
-        server_message: &ServerMessageV1,
+        peer_credentials: &TaggedData<CredentialsType>,
         server_address_port: SocketAddr,
         compat: Compatibility,
     ) -> anyhow::Result<Endpoint> {
@@ -334,7 +336,7 @@ impl Client {
         self.timers.next("data channel setup");
         let (endpoint, _) = create_endpoint(
             &self.credentials,
-            &server_message.cert,
+            peer_credentials,
             server_address_port.into(),
             config,
             prep_result.job_spec.direction().client_mode(),
@@ -494,29 +496,23 @@ mod test {
     #[tokio::test]
     async fn endpoint_create_close() {
         use crate::client::main_loop::QcpConnection;
-        use crate::protocol::control::Compatibility;
-        use crate::protocol::control::{ClosedownReport, ClosedownReportV1};
+        use crate::protocol::control::{ClosedownReport, ClosedownReportV1, Compatibility};
 
         let mut uut = make_uut(|_, _| (), "127.0.0.1:file", LOCAL_FILE);
         let working = Configuration_Optional::default();
         let config = Configuration::system_default().clone();
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
         let server_cert = crate::util::Credentials::generate().unwrap();
-        let server_message = crate::protocol::control::ServerMessageV1 {
-            name: "test".to_string(),
-            port: 0,
-            cert: server_cert.certificate.to_vec(),
-            ..Default::default()
-        };
         let server_address_port = (Ipv4Addr::LOCALHOST, 0);
+        let level = Compatibility::Level(1);
 
         let endpoint = uut
             .create_quic_endpoint(
                 &prep_result,
                 &config,
-                &server_message,
+                &server_cert.to_tagged_data(level, None).unwrap(),
                 server_address_port.into(),
-                Compatibility::Level(1),
+                level,
             )
             .unwrap();
         assert!(endpoint.local_addr().is_ok());

@@ -9,7 +9,6 @@ use std::time::Duration;
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;
 use quinn::{ConnectionStats, Endpoint};
-use serde_bare::Uint;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, Stdin, Stdout};
 use tokio::time::timeout;
 use tracing::{Instrument as _, debug, error, info, trace, warn};
@@ -21,10 +20,10 @@ use crate::protocol::FindTag as _;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::control::{
-    BANNER, ClientGreeting, ClientMessage, ClientMessageAttributes, ClientMessageV1,
+    BANNER, ClientGreeting, ClientMessage, ClientMessage2Attributes, ClientMessageV2,
     ClosedownReport, ClosedownReportV1, Compatibility, CongestionController, ConnectionType,
     Direction, OLD_BANNER, OUR_COMPATIBILITY_LEVEL, OUR_COMPATIBILITY_NUMERIC, ServerFailure,
-    ServerGreeting, ServerMessage, ServerMessageV1,
+    ServerGreeting, ServerMessage, ServerMessage2Attributes, ServerMessageV2,
 };
 use crate::transport::combine_bandwidth_configurations;
 use crate::util::{Credentials, TimeFormat, TracingSetupFn};
@@ -46,6 +45,7 @@ pub(crate) trait ControlChannelServerInterface<
         manager: &mut Manager,
         setup_tracing: TracingSetupFn,
         colours: bool,
+        force_compat: Option<Compatibility>,
     ) -> anyhow::Result<ServerResult>;
 
     async fn run_server_inner(
@@ -145,10 +145,14 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     // =================================================================================
     // CLIENT
 
-    async fn client_exchange_greetings(&mut self, remote_debug: bool) -> Result<ServerGreeting> {
+    async fn client_exchange_greetings(
+        &mut self,
+        remote_debug: bool,
+        force_compat: Option<Compatibility>,
+    ) -> Result<ServerGreeting> {
         self.send(
             ClientGreeting {
-                compatibility: OUR_COMPATIBILITY_LEVEL.into(),
+                compatibility: force_compat.unwrap_or(OUR_COMPATIBILITY_LEVEL).into(),
                 debug: remote_debug,
                 extension: 0,
             },
@@ -169,8 +173,6 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         config: &Configuration_Optional,
         direction: Direction,
     ) -> Result<()> {
-        // FUTURE: Select the client message version to send based on server's compatibility level.
-
         let congestion = config
             .congestion
             .unwrap_or(Configuration::system_default().congestion);
@@ -181,8 +183,13 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
             );
         }
 
+        let tagged_creds = credentials.to_tagged_data(
+            self.selected_compat,
+            config.tls_auth_type.as_deref().copied(), // ugh, this is a bit ugly
+        )?;
         let mut message = ClientMessage::new(
-            credentials,
+            self.selected_compat,
+            tagged_creds,
             connection_type,
             parameters.remote_config,
             config,
@@ -192,20 +199,19 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         self.send(message, "client message").await
     }
 
-    async fn client_read_server_message(&mut self) -> Result<ServerMessageV1> {
+    async fn client_read_server_message(&mut self) -> Result<ServerMessageV2> {
         let message = self.recv::<ServerMessage>("server message").await?;
-        debug!("Received server message: {message:?}");
-        // FUTURE: ServerMessage V2 will require more logic to unpack the message contents.
-        let message1 = match message {
-            ServerMessage::V1(m) => m,
+        debug!("Received server message: {{ {message} }}");
+        Ok(match message {
+            ServerMessage::V1(m) => m.into(),
+            ServerMessage::V2(m) => m,
             ServerMessage::Failure(f) => {
                 anyhow::bail!("server sent failure message: {f}");
             }
             ServerMessage::ToFollow => {
                 anyhow::bail!("remote or logic error: unpacked unexpected ServerMessage::ToFollow")
             }
-        };
-        Ok(message1)
+        })
     }
 
     /// Runs the client side of the operation, end-to-end.
@@ -218,7 +224,8 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         manager: &mut Manager,
         parameters: &Parameters,
         direction: Direction,
-    ) -> Result<ServerMessageV1> {
+        force_compat: Option<Compatibility>,
+    ) -> Result<ServerMessageV2> {
         trace!("opening control channel");
 
         // PHASE 1: BANNER CHECK
@@ -226,7 +233,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
 
         // PHASE 2: EXCHANGE GREETINGS
         let remote_greeting = self
-            .client_exchange_greetings(parameters.remote_debug)
+            .client_exchange_greetings(parameters.remote_debug, force_compat)
             .await?;
         debug!("Received server greeting: {remote_greeting:?}");
 
@@ -242,15 +249,19 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         .await?;
 
         trace!("waiting for server message");
-        let message1 = self.client_read_server_message().await?;
+        let message = self.client_read_server_message().await?;
 
-        manager.merge_provider(&message1);
+        manager.merge_provider(&message);
         manager.apply_system_default(); // SOMEDAY: If we split config into two (bandwidth & options) this shouldn't be necessary.
-
-        if !message1.warning.is_empty() {
-            warn!("Remote endpoint warning: {}", &message1.warning);
+        for attr in &message.attributes {
+            if attr.tag() == Some(ServerMessage2Attributes::WarningMessage) {
+                warn!(
+                    "Remote endpoint warning: {}",
+                    attr.data.as_str().unwrap_or("<invalid string>")
+                );
+            }
         }
-        Ok(message1)
+        Ok(message)
     }
 
     pub(super) async fn wait_for_banner(&mut self) -> Result<()> {
@@ -307,10 +318,14 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     // =================================================================================
     // SERVER
 
-    async fn server_exchange_greetings(&mut self) -> Result<ClientGreeting> {
+    async fn server_exchange_greetings(
+        &mut self,
+        force_compat: Option<Compatibility>,
+    ) -> Result<ClientGreeting> {
+        let compat = force_compat.unwrap_or(OUR_COMPATIBILITY_LEVEL);
         self.send(
             ServerGreeting {
-                compatibility: OUR_COMPATIBILITY_LEVEL.into(),
+                compatibility: compat.into(),
                 extension: 0,
             },
             "server greeting",
@@ -322,7 +337,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         Ok(reply)
     }
 
-    async fn server_read_client_message(&mut self) -> Result<ClientMessageV1> {
+    async fn server_read_client_message(&mut self) -> Result<ClientMessageV2> {
         let client_message = match self.recv::<ClientMessage>("client message").await {
             Ok(cm) => cm,
             Err(e) => {
@@ -336,14 +351,15 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         };
 
         trace!("waiting for client message");
-        let message1 = match client_message {
-            ClientMessage::V1(m) => m,
+        let message = match client_message {
             ClientMessage::ToFollow => {
                 self.send_error(ServerFailure::Malformed).await?;
                 anyhow::bail!("remote or logic error: unpacked unexpected ClientMessage::ToFollow")
             }
+            ClientMessage::V1(m) => m.into(),
+            ClientMessage::V2(m) => m,
         };
-        Ok(message1)
+        Ok(message)
     }
 
     async fn server_send_message(
@@ -353,24 +369,19 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         config: &Configuration,
         warning: String,
     ) -> Result<()> {
-        // FUTURE: When later versions of ServerMessage are created, check client compatibility and send the appropriate version.
-        self.send(
-            ServerMessage::V1(ServerMessageV1 {
-                port,
-                cert: credentials.certificate.to_vec(),
-                name: credentials.hostname.clone(),
-                bandwidth_to_server: Uint(config.rx()),
-                bandwidth_to_client: Uint(config.tx()),
-                rtt: config.rtt,
-                congestion: *config.congestion,
-                initial_congestion_window: Uint(config.initial_congestion_window.into()),
-                timeout: config.timeout,
-                warning,
-                extension: 0,
-            }),
-            "server message",
-        )
-        .await?;
+        let tagged_creds =
+            credentials.to_tagged_data(self.selected_compat, Some(*config.tls_auth_type))?;
+
+        let message = ServerMessage::new(
+            self.selected_compat,
+            config,
+            port,
+            tagged_creds,
+            credentials.hostname.clone(),
+            warning,
+        );
+        debug!("sending server message: {message:?}");
+        self.send(message, "server message").await?;
         self.flush().await?;
         Ok(())
     }
@@ -390,12 +401,14 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
         manager: &mut Manager,
         setup_tracing: TracingSetupFn,
         colours: bool,
+        force_compat: Option<Compatibility>,
     ) -> anyhow::Result<ServerResult> {
         // PHASE 1: BANNER (checked by client)
         self.stream.send.write_all(BANNER.as_bytes()).await?;
 
         // PHASE 2: GREETINGS
-        let remote_greeting = self.server_exchange_greetings().await?;
+        let remote_greeting = self.server_exchange_greetings(force_compat).await?;
+        // server_exchange_greetings sets up self.selected_compat
         let time_format = manager.get_config_field::<TimeFormat>(
             "time_format",
             Some(Configuration::system_default().time_format),
@@ -429,23 +442,23 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
     ) -> anyhow::Result<ServerResult> {
         // PHASE 3: MESSAGES
         // PHASE 3A: Read client message
-        let message1 = self.server_read_client_message().await?;
+        let message2 = self.server_read_client_message().await?;
 
         // PHASE 3B: Process client message
-        debug!(
-            "got client cert length {}, using {:?}",
-            message1.cert.len(),
-            message1.connection_type,
-        );
-        debug!("Received client message: {message1}");
-        if message1.show_config {
+        debug!("using {:?}", message2.connection_type,);
+        debug!("Received client message: {message2}");
+        let show_config = message2
+            .attributes
+            .find_tag(crate::protocol::control::ClientMessage2Attributes::OutputConfig)
+            .is_some();
+        if show_config {
             info!(
                 "Static configuration:\n{}",
                 manager.to_display_adapter::<Configuration>()
             );
         }
 
-        let config = match combine_bandwidth_configurations(manager, &message1) {
+        let config = match combine_bandwidth_configurations(manager, &message2) {
             Ok(cfg) => cfg,
             Err(e) => {
                 self.send_error(ServerFailure::NegotiationFailed(format!("{e}")))
@@ -454,7 +467,7 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
             }
         };
 
-        if message1.show_config {
+        if show_config {
             info!(
                 "Final configuration:\n{}",
                 manager.to_display_adapter::<Configuration>()
@@ -464,20 +477,21 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
         // PHASE 3C: Create the QUIC endpoint
         let credentials = Credentials::generate()?;
         let direction = Direction::from(
-            message1
+            message2
                 .attributes
-                .find_tag(ClientMessageAttributes::DirectionOfTravel),
+                .find_tag(ClientMessage2Attributes::DirectionOfTravel),
         );
         trace!("Direction of travel: {direction}");
+        assert_eq!(compat, self.selected_compat);
 
         let (endpoint, warning) = match create_endpoint(
             &credentials,
-            &message1.cert,
-            message1.connection_type,
+            &message2.credentials,
+            message2.connection_type,
             &config,
             direction.server_mode(),
             true,
-            compat,
+            self.selected_compat,
         ) {
             Ok(t) => t,
             Err(e) => {
@@ -528,7 +542,10 @@ mod test {
                 MessageHeader, ProtocolMessage as _, ReceivingStream, SendReceivePair,
                 SendingStream,
             },
-            control::{ClosedownReportV1, ConnectionType, Direction, OLD_BANNER, ServerMessageV1},
+            control::{
+                ClosedownReportV1, Compatibility, CongestionController, ConnectionType, OLD_BANNER,
+                ServerMessageV2,
+            },
             test_helpers::new_test_plumbing,
         },
         util::{Credentials, PortRange, TimeFormat},
@@ -554,51 +571,54 @@ mod test {
         manager: Manager,
         params: Parameters,
         client: ControlChannel<S, R>,
+        compat: Compatibility,
     }
     impl<S: SendingStream, R: ReceivingStream> TestClient<S, R> {
-        fn new(pipe: SendReceivePair<S, R>) -> TestClient<S, R> {
+        fn new(pipe: SendReceivePair<S, R>, compat: Compatibility) -> TestClient<S, R> {
             Self {
                 creds: Credentials::generate().unwrap(),
                 manager: Manager::without_files(None),
                 params: Parameters::default(),
                 client: ControlChannel::new(pipe),
+                compat,
             }
         }
-        // convenience constructor, creates a manager and runs a provided closure on it
+        /// convenience constructor, creates a manager and runs a provided closure on it
         fn with_prefs<F: FnOnce(&mut Manager)>(
             pipe: SendReceivePair<S, R>,
             f: F,
+            compat: Compatibility,
         ) -> TestClient<S, R> {
-            let mut rv = Self::new(pipe);
+            let mut rv = Self::new(pipe, compat);
             f(&mut rv.manager);
             rv
         }
-        fn go(&mut self) -> impl Future<Output = Result<ServerMessageV1>> {
+        /// Convenience wrapper, runs the test client (async)
+        fn run(&mut self) -> impl Future<Output = Result<ServerMessageV2>> {
             self.client.run_client(
                 &self.creds,
                 ConnectionType::Ipv4,
                 &mut self.manager,
                 &self.params,
                 crate::protocol::control::Direction::Both,
+                Some(self.compat),
             )
         }
     }
 
-    #[cfg_attr(cross_target_mingw, ignore)]
     // TODO: Cross-compiled mingw code fails here in quinn::Endpoint::new
     // with Endpoint Failed: OS Error 10045 (FormatMessageW() returned error 317) (os error 10045)
     // Don't run this test on such cross builds for now.
-    #[tokio::test]
-    async fn happy_path() {
+    async fn happy_path(compat: Compatibility) {
         let (pipe1, pipe2) = new_test_plumbing();
-
-        let mut cli = TestClient::new(pipe1);
+        let mut cli = TestClient::new(pipe1, compat);
         cli.params.remote_config = true;
-        let cli_fut = cli.go();
+        let cli_fut = cli.run();
 
         let mut server = ControlChannel::new(pipe2);
         let mut manager = Manager::without_files(None);
-        let ser_fut = server.run_server(None, &mut manager, setup_tracing_stub, false);
+        let ser_fut =
+            server.run_server(None, &mut manager, setup_tracing_stub, false, Some(compat));
 
         let (cli_res, ser_res) = tokio::join!(cli_fut, ser_fut);
         eprintln!("Client: {cli_res:?}\nServer: {ser_res:?}");
@@ -612,11 +632,23 @@ mod test {
         assert_eq!(expected, got);
     }
 
+    #[cfg_attr(cross_target_mingw, ignore)] // see comment under happy_path() for why
+    #[tokio::test]
+    async fn happy_path_compat_1() {
+        happy_path(Compatibility::Level(1)).await;
+    }
+
+    #[cfg_attr(cross_target_mingw, ignore)] // see comment under happy_path() for why
+    #[tokio::test]
+    async fn happy_path_compat_3() {
+        happy_path(Compatibility::Level(3)).await;
+    }
+
     #[tokio::test]
     async fn old_banner() {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let mut cli = TestClient::new(pipe1);
-        let cli_fut = cli.go();
+        let mut cli = TestClient::new(pipe1, Compatibility::Level(1));
+        let cli_fut = cli.run();
         pipe2.send.write_all(OLD_BANNER.as_bytes()).await.unwrap();
         let res = cli_fut.await;
         assert!(res.is_err_and(|e| {
@@ -628,8 +660,8 @@ mod test {
     #[tokio::test]
     async fn banner_junk() {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let mut cli = TestClient::new(pipe1);
-        let cli_fut = cli.go();
+        let mut cli = TestClient::new(pipe1, Compatibility::Level(1));
+        let cli_fut = cli.run();
         pipe2
             .send
             .write_all("qqqqqqqqqqqqqqqqq\n".as_bytes())
@@ -651,19 +683,31 @@ mod test {
     async fn negotiation_fails() {
         let (pipe1, pipe2) = new_test_plumbing();
 
-        let mut cli = TestClient::with_prefs(pipe1, |mgr| {
-            mgr.merge_provider(fake_cli_with_port(11111, 11111));
-        });
-        let cli_fut = cli.go();
+        let mut cli = TestClient::with_prefs(
+            pipe1,
+            |mgr| {
+                mgr.merge_provider(fake_cli_with_port(11111, 11111));
+            },
+            Compatibility::Level(1),
+        );
+        let cli_fut = cli.run();
 
         let mut server = ControlChannel::new(pipe2);
         let mut manager = Manager::without_files(None);
         // non-overlapping port range, will fail to negotiate
         manager.merge_provider(fake_cli_with_port(22222, 22222));
-        let ser_fut = server.run_server(None, &mut manager, setup_tracing_stub, false);
+        let ser_fut = server.run_server(
+            None,
+            &mut manager,
+            setup_tracing_stub,
+            false,
+            Some(Compatibility::Level(1)),
+        );
 
         let (cli_res, ser_res) = tokio::join!(cli_fut, ser_fut);
+        assert!(cli_res.is_err());
         assert!(cli_res.is_err_and(|e| e.to_string().contains("Negotiation Failed")));
+        assert!(ser_res.is_err());
         assert!(ser_res.is_err_and(|e| e.to_string().contains("negotiation failed")));
     }
 
@@ -700,46 +744,6 @@ mod test {
         assert!(res1.is_err_and(|e| e.to_string().contains("unexpected ClientMessage::ToFollow")));
     }
 
-    #[tokio::test]
-    async fn endpoint_fails() {
-        // This is a very unexpected case. The most ready way we've got to simulate it is by presenting an unparseable client certificate.
-
-        async fn broken_client<S: SendingStream, R: ReceivingStream>(
-            cli: &mut TestClient<S, R>,
-        ) -> Result<ServerMessageV1> {
-            let mut bad_creds = Credentials::generate()?;
-            bad_creds.certificate = vec![1u8; 256].into();
-            cli.client.wait_for_banner().await?;
-            let _ = cli.client.client_exchange_greetings(false).await?;
-            let manager = Manager::without_files(None);
-            let cfg = manager.get::<Configuration_Optional>().unwrap();
-            cli.client
-                .client_send_message(
-                    &bad_creds,
-                    ConnectionType::Ipv4,
-                    &Parameters::default(),
-                    &cfg,
-                    Direction::Both,
-                )
-                .await?;
-            cli.client.client_read_server_message().await
-        }
-        let (pipe1, pipe2) = new_test_plumbing();
-
-        let mut cli = TestClient::new(pipe1);
-
-        let cli_fut = broken_client(&mut cli);
-
-        let mut server = ControlChannel::new(pipe2);
-        let mut manager = Manager::without_files(None);
-        let ser_fut = server.run_server(None, &mut manager, setup_tracing_stub, false);
-
-        let (cli_res, _) = tokio::join!(cli_fut, ser_fut);
-        let e = cli_res.unwrap_err();
-        eprintln!("msg {e:?}");
-        assert!(e.to_string().contains("Endpoint Failed"));
-    }
-
     #[test]
     fn compatibility_level_comparison() {
         type Uut = ControlChannel<tokio::io::Stdout, tokio::io::Stdin>;
@@ -751,5 +755,33 @@ mod test {
                 "case: {a} {b} -> {result}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn compat_check_newreno() {
+        let (pipe1, pipe2) = new_test_plumbing();
+        // Client runs at compat level 3
+        let mut cli = TestClient::new(pipe1, Compatibility::Level(3));
+        // ...crucial: set NewReno in the config
+        let cfg = Configuration_Optional {
+            congestion: Some(CongestionController::NewReno.into()),
+            ..Default::default()
+        };
+        cli.manager.merge_provider(cfg);
+        let cli_fut = cli.run();
+
+        let mut server = ControlChannel::new(pipe2);
+        let mut manager = Manager::without_files(None);
+        // Server runs at compat level 1 i.e. does NOT support NewReno
+        let ser_fut = server.run_server(
+            None,
+            &mut manager,
+            setup_tracing_stub,
+            false,
+            Some(Compatibility::Level(1)),
+        );
+
+        let res = tokio::try_join!(cli_fut, ser_fut).unwrap_err();
+        assert!(res.to_string().contains("does not support NewReno"));
     }
 }

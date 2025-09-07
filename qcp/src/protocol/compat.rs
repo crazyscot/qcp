@@ -59,9 +59,12 @@ def_enum!(
         NEW_RENO => Compatibility::Level(2),
         /// Support for preserving file metadata
         PRESERVE => Compatibility::Level(2),
-        /// Get2 command
-        FILEHEADER2_FILETRAILER2_GET2_PUT2 => Compatibility::Level(2),
+        /// Get2 and Put2 commands, `FileHeader2` and `FileTrailer2` structures
+        GET2_PUT2 => Compatibility::Level(2),
+        /// `ClientMessage2`, `ServerMessage2`, `CredentialsType`, `ClientMessage2Attributes`
+        CMSG_SMSG_2 => Compatibility::Level(3),
     }
+    // Note: When adding a new compatibility level, don't forget to update OUR_COMPATIBILITY_LEVEL.
 );
 
 impl Feature {
@@ -72,6 +75,11 @@ impl Feature {
     }
 
     /// Returns the symbolic name for a feature, in screaming snake case.
+    ///
+    /// ```
+    /// use qcp::protocol::{control::Compatibility, compat::Feature};
+    /// assert_eq!(Feature::NEW_RENO.name(), "NEW_RENO");
+    /// ```
     #[must_use]
     pub const fn name(&self) -> &'static str {
         self.1
@@ -147,5 +155,8 @@ mod test {
 
         assert!(!Compatibility::Level(1).supports(Feature::NEW_RENO));
         assert!(Compatibility::Level(2).supports(Feature::NEW_RENO));
+
+        assert!(!Compatibility::Level(2).supports(Feature::CMSG_SMSG_2));
+        assert!(Compatibility::Level(3).supports(Feature::CMSG_SMSG_2));
     }
 }

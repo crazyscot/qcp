@@ -49,12 +49,16 @@ pub trait DataTag: Into<u64> + TryFrom<u64> + ToString {
     ///
     /// This is a helper for `Display` and `Debug` on [`TaggedData`].
     ///
-    /// The default implementation calls directly to Debug. See [`DataTag::debug_data`], which may be overridden for any special output (e.g. octal) that makes sense for the enum.
+    /// The default implementation looks up the symbolic tag, then calls [`DataTag::debug_data`] for that tag.
+    /// If the value was not recognised as a tag, we call Debug on the variant data.
+    /// This method may be overridden to handle that case differently.
     #[must_use]
-    fn debug_data_u64(value: u64, data: &Variant) -> String {
-        Self::try_from(value).map_or_else(|_| format!("{data:?}"), |tag| tag.debug_data(data))
+    fn debug_data_for_tag(tag: u64, data: &Variant) -> String {
+        Self::try_from(tag).map_or_else(|_| format!("{data:?}"), |tag| tag.debug_data(data))
     }
     /// Renders [`Variant`] data for tag-specific debug.
+    ///
+    /// This is a helper for `Display` and `Debug` on [`TaggedData`].
     ///
     /// The default implementation calls directly to Debug, but may be overridden for any special output (e.g. octal) that makes sense for the enum.
     #[must_use]
@@ -77,15 +81,17 @@ fn last_component(tn: &'static str) -> &'static str {
 /// A tagging enum with its attached data.
 ///
 /// To make an enum capable of being used in this struct, implement the [`DataTag`] trait and declare `#[repr(u64)]`.
-#[derive(Serialize, Deserialize, PartialEq, Clone, derive_more::Debug, derive_more::Display)]
-#[display("({}, {})", self.tag_str(), E::debug_data_u64(tag.0, data))]
+#[derive(
+    Serialize, Deserialize, PartialEq, Clone, Default, derive_more::Debug, derive_more::Display,
+)]
+#[display("({}, {})", self.tag_str(), E::debug_data_for_tag(tag.0, data))]
 pub struct TaggedData<E: DataTag> {
     /// Option tag
     #[debug("{}::{}", last_component(std::any::type_name::<E>()),
         E::try_from(tag.0).map_or_else(|_| format!("UNKNOWN_{}", tag.0), |f| f.to_string()))]
     tag: Uint,
     /// Option data
-    #[debug("{}", E::debug_data_u64(tag.0, data))]
+    #[debug("{}", E::debug_data_for_tag(tag.0, data))]
     pub data: Variant,
     #[debug(ignore)]
     #[serde(skip)]
@@ -177,7 +183,7 @@ pub(crate) fn display_vec_td<E: DataTag>(v: &Vec<TaggedData<E>>) -> String {
         first = false;
         s.push_str(&it.tag_str());
         s.push(':');
-        s.push_str(&E::debug_data_u64(it.tag_raw(), &it.data));
+        s.push_str(&E::debug_data_for_tag(it.tag_raw(), &it.data));
     }
     s.push(']');
     s

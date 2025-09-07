@@ -59,10 +59,11 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use super::common::ProtocolMessage;
 use crate::{
+    Configuration,
     config::Configuration_Optional,
-    protocol::{DataTag, TaggedData, Variant, display_vec_td},
+    protocol::{DataTag, FindTag as _, TaggedData, Variant, compat::Feature, display_vec_td},
     transport::ThroughputMode,
-    util::{Credentials, PortRange as CliPortRange, serialization::SerializeAsString},
+    util::{PortRange as CliPortRange, serialization::SerializeAsString},
 };
 
 /// Server banner message, sent on stdout and checked by the client
@@ -73,14 +74,14 @@ pub const BANNER: &str = "qcp-server-2\n";
 pub const OLD_BANNER: &str = "qcp-server-1\n";
 
 /// The protocol compatibility version implemented by this crate
-pub(crate) const OUR_COMPATIBILITY_NUMERIC: u16 = 2;
+pub(crate) const OUR_COMPATIBILITY_NUMERIC: u16 = 3;
 /// The protocol compatibility version implemented by this crate
 pub const OUR_COMPATIBILITY_LEVEL: Compatibility = Compatibility::Level(OUR_COMPATIBILITY_NUMERIC);
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // Display helpers
 
-use engineering_repr::EngineeringQuantity as EQ;
+use engineering_repr::{EngineeringQuantity as EQ, EngineeringRepr};
 
 fn display_opt_uint(label: &str, bandwidth: Option<&Uint>) -> String {
     bandwidth.map_or_else(String::new, |u| {
@@ -371,7 +372,16 @@ impl ProtocolMessage for ServerGreeting {
 ////////////////////////////////////////////////////////////////////////////////////////
 // CLIENT MESSAGE
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug, Default, derive_more::Display)]
+#[derive(
+    Clone,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Debug,
+    Default,
+    derive_more::Display,
+    derive_more::From,
+)]
 /// The control parameters send from client to server.
 pub enum ClientMessage {
     /// Special value indicating an endpoint has not yet read the remote `ClientMessage`.
@@ -379,9 +389,12 @@ pub enum ClientMessage {
     #[default]
     #[serde(skip_serializing)]
     ToFollow, // 0
-    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility` level 1.
     /// On the wire this is encoded with enum discriminant 1.
     V1(ClientMessageV1),
+    /// This version was introduced with `VersionCompatibility` level 3.
+    /// On the wire this is encoded with enum discriminant 2.
+    V2(ClientMessageV2),
 }
 impl ProtocolMessage for ClientMessage {}
 
@@ -401,7 +414,7 @@ impl ProtocolMessage for ClientMessage {}
     display_vec_td(attributes),
 )]
 /// Version 1 of the client control parameters message.
-/// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+/// This version was introduced in qcp 0.3 with `VersionCompatibility` level 1.
 pub struct ClientMessageV1 {
     /// Client's self-signed certificate (DER)
     #[debug(ignore)]
@@ -431,11 +444,167 @@ pub struct ClientMessageV1 {
     /// If it is mandatory for the server to action a given attribute, it MUST NOT be sent in this field.
     /// Instead, use a later version of the `ClientMessage`.
     ///
-    /// This field was added in qcp 0.5 with `VersionCompatibility=V2`.
+    /// This field was added in qcp 0.5 with `VersionCompatibility` level 2.
     /// Prior to Compatibility::Level(2) this was a reserved u8, which was required to be set to 0.
     /// If length 0, it looks the same on the wire.
     /// If length >0, earlier versions ignore the attributes.
     pub attributes: Vec<TaggedData<ClientMessageAttributes>>,
+}
+
+/// Extensible credentials tag
+///
+/// This enum was introduced with `VersionCompatibility` level 3.
+#[derive(
+    strum_macros::Display,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    IntEnum,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    clap::ValueEnum,
+    strum_macros::EnumString,
+    strum_macros::VariantNames,
+)]
+#[non_exhaustive]
+#[repr(u64)]
+#[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
+#[serde(rename_all = "lowercase")]
+pub enum CredentialsType {
+    /// Indicates an invalid attribute, or that there is no preference.
+    /// This enum variant is not valid on the wire; credentials must always be a concrete type.
+    Any = 0,
+    /// Self-signed X509 certificate.
+    // Data is a `Variant::Bytes`
+    X509,
+    /// Raw (RFC7250) public key.
+    // Data is a `Variant::Bytes`
+    #[default]
+    RawPublicKey,
+}
+impl DataTag for CredentialsType {}
+
+#[derive(
+    Clone, Default, Serialize, Deserialize, PartialEq, derive_more::Debug, derive_more::Display,
+)]
+#[display("{connection_type}, attributes {}", display_vec_td(attributes))]
+/// Version 2 of the client control parameters message.
+/// This version was introduced with `VersionCompatibility` level 3.
+pub struct ClientMessageV2 {
+    /// Client's TLS credentials (DER)
+    #[debug(ignore)]
+    pub credentials: TaggedData<CredentialsType>,
+
+    /// The connection type to use (the type of socket we want the server to bind)
+    pub connection_type: ConnectionType,
+
+    /// Optional fields
+    pub attributes: Vec<TaggedData<ClientMessage2Attributes>>,
+
+    /// Extension field, reserved for future expansion; for now, must be set to 0
+    pub extension: u8,
+}
+
+impl ClientMessageV2 {
+    fn new(credentials: TaggedData<CredentialsType>, connection_type: ConnectionType) -> Self {
+        Self {
+            credentials,
+            connection_type,
+            attributes: Vec::new(),
+            extension: 0,
+        }
+    }
+}
+
+impl ClientMessageV2 {
+    pub(crate) fn apply_config_attributes(
+        &mut self,
+        remote_config: bool,
+        our_config: &Configuration_Optional,
+    ) {
+        if remote_config {
+            self.attributes
+                .push(ClientMessage2Attributes::OutputConfig.into());
+        }
+        if let Some(pr) = our_config.remote_port {
+            self.attributes
+                .push(ClientMessage2Attributes::PortRangeStart.with_unsigned(pr.begin));
+            self.attributes
+                .push(ClientMessage2Attributes::PortRangeEnd.with_unsigned(pr.end));
+        }
+        if let Some(eq) = our_config.tx {
+            self.attributes
+                .push(ClientMessage2Attributes::BandwidthToServer.with_unsigned(u64::from(eq)));
+        }
+        if let Some(eq) = our_config.rx {
+            self.attributes
+                .push(ClientMessage2Attributes::BandwidthToClient.with_unsigned(u64::from(eq)));
+        }
+        if let Some(rtt) = our_config.rtt {
+            self.attributes
+                .push(ClientMessage2Attributes::RoundTripTime.with_unsigned(rtt));
+        }
+        if let Some(cc) = our_config.congestion {
+            self.attributes
+                .push(ClientMessage2Attributes::CongestionControllerType.with_unsigned(*cc as u64));
+        }
+        if let Some(icw) = our_config.initial_congestion_window {
+            self.attributes.push(
+                ClientMessage2Attributes::InitialCongestionWindow.with_unsigned(u64::from(icw)),
+            );
+        }
+        if let Some(t) = our_config.timeout {
+            self.attributes
+                .push(ClientMessage2Attributes::QuicTimeout.with_unsigned(t));
+        }
+        // DirectionOfTravel is set up by set_direction()
+    }
+}
+
+impl From<ClientMessageV1> for ClientMessageV2 {
+    fn from(v1: ClientMessageV1) -> Self {
+        let mut attributes = Vec::new();
+        if let Some(pr) = v1.port {
+            attributes.push(ClientMessage2Attributes::PortRangeStart.with_unsigned(pr.begin));
+            attributes.push(ClientMessage2Attributes::PortRangeEnd.with_unsigned(pr.end));
+        }
+        if v1.show_config {
+            attributes.push(ClientMessage2Attributes::OutputConfig.into());
+        }
+        if let Some(Uint(bw)) = v1.bandwidth_to_server {
+            attributes.push(ClientMessage2Attributes::BandwidthToServer.with_unsigned(bw));
+        }
+        if let Some(Uint(bw)) = v1.bandwidth_to_client {
+            attributes.push(ClientMessage2Attributes::BandwidthToClient.with_unsigned(bw));
+        }
+        if let Some(rtt) = v1.rtt {
+            attributes.push(ClientMessage2Attributes::RoundTripTime.with_unsigned(rtt));
+        }
+        if let Some(cc) = v1.congestion {
+            attributes
+                .push(ClientMessage2Attributes::CongestionControllerType.with_unsigned(cc as u64));
+        }
+        if let Some(Uint(icw)) = v1.initial_congestion_window {
+            attributes.push(ClientMessage2Attributes::InitialCongestionWindow.with_unsigned(icw));
+        }
+        if let Some(t) = v1.timeout {
+            attributes.push(ClientMessage2Attributes::QuicTimeout.with_unsigned(t));
+        }
+        if let Some(v) = v1
+            .attributes
+            .find_tag(ClientMessageAttributes::DirectionOfTravel)
+        {
+            attributes.push(ClientMessage2Attributes::DirectionOfTravel.with_variant(v.clone()));
+        }
+        Self {
+            credentials: CredentialsType::X509.with_variant(v1.cert.into()),
+            connection_type: v1.connection_type,
+            attributes,
+            extension: 0,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -466,9 +635,9 @@ struct OriginalClientMessageV1 {
     extension: u8,
 }
 
-/// Extension attributes for the client message
+/// Extension attributes for [`ClientMessageV1`]
 ///
-/// This enum was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+/// This enum was introduced in qcp 0.5 with `VersionCompatibility` level 2.
 #[derive(strum_macros::Display, Clone, Copy, Debug, IntEnum, PartialEq)]
 #[non_exhaustive]
 #[repr(u64)]
@@ -482,19 +651,85 @@ pub enum ClientMessageAttributes {
 impl DataTag for ClientMessageAttributes {
     fn debug_data(&self, data: &Variant) -> String {
         match self {
-            ClientMessageAttributes::Invalid => "Invalid".into(),
             ClientMessageAttributes::DirectionOfTravel => {
                 Direction::from_repr(data.coerce_unsigned().as_())
                     .unwrap_or(Direction::Both)
                     .to_string()
             }
+            _ => format!("{data:?}"),
+        }
+    }
+}
+
+/// Extension attributes for `ClientMessageV2`
+///
+/// This enum was introduced with `VersionCompatibility` level 3.
+#[derive(strum_macros::Display, Clone, Copy, Debug, IntEnum, PartialEq)]
+#[non_exhaustive]
+#[repr(u64)]
+pub enum ClientMessage2Attributes {
+    /// Indicates an invalid attribute.
+    Invalid = 0,
+    /// The intended direction of data flow for the connection.
+    /// This is a value from [`Direction`], stored as [`crate::protocol::Variant::Unsigned`].
+    DirectionOfTravel,
+    /// Specifies the start of the port range we would like the server
+    /// to bind to.
+    /// Must always be used with `PortRangeEnd`.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    PortRangeStart,
+    /// Specifies the end of the port range we would like the server
+    /// to bind to.
+    /// Must always be used with `PortRangeStart`.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    PortRangeEnd,
+    /// Requests the server to output its config for this connection.
+    /// Data is Empty.
+    OutputConfig,
+    /// The requested bandwidth to use from client to server.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    BandwidthToServer,
+    /// The requested bandwidth to use from server to client (if None, use the same as bandwidth to server).
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    BandwidthToClient,
+    /// The network Round Trip Time, in milliseconds, to use in calculating the bandwidth delay product.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    RoundTripTime,
+    /// The congestion control algorithm to use.
+    /// This is a value from [`CongestionController`], stored as [`crate::protocol::Variant::Unsigned`].
+    CongestionControllerType,
+    /// The initial congestion window.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    InitialCongestionWindow,
+    /// Connection timeout for the QUIC endpoints, in seconds.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    QuicTimeout,
+}
+impl DataTag for ClientMessage2Attributes {
+    fn debug_data(&self, data: &Variant) -> String {
+        match self {
+            ClientMessage2Attributes::DirectionOfTravel => {
+                Direction::from_repr(data.coerce_unsigned().as_())
+                    .unwrap_or(Direction::Both)
+                    .to_string()
+            }
+            ClientMessage2Attributes::CongestionControllerType => {
+                CongestionController::from_repr(data.coerce_unsigned().as_())
+                    .unwrap_or_default()
+                    .to_string()
+            }
+            ClientMessage2Attributes::BandwidthToClient
+            | ClientMessage2Attributes::BandwidthToServer => {
+                data.coerce_unsigned().to_eng(4).to_string()
+            }
+            _ => format!("{data:?}"),
         }
     }
 }
 
 /// Direction of data flow for the connection.
 ///
-/// This enum was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+/// This enum was introduced in qcp 0.5 with `VersionCompatibility` level 2.
 #[derive(
     strum_macros::Display, Clone, Copy, Debug, PartialEq, Eq, strum_macros::FromRepr, Default,
 )]
@@ -543,17 +778,21 @@ impl Direction {
 
 impl ClientMessage {
     pub(crate) fn new(
-        credentials: &Credentials,
+        compat: Compatibility,
+        cert: TaggedData<CredentialsType>,
         connection_type: ConnectionType,
         remote_config: bool,
         my_config: &Configuration_Optional,
     ) -> Self {
-        ClientMessage::V1(ClientMessageV1::new(
-            credentials,
-            connection_type,
-            remote_config,
-            my_config,
-        ))
+        assert!(cert.data.is_bytes());
+        if compat.supports(Feature::CMSG_SMSG_2) {
+            let mut msg = ClientMessageV2::new(cert, connection_type);
+            msg.apply_config_attributes(remote_config, my_config);
+            msg.into()
+        } else {
+            let cert_bytes = cert.data.into_bytes().unwrap_or_default();
+            ClientMessageV1::new(&cert_bytes, connection_type, remote_config, my_config).into()
+        }
     }
 
     pub(crate) fn set_direction(&mut self, direction: Direction) {
@@ -562,13 +801,16 @@ impl ClientMessage {
             ClientMessage::V1(msg) => msg
                 .attributes
                 .push(ClientMessageAttributes::DirectionOfTravel.with_unsigned(direction as u64)),
+            ClientMessage::V2(msg) => msg
+                .attributes
+                .push(ClientMessage2Attributes::DirectionOfTravel.with_unsigned(direction as u64)),
         }
     }
 }
 
 impl ClientMessageV1 {
     fn new(
-        credentials: &Credentials,
+        cert: &[u8],
         connection_type: ConnectionType,
         remote_config: bool,
         my_config: &Configuration_Optional,
@@ -579,7 +821,7 @@ impl ClientMessageV1 {
         let icw: &Option<EQ<u64>> = &my_config.initial_congestion_window;
 
         Self {
-            cert: credentials.certificate.to_vec(),
+            cert: cert.to_vec(),
             connection_type,
             port: my_config.remote_port.map(std::convert::Into::into),
             show_config: remote_config,
@@ -604,7 +846,16 @@ impl ClientMessageV1 {
 ////////////////////////////////////////////////////////////////////////////////////////
 // SERVER MESSAGE
 
-#[derive(Clone, Serialize, Default, Deserialize, PartialEq, Eq, Debug)]
+#[derive(
+    Clone,
+    Serialize,
+    Default,
+    Deserialize,
+    PartialEq,
+    Debug,
+    derive_more::From,
+    derive_more::Display,
+)]
 /// The control parameters sent from server to client
 pub enum ServerMessage {
     /// Special value indicating an endpoint has not yet read the remote `ServerMessage`.
@@ -612,18 +863,73 @@ pub enum ServerMessage {
     #[default]
     #[serde(skip_serializing)]
     ToFollow,
-    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility` level 1.
     /// On the wire enum discriminant: 1.
     V1(ServerMessageV1),
-    /// This message type was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    /// This message type was introduced in qcp 0.3 with `VersionCompatibility` level 1.
     /// On the wire enum discriminant: 2.
     Failure(ServerFailure),
+    /// This message type was introduced with `VersionCompatibility` level 3.
+    /// On the wire enum discriminant: 3.
+    V2(ServerMessageV2),
 }
 impl ProtocolMessage for ServerMessage {}
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, derive_more::Debug, Default)]
+impl ServerMessage {
+    pub(crate) fn new(
+        compat: Compatibility,
+        config: &Configuration,
+        port: u16,
+        credentials: TaggedData<CredentialsType>,
+        common_name: String,
+        warning: String,
+    ) -> Self {
+        assert!(credentials.data.is_bytes());
+        let bandwidth_to_server = Uint(config.rx());
+        let bandwidth_to_client = Uint(config.tx());
+        if compat.supports(Feature::CMSG_SMSG_2) {
+            let mut msg = ServerMessageV2 {
+                port,
+                credentials,
+                common_name,
+                bandwidth_to_server,
+                bandwidth_to_client,
+                rtt: config.rtt,
+                ..Default::default()
+            };
+            msg.apply_config_attributes(config);
+            msg.into()
+        } else {
+            let cert_bytes = credentials.data.into_bytes().unwrap_or_default();
+            ServerMessageV1 {
+                port,
+                cert: cert_bytes,
+                name: common_name,
+                bandwidth_to_server,
+                bandwidth_to_client,
+                rtt: config.rtt,
+                congestion: *config.congestion,
+                initial_congestion_window: Uint(config.initial_congestion_window.into()),
+                timeout: config.timeout,
+                warning,
+                ..Default::default()
+            }
+            .into()
+        }
+    }
+}
+
+#[derive(
+    Clone, Serialize, Deserialize, PartialEq, Eq, derive_more::Debug, Default, derive_more::Display,
+)]
 /// Version 1 of the message from server to client.
-/// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+/// This version was introduced in qcp 0.3 with `VersionCompatibility` level 1.
+#[display(
+    "{name}:{port} in {}, out {}, rtt {rtt}, congestion {congestion}/{}, timeout {timeout}, \"{warning}\"",
+    bandwidth_to_server.0,
+    bandwidth_to_client.0,
+    initial_congestion_window.0,
+)]
 pub struct ServerMessageV1 {
     /// UDP port the server has bound to
     pub port: u16,
@@ -713,6 +1019,176 @@ pub enum ServerFailure {
     Unknown(String),
 }
 
+/// Version 2 of the server control parameters message.
+/// This version was introduced with `VersionCompatibility` level 3.
+#[derive(
+    Clone, Serialize, Default, Deserialize, PartialEq, derive_more::Debug, derive_more::Display,
+)]
+#[display(
+    "{common_name}:{port} in {}, out {}, rtt {rtt}, attrs {}",
+    bandwidth_to_server.0.to_eng(4),
+    bandwidth_to_client.0.to_eng(4),
+    display_vec_td(attributes)
+)]
+pub struct ServerMessageV2 {
+    /// UDP port the server has bound to
+    pub port: u16,
+    /// Server's TLS credentials (DER encoded)
+    #[debug(ignore)]
+    pub credentials: TaggedData<CredentialsType>,
+
+    /// Server's common name, if provided in the credentials.
+    /// This saves us having to unpick it from the certificate.
+    pub common_name: String,
+
+    /// The final bandwidth to use from client to server
+    pub bandwidth_to_server: Uint,
+    /// The final bandwidth to use from server to client
+    pub bandwidth_to_client: Uint,
+    /// The final round-trip-time to use on the connection
+    pub rtt: u16,
+
+    /// Optional fields
+    pub attributes: Vec<TaggedData<ServerMessage2Attributes>>,
+    // OPTIONAL: name?
+    /// Extension field, reserved for future expansion; for now, must be set to 0
+    pub extension: u8,
+}
+
+impl From<ServerMessageV1> for ServerMessageV2 {
+    fn from(v1: ServerMessageV1) -> Self {
+        let mut attributes = Vec::new();
+        if !v1.warning.is_empty() {
+            attributes
+                .push(ServerMessage2Attributes::WarningMessage.with_variant(v1.warning.into()));
+        }
+        attributes.push(
+            ServerMessage2Attributes::CongestionController.with_unsigned(v1.congestion as u64),
+        );
+        if v1.initial_congestion_window.0 != 0 {
+            attributes.push(
+                ServerMessage2Attributes::InitialCongestionWindow
+                    .with_unsigned(v1.initial_congestion_window.0),
+            );
+        }
+        if v1.timeout != 0 {
+            attributes.push(ServerMessage2Attributes::QuicTimeout.with_unsigned(v1.timeout));
+        }
+        Self {
+            port: v1.port,
+            credentials: CredentialsType::X509.with_variant(v1.cert.into()),
+            common_name: v1.name,
+            bandwidth_to_server: v1.bandwidth_to_server,
+            bandwidth_to_client: v1.bandwidth_to_client,
+            rtt: v1.rtt,
+            attributes,
+            extension: 0,
+        }
+    }
+}
+
+/// Optional attributes for `ServerMessageV2`
+///
+/// This enum was introduced with `VersionCompatibility` level 3.
+#[derive(strum_macros::Display, Clone, Copy, Debug, IntEnum, PartialEq)]
+#[non_exhaustive]
+#[repr(u64)]
+pub enum ServerMessage2Attributes {
+    /// Indicates an invalid attribute.
+    Invalid = 0,
+
+    /// The congestion control algorithm to use.
+    /// This is a value from [`CongestionController`], stored as [`crate::protocol::Variant::Unsigned`].
+    ///
+    /// The [`ServerMessage2Attributes::InitialCongestionWindow`] attribute may be used to specify
+    /// the initial congestion window, if required.
+    CongestionController,
+
+    /// The initial congestion window to use. If not present, the algorithm default is used.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    InitialCongestionWindow,
+
+    /// A warning message to be relayed to a human.
+    /// Data is [`crate::protocol::Variant::String`].
+    WarningMessage,
+
+    /// Connection timeout for the QUIC endpoints, in seconds.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    QuicTimeout,
+}
+
+impl DataTag for ServerMessage2Attributes {}
+
+impl ServerMessageV2 {
+    pub(crate) fn apply_config_attributes(&mut self, config: &Configuration) {
+        if *config.congestion != CongestionController::default() {
+            self.attributes.push(
+                ServerMessage2Attributes::CongestionController
+                    .with_unsigned(*config.congestion as u64),
+            );
+        }
+        let window = u64::from(config.initial_congestion_window);
+        if window != 0 {
+            self.attributes
+                .push(ServerMessage2Attributes::InitialCongestionWindow.with_unsigned(window));
+        }
+        if config.timeout != 0 {
+            self.attributes
+                .push(ServerMessage2Attributes::QuicTimeout.with_unsigned(config.timeout));
+        }
+        // WarningMessage is set up when the message is created.
+    }
+}
+
+impl Provider for ServerMessageV2 {
+    fn metadata(&self) -> figment::Metadata {
+        figment::Metadata::named("ServerMessageV2")
+    }
+
+    fn data(&self) -> Result<figment::value::Map<figment::Profile, Dict>, figment::Error> {
+        let mut dict = Dict::new();
+        let mut insert = |key: &str, val: figment::value::Value| {
+            let _ = dict.insert(key.into(), val);
+        };
+        // This is written from the consumer's (client's) point of view, i.e. bandwidth_to_server is client's tx.
+        insert("tx", self.bandwidth_to_server.0.into());
+        insert("rx", self.bandwidth_to_client.0.into());
+        insert("rtt", self.rtt.into());
+
+        for attr in &self.attributes {
+            if let Some(tag) = attr.tag() {
+                let data = &attr.data;
+                match tag {
+                    ServerMessage2Attributes::CongestionController => {
+                        let ctrl = data.coerce_unsigned().as_();
+                        let cc = CongestionController::from_repr(ctrl).unwrap_or_default();
+                        insert("congestion", cc.into());
+                    }
+                    ServerMessage2Attributes::InitialCongestionWindow => {
+                        insert("initial_congestion_window", data.coerce_unsigned().into());
+                    }
+                    ServerMessage2Attributes::QuicTimeout => {
+                        insert("timeout", data.coerce_unsigned().into());
+                    }
+                    // attributes not forming part of the configuration:
+                    ServerMessage2Attributes::WarningMessage
+                    | ServerMessage2Attributes::Invalid => {}
+                }
+            } else {
+                return Err(figment::Error::from(format!(
+                    "Unknown ServerMessage2Attributes tag {}",
+                    attr.tag_raw()
+                )));
+            }
+        }
+
+        let mut profile_map = Map::new();
+        let _ = profile_map.insert(Profile::Global, dict);
+
+        Ok(profile_map)
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 // CLOSEDOWN REPORT
 
@@ -722,14 +1198,14 @@ pub enum ClosedownReport {
     /// Special value that should never be seen on the wire
     #[serde(skip_serializing)]
     Unknown,
-    /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+    /// This version was introduced in qcp 0.3 with `VersionCompatibility` level 1.
     /// On the wire enum discriminant: 1
     V1(ClosedownReportV1),
 }
 impl ProtocolMessage for ClosedownReport {}
 
 /// Version 1 of the closedown report.
-/// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
+/// This version was introduced in qcp 0.3 with `VersionCompatibility` level 1.
 #[derive(Serialize, Deserialize, PartialEq, Default, Clone, derive_more::Debug)]
 pub struct ClosedownReportV1 {
     /// Final congestion window
@@ -759,7 +1235,7 @@ pub struct ClosedownReportV1 {
     /// If it is mandatory for the client to action a given attribute, it MUST NOT be sent in this field.
     /// Instead, use a later version of the `ClosedownReport`.
     ///
-    /// This field was added in qcp 0.5 with `VersionCompatibility=V2`.
+    /// This field was added in qcp 0.5 with `VersionCompatibility` level 2.
     /// Prior to Compatibility::Level(2) this was a reserved u8, which was required to be set to 0.
     /// If length 0, it looks the same on the wire.
     /// If length >0, earlier versions ignore the attributes.
@@ -794,7 +1270,7 @@ impl From<&ConnectionStats> for ClosedownReportV1 {
 
 /// Extension attributes for the closedown report
 ///
-/// This enum was introduced in qcp 0.5 with `VersionCompatibility=V2`.
+/// This enum was introduced in qcp 0.5 with `VersionCompatibility` level 2.
 #[derive(strum_macros::Display, Clone, Copy, Debug, IntEnum, PartialEq)]
 #[non_exhaustive]
 #[repr(u64)]
@@ -818,7 +1294,7 @@ mod test {
         net::{IpAddr, Ipv4Addr, Ipv6Addr},
     };
 
-    use assertables::assert_matches;
+    use assertables::{assert_contains, assert_matches};
     use pretty_assertions::{assert_eq, assert_str_eq};
     use quinn::ConnectionStats;
     use serde::{Deserialize, Serialize};
@@ -827,16 +1303,18 @@ mod test {
     use crate::{
         config::{Configuration, Configuration_Optional, Manager},
         protocol::{
-            DataTag, TaggedData,
+            DataTag, FindTag, TaggedData,
             common::ProtocolMessage,
             control::{
-                ClientMessageAttributes, ClientMessageV1, ClosedownReport, Compatibility,
-                CongestionController, ConnectionType, Direction, OriginalClientMessage,
-                OriginalClientMessageV1, ServerGreeting, ServerMessageV1,
+                ClientMessage2Attributes, ClientMessageAttributes, ClientMessageV1,
+                ClientMessageV2, ClosedownReport, Compatibility, CongestionController,
+                ConnectionType, CredentialsType, Direction, OriginalClientMessage,
+                OriginalClientMessageV1, ServerGreeting, ServerMessage2Attributes, ServerMessageV1,
+                ServerMessageV2,
             },
             display_vec_td,
         },
-        util::{Credentials, PortRange as CliPortRange, serialization::SerializeAsString},
+        util::{PortRange as CliPortRange, serialization::SerializeAsString},
     };
 
     use super::{
@@ -948,14 +1426,8 @@ mod test {
         assert_eq!(msg, deser);
     }
 
-    fn dummy_credentials() -> Credentials {
-        let fake_keypair = &[0u8];
-        let keypair = rustls_pki_types::PrivatePkcs8KeyDer::<'_>::from(fake_keypair.as_slice());
-        Credentials {
-            certificate: vec![0, 1, 2].into(),
-            keypair: keypair.into(),
-            hostname: "foo".into(),
-        }
+    fn dummy_cert() -> Vec<u8> {
+        vec![0, 1, 2]
     }
 
     #[test]
@@ -988,14 +1460,21 @@ mod test {
             ssh_config: None,
             ssh_subsystem: None,
             color: None,
+            tls_auth_type: None,
         };
 
         let cmsg = {
-            let creds = dummy_credentials();
+            let cert = CredentialsType::X509.with_variant(dummy_cert().into());
             let mut manager = Manager::without_default(None);
             manager.merge_provider(&config);
             let cfg = manager.get::<Configuration_Optional>().unwrap();
-            ClientMessage::new(&creds, ConnectionType::Ipv4, false, &cfg)
+            ClientMessage::new(
+                Compatibility::Level(1),
+                cert,
+                ConnectionType::Ipv4,
+                false,
+                &cfg,
+            )
         };
         let ser = cmsg.to_vec().unwrap();
         //println!("{cmsg:#?}");
@@ -1033,12 +1512,18 @@ mod test {
     #[test]
     fn construct_client_message() {
         // additional serialization cases not tested by serialize_and_provide_client_message
-        let creds = dummy_credentials();
+        let cert = CredentialsType::X509.with_variant(dummy_cert().into());
         let mut manager = Manager::without_default(None);
         let config = Configuration_Optional::default();
         manager.merge_provider(&config);
         let cfg = manager.get::<Configuration_Optional>().unwrap();
-        let cmsg = ClientMessage::new(&creds, ConnectionType::Ipv4, false, &cfg);
+        let cmsg = ClientMessage::new(
+            Compatibility::Level(1),
+            cert,
+            ConnectionType::Ipv4,
+            false,
+            &cfg,
+        );
         assert_matches!(
             cmsg,
             ClientMessage::V1(ClientMessageV1 {
@@ -1188,9 +1673,9 @@ mod test {
 
     #[test]
     fn wire_marshalling_client_message_v1() {
-        let creds = dummy_credentials();
+        let cert = dummy_cert();
         let msg = ClientMessage::V1(ClientMessageV1::new(
-            &creds,
+            &cert,
             ConnectionType::Ipv4,
             false,
             &Configuration_Optional::default(),
@@ -1249,7 +1734,7 @@ mod test {
     fn display_clientmessage_attrs() {
         let d = ClientMessageAttributes::DirectionOfTravel
             .with_variant(Direction::ClientToServer.into());
-        let cm = ClientMessage::V1(ClientMessageV1 {
+        let cm: ClientMessage = ClientMessage::V1(ClientMessageV1 {
             attributes: vec![d.clone()],
             ..Default::default()
         });
@@ -1303,5 +1788,153 @@ mod test {
                 extension: 1, // Earlier versions ignore this field, so if the assert passes we're good.
             })
         );
+    }
+
+    #[test]
+    fn client_message_2_debug_attrs() {
+        let msg = ClientMessageV2 {
+            attributes: vec![
+                ClientMessage2Attributes::Invalid.into(),
+                ClientMessage2Attributes::DirectionOfTravel
+                    .with_unsigned(Direction::ClientToServer as u64),
+                ClientMessage2Attributes::CongestionControllerType
+                    .with_unsigned(CongestionController::NewReno as u64),
+                ClientMessage2Attributes::OutputConfig.into(),
+            ],
+            ..Default::default()
+        };
+        let s = format!("{msg:?}");
+        //eprintln!("{s}");
+        assert!(s.contains("Invalid, data: Empty"));
+        assert!(s.contains("DirectionOfTravel, data: ClientToServer"));
+        assert!(s.contains("CongestionControllerType, data: newreno"));
+        assert!(s.contains("OutputConfig, data: Empty"));
+    }
+
+    #[test]
+    fn client_message_2_display() {
+        let msg = ClientMessageV2 {
+            attributes: vec![
+                ClientMessage2Attributes::BandwidthToClient.with_unsigned(123_456_789u32),
+                ClientMessage2Attributes::BandwidthToServer.with_unsigned(32_768u32),
+                ClientMessage2Attributes::Invalid.into(),
+                ClientMessage2Attributes::DirectionOfTravel
+                    .with_unsigned(Direction::ClientToServer as u64),
+                ClientMessage2Attributes::CongestionControllerType
+                    .with_unsigned(CongestionController::NewReno as u64),
+                ClientMessage2Attributes::OutputConfig.into(),
+            ],
+            ..Default::default()
+        };
+        let s = format!("{msg}");
+        eprintln!("{s}");
+        assert_contains!(s, "Invalid:Empty");
+        assert_contains!(s, "BandwidthToClient:123.4M");
+        assert_contains!(s, "BandwidthToServer:32.76k");
+        assert_contains!(s, "DirectionOfTravel:ClientToServer");
+        assert_contains!(s, "CongestionControllerType:newreno");
+        assert_contains!(s, "OutputConfig:Empty");
+    }
+
+    #[test]
+    fn server_message_1_2_conversion() {
+        use FindTag as _;
+
+        let mut msg1 = ServerMessageV1::default();
+        msg1.warning.push('a');
+        msg1.initial_congestion_window.0 = 42;
+        msg1.timeout = 7;
+
+        let msg2 = ServerMessageV2::from(msg1);
+        let attrs = &msg2.attributes;
+
+        let tag = attrs
+            .find_tag(ServerMessage2Attributes::WarningMessage)
+            .unwrap();
+        assert_eq!(tag.as_str(), Some("a"));
+
+        let tag = attrs
+            .find_tag(ServerMessage2Attributes::InitialCongestionWindow)
+            .unwrap();
+        assert_eq!(tag.coerce_unsigned(), 42);
+
+        let tag = attrs
+            .find_tag(ServerMessage2Attributes::QuicTimeout)
+            .unwrap();
+        assert_eq!(tag.coerce_unsigned(), 7);
+    }
+
+    #[test]
+    fn server_message_2_config_attrs() {
+        let mut mgr = Manager::without_files(None);
+        let cfg = Configuration_Optional {
+            congestion: Some(CongestionController::Bbr.into()),
+            initial_congestion_window: Some(42u64.into()),
+            timeout: Some(88),
+            ..Default::default()
+        };
+        mgr.merge_provider(&cfg);
+        let final_cfg = mgr.get::<Configuration>().unwrap();
+        let mut msg = ServerMessageV2::default();
+        msg.apply_config_attributes(&final_cfg);
+
+        let attrs = &msg.attributes;
+
+        let tag = attrs
+            .find_tag(ServerMessage2Attributes::CongestionController)
+            .unwrap();
+        assert_eq!(tag.coerce_unsigned(), CongestionController::Bbr as u64);
+
+        let tag = attrs
+            .find_tag(ServerMessage2Attributes::InitialCongestionWindow)
+            .unwrap();
+        assert_eq!(tag.coerce_unsigned(), 42);
+
+        let tag = attrs
+            .find_tag(ServerMessage2Attributes::QuicTimeout)
+            .unwrap();
+        assert_eq!(tag.coerce_unsigned(), 88);
+    }
+
+    #[test]
+    fn server_message_2_to_provider() {
+        let msg = ServerMessageV2 {
+            bandwidth_to_server: Uint(12345),
+            bandwidth_to_client: Uint(54321),
+            rtt: 42,
+            attributes: vec![
+                ServerMessage2Attributes::CongestionController
+                    .with_unsigned(CongestionController::Bbr as u64),
+                ServerMessage2Attributes::InitialCongestionWindow.with_unsigned(5544u32),
+                ServerMessage2Attributes::QuicTimeout.with_unsigned(55u32),
+                // these two are not part of the config:
+                ServerMessage2Attributes::WarningMessage.with_variant("hi".into()),
+                ServerMessage2Attributes::Invalid.into(),
+            ],
+            ..Default::default()
+        };
+        let mut mgr = Manager::without_files(None);
+        mgr.apply_system_default();
+        mgr.merge_provider(msg);
+        let cfg = mgr.get::<Configuration>().unwrap();
+        assert_eq!(cfg.rx, 54321u64.into());
+        assert_eq!(cfg.tx, 12345u64.into());
+        assert_eq!(cfg.rtt, 42);
+        assert_eq!(cfg.congestion, CongestionController::Bbr.into());
+        assert_eq!(cfg.initial_congestion_window, 5544u32.into());
+        assert_eq!(cfg.timeout, 55);
+    }
+
+    #[test]
+    fn server_message_2_display() {
+        let msg = ServerMessageV2 {
+            bandwidth_to_client: Uint(12_000),
+            bandwidth_to_server: Uint(1_987_654_321),
+            ..Default::default()
+        };
+        let s = format!("{msg}");
+        eprintln!("{s}");
+        assert_contains!(s, "in 1.987G");
+        assert_contains!(s, "out 12k");
     }
 }

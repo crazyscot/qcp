@@ -76,10 +76,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
 
         trace!("sending command");
 
-        let cmd = if self
-            .compat
-            .supports(Feature::FILEHEADER2_FILETRAILER2_GET2_PUT2)
-        {
+        let cmd = if self.compat.supports(Feature::GET2_PUT2) {
             let mut options = vec![];
             if job.preserve {
                 options.push(CommandParam::PreserveMetadata.into());

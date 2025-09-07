@@ -293,6 +293,12 @@ impl<const N: usize> From<&[u8; N]> for Variant {
     }
 }
 
+impl From<&[u8]> for Variant {
+    fn from(value: &[u8]) -> Self {
+        Variant::Bytes(value.to_vec())
+    }
+}
+
 impl<const N: usize> From<&[Variant; N]> for Variant {
     fn from(value: &[Variant; N]) -> Self {
         Variant::List(value.to_vec())
