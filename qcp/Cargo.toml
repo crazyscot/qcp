@@ -13,9 +13,11 @@ categories = ["command-line-utilities"]
 readme = "../README.md"
 
 [features]
-default = ["rustls-log", "secure-alloc"]
+default = ["rustls-log", "quinn-log", "secure-alloc"]
 ## Enables rustls debug messages. You still have to request them using the environment variable, e.g. `RUST_LOG="rustls=debug"`.
 rustls-log = ["quinn/rustls-log"]
+## Enables quinn debug messages. You still have to request them using the environment variable, e.g. `RUST_LOG="quinn=debug"`.
+quinn-log = ["quinn/log"]
 ## Selects secure mode for memory allocations.
 ## This protects against various heap vulnerabilities, though comes at a performance cost.
 ## Extremely high bandwidth environments may wish to experiment with this for performance.
@@ -70,6 +72,8 @@ quinn = { version = "0.11.9", default-features = false, features = [
 ] }
 rcgen = { version = "0.14.3" }
 rustix = { version = "1.0.8", features = ["net", "fs", "process"] }
+rustls = { version = "0.23.31", features = ["ring"], default-features = false }
+rustls-pemfile = "2.2.0"
 rustls-pki-types = "1.12.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_bare = "0.5.0"

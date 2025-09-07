@@ -68,10 +68,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         let dest = &job.destination.filename;
 
         let real_start = Instant::now();
-        let cmd = if self
-            .compat
-            .supports(Feature::FILEHEADER2_FILETRAILER2_GET2_PUT2)
-        {
+        let cmd = if self.compat.supports(Feature::GET2_PUT2) {
             let mut options = vec![];
             if job.preserve {
                 options.push(CommandParam::PreserveMetadata.into());

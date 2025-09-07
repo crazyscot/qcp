@@ -45,7 +45,7 @@ async fn server_main_inner<
     manager: &mut Manager,
 ) -> anyhow::Result<()> {
     let result = control
-        .run_server(remote_ip, manager, setup_tracing, use_colours())
+        .run_server(remote_ip, manager, setup_tracing, use_colours(), None)
         .await?;
     let _span = tracing::error_span!("[Server]").entered();
     let endpoint = result.endpoint;
@@ -136,9 +136,10 @@ mod test {
                 }),
                 predicate::always(),
                 predicate::always(),
+                predicate::always(),
             )
             .times(1)
-            .returning(|_ip, mgr, _setup_tracing, _colour| {
+            .returning(|_ip, mgr, _setup_tracing, _colour, _force_compat| {
                 let runtime = quinn::default_runtime().unwrap();
 
                 let endpoint = Endpoint::new(

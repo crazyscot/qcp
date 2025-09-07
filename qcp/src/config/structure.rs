@@ -13,7 +13,7 @@ use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
     cli::styles::{ColourMode, RESET, info},
-    protocol::control::CongestionController,
+    protocol::control::{CongestionController, CredentialsType},
     util::{
         AddressFamily, PortRange, TimeFormat, VecOrString, derive_deftly_template_Optionalify,
         serialization::SerializeAsString,
@@ -283,6 +283,7 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
         long,
         help_heading("Connection"),
         group("ip address"),
+        value_name("family"),
         display_order(0)
     )]
     pub address_family: AddressFamily,
@@ -377,7 +378,6 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
     ///
     /// `Subsystem qcp /usr/local/bin/qcp --server`
     #[arg(
-
         long,
         alias("subsystem"),
         default_missing_value("true"), // required for a bool in Configuration, along with num_args and require_equals
@@ -421,6 +421,13 @@ See https://bixense.com/clicolors/ for more details.
 CLI options take precedence over the configuration file, which takes precedence over environment variables."),
     )]
     pub color: ColourMode,
+
+    /// Forces the use of a particular TLS authentication type
+    /// (default: automatic based on server & client compatibility level)
+    #[arg(long, value_name("type"), help_heading("Connection"), display_order(0),
+        value_parser(clap::builder::EnumValueParser::<CredentialsType>::new().map(SerializeAsString)),
+    )]
+    pub tls_auth_type: SerializeAsString<CredentialsType>,
 }
 
 static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
@@ -450,6 +457,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     ssh_config: VecOrString::default(),
     ssh_subsystem: false,
     color: ColourMode::Auto,
+    tls_auth_type: CredentialsType::Any.into(),
 });
 
 impl Configuration {

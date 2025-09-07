@@ -12,11 +12,13 @@ use quinn::{
 };
 use tracing::{debug, trace};
 
+use crate::protocol::Variant;
 use crate::{
     config::{self, Configuration, Configuration_Optional, Manager},
     protocol::{
+        FindTag as _,
         compat::Feature,
-        control::{ClientMessageV1, Compatibility, CongestionController},
+        control::{ClientMessage2Attributes, ClientMessageV2, Compatibility, CongestionController},
     },
     util::PortRange,
 };
@@ -227,6 +229,9 @@ fn min_ignoring_zero(cli: u64, srv: u64) -> CombinationResponse<u64> {
     }
 }
 
+#[cfg(doc)]
+use crate::protocol::control::ClientMessageV1;
+
 /// Applies the bandwidth/parameter negotiation logic given the server's configuration (`server`) and the client's requests (`client`).
 ///
 /// # Logic
@@ -261,8 +266,10 @@ fn min_ignoring_zero(cli: u64, srv: u64) -> CombinationResponse<u64> {
 ///
 pub fn combine_bandwidth_configurations(
     manager: &mut Manager,
-    client: &ClientMessageV1,
+    client: &ClientMessageV2,
 ) -> Result<Configuration> {
+    use num_traits::AsPrimitive as _;
+
     let server: Configuration_Optional = manager.get::<Configuration_Optional>()?;
     let mut client_picks = config::Source::new(META_CLIENT);
     let mut negotiated = config::Source::new(META_NEGOTIATED);
@@ -281,27 +288,36 @@ pub fn combine_bandwidth_configurations(
         };
     }
 
+    let ca = &client.attributes;
+
     // This is written from the server's point of view, i.e. bandwidth_to_server is server's rx.
     negotiate!(
-        client.bandwidth_to_server.map(|u| u.0),
+        ca.find_tag(ClientMessage2Attributes::BandwidthToServer)
+            .map(Variant::coerce_unsigned),
         server.rx,
         min_ignoring_zero,
         "rx"
     )?;
     negotiate!(
-        client.bandwidth_to_client.map(|u| u.0),
+        ca.find_tag(ClientMessage2Attributes::BandwidthToClient)
+            .map(Variant::coerce_unsigned),
         server.tx,
         min_ignoring_zero,
         "tx"
     )?;
     negotiate!(
-        client.rtt,
+        ca.find_tag(ClientMessage2Attributes::RoundTripTime)
+            .map(|v| (v.coerce_unsigned() & 0xffff) as u16),
         server.rtt,
         |_: u16, _| CombinationResponse::Client,
         "rtt"
     )?;
+    let cctrl = ca
+        .find_tag(ClientMessage2Attributes::CongestionControllerType)
+        .map(Variant::coerce_unsigned)
+        .and_then(|v| CongestionController::from_repr(v.as_()));
     negotiate!(
-        client.congestion,
+        cctrl,
         server.congestion.map(|c| *c),
         |_: CongestionController, _| CombinationResponse::Failure(anyhow::anyhow!(
             "server and client have incompatible congestion algorithm requirements"
@@ -309,20 +325,34 @@ pub fn combine_bandwidth_configurations(
         "congestion"
     )?;
     negotiate!(
-        client.initial_congestion_window.map(|u| u.0),
+        ca.find_tag(ClientMessage2Attributes::InitialCongestionWindow)
+            .map(Variant::coerce_unsigned),
         server.initial_congestion_window,
         |_: u64, _| CombinationResponse::Server,
         "initial_congestion_window"
     )?;
+
+    let client_pr = match (
+        ca.find_tag(ClientMessage2Attributes::PortRangeStart)
+            .map(|v| v.coerce_unsigned().as_()),
+        ca.find_tag(ClientMessage2Attributes::PortRangeEnd)
+            .map(|v| v.coerce_unsigned().as_()),
+    ) {
+        (None, None) => None,
+        (Some(it), None) | (None, Some(it)) => Some(PortRange { begin: it, end: it }),
+        (Some(begin), Some(end)) => Some(PortRange { begin, end }),
+    };
+
     negotiate!(
-        client.port.map(PortRange::from),
+        client_pr,
         server.port,
         |a, b| crate::util::PortRange::combine(a, b)
             .map_or_else(CombinationResponse::Failure, CombinationResponse::Combined),
         "port"
     )?;
     negotiate!(
-        client.timeout,
+        ca.find_tag(ClientMessage2Attributes::QuicTimeout)
+            .map(|v| (v.coerce_unsigned() & 0xffff) as u16),
         server.timeout,
         |_: u16, _| CombinationResponse::Client,
         "timeout"
@@ -363,12 +393,14 @@ fn make_dict_human_friendly(dict: &mut figment::value::Dict) {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use assertables::{assert_contains, assert_matches};
-    use serde_bare::Uint;
 
     use crate::{
         Configuration,
         config::Manager,
-        protocol::control::{Compatibility, PortRange_OnWire},
+        protocol::{
+            DataTag,
+            control::{ClientMessage2Attributes, Compatibility},
+        },
         transport::{Configuration_Optional, combine_bandwidth_configurations},
         util::PortRange,
     };
@@ -439,8 +471,12 @@ mod tests {
         mgr.merge_provider(server_cfg);
 
         // client message
-        let mp = crate::protocol::control::ClientMessageV1 {
-            congestion: crate::protocol::control::CongestionController::Cubic.into(),
+        let attributes = vec![
+            ClientMessage2Attributes::CongestionControllerType
+                .with_unsigned(crate::protocol::control::CongestionController::Cubic as u64),
+        ];
+        let mp = crate::protocol::control::ClientMessageV2 {
+            attributes,
             ..Default::default()
         };
 
@@ -467,15 +503,14 @@ mod tests {
         let mut mgr = Manager::new(None, false, false);
         mgr.merge_provider(server_cfg);
 
-        // client message
-        let mp = crate::protocol::control::ClientMessageV1 {
-            port: Some(PortRange_OnWire {
-                begin: 500,
-                end: 1500,
-            }),
-            initial_congestion_window: Some(Uint(500)),
-            // rtt is only present in the client message
-            rtt: Some(1234),
+        let attributes = vec![
+            ClientMessage2Attributes::PortRangeStart.with_unsigned(500u64),
+            ClientMessage2Attributes::PortRangeEnd.with_unsigned(1500u64),
+            ClientMessage2Attributes::InitialCongestionWindow.with_unsigned(500u64),
+            ClientMessage2Attributes::RoundTripTime.with_unsigned(1234u64),
+        ];
+        let mp = crate::protocol::control::ClientMessageV2 {
+            attributes,
             ..Default::default()
         };
 

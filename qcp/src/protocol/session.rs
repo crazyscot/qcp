@@ -513,7 +513,7 @@ impl FileHeader {
         meta: &FsMetadata,
         protocol_filename: &str,
     ) -> Self {
-        if compat.supports(Feature::FILEHEADER2_FILETRAILER2_GET2_PUT2) {
+        if compat.supports(Feature::GET2_PUT2) {
             debug!("Using v2 file header/trailer");
             // Always send mode bits, try to get the permissions as close to correct as possible
             let qcpmeta = meta.to_tagged_data(false);
@@ -580,7 +580,7 @@ impl From<FileTrailer> for FileTrailerV2 {
 
 impl FileTrailer {
     pub(crate) fn for_file(compat: Compatibility, meta: &FsMetadata, preserve: bool) -> Self {
-        if compat.supports(Feature::FILEHEADER2_FILETRAILER2_GET2_PUT2) {
+        if compat.supports(Feature::GET2_PUT2) {
             let metadata = if preserve {
                 meta.to_tagged_data(true)
             } else {

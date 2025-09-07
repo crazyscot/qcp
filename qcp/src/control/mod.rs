@@ -2,6 +2,8 @@
 // (c) 2025 Ross Younger
 
 mod channel;
+mod crypto;
+pub(crate) use crypto::{SimpleRpkClientCertVerifier, SimpleRpkServerCertVerifier};
 mod endpoint;
 mod ssh_process;
 
