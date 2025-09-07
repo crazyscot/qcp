@@ -111,7 +111,7 @@ fn display_opt<T: std::fmt::Display>(label: &str, value: Option<&T>) -> String {
 /// * 1: Introduced in qcp 0.3.
 /// * 2: Introduced in qcp 0.5.
 ///
-/// See [`Feature`](super::compat::Feature) for a mapping from compatibility levels to specific features.
+/// See [`Feature`] for a mapping from compatibility levels to specific features.
 ///
 /// <div class="warning">
 /// While this type implements an automatic `PartialEq`, it does not offer an `Ord` or `PartialOrd`

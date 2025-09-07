@@ -3,6 +3,7 @@
 //! Protocol feature compatibility definitions
 
 use heck::ToUpperCamelCase;
+use strum::VariantArray as _;
 
 use super::control::Compatibility;
 
@@ -26,9 +27,15 @@ macro_rules! def_enum {
                 $(#[$v_attr])*
                 $vis const $variant: Self = Self($val, stringify!($variant));
             )+
-
+        }
+        impl strum::VariantArray for $name {
             const VARIANTS: &'static [Self] = &[$(Self::$variant),+];
         }
+        /* easy enough if we need this:
+        impl strum::VariantNames for $name {
+            const VARIANTS: &'static [&'static str] = &[$(stringify!($variant)),+];
+        }
+        */
     };
 }
 
@@ -69,12 +76,6 @@ impl Feature {
     pub const fn name(&self) -> &'static str {
         self.1
     }
-
-    /// The list of all known features.
-    #[must_use]
-    pub const fn variants() -> &'static [Self] {
-        Self::VARIANTS
-    }
 }
 
 impl Compatibility {
@@ -108,20 +109,21 @@ impl From<&Feature> for TableRow {
 }
 
 pub(crate) fn pretty_list() -> tabled::Table {
-    let data = Feature::variants().iter().map(TableRow::from);
+    let data = Feature::VARIANTS.iter().map(TableRow::from);
     tabled::Table::new(data)
 }
 
 #[cfg(test)]
 mod test {
     use crate::protocol::control::Compatibility;
+    use strum::VariantArray as _;
 
     use super::Feature;
     use heck::ToUpperCamelCase as _;
 
     #[test]
     fn list() {
-        for it in Feature::variants() {
+        for it in Feature::VARIANTS {
             eprintln!(
                 "{} -> {} ({})",
                 it.name().to_upper_camel_case(),
