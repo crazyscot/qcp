@@ -13,7 +13,7 @@ use crate::{
     os::{self, AbstractPlatform as _},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indicatif::{MultiProgress, ProgressDrawTarget};
 use lessify::OutputPaged;
 
@@ -164,10 +164,9 @@ fn show_config_data(config_manager: &mut Manager) -> String {
 }
 
 async fn run_server() -> Result<bool> {
-    crate::server_main().await.map_err(|e| {
-        eprintln!("{ERROR}ERROR{RESET} [Server] {e:?}", ERROR = error());
-        anyhow::anyhow!("Server failed")
-    })?;
+    crate::server_main()
+        .await
+        .with_context(|| "[Server] failed")?;
     Ok(true)
 }
 
