@@ -226,7 +226,6 @@ pub struct ServerMessageV2 {
 
     /// Optional fields
     pub attributes: Vec<TaggedData<ServerMessage2Attributes>>,
-    // OPTIONAL: name?
     /// Extension field, reserved for future expansion; for now, must be set to 0
     pub extension: u8,
 }
@@ -380,6 +379,7 @@ mod test {
             common::ProtocolMessage,
             control::{
                 CongestionController, ServerMessage2Attributes, ServerMessageV1, ServerMessageV2,
+                test::dummy_credentials,
             },
         },
     };
@@ -467,6 +467,29 @@ mod test {
         let msg = ServerMessage::Failure(ServerFailure::NegotiationFailed("hello".to_string()));
         let wire = msg.to_vec().unwrap();
         let expected = b"\x02\x01\x05hello".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_server_message_v2() {
+        let credentials = dummy_credentials();
+        let msg2 = ServerMessageV2 {
+            port: 1234,
+            credentials,
+            common_name: "srv".into(),
+            bandwidth_to_server: Uint(12),
+            bandwidth_to_client: Uint(125_000_000),
+            rtt: 50,
+            attributes: vec![
+                ServerMessage2Attributes::WarningMessage.with_str("hi"),
+                ServerMessage2Attributes::QuicTimeout.with_unsigned(4u8),
+            ],
+            extension: 0,
+        };
+        let msg = ServerMessage::V2(msg2);
+        let wire = msg.to_vec().unwrap();
+        let expected =
+            b"\x03\xd2\x04\x01\x05\x03\x00\x01\x02\x03srv\x0c\xc0\xb2\xcd;2\x00\x02\x03\x04\x02hi\x04\x03\x04\x00".to_vec();
         assert_eq!(wire, expected);
     }
 

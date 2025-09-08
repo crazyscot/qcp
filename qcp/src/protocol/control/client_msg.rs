@@ -509,7 +509,7 @@ mod test {
                 ClientMessage2Attributes, ClientMessageAttributes, ClientMessageV1,
                 ClientMessageV2, Compatibility, CongestionController, ConnectionType,
                 CredentialsType, Direction, OriginalClientMessage, OriginalClientMessageV1,
-                test::dummy_cert,
+                test::{dummy_cert, dummy_credentials},
             },
             display_vec_td,
         },
@@ -632,6 +632,22 @@ mod test {
         ));
         let wire = msg.to_vec().unwrap();
         let expected = b"\x01\x03\x00\x01\x02\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
+        assert_eq!(wire, expected);
+    }
+
+    #[test]
+    fn wire_marshalling_client_message_v2() {
+        let cert = dummy_credentials();
+        let mut msg2 = ClientMessageV2::new(cert, ConnectionType::Ipv6);
+        msg2.attributes = vec![
+            ClientMessage2Attributes::DirectionOfTravel
+                .with_unsigned(Direction::ClientToServer as u64),
+            ClientMessage2Attributes::BandwidthToClient.with_unsigned(123_456u32),
+        ];
+        let msg = ClientMessage::V2(msg2);
+        let wire = msg.to_vec().unwrap();
+        let expected =
+            b"\x02\x01\x05\x03\x00\x01\x02\x06\x02\x01\x03\x01\x06\x03\xc0\xc4\x07\x00".to_vec();
         assert_eq!(wire, expected);
     }
 
