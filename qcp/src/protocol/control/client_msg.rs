@@ -121,7 +121,8 @@ pub struct ClientMessageV1 {
 #[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
 #[serde(rename_all = "lowercase")]
 pub enum CredentialsType {
-    /// Indicates an invalid attribute, or that there is no preference.
+    /// No preference. We will autodetect based on protocol compatibility.
+    ///
     /// This enum variant is not valid on the wire; credentials must always be a concrete type.
     Any = 0,
     /// Self-signed X509 certificate.
