@@ -26,6 +26,7 @@ The recommended fix for this is:
 - Confirm top-level docs have been updated for any changes since the last release.
 - Update SECURITY.md if this is a new major or minor release.
 - Update the News section in README.md if appropriate.
+- Update the template `qcp.conf` if any options have been added.
 - Update man page & packaged HTML docs if required:
   - `cargo xtask man && cargo xtask clidoc`
     - _N.B. This isn't automated in CI to save repeating work across multiple builds._

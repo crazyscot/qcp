@@ -423,7 +423,7 @@ CLI options take precedence over the configuration file, which takes precedence 
     pub color: ColourMode,
 
     /// Forces the use of a particular TLS authentication type
-    /// (default: automatic based on server & client compatibility level)
+    /// (default: any)
     #[arg(long, value_name("type"), help_heading("Connection"), display_order(0),
         value_parser(clap::builder::EnumValueParser::<CredentialsType>::new().map(SerializeAsString)),
     )]
