@@ -48,11 +48,7 @@ pub(crate) trait ControlChannelServerInterface<
         force_compat: Option<Compatibility>,
     ) -> anyhow::Result<ServerResult>;
 
-    async fn run_server_inner(
-        &mut self,
-        manager: &mut Manager,
-        compat: Compatibility,
-    ) -> anyhow::Result<ServerResult>;
+    async fn run_server_inner(&mut self, manager: &mut Manager) -> anyhow::Result<ServerResult>;
 
     async fn send_closedown_report(&mut self, stats: &ConnectionStats) -> Result<()>;
 
@@ -430,16 +426,12 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
         );
         debug!("Received client greeting: {remote_greeting:?}");
 
-        self.run_server_inner(manager, remote_greeting.compatibility.into())
+        self.run_server_inner(manager)
             .instrument(tracing::error_span!("[Server]").or_current())
             .await
     }
 
-    async fn run_server_inner(
-        &mut self,
-        manager: &mut Manager,
-        compat: Compatibility,
-    ) -> anyhow::Result<ServerResult> {
+    async fn run_server_inner(&mut self, manager: &mut Manager) -> anyhow::Result<ServerResult> {
         // PHASE 3: MESSAGES
         // PHASE 3A: Read client message
         let message2 = self.server_read_client_message().await?;
@@ -482,7 +474,6 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
                 .find_tag(ClientMessage2Attributes::DirectionOfTravel),
         );
         trace!("Direction of travel: {direction}");
-        assert_eq!(compat, self.selected_compat);
 
         let (endpoint, warning) = match create_endpoint(
             &credentials,
