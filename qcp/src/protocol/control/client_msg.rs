@@ -247,7 +247,7 @@ impl From<ClientMessageV1> for ClientMessageV2 {
             attributes.push(ClientMessage2Attributes::DirectionOfTravel.with_variant(v.clone()));
         }
         Self {
-            credentials: CredentialsType::X509.with_variant(v1.cert.into()),
+            credentials: CredentialsType::X509.with_bytes(v1.cert),
             connection_type: v1.connection_type,
             attributes,
             extension: 0,
@@ -552,7 +552,7 @@ mod test {
         };
 
         let cmsg = {
-            let cert = CredentialsType::X509.with_variant(dummy_cert().into());
+            let cert = CredentialsType::X509.with_bytes(dummy_cert());
             let mut manager = Manager::without_default(None);
             manager.merge_provider(&config);
             let cfg = manager.get::<Configuration_Optional>().unwrap();
@@ -600,7 +600,7 @@ mod test {
     #[test]
     fn construct_client_message() {
         // additional serialization cases not tested by serialize_and_provide_client_message
-        let cert = CredentialsType::X509.with_variant(dummy_cert().into());
+        let cert = CredentialsType::X509.with_bytes(dummy_cert());
         let mut manager = Manager::without_default(None);
         let config = Configuration_Optional::default();
         manager.merge_provider(&config);

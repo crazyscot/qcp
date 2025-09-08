@@ -45,6 +45,26 @@ pub trait DataTag: Into<u64> + TryFrom<u64> + ToString {
         TaggedData::new(self, Variant::signed(data.into()))
     }
 
+    /// Create a new [`TaggedData`] instance with the given variant and bytes data.
+    ///
+    /// This is an ergonomic version of [`DataTag::with_variant`].
+    fn with_bytes<B: AsRef<[u8]>>(self, data: B) -> TaggedData<Self>
+    where
+        Self: Sized,
+    {
+        TaggedData::new(self, Variant::Bytes(data.as_ref().to_vec()))
+    }
+
+    /// Create a new [`TaggedData`] instance with the given variant and string data.
+    ///
+    /// This is an ergonomic version of [`DataTag::with_variant`].
+    fn with_str<S: AsRef<str>>(self, data: S) -> TaggedData<Self>
+    where
+        Self: Sized,
+    {
+        TaggedData::new(self, Variant::String(data.as_ref().to_owned()))
+    }
+
     /// Renders [`Variant`] data belonging to this tag.
     ///
     /// This is a helper for `Display` and `Debug` on [`TaggedData`].
