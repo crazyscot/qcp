@@ -116,7 +116,7 @@ pub fn use_colours() -> bool {
     Deserialize,
     strum_macros::VariantNames,
 )]
-#[serde(rename_all = "kebab-case")] // to match clap::ValueEnum
+#[serde(rename_all = "lowercase")]
 pub enum ColourMode {
     #[value(alias = "on", alias = "yes")]
     /// Forces colours on, whatever is happening

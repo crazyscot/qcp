@@ -27,6 +27,7 @@ static TRACING_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 const FRIENDLY_FORMAT_LOCAL: &str = "%Y-%m-%d %H:%M:%SL";
 const FRIENDLY_FORMAT_UTC: &str = "%Y-%m-%d %H:%M:%SZ";
+const FRIENDLY_FORMAT_UTC_US: &str = "%Y-%m-%d %H:%M:%S%.6fZ";
 
 /// Environment variable that controls what gets logged to stderr
 const STANDARD_ENV_VAR: &str = "RUST_LOG";
@@ -58,14 +59,16 @@ pub(crate) fn trace_level(args: &crate::client::Parameters) -> &str {
     clap::ValueEnum,
     Serialize,
 )]
-#[strum(serialize_all = "lowercase")]
-#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
+#[serde(rename_all = "lowercase")]
 pub enum TimeFormat {
     /// Local time (as best as we can figure it out), as "year-month-day HH:MM:SS"
     #[default]
     Local,
     /// UTC time, as "year-month-day HH:MM:SS"
     Utc,
+    /// UTC time with microsecond resolution, as "year-month-day HH:MM:SS.uuuuuu"
+    UtcMicro,
     /// UTC time, in the format described in [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339).
     ///
     /// Examples:
@@ -142,6 +145,11 @@ where
             .boxed(),
         TimeFormat::Utc => layer
             .with_timer(ChronoUtc::new(FRIENDLY_FORMAT_UTC.into()))
+            .with_writer(writer)
+            .with_filter(filter)
+            .boxed(),
+        TimeFormat::UtcMicro => layer
+            .with_timer(ChronoUtc::new(FRIENDLY_FORMAT_UTC_US.into()))
             .with_writer(writer)
             .with_filter(filter)
             .boxed(),
@@ -415,9 +423,9 @@ mod test {
 
         #[test]
         fn setup_tracing() {
-            super::setup("debug", ConsoleTraceType::None, None, TimeFormat::Utc, false).unwrap();
+            super::setup("debug", ConsoleTraceType::Standard, None, TimeFormat::UtcMicro, false).unwrap();
             // a second call must succeed (albeit with a warning)
-            super::setup("debug", ConsoleTraceType::None, None, TimeFormat::Utc, false).unwrap();
+            super::setup("debug", ConsoleTraceType::Standard, None, TimeFormat::UtcMicro, false).unwrap();
         }
     }
 }
