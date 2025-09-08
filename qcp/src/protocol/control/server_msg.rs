@@ -235,8 +235,7 @@ impl From<ServerMessageV1> for ServerMessageV2 {
     fn from(v1: ServerMessageV1) -> Self {
         let mut attributes = Vec::new();
         if !v1.warning.is_empty() {
-            attributes
-                .push(ServerMessage2Attributes::WarningMessage.with_variant(v1.warning.into()));
+            attributes.push(ServerMessage2Attributes::WarningMessage.with_str(v1.warning));
         }
         attributes.push(
             ServerMessage2Attributes::CongestionController.with_unsigned(v1.congestion as u64),
@@ -252,7 +251,7 @@ impl From<ServerMessageV1> for ServerMessageV2 {
         }
         Self {
             port: v1.port,
-            credentials: CredentialsType::X509.with_variant(v1.cert.into()),
+            credentials: CredentialsType::X509.with_bytes(v1.cert),
             common_name: v1.name,
             bandwidth_to_server: v1.bandwidth_to_server,
             bandwidth_to_client: v1.bandwidth_to_client,
@@ -543,7 +542,7 @@ mod test {
                 ServerMessage2Attributes::InitialCongestionWindow.with_unsigned(5544u32),
                 ServerMessage2Attributes::QuicTimeout.with_unsigned(55u32),
                 // these two are not part of the config:
-                ServerMessage2Attributes::WarningMessage.with_variant("hi".into()),
+                ServerMessage2Attributes::WarningMessage.with_str("hi"),
                 ServerMessage2Attributes::Invalid.into(),
             ],
             ..Default::default()

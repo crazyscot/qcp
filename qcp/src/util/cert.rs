@@ -98,8 +98,7 @@ impl Credentials {
             CredentialsType::Any => unreachable!(),
             CredentialsType::X509 => {
                 // Compat level 1 supports this
-                let cert_bytes: &[u8] = self.certificate();
-                tag.with_variant(cert_bytes.into())
+                tag.with_bytes(self.certificate())
             }
             CredentialsType::RawPublicKey => {
                 // Compat level 3 needed to support this
@@ -109,8 +108,7 @@ impl Credentials {
                 );
                 let key = self.as_raw_public_key()?;
                 let borrowed: &rustls::sign::CertifiedKey = key.borrow();
-                let cert: &[u8] = &borrowed.cert[0];
-                tag.with_variant(cert.into())
+                tag.with_bytes(&borrowed.cert[0])
             }
         };
         Ok(res)

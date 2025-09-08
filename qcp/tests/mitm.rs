@@ -52,14 +52,14 @@ where
         modify_certs_fn(&client_credentials, &server_credentials);
 
     let cli_cert_messed = if compat.supports(Feature::CMSG_SMSG_2) {
-        CredentialsType::RawPublicKey.with_variant(cli_cert_messed.to_vec().into())
+        CredentialsType::RawPublicKey.with_bytes(cli_cert_messed)
     } else {
-        CredentialsType::X509.with_variant(cli_cert_messed.to_vec().into())
+        CredentialsType::X509.with_bytes(cli_cert_messed)
     };
     let srv_cert_messed = if compat.supports(Feature::CMSG_SMSG_2) {
-        CredentialsType::RawPublicKey.with_variant(srv_cert_messed.to_vec().into())
+        CredentialsType::RawPublicKey.with_bytes(srv_cert_messed)
     } else {
-        CredentialsType::X509.with_variant(srv_cert_messed.to_vec().into())
+        CredentialsType::X509.with_bytes(srv_cert_messed)
     };
 
     let (server_endpoint, _) = create_endpoint(
@@ -74,7 +74,7 @@ where
     let conn_addr = server_endpoint.local_addr()?;
     eprintln!("Server bound to {conn_addr:?}");
     let conn_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), conn_addr.port());
-    let srv_name = server_credentials.hostname.to_string();
+    let srv_name = server_credentials.hostname.clone();
 
     let (client_endpoint, _) = create_endpoint(
         &client_credentials,
@@ -240,8 +240,8 @@ async fn test_rpk_ok() {
     run_endpoint_connection(
         |cli, srv| {
             (
-                cli.as_raw_public_key().unwrap().cert[0].to_owned(),
-                srv.as_raw_public_key().unwrap().cert[0].to_owned(),
+                cli.as_raw_public_key().unwrap().cert[0].clone(),
+                srv.as_raw_public_key().unwrap().cert[0].clone(),
             )
         },
         |cli_res, srv_res| {
@@ -275,8 +275,8 @@ async fn test_client_rpk_mismatch() {
     run_endpoint_connection(
         |_cli, srv| {
             (
-                replace_rpk().into(),
-                srv.as_raw_public_key().unwrap().cert[0].to_owned(),
+                replace_rpk(),
+                srv.as_raw_public_key().unwrap().cert[0].clone(),
             )
         },
         |cli_res, srv_res| {
@@ -303,8 +303,8 @@ async fn test_server_rpk_mismatch() {
     run_endpoint_connection(
         |cli, _srv| {
             (
-                cli.as_raw_public_key().unwrap().cert[0].to_owned(),
-                replace_rpk().into(),
+                cli.as_raw_public_key().unwrap().cert[0].clone(),
+                replace_rpk(),
             )
         },
         |cli_res, srv_res| {
