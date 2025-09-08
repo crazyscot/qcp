@@ -339,8 +339,9 @@ mod test {
 
     use crate::{
         protocol::{
+            DataTag as _, TaggedData,
             common::ProtocolMessage,
-            control::{Compatibility, CongestionController, ConnectionType},
+            control::{Compatibility, CongestionController, ConnectionType, CredentialsType},
         },
         util::{PortRange as CliPortRange, serialization::SerializeAsString},
     };
@@ -350,6 +351,10 @@ mod test {
     // helper function - creates a bogus certificate
     pub(crate) fn dummy_cert() -> Vec<u8> {
         vec![0, 1, 2]
+    }
+    // helper function - creates a bogus Credentials
+    pub(crate) fn dummy_credentials() -> TaggedData<CredentialsType> {
+        CredentialsType::X509.with_bytes(vec![0, 1, 2])
     }
 
     #[test]
