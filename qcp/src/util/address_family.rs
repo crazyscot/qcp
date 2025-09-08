@@ -15,7 +15,7 @@
     serde::Deserialize,
     strum_macros::VariantNames,
 )]
-#[serde(rename_all = "kebab-case")] // to match clap::ValueEnum
+#[serde(rename_all = "lowercase")]
 pub enum AddressFamily {
     /// IPv4
     #[value(alias("4"), alias("inet4"))]
