@@ -121,7 +121,7 @@ pub struct ClientMessageV1 {
 #[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
 #[serde(rename_all = "lowercase")]
 pub enum CredentialsType {
-    /// No preference. We will autodetect based on protocol compatibility.
+    /// No preference. Autodetects based on protocol compatibility.
     ///
     /// This enum variant is not valid on the wire; credentials must always be a concrete type.
     Any = 0,
@@ -550,6 +550,7 @@ mod test {
             ssh_subsystem: None,
             color: None,
             tls_auth_type: None,
+            aes256: None,
         };
 
         let cmsg = {

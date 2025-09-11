@@ -29,7 +29,7 @@
 //! ## Motivation
 //!
 //! This protocol exists because I needed to copy multiple large (3+ GB) files from
-//! a server in Europe to my home in New Zealand.
+//! a server in Europe to my home in New Zealand (ping time is around 300ms).
 //!
 //! I've got nothing against `ssh` or `scp`. They're brilliant. I've been using them since the 1990s.
 //! However they run on top of [TCP], which does not perform very well when the network is congested.
@@ -42,7 +42,7 @@
 //! you might have been experiencing this same issue.
 //! Friends with satellite (pre-Starlink) internet connections seem to be particularly badly affected.
 //!
-//! ## Security design 🛡️
+//! ## 🛡️ Security design
 //!
 //! The security goals for this project are fairly straightforward:
 //!
@@ -56,7 +56,7 @@
 //! Sysadmins can set their own policies regarding password, cryptographic or other authentication methods.
 //!
 //!
-//! [QUIC] traffic is protected by [TLS]. In many cases, a QUIC server would have a TLS certificate
+//! [QUIC] traffic is protected by [TLS] 1.3. In many cases, a QUIC server would have a TLS certificate
 //! signed by a [CA] in the same way as a website.
 //!
 //! However, I wanted bidirectional endpoint authentication. I also didn't want the hassle of setting
@@ -83,6 +83,19 @@
 //! * the random number generators on both endpoints are of sufficient quality
 //! * nobody has perpetrated a software supply chain attack on qcp, ssh, or any of the myriad components they depend on
 //!
+//! ### Note on TLS cipher suite selection
+//!
+//! QUIC uses TLS 1.3. With TLS 1.3 there is a movement towards automatically selecting cipher suites, taking the cryptographic configuration out of the user's hands.
+//!
+//! As of qcp 0.6, the rustls component which implements TLS does not have any sophisticated logic here, so qcp takes care of it internally.
+//!
+//! * We detect whether the CPU has internal support for AES. If not, we prefer ChaCha20 (cipher suite `TLS13_CHACHA20_POLY1305_SHA256`).
+//! * Either side may set the `aes256` configuration, which selects the `TLS13_AES_256_GCM_SHA384` suite, overriding the CPU detection.
+//! * If neither of those rules apply, we weakly prefer AES128 (cipher suite `TLS13_AES_128_GCM_SHA256`) but will use either of the others
+//!   if the server prefers it.
+//!
+//! See [crate::control::crypto::select_cipher_suites] for more details.
+//!
 //! ## Prior Art
 //!
 //! * [FASP](https://en.wikipedia.org/wiki/Fast_and_Secure_Protocol) is a high-speed data transfer protocol that runs on UDP.
@@ -94,7 +107,7 @@
 //! * [quinn](https://docs.rs/quinn/latest/quinn/), a Rust implementation of QUIC
 //! * [quicfiletransfer](https://github.com/sirgallo/quicfiletransfer) uses [QUIC] to transfer files, but without an automated control channel.
 //!
-//! ## See Also
+//! ## References
 //! * [RFC 9000 "QUIC: A UDP-Based Multiplexed and Secure Transport"](https://www.rfc-editor.org/rfc/rfc9000.html)
 //! * [RFC 9001 "Using TLS to Secure QUIC"](https://www.rfc-editor.org/rfc/rfc9001.html)
 //! * [RFC 9002 "QUIC Loss Detection and Congestion Control"](https://www.rfc-editor.org/rfc/rfc9002.html)

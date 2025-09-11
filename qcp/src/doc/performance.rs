@@ -4,15 +4,15 @@
 //!
 //! There's probably a whole book to be written about this.
 //!
-//! I've spent some time tuning this for my use case and leave some hooks so you can experiment.
+//! I've spent some time tuning this for my use case and have left some hooks so you can experiment.
 //!
-//! **It is critical to understand that the Internet is a strange place with many variables, which will likely confound any experiment you may try.**
+//! **It is critical to understand that the Internet is a complex system with many variables, which will likely confound any experiment you may try.**
 //!
 //! In my experience, long-distance traffic flows vary wildly from second to second.
 //! This is why I added a near-instant (last 1s) bandwidth readout, as well the average.
 //!
 //! I found that the throughput from my build server (data flow from Europe to NZ) is sometimes very
-//! fast, able to saturate my 300Mbit last-mile downlink, and sometimes falls back to hundreds of
+//! fast, able to saturate a 300Mbit last-mile downlink, and sometimes falls back to hundreds of
 //! kilobits or even worse. But the way QUIC applies congestion control worked around this really well.
 //! Throughput accelerates rapidly when congestion clears; I _think_ this is subjectively much faster than scp does, but I've not yet gathered the data to do a proper statistical analysis.
 //!
@@ -36,6 +36,20 @@
 //!
 //! You can demonstrate this, in quiet network conditions, by setting the `--initial-congestion-window` option
 //! to something large like a megabyte.
+//!
+//! #### How does cryptography affect performance?
+//!
+//! If a CPU does not have AES support, you get better performance with the `TLS13_CHACHA20_POLY1305_SHA256` cipher suite.
+//!
+//! Since v0.6, qcp attempts to autodetect the CPU's capabilities and select a cipher suite ordering appropriately.
+//! If you have a requirement to use AES256 as far as possible, you can override this with the `aes256` configuration.
+//!
+//! The following performance data was gathered using qcp on a 1Gbit LAN connection with <1ms ping time:
+//!
+//! | Client hardware | Server hardware | AES128 throughput | ChaCha20 throughput |
+//! | --------------- | --------------- | ----------------- | ------------------- |
+//! | Raspberry Pi 4 (4 cores, 1.5GHz; no AES support)   | Intel Ultra7 265K | 10MB/s | 13MB/s |
+//! | Intel Atom D510 (4 cores, 1.66GHz; no AES support) | Intel Ultra7 265K | 10MB/s | 20MB/s |
 //!
 //! ### Tips
 //!
