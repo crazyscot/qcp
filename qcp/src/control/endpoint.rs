@@ -3,7 +3,9 @@
 
 use crate::{
     config::Configuration,
-    control::{SimpleRpkClientCertVerifier, SimpleRpkServerCertVerifier},
+    control::crypto::{
+        SimpleRpkClientCertVerifier, SimpleRpkServerCertVerifier, ignore_client_order,
+    },
     protocol::{
         TaggedData,
         control::{Compatibility, ConnectionType, CredentialsType},
@@ -21,17 +23,21 @@ use quinn::{
 use quinn::{EndpointConfig, rustls};
 use rustls::{
     RootCertStore,
-    client::danger::ServerCertVerifier,
-    client::{AlwaysResolvesClientRawPublicKeys, WebPkiServerVerifier},
-    server::danger::ClientCertVerifier,
-    server::{AlwaysResolvesServerRawPublicKeys, WebPkiClientVerifier},
+    client::{AlwaysResolvesClientRawPublicKeys, WebPkiServerVerifier, danger::ServerCertVerifier},
+    crypto::CryptoProvider,
+    server::{
+        AlwaysResolvesServerRawPublicKeys, ResolvesServerCert, WebPkiClientVerifier,
+        danger::ClientCertVerifier,
+    },
+    sign::SingleCertAndKey,
+    version::TLS13,
 };
 use rustls_pki_types::{
     SubjectPublicKeyInfoDer,
     pem::{PemObject, SectionKind},
 };
-use std::sync::Arc;
-use tracing::{Level, span, trace, warn};
+use std::{borrow::Borrow, sync::Arc};
+use tracing::{Level, debug, span, trace, warn};
 
 /// Creates the QUIC endpoint:
 /// * `credentials` are generated locally.
@@ -127,20 +133,40 @@ fn server_config(
             anyhow::bail!("client sent unknown cert type {}", peer_cert.tag_raw())
         }
     };
-    let builder = rustls::ServerConfig::builder().with_client_cert_verifier(verifier);
-    let mut tls_config = match Credentials::type_tag_for(compat, Some(*config.tls_auth_type)) {
-        CredentialsType::Any => unreachable!(),
-        CredentialsType::X509 => builder.with_single_cert(
-            vec![our_creds.certificate().clone()],
-            our_creds.private_key_der(),
-        )?,
-        CredentialsType::RawPublicKey => {
-            let resolver =
-                AlwaysResolvesServerRawPublicKeys::new(our_creds.as_raw_public_key()?.into());
-            builder.with_cert_resolver(Arc::new(resolver))
-        }
-    };
+    let temp_builder = rustls::ServerConfig::builder();
+    let base_provider = temp_builder.crypto_provider();
+    let mut provider =
+        <Arc<CryptoProvider> as Borrow<CryptoProvider>>::borrow(base_provider).clone();
+    provider.cipher_suites = crate::control::crypto::select_cipher_suites(config.aes256).to_vec();
+    let provider = Arc::new(provider);
+    debug!("Using cipher suites {:?}", provider.cipher_suites);
+
+    let builder = rustls::ServerConfig::builder_with_provider(provider.clone())
+        .with_protocol_versions(&[&TLS13])?
+        .with_client_cert_verifier(verifier);
+    let resolver: Arc<dyn ResolvesServerCert> =
+        match Credentials::type_tag_for(compat, Some(config.tls_auth_type.0)) {
+            CredentialsType::Any => unreachable!(),
+            CredentialsType::X509 => {
+                debug!("Using X509 certificate");
+                Arc::new(SingleCertAndKey::from(
+                    rustls::sign::CertifiedKey::from_der(
+                        vec![our_creds.certificate().clone()],
+                        our_creds.private_key_der(),
+                        &provider,
+                    )?,
+                ))
+            }
+            CredentialsType::RawPublicKey => {
+                debug!("Using RawPublicKey credentials");
+                Arc::new(AlwaysResolvesServerRawPublicKeys::new(
+                    our_creds.as_raw_public_key()?.into(),
+                ))
+            }
+        };
+    let mut tls_config = builder.with_cert_resolver(resolver);
     tls_config.max_early_data_size = u32::MAX;
+    tls_config.ignore_client_order = ignore_client_order(config.aes256);
     let qsc = QuicServerConfig::try_from(tls_config)?;
     let mut server_cfg = QuinnServerConfig::with_crypto(Arc::new(qsc));
     let _ = server_cfg.transport_config(crate::transport::create_config(config, mode, compat)?.0);
@@ -159,18 +185,28 @@ fn client_config(
         anyhow::bail!("Missing peer credentials");
     };
 
+    let temp_builder = rustls::ClientConfig::builder();
+    let base_provider = temp_builder.crypto_provider();
+    let mut provider =
+        <Arc<CryptoProvider> as Borrow<CryptoProvider>>::borrow(base_provider).clone();
+    provider.cipher_suites = crate::control::crypto::select_cipher_suites(config.aes256).to_vec();
+    let provider = Arc::new(provider);
+
     let builder = match peer_cert.tag() {
         Some(CredentialsType::X509) => {
             let mut root_store = RootCertStore::empty();
             root_store.add(peer_cert_data.as_slice().into())?;
             let verifier = WebPkiServerVerifier::builder(root_store.into()).build()?;
-            rustls::ClientConfig::builder().with_webpki_verifier(verifier)
+            rustls::ClientConfig::builder_with_provider(provider)
+                .with_protocol_versions(&[&TLS13])?
+                .with_webpki_verifier(verifier)
         }
         Some(CredentialsType::RawPublicKey) => {
             let spki = SubjectPublicKeyInfoDer::from(peer_cert_data.to_owned());
             let ver = Arc::new(SimpleRpkServerCertVerifier::new(vec![spki]));
             assert!(ver.requires_raw_public_keys());
-            rustls::ClientConfig::builder()
+            rustls::ClientConfig::builder_with_provider(provider)
+                .with_protocol_versions(&[&TLS13])?
                 .dangerous()
                 .with_custom_certificate_verifier(ver)
         }
@@ -179,13 +215,18 @@ fn client_config(
         }
     };
 
-    let tls_config = match Credentials::type_tag_for(compat, Some(*config.tls_auth_type)) {
+    let tls_config = match Credentials::type_tag_for(compat, Some(config.tls_auth_type.0)) {
         CredentialsType::Any => unreachable!(),
-        CredentialsType::X509 => builder.with_client_auth_cert(
-            vec![our_creds.certificate().clone()],
-            our_creds.private_key_der(),
-        )?,
+        CredentialsType::X509 => {
+            debug!("Using X509 credentials");
+            builder.with_client_auth_cert(
+                vec![our_creds.certificate().clone()],
+                our_creds.private_key_der(),
+            )?
+        }
         CredentialsType::RawPublicKey => {
+            debug!("Using RawPublicKey credentials");
+
             let res = AlwaysResolvesClientRawPublicKeys::new(our_creds.as_raw_public_key()?.into());
             builder.with_client_cert_resolver(Arc::new(res))
         }

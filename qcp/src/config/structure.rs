@@ -63,10 +63,12 @@ pub(crate) const MINIMUM_UDP_BUFFER: u64 = 1024; // ridiculously small, but you 
 /// (configuration files and system defaults) obtain.
 ///
 // Maintainer note: None of the members of this struct should be Option<anything>. That leads to sunspots in the CLI and strange warts (Some(Some(foo))).
-#[derive(Deftly)]
+#[derive(PartialEq, Deftly, FieldNamesAsSlice, Serialize)]
+// note: the above derives are BEFORE Optionalify, so do NOT get passed on to the optionalified struct
 #[derive_deftly(Optionalify)]
 #[deftly(visibility = "pub(crate)")]
-#[derive(Debug, Clone, PartialEq, Parser, Deserialize, Serialize, FieldNamesAsSlice)]
+// note: the following derives are AFTER Optionalify, so DO get passed on to the optionalified struct
+#[derive(Clone, Debug, Parser, Deserialize)]
 pub struct Configuration {
     // TRANSPORT PARAMETERS ============================================================================
     // System bandwidth, UDP ports, timeout.
@@ -422,12 +424,27 @@ CLI options take precedence over the configuration file, which takes precedence 
     )]
     pub color: ColourMode,
 
+    // OTHER PARAMETERS ================================================================================
     /// Forces the use of a particular TLS authentication type
     /// (default: any)
     #[arg(long, value_name("type"), help_heading("Connection"), display_order(0),
         value_parser(clap::builder::EnumValueParser::<CredentialsType>::new().map(SerializeAsString)),
     )]
     pub tls_auth_type: SerializeAsString<CredentialsType>,
+
+    /// Use only AES256 cipher suites as far as possible
+    ///
+    /// This option is included for those who have a preference to use only AES256-based
+    /// algorithms (aka CNSA 2.0). Note this option does not fully disable AES128, which is required for
+    /// the QUIC 1.0 Initial Packet.
+    #[arg(
+        long,
+        default_missing_value("true"), // required for a bool in Configuration, along with num_args and require_equals
+        num_args(0..=1),
+        require_equals(true),
+        help_heading("Connection"),
+    )]
+    pub aes256: bool,
 }
 
 static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
@@ -457,7 +474,10 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     ssh_config: VecOrString::default(),
     ssh_subsystem: false,
     color: ColourMode::Auto,
+
+    // Other
     tls_auth_type: CredentialsType::Any.into(),
+    aes256: false,
 });
 
 impl Configuration {
@@ -642,10 +662,16 @@ impl Configuration {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use crate::config::Manager;
+    use crate::{
+        Configuration,
+        config::{ColourMode, Manager},
+        protocol::control::{CongestionController, CredentialsType},
+        util::{AddressFamily, TimeFormat},
+    };
 
     use super::SYSTEM_DEFAULT_CONFIG;
     use assertables::assert_contains;
+    use littertray::LitterTray;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -730,5 +756,40 @@ mod test {
         assert_eq!(data.rtt, SYSTEM_DEFAULT_CONFIG.rtt);
         assert_eq!(data.rx, SYSTEM_DEFAULT_CONFIG.rx());
         assert_eq!(data.tx, SYSTEM_DEFAULT_CONFIG.tx());
+    }
+
+    fn assert_cfg_parseable(data: &str) -> Configuration {
+        use crate::config::{Configuration, Configuration_Optional};
+        let mut mgr = LitterTray::try_with(|tray| {
+            let path = "test.conf";
+            let _ = tray.create_text(path, data);
+            let mut mgr = Manager::without_files(None);
+            mgr.merge_ssh_config(path, None, false);
+            Ok(mgr)
+        })
+        .unwrap();
+        let cfg_opt = mgr.get::<Configuration_Optional>();
+        assert!(cfg_opt.is_ok(), "optional config failed for case {data}");
+        mgr.apply_system_default();
+        let cfg = mgr.get::<Configuration>();
+        assert!(cfg.is_ok(), "non-optional config failed for case {data}");
+        cfg.unwrap()
+    }
+
+    #[test]
+    #[should_panic(expected = "optional config failed")]
+    #[allow(unused_results)]
+    fn cfg_unparseable_enum() {
+        assert_cfg_parseable("congestion nosuchalgorithm");
+    }
+
+    #[test]
+    fn cfg_ssh_options_regression() {
+        let c = assert_cfg_parseable("sshoptions");
+        assert_eq!(c.ssh_options, vec![].into());
+        let c = assert_cfg_parseable("sshoptions a");
+        assert_eq!(c.ssh_options, vec!["a".into()].into());
+        let c = assert_cfg_parseable("sshoptions a b");
+        assert_eq!(c.ssh_options, vec!["a".into(), "b".into()].into());
     }
 }
