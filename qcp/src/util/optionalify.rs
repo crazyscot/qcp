@@ -56,6 +56,8 @@ define_derive_deftly! {
     /// must appear <i>after</i> deriving `Optionalify`. It might look something like this:
     /// </div>
     ///
+    /// ### Example
+    ///
     /// ```
     /// use derive_deftly::Deftly;
     /// use qcp::derive_deftly_template_Optionalify;
@@ -67,13 +69,37 @@ define_derive_deftly! {
     /// }
     /// ```
     ///
+    /// ### Overriding serde attributes
+    ///
+    /// With some types, it is necessary to override serialization / deserialization attributes
+    /// on certain fields of the derived struct. To do this, use a `#[deftly(serde = "...")]` attribute.
+    ///
+    /// The contents of the `serde` meta-attribute replace any `serde` attribute on the field.
+    /// Note that it is necessary to escape any quotes in the replacement attribute.
+    ///
+    /// For example:
+    ///
+    /// ```ignore
+    /// struct MyStruct {
+    ///     // ... fields ...
+    ///
+    ///     #[serde(deserialize_with = "foo::bar")]
+    ///     #[deftly(serde = "deserialize_with = \"foo::qux\"")]
+    ///     pub my_field: MyWeirdType,
+    ///
+    ///     // ... more fields ...
+    /// }
+    /// ```
+    ///
+    /// ### Troubleshooting
+    ///
     /// As with other template macros created with [`derive-deftly`](https://docs.rs/derive-deftly/), if you need
     /// to see what's going on you can use `#[derive_deftly(Optionalify[dbg])]` instead of `#[derive_deftly(Optionalify)]`
-    /// to see the expanded output at compile time.
+    /// to see the expanded output at compile time. Or, if you prefer, `cargo expand`.
     export Optionalify for struct, expect items:
     ${define OPTIONAL_TYPE ${paste $tdeftype _Optional}}
 
-    /// Auto-derived struct variant
+    /// Auto-derived struct variant with fields wrapped as `Option<...>`
     ///
     #[allow(non_camel_case_types)]
     ${tattrs}
@@ -87,7 +113,14 @@ define_derive_deftly! {
     }}
     struct $OPTIONAL_TYPE {
         $(
-            ${fattrs}
+            // The 'serde' meta-attribute is an instruction to remove any serde attribute
+            // on the field, and use the given string instead.
+            ${if fmeta(serde) {
+                ${fattrs ! serde, deftly}
+                #[serde(${fmeta(serde) as token_stream})]
+            } else {
+                ${fattrs}
+            }}
             ${fvis} $fname: Option<$ftype>,
             // Yes, if $ftype is Option<T>, the derived struct ends up with Option<Option<T>>. That's OK.
         )
