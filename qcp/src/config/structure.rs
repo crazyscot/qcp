@@ -286,6 +286,7 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
         help_heading("Connection"),
         group("ip address"),
         value_name("family"),
+        ignore_case(true),
         display_order(0)
     )]
     pub address_family: AddressFamily,
@@ -407,8 +408,8 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
         alias("colour"),
         default_missing_value("always"), // to support `--color`
         num_args(0..=1),
-        //value_parser(clap::builder::EnumValueParser::<ColourMode>::new().map(ColourMode::from)),
         value_name("mode"),
+        ignore_case(true),
         long_help(r"Colour mode for console output (default: auto)
 
 Passing `--color` without a value is equivalent to `--color always`.
@@ -774,6 +775,36 @@ mod test {
         let cfg = mgr.get::<Configuration>();
         assert!(cfg.is_ok(), "non-optional config failed for case {data}");
         cfg.unwrap()
+    }
+
+    #[test]
+    #[allow(unused_results)]
+    fn cfg_enum_capitalisation() {
+        assert_cfg_parseable("");
+        assert_cfg_parseable(
+            r"
+        addressfamily inet6
+        congestion bbr
+        timeformat rfc3339
+        color always
+        tlsauthtype x509
+        ",
+        );
+        let c = assert_cfg_parseable(
+            r"
+        # TODO
+        addressfamily iNEt6
+        #congestion bBr
+        timeformat rFc3339
+        color aLWAys
+        #tlsauthtype X509
+        ",
+        );
+        assert_eq!(c.address_family, AddressFamily::Inet6);
+        //assert_eq!(c.congestion.0, CongestionController::Bbr);
+        assert_eq!(c.time_format, TimeFormat::Rfc3339);
+        assert_eq!(c.color, ColourMode::Always);
+        //assert_eq!(c.tls_auth_type, CredentialsType::X509.into());
     }
 
     #[test]

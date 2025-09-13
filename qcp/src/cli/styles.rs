@@ -9,7 +9,6 @@ use anstyle::AnsiColor::*;
 use anstyle::Color::Ansi;
 use clap::builder::styling::Styles;
 use colorchoice::ColorChoice;
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::io::IsTerminal;
 use std::sync::LazyLock;
@@ -114,11 +113,14 @@ pub fn use_colours() -> bool {
     PartialEq,
     Eq,
     clap::ValueEnum,
-    Serialize,
-    Deserialize,
+    strum_macros::EnumString,
     strum_macros::VariantNames,
+    serde::Serialize,
+    enumscribe::EnumDeserialize,
 )]
 #[serde(rename_all = "lowercase")]
+#[strum(ascii_case_insensitive)]
+#[enumscribe(case_insensitive)]
 pub enum ColourMode {
     #[value(alias = "on", alias = "yes")]
     /// Forces colours on, whatever is happening
