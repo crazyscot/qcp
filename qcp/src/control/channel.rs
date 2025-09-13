@@ -179,10 +179,8 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
             );
         }
 
-        let tagged_creds = credentials.to_tagged_data(
-            self.selected_compat,
-            config.tls_auth_type.as_deref().copied(), // ugh, this is a bit ugly
-        )?;
+        let tagged_creds =
+            credentials.to_tagged_data(self.selected_compat, config.tls_auth_type)?;
         let mut message = ClientMessage::new(
             self.selected_compat,
             tagged_creds,
@@ -366,7 +364,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         warning: String,
     ) -> Result<()> {
         let tagged_creds =
-            credentials.to_tagged_data(self.selected_compat, Some(*config.tls_auth_type))?;
+            credentials.to_tagged_data(self.selected_compat, Some(config.tls_auth_type))?;
 
         let message = ServerMessage::new(
             self.selected_compat,

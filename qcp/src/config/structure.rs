@@ -15,8 +15,8 @@ use crate::{
     cli::styles::{ColourMode, info, reset},
     protocol::control::{CongestionController, CredentialsType},
     util::{
-        AddressFamily, PortRange, TimeFormat, VecOrString, derive_deftly_template_Optionalify,
-        serialization::SerializeAsString,
+        AddressFamily, DeserializeEnum, PortRange, TimeFormat, VecOrString,
+        derive_deftly_template_Optionalify, serialization::SerializeAsString,
     },
 };
 
@@ -428,10 +428,18 @@ CLI options take precedence over the configuration file, which takes precedence 
     // OTHER PARAMETERS ================================================================================
     /// Forces the use of a particular TLS authentication type
     /// (default: any)
-    #[arg(long, value_name("type"), help_heading("Connection"), display_order(0),
-        value_parser(clap::builder::EnumValueParser::<CredentialsType>::new().map(SerializeAsString)),
+    #[arg(
+        long,
+        value_name("type"),
+        help_heading("Connection"),
+        value_enum,
+        ignore_case = true,
+        display_order(0)
     )]
-    pub tls_auth_type: SerializeAsString<CredentialsType>,
+    // DeserializeEnum trait must be in scope for this to work
+    #[serde(deserialize_with = "CredentialsType::deserialize_str")]
+    #[deftly(serde = "default, deserialize_with = \"CredentialsType::deserialize_str_optional\"")]
+    pub tls_auth_type: CredentialsType,
 
     /// Use only AES256 cipher suites as far as possible
     ///
@@ -477,7 +485,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     color: ColourMode::Auto,
 
     // Other
-    tls_auth_type: CredentialsType::Any.into(),
+    tls_auth_type: CredentialsType::Any,
     aes256: false,
 });
 
@@ -797,14 +805,14 @@ mod test {
         #congestion bBr
         timeformat rFc3339
         color aLWAys
-        #tlsauthtype X509
+        tlsauthtype X509
         ",
         );
         assert_eq!(c.address_family, AddressFamily::Inet6);
         //assert_eq!(c.congestion.0, CongestionController::Bbr);
         assert_eq!(c.time_format, TimeFormat::Rfc3339);
         assert_eq!(c.color, ColourMode::Always);
-        //assert_eq!(c.tls_auth_type, CredentialsType::X509.into());
+        assert_eq!(c.tls_auth_type, CredentialsType::X509);
     }
 
     #[test]

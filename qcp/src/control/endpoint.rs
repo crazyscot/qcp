@@ -145,7 +145,7 @@ fn server_config(
         .with_protocol_versions(&[&TLS13])?
         .with_client_cert_verifier(verifier);
     let resolver: Arc<dyn ResolvesServerCert> =
-        match Credentials::type_tag_for(compat, Some(config.tls_auth_type.0)) {
+        match Credentials::type_tag_for(compat, Some(config.tls_auth_type)) {
             CredentialsType::Any => unreachable!(),
             CredentialsType::X509 => {
                 debug!("Using X509 certificate");
@@ -215,7 +215,7 @@ fn client_config(
         }
     };
 
-    let tls_config = match Credentials::type_tag_for(compat, Some(config.tls_auth_type.0)) {
+    let tls_config = match Credentials::type_tag_for(compat, Some(config.tls_auth_type)) {
         CredentialsType::Any => unreachable!(),
         CredentialsType::X509 => {
             debug!("Using X509 credentials");

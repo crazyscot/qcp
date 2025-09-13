@@ -346,8 +346,8 @@ mod test {
             "iNEt6",
             "--color",
             "NONE",
-            //"--tls-auth-type",
-            //"X509",
+            "--tls-auth-type",
+            "X509",
             //"--congestion",
             //"bBr",
             //

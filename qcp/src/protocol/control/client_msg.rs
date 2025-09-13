@@ -17,7 +17,7 @@ use crate::{
         DataTag, FindTag as _, TaggedData, Variant, compat::Feature, control::Compatibility,
     },
     transport::ThroughputMode,
-    util::serialization::SerializeAsString,
+    util::serialization::{DeserializeEnum, SerializeAsString},
 };
 
 #[derive(
@@ -113,13 +113,16 @@ pub struct ClientMessageV1 {
     Serialize,
     Deserialize,
     clap::ValueEnum,
+    strum::AsRefStr,
     strum_macros::EnumString,
     strum_macros::VariantNames,
+    enumscribe::TryUnscribe,
 )]
 #[non_exhaustive]
 #[repr(u64)]
-#[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
-#[serde(rename_all = "lowercase")]
+#[strum(ascii_case_insensitive)]
+#[clap(rename_all = "lower")]
+#[enumscribe(case_insensitive)]
 pub enum CredentialsType {
     /// No preference. Autodetects based on protocol compatibility.
     ///
@@ -134,6 +137,7 @@ pub enum CredentialsType {
     RawPublicKey,
 }
 impl DataTag for CredentialsType {}
+impl DeserializeEnum for CredentialsType {}
 
 #[derive(
     Clone, Default, Serialize, Deserialize, PartialEq, derive_more::Debug, derive_more::Display,
