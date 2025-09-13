@@ -547,9 +547,9 @@ mod test {
             let err = mgr.get::<Configuration_Optional>().unwrap_err();
             println!("{err}");
             assert!(err.to_string().contains("expected one of"));
-            assert!(err.to_string().contains("auto"));
-            assert!(err.to_string().contains("always"));
-            assert!(err.to_string().contains("never"));
+            assert!(err.to_string().contains("Auto"));
+            assert!(err.to_string().contains("Always"));
+            assert!(err.to_string().contains("Never"));
             assert!(err.to_string().contains("for key `"));
             assert!(err.to_string().contains("color"));
             assert!(err.to_string().contains("of host `"));
@@ -614,7 +614,7 @@ mod test {
             let _ = tray.create_text(
                 path,
                 r"
-           TimeFormat not-a-real-format
+           TimeFormat fake
         ",
             );
             let mut mgr = Manager::new(None, false, false);

@@ -10,8 +10,6 @@ use std::{
 
 use anyhow::Context;
 use indicatif::MultiProgress;
-use serde::{Deserialize, Serialize, de};
-use strum::VariantNames as _;
 use tracing_subscriber::{
     EnvFilter,
     fmt::{
@@ -55,12 +53,11 @@ pub(crate) fn trace_level(args: &crate::client::Parameters) -> &str {
     PartialEq,
     strum_macros::Display,
     strum_macros::EnumString,
-    strum_macros::VariantNames,
-    clap::ValueEnum,
-    Serialize,
+    enumscribe::EnumSerialize,
+    enumscribe::EnumDeserialize,
 )]
-#[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
-#[serde(rename_all = "lowercase")]
+#[strum(ascii_case_insensitive)]
+#[enumscribe(case_insensitive)]
 pub enum TimeFormat {
     /// Local time (as best as we can figure it out), as "year-month-day HH:MM:SS"
     #[default]
@@ -75,19 +72,6 @@ pub enum TimeFormat {
     /// `1997-11-12T09:55:06-06:00`
     /// `2010-03-14T18:32:03Z`
     Rfc3339,
-}
-
-impl<'de> Deserialize<'de> for TimeFormat {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let lower = s.to_ascii_lowercase();
-        // requires strum::EnumString && strum::VariantNames && #[strum(serialize_all = "lowercase")]
-        std::str::FromStr::from_str(&lower)
-            .map_err(|_| de::Error::unknown_variant(&s, TimeFormat::VARIANTS))
-    }
 }
 
 /// Result type for `filter_for()`

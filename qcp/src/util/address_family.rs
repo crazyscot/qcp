@@ -10,18 +10,18 @@
     Copy,
     PartialEq,
     Eq,
-    clap::ValueEnum,
+    strum_macros::EnumString,
+    enumscribe::TryUnscribe,
     serde::Serialize,
-    serde::Deserialize,
-    strum_macros::VariantNames,
+    enumscribe::EnumDeserialize,
 )]
 #[serde(rename_all = "lowercase")]
+#[strum(ascii_case_insensitive)]
+#[enumscribe(case_insensitive)]
 pub enum AddressFamily {
     /// IPv4
-    #[value(alias("4"), alias("inet4"))]
     Inet,
     /// IPv6
-    #[value(alias("6"))]
     Inet6,
     /// Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup.
     Any,
@@ -30,8 +30,9 @@ pub enum AddressFamily {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
+    use std::str::FromStr as _;
+
     use super::AddressFamily;
-    use clap::ValueEnum as _;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -52,7 +53,7 @@ mod test {
     fn deser_str() {
         use AddressFamily::*;
         for (str, expected) in &[("inet", Inet), ("inet6", Inet6), ("any", Any)] {
-            let raw = AddressFamily::from_str(str, true).expect(str);
+            let raw = AddressFamily::from_str(str).expect(str);
             let json = format!(r#""{str}""#);
             let output = serde_json::from_str::<AddressFamily>(&json).expect(str);
             assert_eq!(raw, *expected);

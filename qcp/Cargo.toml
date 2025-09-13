@@ -49,6 +49,7 @@ document-features = "0.2.11"
 dtype_variant = "=0.0.14"
 either = "1.15.0"
 engineering-repr = { version = "1.1.1", features = ["serde"] }
+enumscribe = "0.4.0"
 figment = { version = "0.10.19", features = ["env"] }
 futures-util = { version = "0.3.31", default-features = false }
 gethostname = "1.0.2"
