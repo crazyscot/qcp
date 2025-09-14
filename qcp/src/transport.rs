@@ -99,7 +99,7 @@ pub fn create_config(
     }
 
     let window = u64::from(params.initial_congestion_window);
-    let congestion: Arc<dyn DebugControllerFactory> = match params.congestion.0 {
+    let congestion: Arc<dyn DebugControllerFactory> = match params.congestion {
         CongestionController::Cubic => {
             let mut cubic = CubicConfig::default();
             if window != 0 {
@@ -318,7 +318,7 @@ pub fn combine_bandwidth_configurations(
         .and_then(|v| CongestionController::from_repr(v.as_()));
     negotiate!(
         cctrl,
-        server.congestion.map(|c| *c),
+        server.congestion,
         |_: CongestionController, _| CombinationResponse::Failure(anyhow::anyhow!(
             "server and client have incompatible congestion algorithm requirements"
         )),
@@ -432,20 +432,21 @@ mod tests {
 
     #[test]
     fn congestion_config() {
+        use crate::protocol::control::CongestionController::*;
         let mut cfg = Configuration::system_default().clone();
-        cfg.congestion = crate::protocol::control::CongestionController::Cubic.into();
+        cfg.congestion = Cubic;
         cfg.initial_congestion_window = 1000u64.into();
 
         let (_, str) = process_config(&cfg, ThroughputMode::Both);
         assert_contains!(str, "CubicConfig");
         assert_contains!(str, "initial_window: 1000");
 
-        cfg.congestion = crate::protocol::control::CongestionController::Bbr.into();
+        cfg.congestion = Bbr;
         let (_, str) = process_config(&cfg, ThroughputMode::Both);
         assert_contains!(str, "BbrConfig");
         assert_contains!(str, "initial_window: 1000");
 
-        cfg.congestion = crate::protocol::control::CongestionController::NewReno.into();
+        cfg.congestion = NewReno;
         let (_, str) = process_config(&cfg, ThroughputMode::Both);
         assert_contains!(str, "NewRenoConfig");
         assert_contains!(str, "initial_window: 1000");
@@ -454,7 +455,7 @@ mod tests {
     #[test]
     fn congestion_config_compat() {
         let mut cfg = Configuration::system_default().clone();
-        cfg.congestion = crate::protocol::control::CongestionController::NewReno.into();
+        cfg.congestion = crate::protocol::control::CongestionController::NewReno;
 
         let e = create_config(&cfg, ThroughputMode::Both, Compatibility::Level(1)).unwrap_err();
         eprintln!("{e}");
@@ -464,7 +465,7 @@ mod tests {
     fn congestion_config_incompat() {
         // server config
         let server_cfg = Configuration_Optional {
-            congestion: Some(crate::protocol::control::CongestionController::NewReno.into()),
+            congestion: Some(crate::protocol::control::CongestionController::NewReno),
             ..Default::default()
         };
         let mut mgr = Manager::without_files(None);

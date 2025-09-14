@@ -84,7 +84,7 @@ impl ServerMessage {
                 bandwidth_to_server,
                 bandwidth_to_client,
                 rtt: config.rtt,
-                congestion: *config.congestion,
+                congestion: config.congestion,
                 initial_congestion_window: Uint(config.initial_congestion_window.into()),
                 timeout: config.timeout,
                 warning,
@@ -295,10 +295,10 @@ impl DataTag for ServerMessage2Attributes {}
 
 impl ServerMessageV2 {
     pub(crate) fn apply_config_attributes(&mut self, config: &Configuration) {
-        if *config.congestion != CongestionController::default() {
+        if config.congestion != CongestionController::default() {
             self.attributes.push(
                 ServerMessage2Attributes::CongestionController
-                    .with_unsigned(*config.congestion as u64),
+                    .with_unsigned(config.congestion as u64),
             );
         }
         let window = u64::from(config.initial_congestion_window);
@@ -417,7 +417,7 @@ mod test {
             rx: EQ::<u64>::from(v1.bandwidth_to_client.0),
             tx: EQ::<u64>::from(v1.bandwidth_to_server.0),
             rtt: v1.rtt,
-            congestion: v1.congestion.into(),
+            congestion: v1.congestion,
             initial_congestion_window: v1.initial_congestion_window.0.into(),
             timeout: v1.timeout,
             ..Configuration::system_default().clone()
@@ -525,7 +525,7 @@ mod test {
     fn server_message_2_config_attrs() {
         let mut mgr = Manager::without_files(None);
         let cfg = Configuration_Optional {
-            congestion: Some(CongestionController::Bbr.into()),
+            congestion: Some(CongestionController::Bbr),
             initial_congestion_window: Some(42u64.into()),
             timeout: Some(88),
             ..Default::default()
@@ -577,7 +577,7 @@ mod test {
         assert_eq!(cfg.rx, 54321u64.into());
         assert_eq!(cfg.tx, 12345u64.into());
         assert_eq!(cfg.rtt, 42);
-        assert_eq!(cfg.congestion, CongestionController::Bbr.into());
+        assert_eq!(cfg.congestion, CongestionController::Bbr);
         assert_eq!(cfg.initial_congestion_window, 5544u32.into());
         assert_eq!(cfg.timeout, 55);
     }

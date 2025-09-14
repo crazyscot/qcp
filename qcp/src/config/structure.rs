@@ -5,7 +5,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::Result;
-use clap::{Parser, builder::TypedValueParser as _};
+use clap::Parser;
 use engineering_repr::{EngineeringQuantity, EngineeringRepr};
 use human_repr::{HumanCount as _, HumanDuration as _};
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,7 @@ use crate::{
     protocol::control::{CongestionController, CredentialsType},
     util::{
         AddressFamily, DeserializeEnum, PortRange, TimeFormat, VecOrString,
-        derive_deftly_template_Optionalify, serialization::SerializeAsString,
+        derive_deftly_template_Optionalify,
     },
 };
 
@@ -157,11 +157,19 @@ If not specified or 0, uses the value of `rx`.
         long,
         action,
         value_name = "algorithm",
-        value_parser(clap::builder::EnumValueParser::<CongestionController>::new().map(SerializeAsString)), /* whee, this was fun to figure out :-) */
+        value_enum,
+        ignore_case(true),
         help_heading("Advanced network tuning"),
         display_order(0)
     )]
-    pub congestion: SerializeAsString<CongestionController>,
+    // DeserializeEnum trait must be in scope for this to work
+    #[serde(serialize_with = "CongestionController::serialize_str")]
+    #[serde(deserialize_with = "CongestionController::deserialize_str")]
+    #[deftly(
+        serde = "default, deserialize_with = \"CongestionController::deserialize_str_optional\"",
+        serialize_with = "CongestionController::to_string_wrapper"
+    )]
+    pub congestion: CongestionController,
 
     /// _(Network wizards only!)_
     /// The initial value for the sending congestion control window, in bytes.
@@ -461,7 +469,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     rx: 12_500_000u64.into(), // 100Mbit
     tx: 0u64.into(),
     rtt: 300,
-    congestion: CongestionController::Cubic.into(),
+    congestion: CongestionController::Cubic,
     initial_congestion_window: 0u64.into(),
     port: PortRange::default(),
     timeout: 5,
@@ -800,16 +808,15 @@ mod test {
         );
         let c = assert_cfg_parseable(
             r"
-        # TODO
         addressfamily iNEt6
-        #congestion bBr
+        congestion bBr
         timeformat rFc3339
         color aLWAys
         tlsauthtype X509
         ",
         );
         assert_eq!(c.address_family, AddressFamily::Inet6);
-        //assert_eq!(c.congestion.0, CongestionController::Bbr);
+        assert_eq!(c.congestion, CongestionController::Bbr);
         assert_eq!(c.time_format, TimeFormat::Rfc3339);
         assert_eq!(c.color, ColourMode::Always);
         assert_eq!(c.tls_auth_type, CredentialsType::X509);

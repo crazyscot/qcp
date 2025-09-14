@@ -339,7 +339,6 @@ mod test {
     fn cli_option_capitalisation() {
         let args = &[
             "qcp",
-            // TODO
             "--time-format",
             "uTcmIcro",
             "--address-family",
@@ -348,8 +347,8 @@ mod test {
             "NONE",
             "--tls-auth-type",
             "X509",
-            //"--congestion",
-            //"bBr",
+            "--congestion",
+            "bBr",
             //
             "--show-config",
         ];

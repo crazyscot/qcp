@@ -51,7 +51,10 @@ use serde_bare::Uint;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use super::common::ProtocolMessage;
-use crate::{protocol::display_vec_td, util::PortRange as CliPortRange};
+use crate::{
+    protocol::display_vec_td,
+    util::{DeserializeEnum, PortRange as CliPortRange},
+};
 
 /// Server banner message, sent on stdout and checked by the client
 pub const BANNER: &str = "qcp-server-2\n";
@@ -227,11 +230,17 @@ impl From<SocketAddr> for ConnectionType {
     strum_macros::EnumString,
     strum_macros::FromRepr,
     strum_macros::VariantNames,
+    strum::AsRefStr,
     clap::ValueEnum,
+    enumscribe::TryUnscribe,
+    enumscribe::ScribeString,
 )]
 #[serde(try_from = "Uint")]
 #[serde(into = "Uint")]
-#[strum(serialize_all = "lowercase")] // N.B. this applies to EnumString, not Display
+#[strum(ascii_case_insensitive)]
+#[strum(serialize_all = "lowercase")]
+#[clap(rename_all = "lower")]
+#[enumscribe(case_insensitive)]
 pub enum CongestionController {
     /// The congestion algorithm TCP uses. This is good for most cases.
     //
@@ -254,6 +263,8 @@ pub enum CongestionController {
     /// This option requires qcp protocol compatibility level V2.
     NewReno,
 }
+
+impl DeserializeEnum for CongestionController {}
 
 impl From<CongestionController> for Uint {
     fn from(value: CongestionController) -> Self {
