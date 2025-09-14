@@ -24,6 +24,9 @@ use stream::handle_stream;
 #[allow(clippy::module_name_repetitions)]
 #[cfg_attr(coverage_nightly, coverage(off))] // This is a thin adaptor, not worth testing
 pub(crate) async fn server_main() -> anyhow::Result<()> {
+    // We do not use colours in server mode as the output may be relayed to a terminal whose capabilities we do not know
+    console::set_colors_enabled(false);
+
     let control = crate::control::stdio_channel();
     let env_ssh_connection = std::env::var("SSH_CONNECTION").ok();
     let env_ssh_client = std::env::var("SSH_CLIENT").ok();
