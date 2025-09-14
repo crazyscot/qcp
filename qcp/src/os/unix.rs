@@ -26,7 +26,7 @@
 //! recent Linux kernel, independent of distribution.
 //! (They are statically linked against `musl`.)
 
-use crate::cli::styles::{RESET, error, header, info, success, warning};
+use crate::cli::styles::{error, header, info, reset, success, warning};
 use crate::config::BASE_CONFIG_FILENAME;
 
 use human_repr::HumanCount as _;
@@ -83,6 +83,7 @@ fn help_buffers_unix(udp: u64) -> String {
     let INFO = info();
     let WARNING = warning();
     let HEADER = header();
+    let RESET = reset();
 
     let mut output = String::from(super::TESTING_BUFFERS_MESSAGE);
 

@@ -34,12 +34,6 @@ const _HEADER: anstyle::Style = anstyle::Style::new()
     .underline()
     .fg_color(Some(Ansi(Yellow)));
 
-/// Resets styling to default. This is a re-export of [`anstyle::Reset`].
-///
-/// This is purely for convenience; you can also call `error()::render_reset()` (etc.)
-///
-pub use anstyle::Reset as RESET;
-
 // COMPOSITE STYLES //////////////////////////////////////////////////////////////////////
 
 // We don't need to make this conditional, as clap already reads the CLICOLOR environment variables.
@@ -81,6 +75,14 @@ wrap!(warning, _WARNING);
 wrap!(info, _INFO);
 wrap!(success, _SUCCESS);
 wrap!(header, _HEADER);
+
+/// Resets styling to default. This is a re-export of [`anstyle::Reset`].
+///
+/// This is purely for convenience; you can also call `error()::render_reset()` (etc.)
+#[must_use]
+pub(crate) fn reset() -> impl core::fmt::Display + Copy {
+    error().render_reset()
+}
 
 // TABLED CONDITIONAL STYLING ////////////////////////////////////////////////////
 

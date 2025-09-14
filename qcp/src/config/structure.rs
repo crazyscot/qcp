@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::{
-    cli::styles::{ColourMode, RESET, info},
+    cli::styles::{ColourMode, info, reset},
     protocol::control::{CongestionController, CredentialsType},
     util::{
         AddressFamily, PortRange, TimeFormat, VecOrString, derive_deftly_template_Optionalify,
@@ -576,6 +576,8 @@ impl Configuration {
         let rx = data.rx;
         #[allow(non_snake_case)] // look, it's a const
         let INFO = info();
+        #[allow(non_snake_case)] // look, it's a const
+        let RESET = reset();
 
         anyhow::ensure!(
             rx >= MINIMUM_BANDWIDTH,

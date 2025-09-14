@@ -7,7 +7,7 @@ use std::{ffi::OsString, io::Write as _};
 use super::args::{CliArgs, MainMode};
 use crate::{
     Parameters,
-    cli::styles::{RESET, configure_colours, error, use_colours},
+    cli::styles::{configure_colours, error, reset, use_colours},
     client::MAX_UPDATE_FPS,
     config::{Configuration, Manager},
     os::{self, AbstractPlatform as _},
@@ -37,7 +37,12 @@ where
             if crate::util::tracing_is_initialised() {
                 tracing::error!("{e:#}");
             } else {
-                format!("{ERROR}Error:{RESET} {e:#}", ERROR = error()).output_paged();
+                format!(
+                    "{ERROR}Error:{RESET} {e:#}",
+                    ERROR = error(),
+                    RESET = reset()
+                )
+                .output_paged();
             }
         })
         .map_or(ExitCode::FAILURE, |success| match success {
