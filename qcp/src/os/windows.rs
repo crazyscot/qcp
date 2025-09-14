@@ -41,7 +41,7 @@
 //! Most likely the Windows firewall, or some other intervening firewall, is blocking the
 //! UDP packets. [See above](#3-allow-access-through-the-windows-firewall).
 
-use crate::cli::styles::{RESET, info, success, warning};
+use crate::cli::styles::{info, reset, success, warning};
 use crate::config::BASE_CONFIG_FILENAME;
 
 use human_repr::HumanCount as _;
@@ -106,6 +106,7 @@ impl super::AbstractPlatform for WindowsPlatform {
 #[cfg_attr(coverage_nightly, coverage(off))]
 fn help_buffers_win(udp: u64) -> String {
     #![allow(non_snake_case)]
+    let RESET = reset();
     let result = super::test_udp_buffers(udp, udp);
 
     let mut output = String::from(super::TESTING_BUFFERS_MESSAGE);
