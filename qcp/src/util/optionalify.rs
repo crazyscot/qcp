@@ -4,27 +4,6 @@
 #![allow(meta_variable_misuse)] // false positives in these macro definitions
 
 use derive_deftly::define_derive_deftly;
-use figment::value::{Dict, Value};
-
-/// Helper function for [`figment::Provider`](https://docs.rs/figment/latest/figment/trait.Provider.html) implementation
-///
-/// If the given `arg` is not None, inserts it into `dict` with key `arg_name`.
-///
-/// We cannot avoid the large-Err issue here as it is forced by implementing `figment::Provider`, hence `#[allow(clippy::result_large_err)]`.
-#[allow(clippy::result_large_err)]
-pub fn insert_if_some<T>(
-    dict: &mut Dict,
-    arg_name: &str,
-    arg: Option<T>,
-) -> Result<(), figment::Error>
-where
-    T: serde::Serialize,
-{
-    if let Some(a) = arg {
-        let _ = dict.insert(arg_name.to_string(), Value::serialize(a)?);
-    }
-    Ok(())
-}
 
 define_derive_deftly! {
     /// Clones a structure for use with CLI ([`clap`](https://docs.rs/clap/)) and options managers ([`figment`](https://docs.rs/figment/)).
@@ -71,7 +50,7 @@ define_derive_deftly! {
     ///
     /// ### Overriding serde attributes
     ///
-    /// With some types, it is necessary to override serialization / deserialization attributes
+    /// With some types, it is necessary to override the serde deserialization attributes
     /// on certain fields of the derived struct. To do this, use a `#[deftly(serde = "...")]` attribute.
     ///
     /// The contents of the `serde` meta-attribute replace any `serde` attribute on the field.
@@ -90,6 +69,10 @@ define_derive_deftly! {
     ///     // ... more fields ...
     /// }
     /// ```
+    ///
+    /// This doesn't work for `serialize_with` if the type also needs to be serialized differently.
+    /// (case in point: `CongestionController`)
+    /// For this situation, we support `#[deftly(serialize_with = "path::to::some::function")]`.
     ///
     /// ### Troubleshooting
     ///
@@ -136,12 +119,24 @@ define_derive_deftly! {
         }
 
         fn data(&self) -> Result<figment::value::Map<figment::Profile, figment::value::Dict>, figment::Error> {
-            use $crate::util::insert_if_some;
-            use figment::{Profile, value::{Dict, Map}};
+            use figment::{Profile, value::{Dict, Map, Value}};
             let mut dict = Dict::new();
 
+            // Curveball: For some types, we want to serialize them differently
+            // in different contexts. So we have the `serialize_with` meta attribute,
+            // which works like `#[serde(serialize_with = ...)]`.
             $(
-                insert_if_some(&mut dict, stringify!($fname), self.${fname}.clone())?;
+                if let Some(inner) = &self.${fname} {
+                    let value =
+                        ${if fmeta(serialize_with) {
+                            // If there is a special serializer, use that
+                            ${fmeta(serialize_with) as token_stream}(inner)?.into()
+                        } else {
+                            // Else, standard serialization.
+                            Value::serialize(inner)?
+                        }};
+                    let _ = dict.insert(stringify!($fname).to_string(), value);
+                }
             )
 
             let mut profile_map = Map::new();

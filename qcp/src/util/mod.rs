@@ -36,7 +36,7 @@ mod port_range;
 pub use port_range::PortRange;
 
 mod optionalify;
-pub use optionalify::{derive_deftly_template_Optionalify, insert_if_some};
+pub use optionalify::derive_deftly_template_Optionalify;
 
 mod vec_or_string;
 pub use vec_or_string::VecOrString;

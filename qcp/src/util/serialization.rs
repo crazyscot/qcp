@@ -72,6 +72,11 @@ where
         serializer.serialize_str(self.as_ref())
     }
 
+    /// Serialization helper for use with Optionalify `#[deftly(serialize_with = ...)]`.
+    fn to_string_wrapper(&self) -> Result<String, figment::Error> {
+        Ok(self.as_ref().to_string())
+    }
+
     /// String deserialize function for an enum.
     fn deserialize_str<'de, D>(deserializer: D) -> Result<Self, D::Error>
     where

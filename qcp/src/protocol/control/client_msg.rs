@@ -17,7 +17,7 @@ use crate::{
         DataTag, FindTag as _, TaggedData, Variant, compat::Feature, control::Compatibility,
     },
     transport::ThroughputMode,
-    util::serialization::{DeserializeEnum, SerializeAsString},
+    util::serialization::DeserializeEnum,
 };
 
 #[derive(
@@ -201,7 +201,7 @@ impl ClientMessageV2 {
         }
         if let Some(cc) = our_config.congestion {
             self.attributes
-                .push(ClientMessage2Attributes::CongestionControllerType.with_unsigned(*cc as u64));
+                .push(ClientMessage2Attributes::CongestionControllerType.with_unsigned(cc as u64));
         }
         if let Some(icw) = our_config.initial_congestion_window {
             self.attributes.push(
@@ -485,9 +485,7 @@ impl ClientMessageV1 {
             },
             bandwidth_to_client: rx.map(|u| Uint(u64::from(u))),
             rtt: my_config.rtt,
-            congestion: my_config
-                .congestion
-                .map(|o: SerializeAsString<CongestionController>| *o),
+            congestion: my_config.congestion,
             initial_congestion_window: icw.map(|u| Uint(u64::from(u))),
             timeout: my_config.timeout,
 
@@ -529,7 +527,7 @@ mod test {
             tx: Some(42u64.into()),
             rx: Some(89u64.into()),
             rtt: Some(1234),
-            congestion: Some(CongestionController::Bbr.into()),
+            congestion: Some(CongestionController::Bbr),
             udp_buffer: Some(456_789u64.into()),
             initial_congestion_window: Some(12345u64.into()),
             port: Some(CliPortRange { begin: 17, end: 98 }),

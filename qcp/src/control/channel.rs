@@ -172,7 +172,7 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
         let congestion = config
             .congestion
             .unwrap_or(Configuration::system_default().congestion);
-        if *congestion == CongestionController::NewReno {
+        if congestion == CongestionController::NewReno {
             anyhow::ensure!(
                 self.selected_compat.supports(Feature::NEW_RENO),
                 "Remote host does not support NewReno"
@@ -753,7 +753,7 @@ mod test {
         let mut cli = TestClient::new(pipe1, Compatibility::Level(3));
         // ...crucial: set NewReno in the config
         let cfg = Configuration_Optional {
-            congestion: Some(CongestionController::NewReno.into()),
+            congestion: Some(CongestionController::NewReno),
             ..Default::default()
         };
         cli.manager.merge_provider(cfg);
