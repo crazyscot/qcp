@@ -24,7 +24,7 @@ pub(crate) mod stats;
 pub(crate) mod time;
 
 pub(crate) mod serialization;
-pub use serialization::{DeserializeEnum, SerializeAsString};
+pub use serialization::DeserializeEnum;
 
 mod tracing;
 pub(crate) use tracing::{

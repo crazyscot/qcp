@@ -243,7 +243,6 @@ impl Manager {
 mod test {
     use crate::config::{Configuration, Configuration_Optional, Manager};
     use crate::protocol::control::CongestionController;
-    use crate::util::serialization::SerializeAsString;
     use crate::util::{PortRange, TimeFormat};
     use engineering_repr::EngineeringQuantity;
     use littertray::LitterTray;
@@ -373,14 +372,17 @@ mod test {
     #[test]
     fn types() {
         use crate::protocol::control::CongestionController;
-
+        use crate::util::DeserializeEnum as _;
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
             vecs: Vec<String>,
             s: String,
             i: u32,
             b: bool,
-            en: SerializeAsString<CongestionController>,
+            #[serde(serialize_with = "CongestionController::serialize_str")]
+            // DeserializeEnum trait must be in scope
+            #[serde(deserialize_with = "CongestionController::deserialize_str")]
+            en: CongestionController,
             pr: PortRange,
         }
 
@@ -408,7 +410,7 @@ mod test {
                     s: "foo".into(),
                     i: 42,
                     b: true,
-                    en: CongestionController::Bbr.into(),
+                    en: CongestionController::Bbr,
                     pr: PortRange {
                         begin: 123,
                         end: 456
@@ -455,7 +457,7 @@ mod test {
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
             b: bool,
-            en: SerializeAsString<CongestionController>,
+            en: CongestionController,
             i: u32,
             pr: PortRange,
         }

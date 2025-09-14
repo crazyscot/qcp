@@ -216,7 +216,6 @@ impl From<SocketAddr> for ConnectionType {
 
 /// Selects the congestion control algorithm to use.
 /// This structure is serialized as a standard BARE enum.
-/// To serialize it as a string, see [`crate::util::SerializeAsString`].
 #[derive(
     Copy,
     Clone,
@@ -352,9 +351,9 @@ mod test {
         protocol::{
             DataTag as _, TaggedData,
             common::ProtocolMessage,
-            control::{Compatibility, CongestionController, ConnectionType, CredentialsType},
+            control::{Compatibility, ConnectionType, CredentialsType},
         },
-        util::{PortRange as CliPortRange, serialization::SerializeAsString},
+        util::PortRange as CliPortRange,
     };
 
     use super::PortRange_OnWire;
@@ -437,14 +436,6 @@ mod test {
         // The real test here is that decode succeeded.
         assert_eq!(decoded.i, t2.i);
         assert_eq!(decoded.extension, 1);
-    }
-
-    #[test]
-    fn type_conversions_congestion() {
-        let c = CongestionController::Cubic;
-        let c2 = SerializeAsString::<CongestionController>::from(c);
-        println!("{c2}");
-        assert_eq!(*c2, c);
     }
 
     #[test]
