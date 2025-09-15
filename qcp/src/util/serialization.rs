@@ -3,7 +3,8 @@
 
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
-use serde::{Deserializer, Serializer, de::SeqAccess, de::Visitor};
+use engineering_repr::EngineeringQuantity;
+use serde::{Deserialize as _, Deserializer, Serializer, de::SeqAccess, de::Visitor};
 
 /// String to enum deserialization helper trait (via enumscribe).
 ///
@@ -174,5 +175,40 @@ impl StringOrVec {
         D: Deserializer<'de>,
     {
         Self::deserialize(deserializer).map(Some)
+    }
+}
+
+/// Helper type for serializing u64 via EngineeringQuantity
+pub(crate) struct EQHelper {}
+impl EQHelper {
+    #[allow(clippy::trivially_copy_pass_by_ref)] // required by serde
+    pub(crate) fn serialize<S>(val: &u64, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(
+            &EngineeringQuantity::<u64>::from(*val)
+                .with_precision(0)
+                .to_string(),
+        )
+    }
+    pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<u64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        EngineeringQuantity::<u64>::deserialize(deserializer).map(Into::into)
+    }
+    pub(crate) fn deserialize_optional<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        EngineeringQuantity::<u64>::deserialize(deserializer).map(|eq| Some(u64::from(eq)))
+    }
+
+    #[allow(clippy::unnecessary_wraps)] // required by serde
+    pub(crate) fn to_string_figment(val: &u64) -> Result<String, &str> {
+        Ok(EngineeringQuantity::<u64>::from(*val)
+            .with_precision(0)
+            .to_string())
     }
 }

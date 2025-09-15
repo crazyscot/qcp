@@ -151,8 +151,7 @@ fn help_buffers_data(mut manager: Manager) -> Result<String> {
     manager.apply_system_default();
     manager.validate_configuration()?;
     let config = manager.get::<Configuration>()?;
-    let udp_buf = u64::from(config.udp_buffer);
-    Ok(os::Platform::help_buffers_mode(udp_buf))
+    Ok(os::Platform::help_buffers_mode(config.udp_buffer))
 }
 
 fn show_config(mut config_manager: Manager) -> Result<bool> {

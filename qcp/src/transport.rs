@@ -98,7 +98,7 @@ pub fn create_config(
         ThroughputMode::Tx => (),
     }
 
-    let window = u64::from(params.initial_congestion_window);
+    let window = params.initial_congestion_window;
     let congestion: Arc<dyn DebugControllerFactory> = match params.congestion {
         CongestionController::Cubic => {
             let mut cubic = CubicConfig::default();
@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn modes() {
         let mut cfg = Configuration::system_default().clone();
-        cfg.tx = 1_000_000u64.into();
+        cfg.tx = 1_000_000;
         cfg.rx = cfg.tx;
         cfg.rtt = 456;
 
@@ -435,7 +435,7 @@ mod tests {
         use crate::protocol::control::CongestionController::*;
         let mut cfg = Configuration::system_default().clone();
         cfg.congestion = Cubic;
-        cfg.initial_congestion_window = 1000u64.into();
+        cfg.initial_congestion_window = 1000;
 
         let (_, str) = process_config(&cfg, ThroughputMode::Both);
         assert_contains!(str, "CubicConfig");
@@ -498,7 +498,7 @@ mod tests {
                 end: 2000,
             }),
             // Congestion Window will lead to a Server result
-            initial_congestion_window: Some(1000u64.into()),
+            initial_congestion_window: Some(1000),
             ..Default::default()
         };
         let mut mgr = Manager::new(None, false, false);
@@ -528,7 +528,7 @@ mod tests {
             }
         );
         // it doesn't seem possible to use assert_matches! on an EngineeringRepr field
-        assert_eq!(c.initial_congestion_window, 1000u64.into());
+        assert_eq!(c.initial_congestion_window, 1000);
     }
 
     #[test]

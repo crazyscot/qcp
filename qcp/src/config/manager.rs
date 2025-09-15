@@ -263,11 +263,11 @@ mod test {
     fn config_merge() {
         // simulate a CLI
         let entered = Configuration_Optional {
-            rx: Some(12345u64.into()),
+            rx: Some(12345u64),
             ..Default::default()
         };
         let expected = Configuration {
-            rx: 12345u64.into(),
+            rx: 12345u64,
             ..Configuration::system_default().clone()
         };
 
@@ -489,7 +489,7 @@ mod test {
         let _ee = EngineeringQuantity::<u32>::from_raw(1, 2);
         // simulate a CLI
         let entered = Configuration_Optional {
-            rx: Some(12345u64.into()),
+            rx: Some(12345u64),
             ..Default::default()
         };
         LitterTray::try_with(|tray| {

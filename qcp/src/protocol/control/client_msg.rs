@@ -189,11 +189,11 @@ impl ClientMessageV2 {
         }
         if let Some(eq) = our_config.tx {
             self.attributes
-                .push(ClientMessage2Attributes::BandwidthToServer.with_unsigned(u64::from(eq)));
+                .push(ClientMessage2Attributes::BandwidthToServer.with_unsigned(eq));
         }
         if let Some(eq) = our_config.rx {
             self.attributes
-                .push(ClientMessage2Attributes::BandwidthToClient.with_unsigned(u64::from(eq)));
+                .push(ClientMessage2Attributes::BandwidthToClient.with_unsigned(eq));
         }
         if let Some(rtt) = our_config.rtt {
             self.attributes
@@ -204,9 +204,8 @@ impl ClientMessageV2 {
                 .push(ClientMessage2Attributes::CongestionControllerType.with_unsigned(cc as u64));
         }
         if let Some(icw) = our_config.initial_congestion_window {
-            self.attributes.push(
-                ClientMessage2Attributes::InitialCongestionWindow.with_unsigned(u64::from(icw)),
-            );
+            self.attributes
+                .push(ClientMessage2Attributes::InitialCongestionWindow.with_unsigned(icw));
         }
         if let Some(t) = our_config.timeout {
             self.attributes
@@ -468,10 +467,9 @@ impl ClientMessageV1 {
         remote_config: bool,
         my_config: &Configuration_Optional,
     ) -> Self {
-        use engineering_repr::EngineeringQuantity as EQ;
         // Configuration_Optional seems a bit much for recent rust-analyzer, but the compiler doesn't mind it. Sop:
-        let rx: &Option<EQ<u64>> = &my_config.rx;
-        let icw: &Option<EQ<u64>> = &my_config.initial_congestion_window;
+        let rx: &Option<u64> = &my_config.rx;
+        let icw: &Option<u64> = &my_config.initial_congestion_window;
 
         Self {
             cert: cert.to_vec(),
@@ -479,14 +477,14 @@ impl ClientMessageV1 {
             port: my_config.remote_port,
             show_config: remote_config,
 
-            bandwidth_to_server: match my_config.tx.map(u64::from) {
+            bandwidth_to_server: match my_config.tx {
                 None | Some(0) => None,
                 Some(v) => Some(Uint(v)),
             },
-            bandwidth_to_client: rx.map(|u| Uint(u64::from(u))),
+            bandwidth_to_client: rx.map(Uint),
             rtt: my_config.rtt,
             congestion: my_config.congestion,
-            initial_congestion_window: icw.map(|u| Uint(u64::from(u))),
+            initial_congestion_window: icw.map(Uint),
             timeout: my_config.timeout,
 
             attributes: vec![],
@@ -524,12 +522,12 @@ mod test {
     #[test]
     fn serialize_client_message() {
         let config = Configuration_Optional {
-            tx: Some(42u64.into()),
-            rx: Some(89u64.into()),
+            tx: Some(42),
+            rx: Some(89),
             rtt: Some(1234),
             congestion: Some(CongestionController::Bbr),
-            udp_buffer: Some(456_789u64.into()),
-            initial_congestion_window: Some(12345u64.into()),
+            udp_buffer: Some(456_789),
+            initial_congestion_window: Some(12345),
             port: Some(PortRange { begin: 17, end: 98 }),
             remote_port: Some(PortRange {
                 begin: 123,

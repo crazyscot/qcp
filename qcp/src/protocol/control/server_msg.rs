@@ -85,7 +85,7 @@ impl ServerMessage {
                 bandwidth_to_client,
                 rtt: config.rtt,
                 congestion: config.congestion,
-                initial_congestion_window: Uint(config.initial_congestion_window.into()),
+                initial_congestion_window: Uint(config.initial_congestion_window),
                 timeout: config.timeout,
                 warning,
                 ..Default::default()
@@ -301,7 +301,7 @@ impl ServerMessageV2 {
                     .with_unsigned(config.congestion as u64),
             );
         }
-        let window = u64::from(config.initial_congestion_window);
+        let window = config.initial_congestion_window;
         if window != 0 {
             self.attributes
                 .push(ServerMessage2Attributes::InitialCongestionWindow.with_unsigned(window));
@@ -388,8 +388,6 @@ mod test {
 
     #[test]
     fn serialize_provide_server_message() {
-        use engineering_repr::EngineeringQuantity as EQ;
-
         let v1 = ServerMessageV1 {
             port: 12345,
             cert: vec![9, 8, 7],
@@ -414,11 +412,11 @@ mod test {
         println!("{cfg:?}");
         let expected = Configuration {
             // Server message is processed by the client, so bandwidth_to_client becomes config.rx
-            rx: EQ::<u64>::from(v1.bandwidth_to_client.0),
-            tx: EQ::<u64>::from(v1.bandwidth_to_server.0),
+            rx: v1.bandwidth_to_client.0,
+            tx: v1.bandwidth_to_server.0,
             rtt: v1.rtt,
             congestion: v1.congestion,
-            initial_congestion_window: v1.initial_congestion_window.0.into(),
+            initial_congestion_window: v1.initial_congestion_window.0,
             timeout: v1.timeout,
             ..Configuration::system_default().clone()
         };
@@ -526,7 +524,7 @@ mod test {
         let mut mgr = Manager::without_files(None);
         let cfg = Configuration_Optional {
             congestion: Some(CongestionController::Bbr),
-            initial_congestion_window: Some(42u64.into()),
+            initial_congestion_window: Some(42),
             timeout: Some(88),
             ..Default::default()
         };
@@ -574,11 +572,11 @@ mod test {
         mgr.apply_system_default();
         mgr.merge_provider(msg);
         let cfg = mgr.get::<Configuration>().unwrap();
-        assert_eq!(cfg.rx, 54321u64.into());
-        assert_eq!(cfg.tx, 12345u64.into());
+        assert_eq!(cfg.rx, 54321);
+        assert_eq!(cfg.tx, 12345);
         assert_eq!(cfg.rtt, 42);
         assert_eq!(cfg.congestion, CongestionController::Bbr);
-        assert_eq!(cfg.initial_congestion_window, 5544u32.into());
+        assert_eq!(cfg.initial_congestion_window, 5544);
         assert_eq!(cfg.timeout, 55);
     }
 

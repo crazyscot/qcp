@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
-use engineering_repr::{EngineeringQuantity, EngineeringRepr};
+use engineering_repr::EngineeringRepr;
 use human_repr::{HumanCount as _, HumanDuration as _};
 use serde::{Deserialize, Serialize};
 use struct_field_names_as_array::FieldNamesAsSlice;
@@ -14,9 +14,10 @@ use struct_field_names_as_array::FieldNamesAsSlice;
 use crate::{
     cli::styles::{ColourMode, info, reset},
     protocol::control::{CongestionController, CredentialsType},
+    util::serialization::{EQHelper, StringOrVec},
     util::{
         AddressFamily, PortRange, SerializeAsString, SerializeEnumAsString, TimeFormat,
-        ToStringForFigment, derive_deftly_template_Optionalify, serialization::StringOrVec,
+        ToStringForFigment, derive_deftly_template_Optionalify,
     },
 };
 use derive_deftly::Deftly;
@@ -109,7 +110,12 @@ if (for example) you expect to fill a 1Gbit ethernet connection,
 125M would be a suitable setting.
         "),
     )]
-    pub rx: EngineeringQuantity<u64>,
+    #[serde(with = "EQHelper")]
+    #[deftly(
+        serde = "default, deserialize_with = \"EQHelper::deserialize_optional\"",
+        serialize_with = "EQHelper::to_string_figment"
+    )]
+    pub rx: u64,
     /// The maximum network bandwidth we expect sending data TO the remote system,
     /// if it is different from the bandwidth FROM the system.
     /// (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
@@ -138,7 +144,12 @@ This parameter is always interpreted as the _local_ bandwidth, whether operating
 If not specified or 0, uses the value of `rx`.
 "),
     )]
-    pub tx: EngineeringQuantity<u64>,
+    #[serde(with = "EQHelper")]
+    #[deftly(
+        serde = "default, deserialize_with = \"EQHelper::deserialize_optional\"",
+        serialize_with = "EQHelper::to_string_figment"
+    )]
+    pub tx: u64,
 
     /// The expected network Round Trip time to the target system, in milliseconds.
     /// [default: 300]
@@ -198,7 +209,12 @@ Setting this value too high reduces performance!
 This may be specified directly as a number, or as an SI quantity like `10k`."
         )
     )]
-    pub initial_congestion_window: EngineeringQuantity<u64>,
+    #[serde(with = "EQHelper")]
+    #[deftly(
+        serde = "default, deserialize_with = \"EQHelper::deserialize_optional\"",
+        serialize_with = "EQHelper::to_string_figment"
+    )]
+    pub initial_congestion_window: u64,
 
     /// Uses the given UDP port or range on the **local** endpoint.
     /// This can be useful when there is a firewall between the endpoints.
@@ -232,7 +248,12 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     /// However there may be high-bandwidth situations (10Gbps or more) where this becomes a bottleneck,
     /// or situations where you wish to restrict memory consumption.
     #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
-    pub udp_buffer: EngineeringQuantity<u64>,
+    #[serde(with = "EQHelper")]
+    #[deftly(
+        serde = "default, deserialize_with = \"EQHelper::deserialize_optional\"",
+        serialize_with = "EQHelper::to_string_figment"
+    )]
+    pub udp_buffer: u64,
 
     /// Packet reordering loss detection threshold
     ///
@@ -481,15 +502,15 @@ CLI options take precedence over the configuration file, which takes precedence 
 
 static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
     // Transport
-    rx: 12_500_000u64.into(), // 100Mbit
-    tx: 0u64.into(),
+    rx: 12_500_000, // 100Mbit
+    tx: 0,
     rtt: 300,
     congestion: CongestionController::Cubic,
-    initial_congestion_window: 0u64.into(),
+    initial_congestion_window: 0,
     port: PortRange::default(),
     timeout: 5,
     // https://fasterdata.es.net/host-tuning/linux/udp-tuning/ recommends 4M as good for most settings
-    udp_buffer: 4_000_000u64.into(),
+    udp_buffer: 4_000_000,
     packet_threshold: 3,     // default from Quinn
     time_threshold: 9. / 8., // default from Quinn
     initial_mtu: 1200,       // same as Quinn
@@ -526,12 +547,12 @@ impl Configuration {
     #[must_use]
     /// Receive bandwidth (accessor)
     pub fn rx(&self) -> u64 {
-        self.rx.into()
+        self.rx
     }
     #[must_use]
     /// Transmit bandwidth (accessor)
     pub fn tx(&self) -> u64 {
-        match u64::from(self.tx) {
+        match self.tx {
             0 => self.rx(),
             tx => tx,
         }
@@ -565,7 +586,7 @@ impl Configuration {
     /// Formats the transport-related options for display
     #[must_use]
     pub fn format_transport_config(&self) -> String {
-        let iwind = match u64::from(self.initial_congestion_window) {
+        let iwind = match self.initial_congestion_window {
             0 => "<default>".to_string(),
             s => s.human_count_bytes().to_string(),
         };
@@ -587,7 +608,7 @@ impl Configuration {
             iwind = iwind,
             swnd = self.send_window().human_count_bytes(),
             rwnd = self.recv_window().human_count_bytes(),
-            udp = u64::from(self.udp_buffer).human_count_bytes(),
+            udp = self.udp_buffer.human_count_bytes(),
             pkt_t = self.packet_threshold,
             tim_t = self.time_threshold,
         )
@@ -617,7 +638,7 @@ impl Configuration {
             rtt: self.rtt,
             rx: self.rx(),
             tx: self.tx(),
-            udp: self.udp_buffer.into(),
+            udp: self.udp_buffer,
         }
     }
 
@@ -728,7 +749,7 @@ mod test {
         assert!(s.contains("rtt 123ms"));
         assert!(s.contains("congestion algorithm cubic with initial window <default>"));
 
-        cfg.initial_congestion_window = 1000u64.into();
+        cfg.initial_congestion_window = 1000;
         let s = cfg.format_transport_config();
         assert!(s.contains("congestion algorithm cubic with initial window 1kB"));
     }
@@ -749,29 +770,25 @@ mod test {
         let cfg = SYSTEM_DEFAULT_CONFIG.clone();
         assert!(cfg.try_validate().is_ok());
 
+        tc(|c| c.rx = 1, "receive bandwidth (rx 1B) is too small", None);
         tc(
-            |c| c.rx = 1u64.into(),
-            "receive bandwidth (rx 1B) is too small",
-            None,
-        );
-        tc(
-            |c| c.tx = 1u64.into(),
+            |c| c.tx = 1,
             "transmit bandwidth (tx 1B) is too small",
             None,
         );
         tc(
-            |c| c.rx = u64::MAX.into(),
+            |c| c.rx = u64::MAX,
             "receive bandwidth delay product calculation",
             Some("overflowed"),
         );
         tc(
-            |c| c.tx = u64::MAX.into(),
+            |c| c.tx = u64::MAX,
             "transmit bandwidth delay product calculation",
             Some("overflowed"),
         );
         tc(|c| c.rtt = 0, "RTT cannot be zero", None);
         tc(
-            |c| c.udp_buffer = 0u64.into(),
+            |c| c.udp_buffer = 0,
             "The UDP buffer size (0) is too small",
             None,
         );
