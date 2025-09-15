@@ -227,7 +227,6 @@ impl Client {
                 .ssh_config
                 .as_ref()
                 .unwrap_or(&default_config.ssh_config)
-                .to_vec_owned()
                 .as_ref(),
         );
         let remote_dns_name = ssh_config_files

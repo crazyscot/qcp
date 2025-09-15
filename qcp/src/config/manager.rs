@@ -358,12 +358,12 @@ mod test {
             mgr.merge_ssh_config(path, Some("foo"), false);
             //println!("{}", mgr.to_display_adapter::<Configuration>(false));
             let result = mgr.get::<Configuration>().unwrap();
-            assert_eq!(result.ssh_options, ["a", "b", "c"].as_slice().into());
+            assert_eq!(result.ssh_options, ["a", "b", "c"].as_slice());
 
             let mut mgr = Manager::without_files(Some("bar"));
             mgr.merge_ssh_config(path, Some("bar"), false);
             let result = mgr.get::<Configuration>().unwrap();
-            assert_eq!(result.ssh_options, ["d", "e", "f"].as_slice().into());
+            assert_eq!(result.ssh_options, ["d", "e", "f"].as_slice());
             Ok(())
         })
         .unwrap();
@@ -372,8 +372,8 @@ mod test {
     #[test]
     fn types() {
         use crate::protocol::control::CongestionController;
-        use crate::util::SerializeEnumAsString as _;
         use crate::util::SerializeAsString as _;
+        use crate::util::SerializeEnumAsString as _;
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
             vecs: Vec<String>,
@@ -671,7 +671,7 @@ mod test {
                 let mut mgr = Manager::without_files(None);
                 mgr.merge_ssh_config(path, None, false);
                 let cfg = mgr.get::<Configuration_Optional>().context("get config")?;
-                assert_eq!(&cfg.ssh_options.unwrap().to_vec(), case);
+                assert_eq!(&cfg.ssh_options.unwrap(), case);
                 Ok(())
             })
             .unwrap();

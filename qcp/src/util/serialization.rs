@@ -3,7 +3,7 @@
 
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
-use serde::{Deserializer, Serializer, de::Visitor};
+use serde::{Deserializer, Serializer, de::SeqAccess, de::Visitor};
 
 /// String to enum deserialization helper trait (via enumscribe).
 ///
@@ -128,5 +128,51 @@ where
     /// figment::Error.
     fn to_string_figment(&self) -> Result<String, &str> {
         Ok(self.to_string())
+    }
+}
+
+/// Deserialization helper allowing a value to appear as either a `String` or a `Vec<String>`
+pub(crate) struct StringOrVec {}
+
+impl StringOrVec {
+    /// Deserialization of `Vec<String>` from string
+    pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct SVVisitor;
+        impl<'de> Visitor<'de> for SVVisitor {
+            type Value = Vec<String>;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a string or list of string")
+            }
+            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(vec![s.to_owned()])
+            }
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut v = Vec::new();
+                while let Some(it) = seq.next_element()? {
+                    v.push(it);
+                }
+                Ok(v)
+            }
+        }
+        deserializer.deserialize_any(SVVisitor)
+    }
+
+    /// Deserialization of `Option<Vec<String>>` from string
+    pub(crate) fn deserialize_optional<'de, D>(
+        deserializer: D,
+    ) -> Result<Option<Vec<String>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::deserialize(deserializer).map(Some)
     }
 }

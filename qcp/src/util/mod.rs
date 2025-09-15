@@ -24,7 +24,7 @@ pub(crate) mod stats;
 pub(crate) mod time;
 
 pub(crate) mod serialization;
-pub use serialization::{SerializeEnumAsString, SerializeAsString, ToStringForFigment};
+pub use serialization::{SerializeAsString, SerializeEnumAsString, ToStringForFigment};
 
 mod tracing;
 pub(crate) use tracing::{
@@ -37,6 +37,3 @@ pub use port_range::PortRange;
 
 mod optionalify;
 pub use optionalify::derive_deftly_template_Optionalify;
-
-mod vec_or_string;
-pub use vec_or_string::VecOrString;

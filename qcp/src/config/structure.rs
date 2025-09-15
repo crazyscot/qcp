@@ -16,7 +16,7 @@ use crate::{
     protocol::control::{CongestionController, CredentialsType},
     util::{
         AddressFamily, PortRange, SerializeAsString, SerializeEnumAsString, TimeFormat,
-        ToStringForFigment, VecOrString, derive_deftly_template_Optionalify,
+        ToStringForFigment, derive_deftly_template_Optionalify, serialization::StringOrVec,
     },
 };
 use derive_deftly::Deftly;
@@ -333,7 +333,9 @@ On the command line, you must repeat `-S` for each argument.
 For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
         )
     )]
-    pub ssh_options: VecOrString,
+    #[serde(deserialize_with = "StringOrVec::deserialize")]
+    #[deftly(serde = "default, deserialize_with = \"StringOrVec::deserialize_optional\"")]
+    pub ssh_options: Vec<String>,
 
     /// Uses the given UDP port or range on the **remote** endpoint.
     /// This can be useful when there is a firewall between the endpoints.
@@ -392,7 +394,9 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
     /// This option is really intended to be used in a qcp configuration file.
     /// On the command line, you can repeat `--ssh-config file` as many times as needed.
     #[arg(long, value_name("FILE"), help_heading("Connection"), display_order(0))]
-    pub ssh_config: VecOrString,
+    #[serde(deserialize_with = "StringOrVec::deserialize")]
+    #[deftly(serde = "default, deserialize_with = \"StringOrVec::deserialize_optional\"")]
+    pub ssh_config: Vec<String>,
 
     /// Ssh subsystem mode
     ///
@@ -495,11 +499,11 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     // Client
     address_family: AddressFamily::Any,
     ssh: "ssh".into(),
-    ssh_options: VecOrString::default(),
+    ssh_options: Vec::new(),
     remote_port: PortRange::default(),
     remote_user: String::new(),
     time_format: TimeFormat::Local,
-    ssh_config: VecOrString::default(),
+    ssh_config: Vec::new(),
     ssh_subsystem: false,
     color: ColourMode::Auto,
 
@@ -843,10 +847,10 @@ mod test {
     #[test]
     fn cfg_ssh_options_regression() {
         let c = assert_cfg_parseable("sshoptions");
-        assert_eq!(c.ssh_options, vec![].into());
+        assert_eq!(c.ssh_options, Vec::<String>::new());
         let c = assert_cfg_parseable("sshoptions a");
-        assert_eq!(c.ssh_options, vec!["a".into()].into());
+        assert_eq!(c.ssh_options, vec!["a"]);
         let c = assert_cfg_parseable("sshoptions a b");
-        assert_eq!(c.ssh_options, vec!["a".into(), "b".into()].into());
+        assert_eq!(c.ssh_options, vec!["a", "b"]);
     }
 }

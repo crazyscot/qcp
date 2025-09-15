@@ -44,13 +44,7 @@ fn ssh_cli_args(
     }
 
     // Other SSH options
-    args.extend_from_slice(
-        &config
-            .ssh_options
-            .as_ref()
-            .unwrap_or(&defaults.ssh_options)
-            .to_vec_owned(),
-    );
+    args.extend_from_slice(config.ssh_options.as_ref().unwrap_or(&defaults.ssh_options));
 
     // Hostname
     args.push(ssh_hostname.to_owned());
@@ -215,7 +209,7 @@ mod test {
     fn hostname_ssh_opts() {
         let xopts = ["--abc", "def", "--ghi", "jkl"];
         let cfg1 = Configuration_Optional {
-            ssh_options: Some(xopts.map(String::from).to_vec().into()),
+            ssh_options: Some(xopts.map(String::from).to_vec()),
             ..Default::default()
         };
         let args = ssh_cli_args(ConnectionType::Ipv4, "my_host", &cfg1, false);
