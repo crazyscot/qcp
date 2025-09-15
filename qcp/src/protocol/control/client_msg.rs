@@ -17,7 +17,7 @@ use crate::{
         DataTag, FindTag as _, TaggedData, Variant, compat::Feature, control::Compatibility,
     },
     transport::ThroughputMode,
-    util::{PortRange, serialization::DeserializeEnum},
+    util::{PortRange, serialization::SerializeEnumAsString},
 };
 
 #[derive(
@@ -137,7 +137,7 @@ pub enum CredentialsType {
     RawPublicKey,
 }
 impl DataTag for CredentialsType {}
-impl DeserializeEnum for CredentialsType {}
+impl SerializeEnumAsString for CredentialsType {}
 
 #[derive(
     Clone, Default, Serialize, Deserialize, PartialEq, derive_more::Debug, derive_more::Display,

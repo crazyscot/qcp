@@ -15,7 +15,7 @@ use crate::{
     cli::styles::{ColourMode, info, reset},
     protocol::control::{CongestionController, CredentialsType},
     util::{
-        AddressFamily, DeserializeEnum, PortRange, SerializeAsString, TimeFormat,
+        AddressFamily, PortRange, SerializeAsString, SerializeEnumAsString, TimeFormat,
         ToStringForFigment, VecOrString, derive_deftly_template_Optionalify,
     },
 };

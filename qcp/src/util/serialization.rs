@@ -20,7 +20,7 @@ use serde::{Deserializer, Serializer, de::Visitor};
 /// and `strum::AsRefStr`.
 ///
 /// You are not expected to need to override the default implementation.
-pub trait DeserializeEnum
+pub trait SerializeEnumAsString
 where
     Self: Sized + enumscribe::TryUnscribe + strum::VariantNames + AsRef<str>,
 {

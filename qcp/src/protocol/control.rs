@@ -53,7 +53,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use super::common::ProtocolMessage;
 use crate::{
     protocol::display_vec_td,
-    util::{DeserializeEnum, ToStringForFigment},
+    util::{SerializeEnumAsString, ToStringForFigment},
 };
 
 /// Server banner message, sent on stdout and checked by the client
@@ -263,7 +263,7 @@ pub enum CongestionController {
     NewReno,
 }
 
-impl DeserializeEnum for CongestionController {}
+impl SerializeEnumAsString for CongestionController {}
 impl ToStringForFigment for CongestionController {}
 
 impl From<CongestionController> for Uint {

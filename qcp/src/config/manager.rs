@@ -372,7 +372,7 @@ mod test {
     #[test]
     fn types() {
         use crate::protocol::control::CongestionController;
-        use crate::util::DeserializeEnum as _;
+        use crate::util::SerializeEnumAsString as _;
         use crate::util::SerializeAsString as _;
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
