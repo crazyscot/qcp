@@ -1,7 +1,7 @@
 [package]
 name = "qcp"
 description = "Secure remote file copy utility which uses the QUIC protocol over UDP"
-rust-version = "1.85.0"
+rust-version = "1.88.0"
 version = "0.6.0-pre"
 edition.workspace = true
 authors = ["Ross Younger <qcp@crazyscot.com>"]

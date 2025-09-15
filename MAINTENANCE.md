@@ -4,7 +4,7 @@
 
 The rust-analyzer plugin for Visual Studio Code comes bundled with a specific version of rust-analyzer.
 
-As this project has an older MSRV, sometimes the newer analyzer doesn't quite work properly.
+As this project does not automatically track the latest MSRV, sometimes the newer analyzer doesn't quite work properly.
 
 The recommended fix for this is:
 
