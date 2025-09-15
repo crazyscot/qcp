@@ -38,12 +38,6 @@ impl Display for PortRange {
     }
 }
 
-impl From<PortRange> for String {
-    fn from(value: PortRange) -> Self {
-        value.to_string()
-    }
-}
-
 static PR_EXPECTED: &str = "a single port number [0..65535] or a range `a-b`";
 
 impl FromStr for PortRange {
