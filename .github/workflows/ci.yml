@@ -2,13 +2,7 @@ name: CI
 
 on:
   push:
-    branches:
-      - dev
-      - main
-  pull_request:
-    branches:
-      - dev
-      - main
+  #pull_request: # duplicated by 'push'
   workflow_dispatch:
 
 env:
@@ -47,6 +41,8 @@ jobs:
         with:
           key: ${{ matrix.rust-version }}
           cache-on-failure: true
+          cache-targets: true
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
         if: ${{ matrix.cache }}
 
       # Within this workflow we will continue on error, to give
@@ -75,6 +71,7 @@ jobs:
           # this action is used in multiple places
         with:
           cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - run: cargo docs-rs -p qcp --locked
       # Continue on error for maximum information
       - run: cargo doc -p qcp --no-deps --locked --document-private-items
@@ -104,7 +101,7 @@ jobs:
           # this action is used in multiple places
         with:
           cache-on-failure: true
-          cache-all-crates: true
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: Run coverage tests
         # Note that we do NOT run +nightly here, as we installed an explicit nightly version above.
         # (We currently prefer cacheability over tracking nightly features.)

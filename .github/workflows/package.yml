@@ -56,6 +56,7 @@ jobs:
           - target: x86_64-pc-windows-gnu
             host: ubuntu-24.04
             archive_fragment: windows-x86_64-mingw
+            cache: true
 
     runs-on: ${{ matrix.host }}
     env:
@@ -77,7 +78,7 @@ jobs:
           taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
           # this action is used in multiple places
         with:
-          tool: cargo-cyclonedx@0.5.7${{ env.Q_BUILD_DEB == '1' && ',cargo-deb@3.5.1' || ''}}
+          tool: cargo-cyclonedx@0.5.7${{ env.Q_BUILD_DEB == '1' && ',cargo-deb@3.6.0' || ''}}
           checksum: true
         if: inputs.package
 
@@ -85,6 +86,15 @@ jobs:
       # 31 Mar 2025: Disabled cacheing.
       # Full cacheing with `cache-targets` saves 30-40s per platform, but at a high space cost.
       # Cacheing with cache-targets: false is a net slowdown.
+      - uses:
+          Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
+          # this action is used in multiple places
+        with:
+          key: ${{ inputs.test && 'test' || 'package' }}
+          cache-on-failure: true
+          cache-targets: true
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
+        if: ${{ matrix.cache }}
 
       - run: cargo test --locked
         if: inputs.test
