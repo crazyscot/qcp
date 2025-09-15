@@ -373,6 +373,7 @@ mod test {
     fn types() {
         use crate::protocol::control::CongestionController;
         use crate::util::DeserializeEnum as _;
+        use crate::util::SerializeAsString as _;
         #[derive(Debug, Deserialize, PartialEq)]
         struct Test {
             vecs: Vec<String>,
@@ -383,6 +384,7 @@ mod test {
             // DeserializeEnum trait must be in scope
             #[serde(deserialize_with = "CongestionController::deserialize_str")]
             en: CongestionController,
+            #[serde(deserialize_with = "PortRange::deserialize_str")]
             pr: PortRange,
         }
 

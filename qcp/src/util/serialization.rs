@@ -1,7 +1,7 @@
 //! Serialization helpers
 // (c) 2024 Ross Younger
 
-use std::marker::PhantomData;
+use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use serde::{Deserializer, Serializer, de::Visitor};
 
@@ -30,13 +30,6 @@ where
         S: Serializer,
     {
         serializer.serialize_str(self.as_ref())
-    }
-
-    /// Serialization helper for use with Optionalify `#[deftly(serialize_with = ...)]`.
-    // The large-Err warning cannot be helped, it's forced by Figment
-    #[allow(clippy::result_large_err)]
-    fn to_string_wrapper(&self) -> Result<String, figment::Error> {
-        Ok(self.as_ref().to_string())
     }
 
     /// String deserialize function for an enum.
@@ -70,5 +63,70 @@ where
         D: Deserializer<'de>,
     {
         Ok(Some(Self::deserialize_str(deserializer)?))
+    }
+}
+
+/// Helper trait that provides alternative serialization, as a string.
+/// For use with `#[serde(serialize_with ..., deserialize_with ...)]`.
+pub trait SerializeAsString
+where
+    Self: FromStr + Display,
+    <Self as std::str::FromStr>::Err: std::fmt::Display,
+{
+    /// Serialization that wraps to Display
+    fn serialize_str<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+    /// Deserialization from string
+    fn deserialize_str<'de, D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct MyVisitor<T>(PhantomData<T>);
+        impl<T> Visitor<'_> for MyVisitor<T>
+        where
+            T: FromStr,
+            <T as std::str::FromStr>::Err: std::fmt::Display,
+        {
+            type Value = T;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a string")
+            }
+            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Self::Value::from_str(s).map_err(|e| serde::de::Error::custom(e))
+            }
+        }
+        deserializer.deserialize_str(MyVisitor::<Self>(PhantomData))
+    }
+    /// Deserialisation from string for `Option<Type>`
+    /// Always returns `Some(type)`.
+    fn deserialize_str_optional<'de, D>(deserializer: D) -> Result<Option<Self>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Some(Self::deserialize_str(deserializer)?))
+    }
+}
+
+/// Serialization helper bridging [`figment::Figment`] and [`crate::derive_deftly_template_Optionalify`]
+///
+/// You are not expected to need to override the default implementation.
+pub trait ToStringForFigment
+where
+    Self: Display,
+{
+    /// Serialization helper for use with Optionalify `#[deftly(serialize_with = ...)]`.
+    ///
+    /// This is an infallible conversion.
+    /// Returning &str as its error type is a hack to make it fit neatly into
+    /// figment::Error.
+    fn to_string_figment(&self) -> Result<String, &str> {
+        Ok(self.to_string())
     }
 }

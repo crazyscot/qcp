@@ -1,10 +1,12 @@
 //! CLI argument helper type - a range of port numnbers.
 // (c) 2024 Ross Younger
 use serde::{
-    Serialize,
-    de::{self, Error, Unexpected},
+    Deserialize, Serialize,
+    de::{Error as DeError, Unexpected},
 };
 use std::{fmt::Display, str::FromStr};
+
+use crate::util::serialization::{SerializeAsString, ToStringForFigment};
 
 /// A range of port numbers.
 ///
@@ -15,14 +17,16 @@ use std::{fmt::Display, str::FromStr};
 /// remote_port 60000         # a single port
 /// remote_port 60000-60010   # a range
 /// ```
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize)]
-#[serde(from = "String", into = "String")]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PortRange {
     /// First number in the range
     pub begin: u16,
     /// Last number in the range, inclusive.
     pub end: u16,
 }
+
+impl SerializeAsString for PortRange {}
+impl ToStringForFigment for PortRange {}
 
 impl Display for PortRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -110,22 +114,6 @@ impl PortRange {
                 "requested port range {theirs} could not be satisfied (our config: {self})"
             );
             PortRange { begin, end }
-        })
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for PortRange {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        FromStr::from_str(&s).map_err(|e: figment::Error| {
-            if let figment::error::Kind::InvalidValue(_, _) = e.kind {
-                de::Error::invalid_value(Unexpected::Str(&s), &PR_EXPECTED)
-            } else {
-                de::Error::custom(e)
-            }
         })
     }
 }

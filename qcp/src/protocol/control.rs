@@ -53,7 +53,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use super::common::ProtocolMessage;
 use crate::{
     protocol::display_vec_td,
-    util::{DeserializeEnum, PortRange as CliPortRange},
+    util::{DeserializeEnum, ToStringForFigment},
 };
 
 /// Server banner message, sent on stdout and checked by the client
@@ -264,6 +264,7 @@ pub enum CongestionController {
 }
 
 impl DeserializeEnum for CongestionController {}
+impl ToStringForFigment for CongestionController {}
 
 impl From<CongestionController> for Uint {
     fn from(value: CongestionController) -> Self {
@@ -286,54 +287,6 @@ impl From<CongestionController> for figment::value::Value {
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////
-// PORT RANGE
-
-/// Representation of a TCP or UDP port range
-///
-/// N.B. This type is structurally identical to, but distinct from,
-/// [`crate::util::PortRange`] so that it can have different serialization
-/// semantics.
-#[derive(
-    Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug, Default, derive_more::Display,
-)]
-#[allow(non_camel_case_types)]
-#[display("{}-{}", begin, end)]
-pub struct PortRange_OnWire {
-    /// The first port of the range
-    pub begin: u16,
-    /// The last port of the range, inclusive. This may be the same as the first.
-    pub end: u16,
-}
-
-impl From<CliPortRange> for PortRange_OnWire {
-    fn from(other: CliPortRange) -> Self {
-        Self {
-            begin: other.begin,
-            end: other.end,
-        }
-    }
-}
-
-impl From<CliPortRange> for Option<PortRange_OnWire> {
-    fn from(value: CliPortRange) -> Self {
-        if value.is_default() {
-            None
-        } else {
-            Some(value.into())
-        }
-    }
-}
-
-impl From<PortRange_OnWire> for CliPortRange {
-    fn from(other: PortRange_OnWire) -> Self {
-        Self {
-            begin: other.begin,
-            end: other.end,
-        }
-    }
-}
-
 // //////////////////////////////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
@@ -347,16 +300,11 @@ mod test {
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
 
-    use crate::{
-        protocol::{
-            DataTag as _, TaggedData,
-            common::ProtocolMessage,
-            control::{Compatibility, ConnectionType, CredentialsType},
-        },
-        util::PortRange as CliPortRange,
+    use crate::protocol::{
+        DataTag as _, TaggedData,
+        common::ProtocolMessage,
+        control::{Compatibility, ConnectionType, CredentialsType},
     };
-
-    use super::PortRange_OnWire;
 
     // helper function - creates a bogus certificate
     pub(crate) fn dummy_cert() -> Vec<u8> {
@@ -436,19 +384,6 @@ mod test {
         // The real test here is that decode succeeded.
         assert_eq!(decoded.i, t2.i);
         assert_eq!(decoded.extension, 1);
-    }
-
-    #[test]
-    fn type_conversions_port_range() {
-        let cli = CliPortRange { begin: 1, end: 10 };
-        let wire = PortRange_OnWire::from(cli);
-        assert_eq!(CliPortRange::from(wire), cli);
-        println!("{wire}");
-
-        let opt1: Option<PortRange_OnWire> = cli.into();
-        assert_eq!(opt1, Some(PortRange_OnWire { begin: 1, end: 10 }));
-        let opt2: Option<PortRange_OnWire> = CliPortRange::default().into();
-        assert_eq!(opt2, None);
     }
 
     #[test]

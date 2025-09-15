@@ -15,11 +15,10 @@ use crate::{
     cli::styles::{ColourMode, info, reset},
     protocol::control::{CongestionController, CredentialsType},
     util::{
-        AddressFamily, DeserializeEnum, PortRange, TimeFormat, VecOrString,
-        derive_deftly_template_Optionalify,
+        AddressFamily, DeserializeEnum, PortRange, SerializeAsString, TimeFormat,
+        ToStringForFigment, VecOrString, derive_deftly_template_Optionalify,
     },
 };
-
 use derive_deftly::Deftly;
 
 /// Minimum bandwidth we will accept in either direction.
@@ -167,7 +166,7 @@ If not specified or 0, uses the value of `rx`.
     #[serde(deserialize_with = "CongestionController::deserialize_str")]
     #[deftly(
         serde = "default, deserialize_with = \"CongestionController::deserialize_str_optional\"",
-        serialize_with = "CongestionController::to_string_wrapper"
+        serialize_with = "CongestionController::to_string_figment"
     )]
     pub congestion: CongestionController,
 
@@ -208,6 +207,14 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     ///
     /// If unspecified, uses any available UDP port.
     #[arg(long, value_name("M-N"), help_heading("Connection"), display_order(0))]
+    #[serde(
+        serialize_with = "PortRange::serialize_str",
+        deserialize_with = "PortRange::deserialize_str"
+    )]
+    #[deftly(
+        serde = "default, deserialize_with = \"PortRange::deserialize_str_optional\"",
+        serialize_with = "PortRange::to_string_figment"
+    )]
     pub port: PortRange,
 
     /// Connection timeout for the QUIC endpoints [seconds; default 5]
@@ -340,6 +347,14 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
         value_name("M-N"),
         help_heading("Connection"),
         display_order(0)
+    )]
+    #[serde(
+        serialize_with = "PortRange::serialize_str",
+        deserialize_with = "PortRange::deserialize_str"
+    )]
+    #[deftly(
+        serde = "default, deserialize_with = \"PortRange::deserialize_str_optional\"",
+        serialize_with = "PortRange::to_string_figment"
     )]
     pub remote_port: PortRange,
 

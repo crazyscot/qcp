@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_bare::Uint;
 
 use super::{
-    CongestionController, ConnectionType, PortRange_OnWire, ProtocolMessage, display_opt,
-    display_opt_uint, display_vec_td,
+    CongestionController, ConnectionType, ProtocolMessage, display_opt, display_opt_uint,
+    display_vec_td,
 };
 use crate::{
     config::Configuration_Optional,
@@ -17,7 +17,7 @@ use crate::{
         DataTag, FindTag as _, TaggedData, Variant, compat::Feature, control::Compatibility,
     },
     transport::ThroughputMode,
-    util::serialization::DeserializeEnum,
+    util::{PortRange, serialization::DeserializeEnum},
 };
 
 #[derive(
@@ -70,7 +70,7 @@ pub struct ClientMessageV1 {
     /// The connection type to use (the type of socket we want the server to bind)
     pub connection_type: ConnectionType,
     /// If present, requests the server bind to a UDP port from a given range.
-    pub port: Option<PortRange_OnWire>,
+    pub port: Option<PortRange>,
     /// Requests the server show its configuration for this connection
     pub show_config: bool,
 
@@ -277,7 +277,7 @@ impl ProtocolMessage for OriginalClientMessage {}
 pub(super) struct OriginalClientMessageV1 {
     pub(super) cert: Vec<u8>,
     pub(super) connection_type: ConnectionType,
-    pub(super) port: Option<PortRange_OnWire>,
+    pub(super) port: Option<PortRange>,
     pub(super) show_config: bool,
     pub(super) bandwidth_to_server: Option<Uint>,
     pub(super) bandwidth_to_client: Option<Uint>,
@@ -476,7 +476,7 @@ impl ClientMessageV1 {
         Self {
             cert: cert.to_vec(),
             connection_type,
-            port: my_config.remote_port.map(std::convert::Into::into),
+            port: my_config.remote_port,
             show_config: remote_config,
 
             bandwidth_to_server: match my_config.tx.map(u64::from) {
@@ -516,10 +516,10 @@ mod test {
             },
             display_vec_td,
         },
-        util::PortRange as CliPortRange,
+        util::PortRange,
     };
 
-    use super::{ClientMessage, PortRange_OnWire};
+    use super::ClientMessage;
 
     #[test]
     fn serialize_client_message() {
@@ -530,8 +530,8 @@ mod test {
             congestion: Some(CongestionController::Bbr),
             udp_buffer: Some(456_789u64.into()),
             initial_congestion_window: Some(12345u64.into()),
-            port: Some(CliPortRange { begin: 17, end: 98 }),
-            remote_port: Some(CliPortRange {
+            port: Some(PortRange { begin: 17, end: 98 }),
+            remote_port: Some(PortRange {
                 begin: 123,
                 end: 456,
             }),
@@ -569,8 +569,8 @@ mod test {
             )
         };
         let ser = cmsg.to_vec().unwrap();
-        //println!("{cmsg:#?}");
-        //println!("vec: {ser:?}");
+        println!("{cmsg:#?}");
+        println!("vec: {ser:?}");
         let deser = ClientMessage::from_slice(&ser).unwrap();
         //println!("{deser:#?}");
 
@@ -584,7 +584,7 @@ mod test {
             ClientMessage::V1(ClientMessageV1 {
                 cert: _,
                 connection_type: ConnectionType::Ipv4,
-                port: Some(PortRange_OnWire {
+                port: Some(PortRange {
                     // crucial check: this is client config.remote_port
                     begin: 123,
                     end: 456
