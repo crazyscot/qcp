@@ -70,12 +70,12 @@ quinn = { version = "0.11.9", default-features = false, features = [
     "rustls",
     "ring",
 ] }
-rcgen = { version = "0.14.3" }
-rustix = { version = "1.0.8", features = ["net", "fs", "process"] }
+rcgen = { version = "0.14.4" }
+rustix = { version = "1.1.2", features = ["net", "fs", "process"] }
 rustls = { version = "0.23.31", features = ["ring"], default-features = false }
 rustls-pemfile = "2.2.0"
 rustls-pki-types = "1.12.0"
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.223", features = ["derive"] }
 serde_bare = "0.5.0"
 serde_repr = "0.1.20"
 static_assertions = "1.1.0"
@@ -87,7 +87,7 @@ thiserror = "2.0.16"
 tokio = { workspace = true }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "chrono"] }
-wildmatch = "2.4.0"
+wildmatch = "2.5.0"
 
 [target.'cfg(unix)'.dependencies]
 file-mode = "0.1.2"
@@ -102,7 +102,7 @@ mockall = "0.13.1"
 pretty_assertions = "1.4.1"
 roff = "0.2.2"
 rusty-fork = { workspace = true }
-serde_json = "1.0.143"
+serde_json = "1.0.145"
 serde_test = "1.0.177"
 tempfile = { workspace = true }
 tokio-test = "0.4.4"

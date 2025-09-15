@@ -10,10 +10,10 @@ anyhow = "1.0.99"
 cfg-if = "1.0.3"
 clap = { version = "4.5.47", features = ["wrap_help", "derive", "cargo", "help", "string"] }
 colorchoice = "1.0.4"
-console = { version = "0.16.0" }
+console = { version = "0.16.1" }
 littertray = "0.2.1"
 rusty-fork = "0.3.0"
-tempfile = { version = "3.21.0", default-features = false }
+tempfile = { version = "3.22.0", default-features = false }
 tokio = { version = "1.47.1", default-features = true, features = [
     "fs",
     "io-std",
