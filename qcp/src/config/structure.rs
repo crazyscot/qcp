@@ -695,7 +695,7 @@ mod test {
     fn flattened() {
         let v = SYSTEM_DEFAULT_CONFIG.clone();
         let j = serde_json::to_string(&v).unwrap();
-        let d = json::parse(&j).unwrap();
+        let d = jzon::parse(&j).unwrap();
         assert!(!d.has_key("bw"));
         assert!(d.has_key("rtt"));
     }
