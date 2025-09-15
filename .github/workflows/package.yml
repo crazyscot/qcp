@@ -33,6 +33,7 @@ jobs:
           - target: aarch64-unknown-linux-musl
             host: ubuntu-24.04-arm
             archive_fragment: linux-aarch64-musl
+            update_rust: true
 
           - target: x86_64-apple-darwin
             host: macos-14
@@ -81,6 +82,10 @@ jobs:
           tool: cargo-cyclonedx@0.5.7${{ env.Q_BUILD_DEB == '1' && ',cargo-deb@3.6.0' || ''}}
           checksum: true
         if: inputs.package
+
+      - name: Update Rust
+        run: rustup update stable
+        if: ${{ matrix.update_rust }}
 
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
       # 31 Mar 2025: Disabled cacheing.
