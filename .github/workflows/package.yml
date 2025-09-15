@@ -70,7 +70,7 @@ jobs:
       Q_PACK_2: ${{ !contains(matrix.target, 'windows') && ',qcp/misc/qcp.1,qcp/misc/qcp_config.5' || '' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: taiki-e/setup-cross-toolchain-action@4c366193ea262ae0c17c6b79c3edc3d4f1394263 # v1.30.0
+      - uses: taiki-e/setup-cross-toolchain-action@84e58a47fc2bcd3821a2aa8c153595bbffb0e10f # v1.32.1
         with:
           target: ${{ matrix.target }}
       - name: Additional rust tools for packaging
