@@ -97,7 +97,7 @@ file-mode = "0.1.2"
 assertables = "9.8.2"
 clap-markdown = "0.1.5"
 clap_mangen = "0.2.29"
-json = "0.12.4"
+jzon = "0.12.5"
 littertray = { workspace = true, features = ["async"] }
 mockall = "0.13.1"
 pretty_assertions = "1.4.1"
