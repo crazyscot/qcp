@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false # useful for testing
       matrix:
-        rust-version: [1.85.0, stable]
+        rust-version: [1.88.0, stable]
         cache: [true]
         include:
           - rust-version: nightly

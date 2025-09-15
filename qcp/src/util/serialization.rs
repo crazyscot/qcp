@@ -33,6 +33,8 @@ where
     }
 
     /// Serialization helper for use with Optionalify `#[deftly(serialize_with = ...)]`.
+    // The large-Err warning cannot be helped, it's forced by Figment
+    #[allow(clippy::result_large_err)]
     fn to_string_wrapper(&self) -> Result<String, figment::Error> {
         Ok(self.as_ref().to_string())
     }
