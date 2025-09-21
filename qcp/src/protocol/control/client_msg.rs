@@ -187,9 +187,13 @@ impl ClientMessageV2 {
             self.attributes
                 .push(ClientMessage2Attributes::PortRangeEnd.with_unsigned(pr.end));
         }
-        if let Some(eq) = our_config.tx {
+        let rx_bw = match our_config.tx {
+            None | Some(0) => our_config.rx,
+            Some(i) => Some(i),
+        };
+        if let Some(rx) = rx_bw {
             self.attributes
-                .push(ClientMessage2Attributes::BandwidthToServer.with_unsigned(eq));
+                .push(ClientMessage2Attributes::BandwidthToServer.with_unsigned(rx));
         }
         if let Some(eq) = our_config.rx {
             self.attributes

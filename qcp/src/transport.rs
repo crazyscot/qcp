@@ -393,16 +393,20 @@ fn make_dict_human_friendly(dict: &mut figment::value::Dict) {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use assertables::{assert_contains, assert_matches};
+    use pretty_assertions::assert_eq;
 
     use crate::{
         Configuration,
         config::Manager,
         protocol::{
-            DataTag,
-            control::{ClientMessage2Attributes, Compatibility},
+            DataTag, FindTag,
+            control::{
+                ClientMessage, ClientMessage2Attributes, Compatibility, ConnectionType,
+                OUR_COMPATIBILITY_LEVEL, ServerMessage,
+            },
         },
         transport::{Configuration_Optional, combine_bandwidth_configurations},
-        util::PortRange,
+        util::{Credentials, PortRange},
     };
 
     use super::{ThroughputMode, create_config};
@@ -524,11 +528,10 @@ mod tests {
                     end: 1500
                 },
                 rtt: 1234,
+                initial_congestion_window: 1000,
                 ..
             }
         );
-        // it doesn't seem possible to use assert_matches! on an EngineeringRepr field
-        assert_eq!(c.initial_congestion_window, 1000);
     }
 
     #[test]
@@ -545,5 +548,162 @@ mod tests {
             min_ignoring_zero(200, 100),
             CombinationResponse::Combined(100)
         );
+    }
+
+    #[test]
+    fn issue169_bandwidth_config() {
+        // read config file (Rx 100M/Tx unset), check rx() & tx() come through as 100M/100M
+        let server_cfg = Configuration_Optional {
+            rx: Some(123_456),
+            ..Default::default()
+        };
+        let mut mgr = Manager::without_files(None);
+        mgr.merge_provider(server_cfg);
+        let cfg = mgr.get::<Configuration>().unwrap();
+        assert_eq!(cfg.rx(), 123_456);
+        assert_eq!(cfg.tx(), 123_456);
+
+        // client message
+        let creds = Credentials::generate().unwrap();
+        let cert = creds.to_tagged_data(OUR_COMPATIBILITY_LEVEL, None).unwrap();
+        let cfg_o = mgr.get::<Configuration_Optional>().unwrap();
+        let cmsg = ClientMessage::new(
+            OUR_COMPATIBILITY_LEVEL,
+            cert.clone(),
+            ConnectionType::Ipv4,
+            false,
+            &cfg_o,
+        );
+        if let ClientMessage::V2(cmsg) = cmsg {
+            let tx = cmsg
+                .attributes
+                .find_tag(ClientMessage2Attributes::BandwidthToServer)
+                .unwrap();
+            let rx = cmsg
+                .attributes
+                .find_tag(ClientMessage2Attributes::BandwidthToClient)
+                .unwrap();
+            assert_eq!(rx.coerce_unsigned(), 123_456);
+            assert_eq!(tx.coerce_unsigned(), 123_456);
+        } else {
+            panic!();
+        }
+
+        // same for server_message
+        let smsg = ServerMessage::new(
+            OUR_COMPATIBILITY_LEVEL,
+            &cfg,
+            1234,
+            cert,
+            "test".into(),
+            String::new(),
+        );
+        if let ServerMessage::V2(smsg) = smsg {
+            let tx = smsg.bandwidth_to_client.0;
+            let rx = smsg.bandwidth_to_server.0;
+            assert_eq!(rx, 123_456);
+            assert_eq!(tx, 123_456);
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn issue169_dont_send_default_bandwidth_in_client_message() {
+        let mgr = Manager::without_default(None);
+
+        // client message
+        let creds = Credentials::generate().unwrap();
+        let cert = creds.to_tagged_data(OUR_COMPATIBILITY_LEVEL, None).unwrap();
+        let cfg_o = mgr.get::<Configuration_Optional>().unwrap();
+        let cmsg = ClientMessage::new(
+            OUR_COMPATIBILITY_LEVEL,
+            cert.clone(),
+            ConnectionType::Ipv4,
+            false,
+            &cfg_o,
+        );
+        if let ClientMessage::V2(cmsg) = cmsg {
+            assert!(
+                cmsg.attributes
+                    .find_tag(ClientMessage2Attributes::BandwidthToServer)
+                    .is_none()
+            );
+            assert!(
+                cmsg.attributes
+                    .find_tag(ClientMessage2Attributes::BandwidthToClient)
+                    .is_none()
+            );
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn issue169_curveball_do_send_default_bandwidth_if_explicitly_set() {
+        let def = Configuration::system_default();
+        let cfg = Configuration_Optional {
+            rx: Some(def.rx()),
+            tx: Some(def.tx()),
+            ..Default::default()
+        };
+        let mut mgr = Manager::without_files(None);
+        mgr.merge_provider(cfg);
+
+        // client message
+        let creds = Credentials::generate().unwrap();
+        let cert = creds.to_tagged_data(OUR_COMPATIBILITY_LEVEL, None).unwrap();
+        let cfg_o = mgr.get::<Configuration_Optional>().unwrap();
+        let cmsg = ClientMessage::new(
+            OUR_COMPATIBILITY_LEVEL,
+            cert.clone(),
+            ConnectionType::Ipv4,
+            false,
+            &cfg_o,
+        );
+        if let ClientMessage::V2(cmsg) = cmsg {
+            assert_eq!(
+                cmsg.attributes
+                    .find_tag(ClientMessage2Attributes::BandwidthToServer)
+                    .unwrap()
+                    .coerce_unsigned(),
+                def.tx(),
+            );
+            assert_eq!(
+                cmsg.attributes
+                    .find_tag(ClientMessage2Attributes::BandwidthToClient)
+                    .unwrap()
+                    .coerce_unsigned(),
+                def.rx(),
+            );
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    fn bandwidth_negotiation() {
+        // server config
+        let server_cfg = Configuration_Optional {
+            rx: Some(222_111),
+            tx: Some(333_444),
+            ..Default::default()
+        };
+        let mut mgr = Manager::new(None, false, false);
+        mgr.merge_provider(server_cfg);
+
+        let attributes = vec![
+            ClientMessage2Attributes::BandwidthToClient.with_unsigned(987_654u32), // greater than the other, so that one wins
+            ClientMessage2Attributes::BandwidthToServer.with_unsigned(123_456u32), // lower than the other, so this one wins
+        ];
+        let cmsg = crate::protocol::control::ClientMessageV2 {
+            attributes,
+            ..Default::default()
+        };
+
+        let c = combine_bandwidth_configurations(&mut mgr, &cmsg).unwrap();
+        // this is a server-oriented configuration
+        assert_eq!(c.tx, 333_444);
+        assert_eq!(c.rx, 123_456);
     }
 }
