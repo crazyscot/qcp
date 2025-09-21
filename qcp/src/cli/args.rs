@@ -355,4 +355,22 @@ mod test {
         let res = CliArgs::custom_parse(args).inspect_err(|e| eprintln!("{e}"));
         assert!(res.is_ok());
     }
+
+    #[test]
+    fn cli_accepts_eng_quantities() {
+        let args = &[
+            "qcp",
+            "--tx",
+            "100M",
+            "--rx",
+            "42k",
+            "--udp-buffer",
+            "3M5",
+            "--show-config",
+            "host:file",
+            "file",
+        ];
+        let res = CliArgs::custom_parse(args).inspect_err(|e| eprintln!("{e}"));
+        assert!(res.is_ok());
+    }
 }

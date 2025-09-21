@@ -1,12 +1,12 @@
 //! Configuration structure
 // (c) 2024 Ross Younger
 
-use std::sync::LazyLock;
 use std::time::Duration;
+use std::{str::FromStr, sync::LazyLock};
 
 use anyhow::Result;
-use clap::Parser;
-use engineering_repr::EngineeringRepr;
+use clap::{Parser, builder::TypedValueParser as _};
+use engineering_repr::{EngineeringQuantity, EngineeringRepr};
 use human_repr::{HumanCount as _, HumanDuration as _};
 use serde::{Deserialize, Serialize};
 use struct_field_names_as_array::FieldNamesAsSlice;
@@ -94,6 +94,7 @@ pub struct Configuration {
         alias("rx-bw"),
         display_order(1),
         value_name = "bytes",
+        value_parser (clap::builder::StringValueParser::new().try_map(|s| EngineeringQuantity::<u64>::from_str(&s)).map(|v| u64::from(v))),
         help_heading("Network tuning"),
         long_help(r"
 The maximum network bandwidth we expect receiving data FROM the remote system.
@@ -132,6 +133,7 @@ if (for example) you expect to fill a 1Gbit ethernet connection,
         alias("tx-bw"),
         display_order(1),
         value_name = "bytes",
+        value_parser (clap::builder::StringValueParser::new().try_map(|s| EngineeringQuantity::<u64>::from_str(&s)).map(|v| u64::from(v))),
         help_heading("Network tuning"),
         long_help(r"
 The maximum network bandwidth we expect sending data TO the remote system,
@@ -247,7 +249,11 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     /// The default, 4M, should be good for most cases.
     /// However there may be high-bandwidth situations (10Gbps or more) where this becomes a bottleneck,
     /// or situations where you wish to restrict memory consumption.
-    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
+    #[arg(long,
+        help_heading("Advanced network tuning"),
+        value_name("bytes"),
+        value_parser(clap::builder::StringValueParser::new().try_map(|s| EngineeringQuantity::<u64>::from_str(&s)).map(|v| u64::from(v))))
+    ]
     #[serde(with = "EQHelper")]
     #[deftly(
         serde = "default, deserialize_with = \"EQHelper::deserialize_optional\"",
