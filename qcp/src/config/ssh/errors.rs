@@ -53,11 +53,11 @@ impl std::fmt::Display for ConfigFileError {
         let e = self;
         Self::fmt_kind(&e.kind, f)?;
 
-        if let (Some(profile), Some(md)) = (&e.profile, &e.metadata) {
-            if !e.path.is_empty() {
-                let key = md.interpolate(profile, &e.path);
-                write!(f, " for {key}")?;
-            }
+        if let (Some(profile), Some(md)) = (&e.profile, &e.metadata)
+            && !e.path.is_empty()
+        {
+            let key = md.interpolate(profile, &e.path);
+            write!(f, " for {key}")?;
         }
 
         if let Some(md) = &e.metadata {

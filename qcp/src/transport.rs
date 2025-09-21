@@ -376,10 +376,10 @@ fn make_entry_human_friendly(
     use figment::value::Value;
 
     let _ = entry.and_modify(|v| {
-        if let Value::Num(_tag, num) = v {
-            if let Some(u) = num.to_u128() {
-                *v = Value::from(u.to_eng(0).to_string());
-            }
+        if let Value::Num(_tag, num) = v
+            && let Some(u) = num.to_u128()
+        {
+            *v = Value::from(u.to_eng(0).to_string());
         }
     });
 }

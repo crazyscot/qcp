@@ -10,19 +10,19 @@ pub(super) fn parse_ssh_env(
     if let Some(s) = env_ssh_connection {
         // SSH_CONNECTION: client IP, client port, server IP, server port
         let it = s.split(' ').next();
-        if let Some(client) = it {
-            if !client.is_empty() {
-                return Some(client.to_string());
-            }
+        if let Some(client) = it
+            && !client.is_empty()
+        {
+            return Some(client.to_string());
         }
     }
     if let Some(s) = env_ssh_client {
         // SSH_CLIENT: client IP, client port, server port
         let it = s.split(' ').next();
-        if let Some(client) = it {
-            if !client.is_empty() {
-                return Some(client.to_string());
-            }
+        if let Some(client) = it
+            && !client.is_empty()
+        {
+            return Some(client.to_string());
         }
     }
     None
