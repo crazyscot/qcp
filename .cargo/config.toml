@@ -6,13 +6,13 @@ frequency = 'always'
 #    (the base docker image cross uses is based on focal, which does not have a mold package)
 # So for now, we use defaults to not break CI.
 # To speed up local builds, set up your own ~/.cargo/config.toml something like this:
+#
 #   [target.'cfg(target_os="linux")']
-#   linker = "clang-15"
+#   linker = "clang"
 #   rustflags = ["-C", "link-arg=--ld-path=mold"]
-
-
-[target.'cfg(target_os="windows")']
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+#
+# You might also try wild (Linux only at the time of writing). `cargo install --locked wild-linker`
+# On Windows, lld might be worthwhile.
 
 # On Windows MSVC, statically link the C runtime so that the resulting EXE does
 # not depend on the vcruntime DLL.
