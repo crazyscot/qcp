@@ -31,6 +31,8 @@ use bytes::BytesMut;
 use serde_bare::error::Error as sbError;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+use crate::util::io::read_available_non_blocking;
+
 /////////////////////////////////////////////////////////////////////////////////////////////
 // STREAM TYPEDEFS
 
@@ -105,7 +107,7 @@ where
     /// Checks the passed-in limit against this type's [`WIRE_ENCODING_LIMIT`](Self::WIRE_ENCODING_LIMIT).
     ///
     /// # Return
-    /// true iff the passed-in limit satisfies any requirement specified by this type
+    /// OK(()) iff the passed-in limit satisfies any requirement specified by this type
     fn check_size(size: u32) -> Result<(), Error> {
         anyhow::ensure!(
             size <= Self::WIRE_ENCODING_LIMIT,
@@ -179,7 +181,21 @@ where
     {
         async {
             let header = MessageHeader::from_reader_async(reader, MessageHeader::SIZE).await?;
-            Self::check_size(header.size)?;
+            if let Err(e) = Self::check_size(header.size) {
+                // Did we receive text on the remote stderr? We shouldn't have, but try to decode it and output.
+                let mut raw = BytesMut::zeroed(256);
+                let mut buf = tokio::io::ReadBuf::new(&mut raw);
+                if let Ok(hdr) = header.to_vec() {
+                    buf.put_slice(&hdr);
+                    if read_available_non_blocking(reader, &mut buf).await.is_ok()
+                        && let Ok(s) = str::from_utf8(&raw)
+                    {
+                        // If it's not valid UTF-8, this will fail to decode and we won't output it.
+                        tracing::warn!("Received protocol garbage: {}", s.trim());
+                    }
+                }
+                return Err(e);
+            }
             Self::from_reader_async(reader, header.size).await
         }
     }
