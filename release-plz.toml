@@ -23,10 +23,12 @@ changelog_path = "CHANGELOG.md"
 
 [[package]]
 name = "qcp-unsafe-tests"
+publish = false
 release = false
 
 [[package]]
 name = "xtask"
+publish = false
 release = false
 
 [changelog]
