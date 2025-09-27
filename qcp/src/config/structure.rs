@@ -167,7 +167,6 @@ If not specified or 0, uses the value of `rx`.
     /// [default: cubic]
     #[arg(
         long,
-        action,
         value_name = "algorithm",
         value_enum,
         ignore_case(true),

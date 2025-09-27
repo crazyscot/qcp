@@ -121,7 +121,7 @@ pub struct ClientMessageV1 {
 #[non_exhaustive]
 #[repr(u64)]
 #[strum(ascii_case_insensitive)]
-#[clap(rename_all = "lower")]
+#[value(rename_all = "lower")]
 #[enumscribe(case_insensitive)]
 pub enum CredentialsType {
     /// No preference. Autodetects based on protocol compatibility.

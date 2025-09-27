@@ -104,7 +104,7 @@ pub(crate) struct CliArgs {
     ///
     /// Note that the recommendations are based on the `udp_buffer` field in your configuration,
     /// which you can also set on the CLI.
-    #[arg(long, action, help_heading("Network tuning"), display_order(100))]
+    #[arg(long, help_heading("Network tuning"), display_order(100))]
     pub help_buffers: bool,
 
     /// Outputs all known protocol features with their compatibility levels.

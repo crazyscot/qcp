@@ -15,7 +15,7 @@ pub struct Parameters {
     ///
     /// This has the same effect as setting `RUST_LOG=qcp=debug` in the environment.
     /// If present, `RUST_LOG` overrides this option.
-    #[arg(long, action, help_heading("Debug"), display_order(0))]
+    #[arg(long, help_heading("Debug"), display_order(0))]
     pub debug: bool,
 
     /// Log to a file
@@ -24,7 +24,6 @@ pub struct Parameters {
     /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
     #[arg(
         long,
-        action,
         value_name("FILE"),
         help_heading("Output"),
         next_line_help(true),
@@ -35,7 +34,7 @@ pub struct Parameters {
     /// Quiet mode
     ///
     /// Switches off progress display and statistics; reports only errors
-    #[arg(short, long, action, conflicts_with("debug"), help_heading("Output"))]
+    #[arg(short, long, conflicts_with("debug"), help_heading("Output"))]
     pub quiet: bool,
 
     /// Show additional transfer statistics
@@ -43,7 +42,6 @@ pub struct Parameters {
         short = 's',
         long,
         alias("stats"),
-        action,
         conflicts_with("quiet"),
         help_heading("Output"),
         display_order(0)
@@ -52,21 +50,21 @@ pub struct Parameters {
 
     /// Enables detailed debug output from the remote endpoint
     /// (this may interfere with transfer speeds)
-    #[arg(long, action, help_heading("Debug"), display_order(0))]
+    #[arg(long, help_heading("Debug"), display_order(0))]
     pub remote_debug: bool,
 
     /// Enables super-detailed trace output from the remote endpoint
     /// (this may interfere with transfer speeds)
-    #[arg(hide = true, long, action, help_heading("Debug"), display_order(0))]
+    #[arg(hide = true, long, help_heading("Debug"), display_order(0))]
     pub remote_trace: bool,
 
     /// Output timing profile data after completion
-    #[arg(long, action, help_heading("Output"), display_order(0))]
+    #[arg(long, help_heading("Output"), display_order(0))]
     pub profile: bool,
 
     /// Connects to a remote server but does not actually transfer any files.
     /// This is useful to test that the control channel works and when debugging the negotiated bandwidth parameters (see also `--remote-config`).
-    #[arg(long, action, help_heading("Configuration"), display_order(0))]
+    #[arg(long, help_heading("Configuration"), display_order(0))]
     pub dry_run: bool,
     /// Outputs the server's configuration for this connection.
     /// (Unlike `--show-config`, this option does not prevent a file transfer. However, you can do so by selecting `--dry-run` mode.)

@@ -238,7 +238,7 @@ impl From<SocketAddr> for ConnectionType {
 #[serde(into = "Uint")]
 #[strum(ascii_case_insensitive)]
 #[strum(serialize_all = "lowercase")]
-#[clap(rename_all = "lower")]
+#[value(rename_all = "lower")]
 #[enumscribe(case_insensitive)]
 pub enum CongestionController {
     /// The congestion algorithm TCP uses. This is good for most cases.
