@@ -378,10 +378,14 @@ mod test {
     fn cli_repeatable_arguments() {
         let args = &[
             "qcp",
-            "-S", "-p",
-            "-S", "222",
-            "--ssh-config", "myfile",
-            "--ssh-config", "myfile2",
+            "-S",
+            "-p",
+            "-S",
+            "222",
+            "--ssh-config",
+            "myfile",
+            "--ssh-config",
+            "myfile2",
         ];
         let res = CliArgs::custom_parse(args).inspect_err(|e| eprintln!("{e}"));
         assert!(res.is_ok());
