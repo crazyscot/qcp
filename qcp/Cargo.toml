@@ -26,7 +26,6 @@ secure-alloc = ["mimalloc/secure"]
 unstable-test-helpers = []
 
 [dependencies]
-anstream = { workspace = true }
 anstyle = { workspace = true }
 anyhow = { workspace = true }
 async-trait = "0.1.89"
