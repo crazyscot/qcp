@@ -5,6 +5,8 @@ on:
   #pull_request: # duplicated by 'push'
   workflow_dispatch:
 
+permissions: {}
+
 env:
   CARGO_TERM_COLOR: always
   CLICOLOR_FORCE: 1
@@ -26,9 +28,11 @@ jobs:
             cache: false
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Install Rust ${{ matrix.rust-version }}
         uses:
-          dtolnay/rust-toolchain@master
+          dtolnay/rust-toolchain@6d653acede28d24f02e3cd41383119e8b1b35921 # 2025-09-17
           # this action is used in multiple places
         with:
           toolchain: ${{ matrix.rust-version }}
@@ -59,12 +63,16 @@ jobs:
       RUSTDOCFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@master
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6d653acede28d24f02e3cd41383119e8b1b35921 # 2025-09-17
         with:
           # update periodically
           toolchain: nightly-2025-07-31
           components: rust-src
-      - uses: dtolnay/install@cargo-docs-rs
+      - uses: dtolnay/install@b2464e56f40a0193c82503a074e7ccf9dd2d7f40 # 2025-09-07
+        with:
+          crate: cargo-docs-rs
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
       - uses:
           Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
@@ -82,9 +90,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Install Rust
         uses:
-          dtolnay/rust-toolchain@master
+          dtolnay/rust-toolchain@6d653acede28d24f02e3cd41383119e8b1b35921 # 2025-09-17
           # this action is used in multiple places
         with:
           # update periodically
@@ -134,7 +144,9 @@ jobs:
     continue-on-error: ${{ matrix.checks == 'advisories' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@f2ba7abc2abebaf185c833c3961145a3c275caad # 2.0.13
         with:
           command: check ${{ matrix.checks }}
 
