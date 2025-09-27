@@ -68,7 +68,7 @@ If not specified or 0, uses the value of <code>rx</code>.</p></li>
 The congestion algorithm TCP uses. This is good for most cases</li>
 <li><code>bbr</code>:
 (Use with caution!) An experimental algorithm created by Google, which increases goodput in some situations (particularly long and fat connections where the intervening buffers are shallow). However this comes at the cost of having more data in-flight, and much greater packet retransmission. See <code>https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/</code> for more discussion</li>
-<li><code>new-reno</code>:
+<li><code>newreno</code>:
 The traditional "NewReno" congestion algorithm. This was the algorithm used in TCP before the introduction of Cubic</li>
 </ul></li>
 <li><p><code>--initial-congestion-window &lt;bytes&gt;</code>
@@ -122,19 +122,8 @@ If unspecified, the active congestion control algorithm decides.</p>
 <p>Some connections do not support even this MTU, so for best efficiency - particularly with small file transfers - it may be worth setting this lower to avoid the penalty caused by MTU detection triggering black hole behaviour.</p>
 
 <p>It is safe to set a high limit, but that may reduce efficiency as MTU discovery will take longer to complete.</p></li>
-<li><p><code>--address-family &lt;ADDRESS_FAMILY&gt;</code> — Forces use of a particular IP version when connecting to the remote. [default: any]</p>
-
-<p>Possible values:</p>
-
-<ul>
-<li><code>inet</code>:
-IPv4</li>
-<li><code>inet6</code>:
-IPv6</li>
-<li><code>any</code>:
-Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup</li>
-</ul></li>
-<li><p><code>--ssh &lt;ssh-client&gt;</code> — Specifies the ssh client program to use [default: <code>ssh</code>]</p></li>
+<li><code>--address-family &lt;family&gt;</code> — Forces use of a particular IP version when connecting to the remote. [default: any]</li>
+<li><code>--ssh &lt;ssh-client&gt;</code> — Specifies the ssh client program to use [default: <code>ssh</code>]</li>
 <li><p><code>-S &lt;ssh-option&gt;</code>
 — Provides an additional option or argument to pass to the ssh client. [default: none]</p>
 
@@ -148,32 +137,19 @@ For example, to pass <code>-i /dev/null</code> to ssh, specify: <code>-S -i -S /
 <li><p><code>-l</code>, <code>--remote-user &lt;login_name&gt;</code> — Specifies the user on the remote machine to connect as.</p>
 
 <p>This is functionally the same as specifying a remote filename <code>user@host:file</code>. If unspecified, we leave it up to ssh to determine.</p></li>
-<li><p><code>--time-format &lt;FORMAT&gt;</code> — Specifies the time format to use when printing messages to the console or to file [default: local]</p>
-
-<p>Possible values:</p>
-
-<ul>
-<li><code>local</code>:
-Local time (as best as we can figure it out), as "year-month-day HH:MM:SS"</li>
-<li><code>utc</code>:
-UTC time, as "year-month-day HH:MM:SS"</li>
-<li><code>rfc3339</code>:
-UTC time, in the format described in <a href="https://datatracker.ietf.org/doc/html/rfc3339">RFC 3339</a></li>
-</ul></li>
+<li><code>--time-format &lt;FORMAT&gt;</code> — Specifies the time format to use when printing messages to the console or to file [default: local]</li>
 <li><p><code>--ssh-config &lt;FILE&gt;</code> — Alternative ssh config file(s)</p>
 
 <p>By default, qcp reads your user and system ssh config files to look for Hostname aliases. In some cases the logic in qcp may not read them successfully; this is an escape hatch, allowing you to specify one or more alternative files to read instead (which may be empty, nonexistent or /dev/null).</p>
 
 <p>This option is really intended to be used in a qcp configuration file. On the command line, you can repeat <code>--ssh-config file</code> as many times as needed.</p></li>
-<li><p><code>--ssh-subsystem &lt;SSH_SUBSYSTEM&gt;</code> — Ssh subsystem mode</p>
+<li><p><code>--ssh-subsystem</code> — Ssh subsystem mode</p>
 
 <p>This mode causes qcp to run <code>ssh &lt;host&gt; -s qcp</code> instead of <code>ssh &lt;host&gt; qcp --server</code>.</p>
 
 <p>This is useful where the remote system has a locked-down <code>PATH</code> and the qcp binary is not resident on that <code>PATH</code>. The remote system sshd has to be configured with a line like this:</p>
 
-<p><code>Subsystem qcp /usr/local/bin/qcp --server</code></p>
-
-<p>Possible values: <code>true</code>, <code>false</code></p></li>
+<p><code>Subsystem qcp /usr/local/bin/qcp --server</code></p></li>
 <li><p><code>--color &lt;mode&gt;</code> — Colour mode for console output (default: auto)</p>
 
 <p>Passing <code>--color</code> without a value is equivalent to <code>--color always</code>.</p>
@@ -197,6 +173,21 @@ Never use colours</li>
 <li><code>auto</code>:
 Use colours only when writing to a terminal. This is the default behaviour</li>
 </ul></li>
+<li><p><code>--tls-auth-type &lt;type&gt;</code> — Forces the use of a particular TLS authentication type (default: any)</p>
+
+<p>Possible values:</p>
+
+<ul>
+<li><code>any</code>:
+No preference. Autodetects based on protocol compatibility</li>
+<li><code>x509</code>:
+Self-signed X509 certificate</li>
+<li><code>rawpublickey</code>:
+Raw (RFC7250) public key</li>
+</ul></li>
+<li><p><code>--aes256</code> — Use only AES256 cipher suites as far as possible</p>
+
+<p>This option is included for those who have a preference to use only AES256-based algorithms (aka CNSA 2.0). Note this option does not fully disable AES128, which is required for the QUIC 1.0 Initial Packet.</p></li>
 <li><p><code>--show-config</code> — Outputs the local configuration, then exits.</p>
 
 <p>If a remote <code>SOURCE</code> or <code>DESTINATION</code> argument is given, outputs the configuration we would use for operations to that host.</p>

@@ -8,7 +8,7 @@ qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH SYNOPSIS
-\fBqcp\fR [\fB\-\-rx\fR] [\fB\-\-tx\fR] [\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-\-port\fR] [\fB\-\-timeout\fR] [\fB\-\-udp\-buffer\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-initial\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-color\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-\-list\-features\fR] [\fB\-\-debug\fR] [\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
+\fBqcp\fR [\fB\-\-rx\fR] [\fB\-\-tx\fR] [\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-\-port\fR] [\fB\-\-timeout\fR] [\fB\-\-udp\-buffer\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-initial\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-color\fR] [\fB\-\-tls\-auth\-type\fR] [\fB\-\-aes256\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-\-list\-features\fR] [\fB\-\-debug\fR] [\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH DESCRIPTION
@@ -131,7 +131,7 @@ cubic: The congestion algorithm TCP uses. This is good for most cases
 .IP \(bu 2
 bbr: (Use with caution!) An experimental algorithm created by Google, which increases goodput in some situations (particularly long and fat connections where the intervening buffers are shallow). However this comes at the cost of having more data in\-flight, and much greater packet retransmission. See `https://blog.apnic.net/2020/01/10/when\-to\-use\-and\-not\-use\-bbr/` for more discussion
 .IP \(bu 2
-new\-reno: The traditional "NewReno" congestion algorithm. This was the algorithm used in TCP before the introduction of Cubic
+newreno: The traditional "NewReno" congestion algorithm. This was the algorithm used in TCP before the introduction of Cubic
 .RE
 .TP
 \fB\-\-initial\-congestion\-window\fR \fI<bytes>\fR
@@ -204,20 +204,8 @@ Connection timeout for the QUIC endpoints [seconds; default 5]
 
 This needs to be long enough for your network connection, but short enough to provide a timely indication that UDP may be blocked.
 .TP
-\fB\-\-address\-family\fR \fI<ADDRESS_FAMILY>\fR
+\fB\-\-address\-family\fR \fI<family>\fR
 Forces use of a particular IP version when connecting to the remote. [default: any]
-.br
-
-.br
-\fIPossible values:\fR
-.RS 14
-.IP \(bu 2
-inet: IPv4
-.IP \(bu 2
-inet6: IPv6
-.IP \(bu 2
-any: Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup
-.RE
 .TP
 \fB\-\-ssh\fR \fI<ssh\-client>\fR
 Specifies the ssh client program to use [default: `ssh`]
@@ -248,7 +236,7 @@ By default, qcp reads your user and system ssh config files to look for Hostname
 
 This option is really intended to be used in a qcp configuration file. On the command line, you can repeat `\-\-ssh\-config file` as many times as needed.
 .TP
-\fB\-\-ssh\-subsystem\fR[=\fI<SSH_SUBSYSTEM>\fR]
+\fB\-\-ssh\-subsystem\fR
 Ssh subsystem mode
 
 This mode causes qcp to run `ssh <host> \-s qcp` instead of `ssh <host> qcp \-\-server`.
@@ -256,10 +244,26 @@ This mode causes qcp to run `ssh <host> \-s qcp` instead of `ssh <host> qcp \-\-
 This is useful where the remote system has a locked\-down `PATH` and the qcp binary is not resident on that `PATH`. The remote system sshd has to be configured with a line like this:
 
 `Subsystem qcp /usr/local/bin/qcp \-\-server`
+.TP
+\fB\-\-tls\-auth\-type\fR \fI<type>\fR
+Forces the use of a particular TLS authentication type (default: any)
 .br
 
 .br
-[\fIpossible values: \fRtrue, false]
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+any: No preference. Autodetects based on protocol compatibility
+.IP \(bu 2
+x509: Self\-signed X509 certificate
+.IP \(bu 2
+rawpublickey: Raw (RFC7250) public key
+.RE
+.TP
+\fB\-\-aes256\fR
+Use only AES256 cipher suites as far as possible
+
+This option is included for those who have a preference to use only AES256\-based algorithms (aka CNSA 2.0). Note this option does not fully disable AES128, which is required for the QUIC 1.0 Initial Packet.
 .TP
 \fB\-4\fR
 Forces use of IPv4
@@ -274,18 +278,6 @@ This is a convenience alias for `\-\-address\-family inet6`
 .TP
 \fB\-\-time\-format\fR \fI<FORMAT>\fR
 Specifies the time format to use when printing messages to the console or to file [default: local]
-.br
-
-.br
-\fIPossible values:\fR
-.RS 14
-.IP \(bu 2
-local: Local time (as best as we can figure it out), as "year\-month\-day HH:MM:SS"
-.IP \(bu 2
-utc: UTC time, as "year\-month\-day HH:MM:SS"
-.IP \(bu 2
-rfc3339: UTC time, in the format described in [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
-.RE
 .TP
 \fB\-\-log\-file\fR \fI<FILE>\fR
 Log to a file
