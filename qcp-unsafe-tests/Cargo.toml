@@ -24,7 +24,7 @@ tokio = { workspace = true }
 tokio-test = "0.4.4"
 
 [target.'cfg(unix)'.dev-dependencies]
-libc = "0.2.175"
+libc = "0.2.176"
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(coverage_nightly)'] }

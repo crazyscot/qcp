@@ -63,12 +63,12 @@ quinn = { version = "0.11.9", default-features = false, features = [
     "rustls",
     "ring",
 ] }
-rcgen = { version = "0.14.4" }
+rcgen = { version = "0.14.5" }
 rustix = { version = "1.1.2", features = ["net", "fs", "process"] }
-rustls = { version = "0.23.31", features = ["ring"], default-features = false }
+rustls = { version = "0.23.32", features = ["ring"], default-features = false }
 rustls-pemfile = "2.2.0"
 rustls-pki-types = "1.12.0"
-serde = { version = "1.0.223", features = ["derive"] }
+serde = { version = "1.0.227", features = ["derive"] }
 serde_bare = "0.5.0"
 serde_repr = "0.1.20"
 static_assertions = "1.1.0"
