@@ -7,19 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/crazyscot/qcp/compare/v0.5.2...v0.6.0)
+
+### ⛰️ Features
+
+- New output time format utc-micro / "UtcMicro" - ([1747596](https://github.com/crazyscot/qcp/commit/1747596025190bbf9688a62b3258da16ea01aadc))
+- TLS RawPublicKey authentication - ([2b5b9c6](https://github.com/crazyscot/qcp/commit/2b5b9c6d0e75a222f8cf1baf2e32027270a2de93))
+
+### 🐛 Bug Fixes
+
+- Improve error reporting from the server main loop - ([ea1bd4a](https://github.com/crazyscot/qcp/commit/ea1bd4af6a8b318dd3bb1919c09b1a6fd6a7c493))
+- Bandwidth configuration tx=0 special case - ([5806c35](https://github.com/crazyscot/qcp/commit/5806c354fe85ef6fc59bb638ad37efd0315f4283))
+- Do not send ANSI reset codes when configured not to - ([7dc8efb](https://github.com/crazyscot/qcp/commit/7dc8efba5c86fa86ea8a1c0a5aecbebd268ea2f7))
+- Make error output from invalid configuration files less confusing - ([6bb8f2d](https://github.com/crazyscot/qcp/commit/6bb8f2df17ebb2e341052dafc98b06b026ac0e34))
+- Do not use ANSI colours in server mode - ([6dc1d0c](https://github.com/crazyscot/qcp/commit/6dc1d0c5287df5878bccaa09e145bb2793cab697))
+- Report failures in --server mode less confusingly - ([cd90b46](https://github.com/crazyscot/qcp/commit/cd90b46de3a5125170a9620f625eca9da1b69e89))
+
+### ⚡ Performance
+
+- Automatic TLS cipher suite selection - ([c3461d0](https://github.com/crazyscot/qcp/commit/c3461d07731fd64a8a79956505d26f6dfe9ef4ec))
+
+### 🧪 Testing
+
+- Add regression test for repeatable CLI arguments ([#170](https://github.com/crazyscot/qcp/pull/170)) - ([43529c5](https://github.com/crazyscot/qcp/commit/43529c583377356ba6c46595d55641280f082217))
+- Add wire marshalling checks for ServerMessageV2 and ClientMessageV2 - ([99fc072](https://github.com/crazyscot/qcp/commit/99fc0720200bf673cdf7fa811cb7b575355836ff))
+
+### ⚙️ Miscellaneous Tasks
+
+- If we receive bogus protocol data that is valid UTF-8, send it to debug output - ([694e396](https://github.com/crazyscot/qcp/commit/694e3966308942ab7f31a1bf0b2ce7798307f4fa))
+- Remove unused trait impls - ([f087abe](https://github.com/crazyscot/qcp/commit/f087abefe5a72e1265213ab42d09917d6e53ed44))
+- Tidy up boolean argument declarations - ([17ca32d](https://github.com/crazyscot/qcp/commit/17ca32d8e9b120e2affc58d157da719aa9a69eb0))
+- Update MSRV to 1.88 - ([9cbf893](https://github.com/crazyscot/qcp/commit/9cbf893e2afce33c40c1bcd0b4fd0b5f042e386c))
+- Remove SerializeAsString, no longer needed - ([f217248](https://github.com/crazyscot/qcp/commit/f21724897d375a3111589eaf68426179f1ae9db4))
+- Give Optionalify the ability to replace serde attributes - ([1e5735e](https://github.com/crazyscot/qcp/commit/1e5735eb06f8ac53bff650536542faf89c1788e6))
+- Add TaggedData::with_bytes(), with_str() - ([8fc003b](https://github.com/crazyscot/qcp/commit/8fc003bb7e8213b68e61264dadf90718d3e15883))
+- Improve main loop error reporting - ([31b15a4](https://github.com/crazyscot/qcp/commit/31b15a48d37cc67b3c4c63f8612f688a0398ed72))
+
+### 🚜 Refactor
+
+- Remove EngineeringQuantity wrappers from config structure in favour of serialization helper - ([a0aea97](https://github.com/crazyscot/qcp/commit/a0aea972b1b3a137a81dc45e5c129d8c68245b86))
+- Remove VecOrString wrapper type in favour of serialization helpers - ([5068263](https://github.com/crazyscot/qcp/commit/5068263a7c4f84bcdf020ec2ae86663e03d04594))
+- Serialize PortRange directly, without a conversion type - ([4dae6e4](https://github.com/crazyscot/qcp/commit/4dae6e45c692ddf2d8b677dfd0d6be74de156dd8))
+- Parsing for CongestionController - ([582986e](https://github.com/crazyscot/qcp/commit/582986e41729f15d95ffba8fb5e3c92025e0fede))
+- Parsing for CredentialsType - ([86ba732](https://github.com/crazyscot/qcp/commit/86ba73255d6b2c85a34e5ce4508f8f0363b0eba9))
+- Rationalise enum parsing - ([ff59ae0](https://github.com/crazyscot/qcp/commit/ff59ae0d14e717324cedb8d681ab37db276e59ad))
+
 ## [0.5.2](https://github.com/crazyscot/qcp/compare/v0.5.1...v0.5.2)
 
 ### 🛡️ Security
 
 - Bump tracing-subscriber from 0.3.19 to 0.3.20 - ([7af8577](https://github.com/crazyscot/qcp/commit/7af85772b68265d96b9861ac7e20d9dd1a91fe3d))
 
-
 ## [0.5.1](https://github.com/crazyscot/qcp/compare/v0.5.0...v0.5.1)
 
 ### 🏗️ Build, packaging & CI
 
 - Fix debian postinst script edge case - ([e37386c](https://github.com/crazyscot/qcp/commit/e37386ce0b0111de8337c20b08f6f3e58a4ea7da))
-
 
 ## [0.5.0](https://github.com/crazyscot/qcp/compare/v0.4.2...v0.5.0)
 
