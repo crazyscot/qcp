@@ -168,10 +168,11 @@ fn show_config_data(config_manager: &mut Manager) -> String {
 }
 
 async fn run_server() -> Result<bool> {
-    crate::server_main()
+    Ok(crate::server_main()
         .await
-        .with_context(|| "[Server] failed")?;
-    Ok(true)
+        .with_context(|| "ERROR [Server] main loop failed")
+        .inspect_err(|e| eprintln!("{e:?}")) // it's critical that we output to stderr, so the message is not interpreted as protocol data
+        .is_ok())
 }
 
 async fn run_client(config_manager: Manager, client_params: Parameters) -> Result<bool> {
