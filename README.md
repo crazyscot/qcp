@@ -16,6 +16,8 @@ high-performance remote file copy utility for long-distance internet connections
 
 ### News
 
+- **(New in 0.6)**
+  - Improved TLS performance in some use cases (auto-selected cipher suite, RawPublicKey authentication)
 - **(New in 0.5)**
   - The default UDP buffer size is now 4MB. _This may cause warnings until you have updated your sysctl.conf._
   - New features: `--preserve`; `NewReno` congestion controller; `--list-features` meta feature
