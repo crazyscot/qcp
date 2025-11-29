@@ -2,7 +2,7 @@
   description = "The QUIC Copier (qcp) is an experimental high-performance remote file copy utility for long-distance internet connections.";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-25.11";
   };
 
   outputs =
