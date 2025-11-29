@@ -10,7 +10,7 @@
 
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "qcp";
-  version = "0.5.2";
+  version = "0.6.0";
 
   # Tags required to fix the binary version
   GITHUB_REF_TYPE = "tag";
@@ -20,11 +20,11 @@ rustPlatform.buildRustPackage (finalAttrs: {
     owner = "crazyscot";
     repo = "qcp";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-7s/xEbheRI+8j73CKy8CDfy6MKZkEhQDt3KWowbPtjc=";
+    hash = "sha256-E5pQoO0uUK+G/ghEv50ELJDHv/QNP81WMPGtGdKN5qU=";
   };
 
   useFetchCargoVendor = true;
-  cargoHash = "sha256-CJh04eaEHvm42x5nR/uDvKYiWGfVFBwvkwriyC3w6dg=";
+  cargoHash = "sha256-4kMYYFJS0TxuvHMxiB/L58LUjnxSbUoF9DhLTYv/RUc=";
 
   nativeBuildInputs = [ installShellFiles ];
 
