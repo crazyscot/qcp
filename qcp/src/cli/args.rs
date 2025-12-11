@@ -34,9 +34,10 @@ pub(crate) enum MainMode {
     // we set short/long version strings explicitly, see custom_parse()
     about,
     long_about,
+    override_usage = "qcp [OPTIONS] <SOURCE>... <DESTINATION>",
     before_help = r"e.g.   qcp some/file my-server:some-directory/
 
-Exactly one of source and destination must be remote.
+Exactly one side (source(s) or destination) must be remote.
 
 Long options may be abbreviated where unambiguous.
 
@@ -201,18 +202,19 @@ mod test {
     use super::CliArgs;
 
     fn get_cli_args(src: bool, dst: bool) -> CliArgs {
+        let src_spec = if src {
+            FileSpec::from_str("myuser@myhost:myfile").unwrap()
+        } else {
+            FileSpec::from_str("myfile").unwrap()
+        };
+        let dst_spec = if dst {
+            FileSpec::from_str("myuser@myhost:myfile").unwrap()
+        } else {
+            FileSpec::from_str("myfile").unwrap()
+        };
         CliArgs {
             client_params: Parameters {
-                source: if src {
-                    Some(FileSpec::from_str("myuser@myhost:myfile").unwrap())
-                } else {
-                    None
-                },
-                destination: if dst {
-                    Some(FileSpec::from_str("myuser@myhost:myfile").unwrap())
-                } else {
-                    None
-                },
+                paths: vec![src_spec, dst_spec],
                 ..Default::default()
             },
             ..Default::default()
@@ -294,8 +296,8 @@ mod test {
             let args = ["qcp", alias, "myuser@myhost:myfile", "."];
             let result = CliArgs::custom_parse(args).unwrap();
             assert_eq!(
-                result.client_params.source,
-                Some(FileSpec::from_str("myuser@myhost:myfile").unwrap())
+                result.client_params.paths[0],
+                FileSpec::from_str("myuser@myhost:myfile").unwrap()
             );
             assert_eq!(result.config.address_family.unwrap(), family);
 

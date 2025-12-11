@@ -10,7 +10,7 @@ use crate::{
         TaggedData,
         common::{ReceivingStream, SendReceivePair, SendingStream},
         compat::Feature,
-        control::{ClosedownReportV1, Compatibility, CredentialsType, ServerMessageV2},
+        control::{ClosedownReportV1, Compatibility, CredentialsType, Direction, ServerMessageV2},
         session::{CommandParam, Get2Args},
     },
     session::CommandStats,
@@ -71,7 +71,27 @@ struct Client {
 #[derive(Debug, PartialEq)]
 struct PrepResult {
     remote_address: IpAddr,
-    job_spec: CopyJobSpec,
+    job_specs: Vec<CopyJobSpec>,
+}
+
+impl PrepResult {
+    fn primary_job(&self) -> &CopyJobSpec {
+        self.job_specs
+            .first()
+            .expect("prep should always produce at least one job")
+    }
+
+    fn remote_host(&self) -> &str {
+        self.primary_job().remote_host()
+    }
+
+    fn direction(&self) -> Direction {
+        self.primary_job().direction()
+    }
+
+    fn preserve(&self) -> bool {
+        self.primary_job().preserve
+    }
 }
 
 type ControlChannelType = ControlChannel<ChildStdin, ChildStdout>;
@@ -172,17 +192,30 @@ impl Client {
 
         self.spinner.set_message("Transferring data");
         self.timers.next(SHOW_TIME);
-        let stream_pair =
-            SendReceivePair::from(connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?);
-        let result = self
-            .manage_request(
-                stream_pair,
-                prep_result.job_spec,
-                &config,
-                self.parameters.quiet,
-                qcp_conn.control.selected_compat,
-            )
-            .await;
+        let mut aggregate_stats = CommandStats::new();
+        let mut overall_success = true;
+        for job in &prep_result.job_specs {
+            let stream_pair =
+                SendReceivePair::from(connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?);
+            let result = self
+                .manage_request(
+                    stream_pair,
+                    job.clone(),
+                    &config,
+                    self.parameters.quiet,
+                    qcp_conn.control.selected_compat,
+                )
+                .await;
+
+            aggregate_stats.payload_bytes += result.stats.payload_bytes;
+            aggregate_stats.peak_transfer_rate = aggregate_stats
+                .peak_transfer_rate
+                .max(result.stats.peak_transfer_rate);
+            if !result.success {
+                overall_success = false;
+                break;
+            }
+        }
 
         // Closedown ----------------------
         let remote_stats = self.closedown(&config, qcp_conn).await?;
@@ -192,7 +225,7 @@ impl Client {
             let transport_time = self.timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
             crate::util::stats::process_statistics(
                 &connection.stats(),
-                result.stats,
+                aggregate_stats,
                 transport_time,
                 &remote_stats,
                 &config,
@@ -204,7 +237,7 @@ impl Client {
             info!("Elapsed time by phase:\n{}", self.timers);
         }
         self.display.clear()?;
-        Ok(result.success)
+        Ok(overall_success)
     }
 
     pub(crate) fn prep(
@@ -219,8 +252,11 @@ impl Client {
         self.spinner.set_message("Preparing");
         self.spinner.enable_steady_tick(Duration::from_millis(150));
 
-        let job_spec = crate::client::CopyJobSpec::try_from(&self.parameters)?;
-        let remote_ssh_hostname = job_spec.remote_host();
+        let job_specs: Vec<CopyJobSpec> = (&self.parameters).try_into()?;
+        let remote_ssh_hostname = job_specs
+            .first()
+            .expect("at least one job spec is required")
+            .remote_host();
 
         let ssh_config_files = super::ssh::SshConfigFiles::new(
             working_config
@@ -243,7 +279,7 @@ impl Client {
         )?;
         Ok(PrepResult {
             remote_address,
-            job_spec,
+            job_specs,
         })
     }
 
@@ -260,7 +296,7 @@ impl Client {
             &self.display,
             working_config,
             &self.parameters,
-            prep_result.job_spec.remote_host(),
+            prep_result.remote_host(),
             prep_result.remote_address.into(),
         )?;
         let mut qcp_conn = QcpConnection::try_from(ssh_client)?;
@@ -272,7 +308,7 @@ impl Client {
                 prep_result.remote_address.into(),
                 &mut self.manager,
                 &self.parameters,
-                prep_result.job_spec.direction(),
+                prep_result.direction(),
                 None,
             )
             .await?;
@@ -283,9 +319,7 @@ impl Client {
             .context("assembling final client configuration from server message")?;
 
         // Are any warnings necessary?
-        if prep_result.job_spec.preserve
-            && !qcp_conn.control.selected_compat.supports(Feature::PRESERVE)
-        {
+        if prep_result.preserve() && !qcp_conn.control.selected_compat.supports(Feature::PRESERVE) {
             warn!("--preserve requested, but remote does not support this option");
         }
         Ok((config, qcp_conn))
@@ -338,7 +372,7 @@ impl Client {
             peer_credentials,
             server_address_port.into(),
             config,
-            prep_result.job_spec.direction().client_mode(),
+            prep_result.direction().client_mode(),
             false,
             compat,
         )?;
@@ -454,8 +488,10 @@ mod test {
     fn make_uut<F: FnOnce(&mut Manager, &mut Parameters)>(f: F, src: &str, dest: &str) -> Client {
         let mut mgr = Manager::without_default(None);
         let mut params = Parameters {
-            source: Some(FileSpec::from_str(src).unwrap()),
-            destination: Some(FileSpec::from_str(dest).unwrap()),
+            paths: vec![
+                FileSpec::from_str(src).unwrap(),
+                FileSpec::from_str(dest).unwrap(),
+            ],
             ..Default::default()
         };
         f(&mut mgr, &mut params);
@@ -477,8 +513,8 @@ mod test {
         let working = Configuration_Optional::default();
         let res = uut.prep(&working, Configuration::system_default()).unwrap();
         assert_eq!(res.remote_address, Ipv4Addr::new(8, 8, 8, 8));
-        assert_eq!(res.job_spec.source, remote_file_spec());
-        assert_eq!(res.job_spec.destination, local_file_spec());
+        assert_eq!(res.job_specs[0].source, remote_file_spec());
+        assert_eq!(res.job_specs[0].destination, local_file_spec());
         eprintln!("{res:?}");
     }
     #[test]
@@ -541,7 +577,7 @@ mod test {
 
         let manage_fut = uut.manage_request(
             plumbing.0,
-            prep_result.job_spec.clone(),
+            prep_result.job_specs[0].clone(),
             Configuration::system_default(),
             false,
             crate::protocol::control::Compatibility::Level(1),
@@ -592,7 +628,7 @@ mod test {
 
         let manage_fut = uut.manage_request(
             plumbing.0,
-            prep_result.job_spec.clone(),
+            prep_result.job_specs[0].clone(),
             Configuration::system_default(),
             false,
             crate::protocol::control::Compatibility::Level(1),

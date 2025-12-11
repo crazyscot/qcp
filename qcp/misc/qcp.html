@@ -26,7 +26,7 @@
 
 <p>e.g. qcp some/file my-server:some-directory/</p>
 
-<p>Exactly one of source and destination must be remote.</p>
+<p>Exactly one side (source(s) or destination) must be remote. If you provide multiple sources the destination must be a directory.</p>
 
 <p>Long options may be abbreviated where unambiguous.</p>
 
@@ -40,24 +40,23 @@
   configuration file).
 </p>
 
-<p><strong>Usage:</strong> <code>qcp [OPTIONS] [SOURCE] [DESTINATION]</code></p>
+<p><strong>Usage:</strong> <code>qcp [OPTIONS] [PATH]...</code></p>
 
 <h6><strong>Arguments:</strong></h6>
 
 <ul>
   <li>
-    <code>&lt;SOURCE&gt;</code> — The source file. This may be a local filename,
-    or remote specified as HOST:FILE or USER@HOST:FILE
-  </li>
-  <li>
     <p>
-      <code>&lt;DESTINATION&gt;</code> — Destination. This may be a file or
-      directory. It may be local or remote.
+      <code>&lt;PATH&gt;</code> — Provide one or more SOURCE paths followed by a
+      DESTINATION path. The last path is treated as the destination; all
+      preceding paths are sources. Exactly one side of the transfer must be
+      remote.
     </p>
 
     <p>
-      If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply
-      HOST: or USER@HOST: to copy to your home directory there.
+      Remote paths may be specified as HOST:PATH or USER@HOST:PATH. To copy to
+      your home directory on the remote system, use HOST: or USER@HOST: as the
+      destination.
     </p>
   </li>
 </ul>

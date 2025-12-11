@@ -122,7 +122,7 @@ Or, if you prefer, clone the source repository in the usual way, then `cargo bui
 The basic syntax is the same as scp or rcp.
 
 ```
-qcp [OPTIONS] <SOURCE> <DESTINATION>
+qcp [OPTIONS] <SOURCE>... <DESTINATION>
 ```
 
 The program has a comprehensive help message, accessed via `qcp -h` (brief) or `qcp --help` (long form).
@@ -139,6 +139,8 @@ Things you should know:
 
 - **qcp uses the ssh binary on your system to connect to the target machine**.
   ssh will check the remote host key and prompt you for a password or passphrase in the usual way.
+
+- You can pass multiple `SOURCE` arguments; the last path is treated as the destination, which must be a directory when copying more than one item. All files are transferred over a single ssh/QUIC session so you don't pay per-file connection setup costs.
 
 - **qcp will read your ssh config file** to resolve any Hostname aliases you may have defined there.
   The idea is, if you can `ssh` to a host, you should also be able to `qcp` to it.
@@ -255,7 +257,6 @@ For this, and any other commercial enquiries please get in touch, to `qcp@crazys
 Some ideas for the future, in no particular order:
 
 - File checksum/hash checking/reporting
-- Support for copying multiple files (e.g. shell globs or `scp -r`)
 - Firewall/NAT traversal
 - Interactive file transfer (akin to `ftp`)
 - Smart file copy using the `rsync` protocol or similar (send only the sections you need to)
