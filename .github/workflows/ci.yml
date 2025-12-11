@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-  #pull_request: # duplicated by 'push'
+  pull_request: # duplicated by 'push', but needed for external PRs
   workflow_dispatch:
 
 permissions: {}

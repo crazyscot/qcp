@@ -34,6 +34,7 @@ jobs:
           STEPS_DOWNLOAD1_OUTPUTS_DOWNLOAD_PATH: ${{ steps.download1.outputs.download-path }}
       - name: upload artifacts to gh release
         # Without a checkout, one must explicitly specify the repo to upload to (-R option).
+        if: ${{ github.event.action == 'published' }}
         run: bash -xc 'gh release upload -R "${{ github.repository }}" "${GITHUB_REF_NAME}" ./*'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
