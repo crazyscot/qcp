@@ -54,14 +54,17 @@ fn ssh_cli_args(
     }
 
     // Subsystem or process (must appear after hostname!)
-    args.extend_from_slice(
-        &if config.ssh_subsystem.unwrap_or(false) {
-            ["-s", "qcp"]
-        } else {
-            ["qcp", "--server"]
-        }
-        .map(String::from),
-    );
+    if config.ssh_subsystem.unwrap_or(false) {
+        args.extend_from_slice(&["-s".to_owned(), "qcp".to_owned()]);
+    } else {
+        let remote_qcp_binary = config
+            .remote_qcp_binary
+            .as_ref()
+            .unwrap_or(&defaults.remote_qcp_binary)
+            .clone();
+        args.push(remote_qcp_binary);
+        args.push("--server".to_owned());
+    }
 
     args
 }
@@ -234,5 +237,28 @@ mod test {
         };
         let args1 = ssh_cli_args(ConnectionType::Ipv4, host, &cfg1, false);
         assert!(vec_subslice_strings(&args1, &["-s", "qcp"]));
+    }
+
+    #[test]
+    fn remote_qcp_binary_override() {
+        let cfg1 = Configuration_Optional {
+            remote_qcp_binary: Some("/opt/qcp/bin/qcp".to_owned()),
+            ..Default::default()
+        };
+        let args = ssh_cli_args(ConnectionType::Ipv4, "my_host", &cfg1, false);
+        assert!(vec_subslice_strings(
+            &args,
+            &["/opt/qcp/bin/qcp", "--server"]
+        ));
+
+        // Remote path should not leak into subsystem mode
+        let cfg2 = Configuration_Optional {
+            remote_qcp_binary: Some("/opt/qcp/bin/qcp".to_owned()),
+            ssh_subsystem: Some(true),
+            ..Default::default()
+        };
+        let args2 = ssh_cli_args(ConnectionType::Ipv4, "my_host", &cfg2, false);
+        assert!(vec_subslice_strings(&args2, &["-s", "qcp"]));
+        assert!(!vec_contains(&args2, "/opt/qcp/bin/qcp"));
     }
 }

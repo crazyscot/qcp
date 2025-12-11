@@ -341,6 +341,13 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     )]
     pub ssh: String,
 
+    /// Specifies the path to the qcp binary on the remote machine. [default: `qcp`]
+    ///
+    /// This is useful where the remote system has a locked-down `PATH` and the qcp binary
+    /// is installed in a non-standard location. qcp will run `<path> --server` after logging in.
+    #[arg(long, value_name("PATH"), help_heading("Connection"), display_order(0))]
+    pub remote_qcp_binary: String,
+
     /// Provides an additional option or argument to pass to the ssh client. [default: none]
     ///
     /// **On the command line** you must repeat `-S` for each argument.
@@ -525,6 +532,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     // Client
     address_family: AddressFamily::Any,
     ssh: "ssh".into(),
+    remote_qcp_binary: "qcp".into(),
     ssh_options: Vec::new(),
     remote_port: PortRange::default(),
     remote_user: String::new(),
