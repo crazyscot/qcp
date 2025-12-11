@@ -548,6 +548,7 @@ mod test {
 
             address_family: None,
             ssh: None,
+            remote_qcp_binary: None,
             ssh_options: None,
             time_format: None,
             ssh_config: None,

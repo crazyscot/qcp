@@ -124,6 +124,7 @@ If unspecified, the active congestion control algorithm decides.</p>
 <p>It is safe to set a high limit, but that may reduce efficiency as MTU discovery will take longer to complete.</p></li>
 <li><code>--address-family &lt;family&gt;</code> — Forces use of a particular IP version when connecting to the remote. [default: any]</li>
 <li><code>--ssh &lt;ssh-client&gt;</code> — Specifies the ssh client program to use [default: <code>ssh</code>]</li>
+<li><code>--remote-qcp-binary &lt;PATH&gt;</code> — Path to the qcp binary on the remote host; qcp will run <code>&lt;path&gt; --server</code> after connecting. Use this if qcp is installed outside the remote PATH.</li>
 <li><p><code>-S &lt;ssh-option&gt;</code>
 — Provides an additional option or argument to pass to the ssh client. [default: none]</p>
 

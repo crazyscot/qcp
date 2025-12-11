@@ -210,6 +210,10 @@ Forces use of a particular IP version when connecting to the remote. [default: a
 \fB\-\-ssh\fR \fI<ssh\-client>\fR
 Specifies the ssh client program to use [default: `ssh`]
 .TP
+\fB\-\-remote\-qcp\-binary\fR \fI<PATH>\fR
+Specifies the path to the qcp binary on the remote machine. qcp will run `<path> \-\-server` after connecting.
+Use this if qcp is installed outside the remote PATH. [default: `qcp`]
+.TP
 \fB\-S\fR \fI<ssh\-option>\fR
 
 Provides an additional option or argument to pass to the ssh client. [default: none]

@@ -87,7 +87,12 @@
 //!
 //!    Then set PATH in your `~/.bashrc` (or equivalent) to include wherever qcp has been installed.
 //!
-//! 3. Install qcp in a known location, then reconfigure sshd with
+//! 3. Tell qcp where the remote binary lives:
+//!
+//!    Use `--remote-qcp-binary /full/path/to/qcp` on the CLI, or set `RemoteQcpBinary /full/path/to/qcp`
+//!    in your qcp configuration file.
+//!
+//! 4. Install qcp in a known location, then reconfigure sshd with
 //!
 //!    `Subsystem qcp /full/path/toqcp --server`
 //!

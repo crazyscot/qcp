@@ -162,7 +162,6 @@ pub use derive_deftly_template_Optionalify;
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use super::derive_deftly_template_Optionalify;
     use derive_deftly::Deftly;
     use figment::{Figment, providers::Serialized};
     use pretty_assertions::assert_eq;
