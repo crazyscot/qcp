@@ -114,7 +114,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
 
         let mut inbound = inbound.take(header.size.0);
         trace!("payload");
-        let _ = tokio::io::copy(&mut inbound, &mut file).await?;
+        let _ = crate::util::io::copy_large(&mut inbound, &mut file).await?;
         // Retrieve the stream from within the Take wrapper for further operations
         let mut inbound = inbound.into_inner();
 
@@ -168,7 +168,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         hdr.to_writer_async_framed(&mut self.stream.send).await?;
 
         trace!("sending file payload");
-        let result = tokio::io::copy(&mut file, &mut self.stream.send).await;
+        let result = crate::util::io::copy_large(&mut file, &mut self.stream.send).await;
         anyhow::ensure!(result.is_ok(), "copy ended prematurely");
         anyhow::ensure!(
             result.is_ok_and(|r| r == file_original_meta.len()),

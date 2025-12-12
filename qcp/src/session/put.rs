@@ -108,7 +108,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
 
         // A server-side abort might happen part-way through a large transfer.
         trace!("send payload");
-        let result = tokio::io::copy(&mut file, &mut outbound).await;
+        let result = crate::util::io::copy_large(&mut file, &mut outbound).await;
 
         match result {
             Ok(sent) if sent == src_meta.len() => (),
@@ -269,7 +269,7 @@ async fn limited_copy(
     f: &mut TokioFile,
 ) -> Result<u64, std::io::Error> {
     let mut limited = recv.take(n);
-    tokio::io::copy(&mut limited, f).await
+    crate::util::io::copy_large(&mut limited, f).await
 }
 
 #[cfg(test)]
