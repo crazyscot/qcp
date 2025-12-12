@@ -638,6 +638,7 @@ mod test {
     }
 
     #[cfg_attr(target_os = "macos", ignore)]
+    #[cfg_attr(target_os = "windows", ignore = "fails under Wine in CI")]
     #[tokio::test]
     async fn quinn_connection_open_bi_stream_adapter_works() {
         use crate::protocol::control::{Compatibility, ConnectionType};
