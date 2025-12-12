@@ -2,8 +2,12 @@ name: CI
 
 on:
   push:
-  pull_request: # duplicated by 'push', but needed for external PRs
+  pull_request: # duplicated by 'push', but needed for external PRs; concurrency config prevents duplicate runs
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 permissions: {}
 
