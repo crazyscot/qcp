@@ -22,7 +22,7 @@ use crate::{
 };
 
 use anyhow::{Context, Result};
-use futures_util::TryFutureExt as _;
+use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
 use std::{
@@ -98,6 +98,26 @@ impl PrepResult {
 }
 
 type ControlChannelType = ControlChannel<ChildStdin, ChildStdout>;
+
+#[async_trait]
+trait BiStreamOpener {
+    type Send: SendingStream + 'static;
+    type Recv: ReceivingStream + 'static;
+
+    async fn open_bi_stream(&self) -> Result<SendReceivePair<Self::Send, Self::Recv>>;
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))] // thin adapter around quinn
+#[async_trait]
+impl BiStreamOpener for QuinnConnection {
+    type Send = quinn::SendStream;
+    type Recv = quinn::RecvStream;
+
+    async fn open_bi_stream(&self) -> Result<SendReceivePair<Self::Send, Self::Recv>> {
+        let bi = self.open_bi().await.map_err(|e| anyhow::anyhow!(e))?;
+        Ok(SendReceivePair::from(bi))
+    }
+}
 
 struct QcpConnection {
     ssh_client: ProcessWrapper,
@@ -195,17 +215,15 @@ impl Client {
 
         self.spinner.set_message("Transferring data");
         self.timers.next(SHOW_TIME);
-        let quiet = self.parameters.quiet;
-        let compat = qcp_conn.control.selected_compat;
-        let (overall_success, aggregate_stats) = process_job_requests(
-            &prep_result.job_specs,
-            || async {
-                let bi = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
-                Ok(SendReceivePair::from(bi))
-            },
-            |stream_pair, job| self.manage_request(stream_pair, job, &config, quiet, compat),
-        )
-        .await?;
+        let (overall_success, aggregate_stats) = self
+            .transfer_jobs(
+                &connection,
+                &prep_result.job_specs,
+                &config,
+                self.parameters.quiet,
+                qcp_conn.control.selected_compat,
+            )
+            .await?;
 
         // Closedown ----------------------
         let remote_stats = self.closedown(&config, qcp_conn).await?;
@@ -402,6 +420,22 @@ impl Client {
         Ok(remote_stats)
     }
 
+    async fn transfer_jobs<C: BiStreamOpener>(
+        &self,
+        connection: &C,
+        jobs: &[CopyJobSpec],
+        config: &Configuration,
+        quiet: bool,
+        compat: Compatibility,
+    ) -> anyhow::Result<(bool, CommandStats)> {
+        process_job_requests(
+            jobs,
+            || connection.open_bi_stream(),
+            |stream_pair, job| self.manage_request(stream_pair, job, config, quiet, compat),
+        )
+        .await
+    }
+
     /// Do whatever it is we were asked to.
     /// On success: returns statistics about the transfer.
     /// On error: returns the transfer statistics, as far as we know, up to the point of failure
@@ -493,6 +527,7 @@ where
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use indicatif::MultiProgress;
+    use std::path::Path;
     use std::sync::{
         Mutex,
         atomic::{AtomicUsize, Ordering},
@@ -500,7 +535,10 @@ mod test {
     use std::{net::Ipv4Addr, str::FromStr};
     use tokio::io::AsyncWriteExt;
 
-    use super::{RequestResult, process_job_requests};
+    use async_trait::async_trait;
+    use littertray::LitterTray;
+
+    use super::{BiStreamOpener, RequestResult, process_job_requests};
 
     #[cfg(unix)]
     use crate::control::create_fake;
@@ -666,6 +704,96 @@ mod test {
     }
 
     #[tokio::test]
+    async fn transfer_jobs_copies_multiple_files_over_reused_connection() {
+        const DATA1: &[u8] = b"alpha";
+        const DATA2: &[u8] = b"beta beta";
+        const OUT1: &str = "out1";
+        const OUT2: &str = "out2";
+
+        let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1);
+
+        let jobs = vec![
+            CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file2", OUT2, false).unwrap(),
+        ];
+
+        let conn = FakeBiConnection::new(vec![
+            encode_get_success_response(DATA1),
+            encode_get_success_response(DATA2),
+        ]);
+
+        let (success, stats) = LitterTray::try_with_async(async |_| {
+            let (success, stats) = uut
+                .transfer_jobs(
+                    &conn,
+                    &jobs,
+                    Configuration::system_default(),
+                    false,
+                    crate::protocol::control::Compatibility::Level(1),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(std::fs::read(OUT1)?, DATA1);
+            assert_eq!(std::fs::read(OUT2)?, DATA2);
+
+            Ok((success, stats))
+        })
+        .await
+        .unwrap();
+
+        assert!(success);
+        assert_eq!(conn.open_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(stats.payload_bytes, (DATA1.len() + DATA2.len()) as u64);
+    }
+
+    #[tokio::test]
+    async fn transfer_jobs_stops_after_failure() {
+        const DATA1: &[u8] = b"alpha";
+        const OUT1: &str = "out1";
+        const OUT2: &str = "out2";
+        const OUT3: &str = "out3";
+
+        let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1);
+
+        let jobs = vec![
+            CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file2", OUT2, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file3", OUT3, false).unwrap(),
+        ];
+
+        let conn = FakeBiConnection::new(vec![
+            encode_get_success_response(DATA1),
+            encode_get_error_response(),
+        ]);
+
+        let (success, stats) = LitterTray::try_with_async(async |_| {
+            let (success, stats) = uut
+                .transfer_jobs(
+                    &conn,
+                    &jobs,
+                    Configuration::system_default(),
+                    false,
+                    crate::protocol::control::Compatibility::Level(1),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(std::fs::read(OUT1)?, DATA1);
+            assert!(!Path::new(OUT2).exists());
+            assert!(!Path::new(OUT3).exists());
+
+            Ok((success, stats))
+        })
+        .await
+        .unwrap();
+
+        assert!(!success);
+        assert_eq!(conn.open_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(stats.payload_bytes, DATA1.len() as u64);
+    }
+
+    #[tokio::test]
     async fn process_job_requests_aggregates_stats() {
         let jobs = vec![
             CopyJobSpec::from_parts("file1", "host:dir", false).unwrap(),
@@ -762,5 +890,67 @@ mod test {
         assert_eq!(handle_calls.load(Ordering::SeqCst), 2);
         assert_eq!(stats.payload_bytes, 10);
         assert_eq!(stats.peak_transfer_rate, 100);
+    }
+
+    fn encode_get_success_response(data: &[u8]) -> Vec<u8> {
+        let mut send_buf = Vec::new();
+        crate::protocol::session::Response::V1(crate::protocol::session::ResponseV1 {
+            status: crate::protocol::session::Status::Ok.into(),
+            message: None,
+        })
+        .to_writer_framed(&mut send_buf)
+        .unwrap();
+        crate::protocol::session::FileHeader::new_v1(data.len() as u64, "file")
+            .to_writer_framed(&mut send_buf)
+            .unwrap();
+        send_buf.extend_from_slice(data);
+        crate::protocol::session::FileTrailer::V1
+            .to_writer_framed(&mut send_buf)
+            .unwrap();
+        send_buf
+    }
+
+    fn encode_get_error_response() -> Vec<u8> {
+        let mut send_buf = Vec::new();
+        crate::protocol::session::Response::V1(crate::protocol::session::ResponseV1 {
+            status: crate::protocol::session::Status::FileNotFound.into(),
+            message: Some("nope".to_string()),
+        })
+        .to_writer_framed(&mut send_buf)
+        .unwrap();
+        send_buf
+    }
+
+    struct FakeBiConnection {
+        responses: Mutex<Vec<Vec<u8>>>,
+        open_calls: AtomicUsize,
+    }
+
+    impl FakeBiConnection {
+        fn new(responses: Vec<Vec<u8>>) -> Self {
+            Self {
+                responses: Mutex::new(responses),
+                open_calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl BiStreamOpener for FakeBiConnection {
+        type Send = tokio::io::WriteHalf<tokio::io::SimplexStream>;
+        type Recv = tokio::io::ReadHalf<tokio::io::SimplexStream>;
+
+        async fn open_bi_stream(
+            &self,
+        ) -> anyhow::Result<crate::protocol::common::SendReceivePair<Self::Send, Self::Recv>>
+        {
+            let (client_side, mut server_side) = new_test_plumbing();
+            let _ = self.open_calls.fetch_add(1, Ordering::SeqCst);
+            let response = self.responses.lock().unwrap().remove(0);
+            let _ = tokio::spawn(async move {
+                let _ = server_side.send.write_all(&response).await;
+            });
+            Ok(client_side)
+        }
     }
 }

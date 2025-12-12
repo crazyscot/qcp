@@ -520,4 +520,26 @@ mod tests {
         let dict = data.get(&Profile::Global).unwrap();
         assert!(dict.get("remote_user").is_none());
     }
+
+    #[test]
+    fn join_local_path_with_empty_base_returns_leaf() {
+        assert_eq!(join_local_path("", "file"), "file");
+    }
+
+    #[test]
+    fn single_local_source_to_remote_destination_is_supported() {
+        let params = Parameters::parse_from(["test", "file1", "user@host:remote_file"]);
+        let specs: Vec<CopyJobSpec> = (&params).try_into().unwrap();
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].destination.to_string(), "user@host:remote_file");
+    }
+
+    #[test]
+    fn remote_user_as_config_is_not_set_when_no_user_is_provided() {
+        let params = Parameters::parse_from(["test", "host:source.txt", "destination.txt"]);
+        let cfg = params.remote_user_as_config();
+        let data = cfg.data().unwrap();
+        let dict = data.get(&Profile::Global).unwrap();
+        assert!(dict.get("remote_user").is_none());
+    }
 }
