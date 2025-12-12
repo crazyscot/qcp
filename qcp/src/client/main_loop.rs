@@ -1021,9 +1021,9 @@ mod test {
             let (client_side, mut server_side) = new_test_plumbing();
             let _ = self.open_calls.fetch_add(1, Ordering::SeqCst);
             let response = self.responses.lock().unwrap().remove(0);
-            let _ = tokio::spawn(async move {
+            std::mem::drop(tokio::spawn(async move {
                 let _ = server_side.send.write_all(&response).await;
-            });
+            }));
             Ok(client_side)
         }
     }
