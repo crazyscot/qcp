@@ -542,4 +542,31 @@ mod tests {
         let dict = data.get(&Profile::Global).unwrap();
         assert!(dict.get("remote_user").is_none());
     }
+
+    #[test]
+    fn mixed_local_and_remote_sources_to_local_destination_rejected() {
+        let params = Parameters::parse_from(["test", "file1", "user@host:/tmp/b", "downloads"]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Only one remote side is supported")
+        );
+    }
+
+    #[test]
+    fn remote_host_lossy_allows_multiple_sources_same_host() {
+        let params =
+            Parameters::parse_from(["test", "user@host:file1", "user@host:file2", "downloads"]);
+        assert_eq!(params.remote_host_lossy().unwrap(), Some("host"));
+    }
+
+    #[test]
+    fn remote_user_as_config_allows_multiple_paths_same_user() {
+        let params =
+            Parameters::parse_from(["test", "alice@host:file1", "alice@host:file2", "downloads"]);
+        let cfg = params.remote_user_as_config();
+        let data = cfg.data().unwrap();
+        let dict = data.get(&Profile::Global).unwrap();
+        assert_eq!(dict.get("remote_user").unwrap().as_str(), Some("alice"));
+    }
 }

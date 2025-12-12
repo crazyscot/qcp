@@ -532,8 +532,12 @@ mod test {
         Mutex,
         atomic::{AtomicUsize, Ordering},
     };
-    use std::{net::Ipv4Addr, str::FromStr};
+    use std::{
+        net::{Ipv4Addr, SocketAddrV4},
+        str::FromStr,
+    };
     use tokio::io::AsyncWriteExt;
+    use tokio::time::{Duration, timeout};
 
     use async_trait::async_trait;
     use littertray::LitterTray;
@@ -630,6 +634,76 @@ mod test {
         let report = uut.closedown(&config, qcp_conn).await.unwrap();
         assert_eq!(report, ClosedownReportV1::default());
         eprintln!("Closedown report: {report:?}");
+    }
+
+    #[cfg_attr(target_os = "macos", ignore)]
+    #[tokio::test]
+    async fn quinn_connection_open_bi_stream_adapter_works() {
+        use crate::protocol::control::{Compatibility, ConnectionType};
+        use crate::transport::ThroughputMode;
+        use crate::util::Credentials;
+
+        let compat = Compatibility::Level(1);
+        let config = Configuration::system_default();
+
+        let server_creds = Credentials::generate().unwrap();
+        let client_creds = Credentials::generate().unwrap();
+        let server_cert = server_creds.to_tagged_data(compat, None).unwrap();
+        let client_cert = client_creds.to_tagged_data(compat, None).unwrap();
+
+        let (server_endpoint, _) = crate::control::create_endpoint(
+            &server_creds,
+            &client_cert,
+            ConnectionType::Ipv4,
+            config,
+            ThroughputMode::Both,
+            true,
+            compat,
+        )
+        .unwrap();
+        let server_port = server_endpoint.local_addr().unwrap().port();
+        let server_addr: std::net::SocketAddr =
+            SocketAddrV4::new(Ipv4Addr::LOCALHOST, server_port).into();
+
+        let server_task = tokio::spawn(async move {
+            let incoming = timeout(Duration::from_secs(5), server_endpoint.accept())
+                .await
+                .expect("timed out waiting for QUIC connection")
+                .expect("endpoint closed unexpectedly");
+
+            let connection = incoming.await.expect("incoming connection failed");
+            let _ = connection.accept_bi().await.expect("accept_bi failed");
+
+            server_endpoint.close(0u32.into(), "test".as_bytes());
+            server_endpoint.wait_idle().await;
+        });
+
+        let (client_endpoint, _) = crate::control::create_endpoint(
+            &client_creds,
+            &server_cert,
+            ConnectionType::Ipv4,
+            config,
+            ThroughputMode::Both,
+            false,
+            compat,
+        )
+        .unwrap();
+
+        let connecting = client_endpoint
+            .connect(server_addr, &server_creds.hostname)
+            .unwrap();
+        let connection = timeout(Duration::from_secs(5), connecting)
+            .await
+            .expect("timed out connecting")
+            .expect("connection failed");
+
+        let _ = connection.open_bi_stream().await.unwrap();
+
+        connection.close(0u32.into(), "test".as_bytes());
+        client_endpoint.close(0u32.into(), "test".as_bytes());
+        let _ = timeout(Duration::from_secs(5), client_endpoint.wait_idle()).await;
+
+        let _ = timeout(Duration::from_secs(5), server_task).await;
     }
 
     #[tokio::test]
