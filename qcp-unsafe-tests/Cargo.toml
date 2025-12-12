@@ -6,16 +6,16 @@ license = "MIT"           # Note this license applies only to qcp-unsafe-tests, 
 publish = false
 
 [dev-dependencies]
-qcp = { path = "../qcp", features = ["unstable-test-helpers"] }
+qcp = { workspace = true, features = ["unstable-test-helpers"] }
 
 anstyle = { workspace = true }
 colorchoice = { workspace = true }
 console = { workspace = true }
-dunce = "1.0.5"
+dunce = { workspace = true }
 littertray = { workspace = true, features = ["async"] }
-pretty_assertions = "1.4.1"
+pretty_assertions = { workspace = true }
 rusty-fork = { workspace = true }
-static_str_ops = "0.1.2"
+static_str_ops = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 

@@ -28,75 +28,71 @@ unstable-test-helpers = []
 [dependencies]
 anstyle = { workspace = true }
 anyhow = { workspace = true }
-async-trait = "0.1.89"
-bytes = "1.11.0"
+async-trait = { workspace = true }
+bytes = { workspace = true }
 cfg-if = { workspace = true }
 clap = { workspace = true }
 colorchoice = { workspace = true }
 console = { workspace = true }
-derive-deftly = "1.6.0"
-derive_more = { version = "2.1.0", features = ["constructor", "debug", "display", "from"] }
-dirs = "6.0.0"
-document-features = "0.2.12"
-dtype_variant = "=0.0.14"
-either = "1.15.0"
-engineering-repr = { version = "1.1.1", features = ["serde"] }
-enumscribe = "0.4.0"
-figment = { version = "0.10.19", features = ["env"] }
-futures-util = { version = "0.3.31", default-features = false }
-gethostname = "1.1.0"
-glob = "0.3.3"
-heck = "0.5.0"
-hex = "0.4.3"
-homedir = "0.3.6"
-human-repr = "1.1.0"
-indicatif = { version = "0.18.3", features = ["tokio"] }
-int-enum = "1.2.0"
-lessify = "0.5.0"
-mimalloc = "0.1.48"
-num-format = { version = "0.4.4" }
-num-traits = "0.2.19"
-paste = "1.0.15"
-quinn = { version = "0.11.9", default-features = false, features = [
-    "runtime-tokio",
-    "rustls",
-    "ring",
-] }
-rcgen = { version = "0.14.5" }
-rustix = { version = "1.1.2", features = ["net", "fs", "process"] }
-rustls = { version = "0.23.35", features = ["ring"], default-features = false }
-rustls-pki-types = "1.13.1"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_bare = "0.5.0"
-serde_repr = "0.1.20"
-static_assertions = "1.1.0"
-struct-field-names-as-array = "0.3.0"
-strum = { version = "0.27.2", features = ["derive"] }
-strum_macros = "0.27.2"
-tabled = "0.20.0"
-thiserror = "2.0.17"
+derive-deftly = { workspace = true }
+derive_more = { workspace = true, features = ["constructor", "debug", "display", "from"] }
+dirs = { workspace = true }
+document-features = { workspace = true }
+dtype_variant = { workspace = true }
+either = { workspace = true }
+engineering-repr = { workspace = true, features = ["serde"] }
+enumscribe = { workspace = true }
+figment = { workspace = true, features = ["env"] }
+futures-util = { workspace = true }
+gethostname = { workspace = true }
+glob = { workspace = true }
+heck = { workspace = true }
+hex = { workspace = true }
+homedir = { workspace = true }
+human-repr = { workspace = true }
+indicatif = { workspace = true, features = ["tokio"] }
+int-enum = { workspace = true }
+lessify = { workspace = true }
+mimalloc = { workspace = true }
+num-format = { workspace = true }
+num-traits = { workspace = true }
+paste = { workspace = true }
+quinn = { workspace = true, features = ["runtime-tokio", "rustls", "ring"] }
+rcgen = { workspace = true }
+rustix = { workspace = true, features = ["net", "fs", "process"] }
+rustls = { workspace = true, features = ["ring"] }
+rustls-pki-types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_bare = { workspace = true }
+serde_repr = { workspace = true }
+static_assertions = { workspace = true }
+struct-field-names-as-array = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
+tabled = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
-tracing = "0.1.43"
-tracing-subscriber = { version = "0.3.22", features = ["env-filter", "chrono"] }
-wildmatch = "2.6.1"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "chrono"] }
+wildmatch = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 file-mode = "0.1.2"
 
 [dev-dependencies]
-assertables = "9.8.2"
-clap-markdown = "0.1.5"
-clap_mangen = "0.2.31"
-jzon = "0.12.5"
+assertables = { workspace = true }
+clap-markdown = { workspace = true }
+clap_mangen = { workspace = true }
+jzon = { workspace = true }
 littertray = { workspace = true, features = ["async"] }
-mockall = "0.14.0"
-pretty_assertions = "1.4.1"
-roff = "0.2.2"
+mockall = { workspace = true }
+pretty_assertions = { workspace = true }
+roff = { workspace = true }
 rusty-fork = { workspace = true }
-serde_json = "1.0.145"
+serde_json = { workspace = true }
 tempfile = { workspace = true }
-tokio-test = "0.4.4"
-x509-certificate = "0.25.0"
+tokio-test = { workspace = true }
+x509-certificate = { workspace = true }
 
 [lints.rust]
 dead_code = "warn"
@@ -135,7 +131,7 @@ private_intra_doc_links = "deny"
 unescaped_backticks = "deny"
 
 [build-dependencies]
-cfg_aliases = "0.2.1"
+cfg_aliases = { workspace = true }
 
 [package.metadata.cross.target.x86_64-unknown-linux-musl]
 #pre-build = [ "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install ..." ]

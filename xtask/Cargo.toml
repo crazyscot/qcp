@@ -8,8 +8,8 @@ publish = false
 
 [dependencies]
 anyhow = { workspace = true }
-cargo_toml = "0.22.3"
-chrono = { version = "0.4.42", default-features = false, features = ["now"] }
-flate2 = "1.1.5"
-pico-args = "0.5.0"
-xshell = "0.2.7"
+cargo_toml = { workspace = true }
+chrono = { workspace = true, features = ["now"] }
+flate2 = { workspace = true }
+pico-args = { workspace = true }
+xshell = { workspace = true }
