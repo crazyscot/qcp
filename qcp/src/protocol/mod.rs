@@ -1,5 +1,5 @@
 // (c) 2024 Ross Younger
-// Code in this module: Protocol defininitions
+// Code in this module: Protocol definitions
 //!
 #![allow(clippy::doc_markdown)]
 //! # 📖 The QCP protocol

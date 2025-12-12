@@ -1,4 +1,4 @@
-//! CLI argument helper type - a range of port numnbers.
+//! CLI argument helper type - a range of port numbers.
 // (c) 2024 Ross Younger
 use serde::{
     Deserialize, Serialize,
@@ -171,7 +171,7 @@ mod tests {
         let _ = Uut::from_str("65537").expect_err("should have failed");
     }
     #[test]
-    fn invalid_unparseable() {
+    fn invalid_unparsable() {
         let _ = Uut::from_str("fdsfdsfds").expect_err("should have failed");
     }
     #[test]

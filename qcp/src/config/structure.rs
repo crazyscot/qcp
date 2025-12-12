@@ -870,7 +870,7 @@ mod test {
     #[test]
     #[should_panic(expected = "optional config failed")]
     #[allow(unused_results)]
-    fn cfg_unparseable_enum() {
+    fn cfg_unparsable_enum() {
         assert_cfg_parseable("congestion nosuchalgorithm");
     }
 

@@ -76,7 +76,7 @@ impl InstaMeterRunner {
         if let Some(task) = self.task.take() {
             let _ = task
                 .await
-                .inspect_err(|e| warn!("meter task paniced: {e:?}"));
+                .inspect_err(|e| warn!("meter task panicked: {e:?}"));
         } else {
             warn!("logic error: stop called with a stopper but no task");
         }

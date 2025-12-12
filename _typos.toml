@@ -1,0 +1,2 @@
+[default]
+extend-ignore-re = ["\\[[0-9a-f]{7}\\]", "\\.UE", "roff.control\\(\"UE\"", "rEmOtE-pOrT"]

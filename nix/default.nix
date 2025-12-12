@@ -43,7 +43,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
       "--skip=os::unix::test::config_paths"
       # Permission checks in the sandbox appear to always fail
       "--skip=session::get::test::permission_denied"
-      # Multiple network tests will fail in sanbox
+      # Multiple network tests will fail in sandbox
       "--skip=client::main_loop::test::endpoint_create_close"
       "--skip=util::dns::tests::ipv4"
       "--skip=util::dns::tests::ipv6"

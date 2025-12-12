@@ -202,7 +202,7 @@ async fn test_client_x509_mismatch() {
 )]
 #[tokio::test]
 async fn test_server_x509_mismatch() {
-    // mess with the server certificate: client refuses to connect AND server repors that the client aborted
+    // mess with the server certificate: client refuses to connect AND server reports that the client aborted
     run_endpoint_connection(
         |cli, srv| {
             (
@@ -299,7 +299,7 @@ async fn test_client_rpk_mismatch() {
 )]
 #[tokio::test]
 async fn test_server_rpk_mismatch() {
-    // mess with the server certificate: client refuses to connect AND server repors that the client aborted
+    // mess with the server certificate: client refuses to connect AND server reports that the client aborted
     run_endpoint_connection(
         |cli, _srv| {
             (
