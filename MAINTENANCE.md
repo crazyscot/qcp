@@ -20,9 +20,14 @@ The recommended fix for this is:
 - Consider setting this `--global`
 - Consider also `git config commit.gpgsign true`
 
+### Tooling
+
+- `cargo install --locked release-plz cargo-semver-checks`
+
 ### Creating a release
 
 - Check and update dependencies as required.
+- `cargo semver-checks` will tell you whether there are any breaking API changes that prompt a version bump.
 - Confirm top-level docs have been updated for any changes since the last release.
 - Update SECURITY.md if this is a new major or minor release.
 - Update the News section in README.md if appropriate.
