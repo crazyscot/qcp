@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/crazyscot/qcp/compare/v0.6.0...v0.7.0)
+
+### ⛰️ Features
+
+- Add remote qcp binary override flag - ([2440370](https://github.com/crazyscot/qcp/commit/24403702eabae55e319cb0e02c421f95cc44a63a))
+
+### Deps
+
+- Prefer the finished 'paste' crate to the unvetted 'pastey' - ([58367c8](https://github.com/crazyscot/qcp/commit/58367c82460fb984627f6e8030f2539ad9f80750))
+
+
 ## [0.6.0](https://github.com/crazyscot/qcp/compare/v0.5.2...v0.6.0)
 
 ### ⛰️ Features
