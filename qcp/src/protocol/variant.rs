@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, convert::identity, fmt::Write};
 
 use dtype_variant::DType;
-use pastey::paste;
+use paste::paste;
 use serde::{Deserialize, Serialize};
 use serde_bare::{Int, Uint};
 
