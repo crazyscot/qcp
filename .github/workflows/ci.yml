@@ -31,17 +31,15 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust ${{ matrix.rust-version }}
-        uses:
-          dtolnay/rust-toolchain@6d653acede28d24f02e3cd41383119e8b1b35921 # 2025-09-17
-          # this action is used in multiple places
+        uses: dtolnay/rust-toolchain@6d653acede28d24f02e3cd41383119e8b1b35921 # 2025-09-17
+        # this action is used in multiple places
         with:
           toolchain: ${{ matrix.rust-version }}
           components: rustfmt,clippy,rust-src
 
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-      - uses:
-          Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
-          # this action is used in multiple places
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
+        # this action is used in multiple places
         with:
           key: ${{ matrix.rust-version }}
           cache-on-failure: true
@@ -74,9 +72,8 @@ jobs:
         with:
           crate: cargo-docs-rs
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-      - uses:
-          Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
-          # this action is used in multiple places
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
+        # this action is used in multiple places
         with:
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/dev' }}
@@ -93,22 +90,19 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust
-        uses:
-          dtolnay/rust-toolchain@6d653acede28d24f02e3cd41383119e8b1b35921 # 2025-09-17
-          # this action is used in multiple places
+        uses: dtolnay/rust-toolchain@6d653acede28d24f02e3cd41383119e8b1b35921 # 2025-09-17
+        # this action is used in multiple places
         with:
           # update periodically
           toolchain: nightly-2025-07-31
           components: llvm-tools-preview,rust-src
-      - uses:
-          taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
-          # this action is used in multiple places
+      - uses: taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
+        # this action is used in multiple places
         with:
           tool: cargo-llvm-cov
           checksum: true
-      - uses:
-          Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
-          # this action is used in multiple places
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
+        # this action is used in multiple places
         with:
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/dev' }}

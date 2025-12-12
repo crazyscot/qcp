@@ -1,7 +1,7 @@
 [future-incompat-report]
 frequency = 'always'
 
-#[target.'cfg(target_os="linux")']
+# [target.'cfg(target_os="linux")']
 # Caution! Unconditionally specifying mold breaks cargo cross on musl.
 #    (the base docker image cross uses is based on focal, which does not have a mold package)
 # So for now, we use defaults to not break CI.

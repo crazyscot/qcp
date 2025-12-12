@@ -1,16 +1,16 @@
 [package]
 name = "qcp"
-description = "Secure remote file copy utility which uses the QUIC protocol over UDP"
-rust-version = "1.88.0"
 version = "0.6.0"
-edition.workspace = true
 authors = ["Ross Younger <qcp@crazyscot.com>"]
-license = "AGPL-3.0-or-later"
-repository = "https://github.com/crazyscot/qcp/"
+categories = ["command-line-utilities"]
+edition.workspace = true
 homepage = "https://github.com/crazyscot/qcp/"
 keywords = ["networking", "file-transfer", "quic"]
-categories = ["command-line-utilities"]
+license = "AGPL-3.0-or-later"
 readme = "../README.md"
+repository = "https://github.com/crazyscot/qcp/"
+rust-version = "1.88.0"
+description = "Secure remote file copy utility which uses the QUIC protocol over UDP"
 
 [features]
 default = ["rustls-log", "quinn-log", "secure-alloc"]
@@ -134,9 +134,9 @@ unescaped_backticks = "deny"
 cfg_aliases = { workspace = true }
 
 [package.metadata.cross.target.x86_64-unknown-linux-musl]
-#pre-build = [ "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install ..." ]
+# pre-build = [ "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install ..." ]
 [package.metadata.cross.target.aarch64-unknown-linux-musl]
-#pre-build = [ "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install ..." ]
+# pre-build = [ "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install ..." ]
 
 [package.metadata.deb]
 extended-description = """\
@@ -148,71 +148,71 @@ security properties but better throughput on congested networks.
 """
 section = "contrib/net"
 assets = [
-    # sneaky; this seems to automagically pick up the correct binary when cross building:
-    [
-        "target/release/qcp",
-        "usr/bin/",
-        "755",
-    ],
+  # sneaky; this seems to automagically pick up the correct binary when cross building:
+  [
+    "target/release/qcp",
+    "usr/bin/",
+    "755",
+  ],
 
-    [
-        "../README.md",
-        "usr/share/doc/qcp/",
-        "644",
-    ],
-    [
-        "../LICENSE",
-        "usr/share/doc/qcp/",
-        "644",
-    ],
-    # gzip -9n < CHANGELOG.md > misc/changelog.gz # done by make-debian-package
-    [
-        "misc/changelog.gz",
-        "usr/share/doc/qcp/",
-        "644",
-    ],
-    # gzip -9n < debian/changelog > debian/changelog.Debian.gz # done by make-debian-package
-    [
-        "debian/changelog.Debian.gz",
-        "usr/share/doc/qcp/",
-        "644",
-    ],
-    [
-        "misc/20-qcp.conf",
-        "etc/sysctl.d/",
-        "644",
-    ], # this is automatically recognised as a conffile
-    [
-        "misc/qcp.1",
-        "usr/share/man/man1/",
-        "644",
-    ],
-    [
-        "misc/qcp_config.5",
-        "usr/share/man/man5/",
-        "644",
-    ],
-    [
-        "misc/qcp.conf",
-        "etc/",
-        "644",
-    ], # this is automatically recognised as a conffile
-    [
-        "misc/qcp_sshd.conf",
-        "etc/ssh/sshd_config.d/",
-        "644",
-    ], # this is automatically recognised as a conffile
-    # gzip -9n < qcp/qcp.cdx.xml > qcp/qcp.cdx.xml.gz # done by make-debian-package
-    [
-        "qcp.cdx.xml.gz",
-        "usr/share/doc/qcp/",
-        "644",
-    ],
-    [
-        "misc/qcp.html",
-        "usr/share/doc/qcp/",
-        "644",
-    ],
+  [
+    "../README.md",
+    "usr/share/doc/qcp/",
+    "644",
+  ],
+  [
+    "../LICENSE",
+    "usr/share/doc/qcp/",
+    "644",
+  ],
+  # gzip -9n < CHANGELOG.md > misc/changelog.gz # done by make-debian-package
+  [
+    "misc/changelog.gz",
+    "usr/share/doc/qcp/",
+    "644",
+  ],
+  # gzip -9n < debian/changelog > debian/changelog.Debian.gz # done by make-debian-package
+  [
+    "debian/changelog.Debian.gz",
+    "usr/share/doc/qcp/",
+    "644",
+  ],
+  [
+    "misc/20-qcp.conf",
+    "etc/sysctl.d/",
+    "644",
+  ], # this is automatically recognised as a conffile
+  [
+    "misc/qcp.1",
+    "usr/share/man/man1/",
+    "644",
+  ],
+  [
+    "misc/qcp_config.5",
+    "usr/share/man/man5/",
+    "644",
+  ],
+  [
+    "misc/qcp.conf",
+    "etc/",
+    "644",
+  ], # this is automatically recognised as a conffile
+  [
+    "misc/qcp_sshd.conf",
+    "etc/ssh/sshd_config.d/",
+    "644",
+  ], # this is automatically recognised as a conffile
+  # gzip -9n < qcp/qcp.cdx.xml > qcp/qcp.cdx.xml.gz # done by make-debian-package
+  [
+    "qcp.cdx.xml.gz",
+    "usr/share/doc/qcp/",
+    "644",
+  ],
+  [
+    "misc/qcp.html",
+    "usr/share/doc/qcp/",
+    "644",
+  ],
 ]
 maintainer-scripts = "debian"
 depends = "$auto,debconf"

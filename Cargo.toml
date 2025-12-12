@@ -8,30 +8,18 @@ edition = "2024"
 [workspace.dependencies]
 anstyle = { version = "1.0.13", default-features = false }
 anyhow = "1.0.100"
-cfg-if = "1.0.4"
-clap = { version = "4.5.53", features = ["wrap_help", "derive", "cargo", "string", "deprecated"] }
-colorchoice = "1.0.4"
-console = { version = "0.16.1" }
-littertray = "1.0.0"
-rusty-fork = "0.3.1"
-tempfile = { version = "3.23.0", default-features = false }
-tokio = { version = "1.48.0", default-features = true, features = [
-    "fs",
-    "io-std",
-    "macros",
-    "process",
-    "rt",
-    "time",
-    "sync",
-] }
 assertables = "9.8.2"
 async-trait = "0.1.89"
 bytes = "1.11.0"
 cargo_toml = "0.22.3"
+cfg-if = "1.0.4"
 cfg_aliases = "0.2.1"
 chrono = { version = "0.4.42", default-features = false }
+clap = { version = "4.5.53", features = ["wrap_help", "derive", "cargo", "string", "deprecated"] }
 clap-markdown = "0.1.5"
 clap_mangen = "0.2.31"
+colorchoice = "1.0.4"
+console = { version = "0.16.1" }
 derive-deftly = "1.6.0"
 derive_more = "2.1.0"
 dirs = "6.0.0"
@@ -54,6 +42,7 @@ indicatif = "0.18.3"
 int-enum = "1.2.0"
 jzon = "0.12.5"
 lessify = "0.5.0"
+littertray = "1.0.0"
 mimalloc = "0.1.48"
 mockall = "0.14.0"
 num-format = "0.4.4"
@@ -68,6 +57,7 @@ roff = "0.2.2"
 rustix = "1.1.2"
 rustls = { version = "0.23.35", default-features = false }
 rustls-pki-types = "1.13.1"
+rusty-fork = "0.3.1"
 serde = "1.0.228"
 serde_bare = "0.5.0"
 serde_json = "1.0.145"
@@ -78,7 +68,9 @@ struct-field-names-as-array = "0.3.0"
 strum = "0.27.2"
 strum_macros = "0.27.2"
 tabled = "0.20.0"
+tempfile = { version = "3.23.0", default-features = false }
 thiserror = "2.0.17"
+tokio = { version = "1.48.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
 tokio-test = "0.4.4"
 tracing = "0.1.43"
 tracing-subscriber = "0.3.22"
@@ -86,8 +78,8 @@ wildmatch = "2.6.1"
 x509-certificate = "0.25.0"
 xshell = "0.2.7"
 
-#[profile.dev]
-#split-debuginfo="unpacked"
+# [profile.dev]
+# split-debuginfo="unpacked"
 # This is not supported on windows msvc; set CARGO_PROFILE_DEV_SPLIT_DEBUGINFO=unpacked in environment instead.
 
 [profile.release]

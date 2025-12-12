@@ -1,9 +1,9 @@
 [package]
 name = "xtask"
 version = "0.0.0"
-edition.workspace = true
 authors = ["Ross Younger <qcp@crazyscot.com>"]
-license = "MIT"                                # Note this license applies only to xtask, not to qcp itself.
+edition.workspace = true
+license = "MIT" # Note this license applies only to xtask, not to qcp itself.
 publish = false
 
 [dependencies]

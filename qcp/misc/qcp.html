@@ -1,236 +1,571 @@
 <h1>Command-Line Help for <code>qcp</code></h1>
 
-<p>This document contains the help content for the <code>qcp</code> command-line program.</p>
+<p>
+  This document contains the help content for the <code>qcp</code> command-line
+  program.
+</p>
 
 <p><strong>Command Overview:</strong></p>
 
 <ul>
-<li><a href="#qcp"><code>qcp</code>↴</a></li>
+  <li><a href="#qcp"><code>qcp</code>↴</a></li>
 </ul>
 
 <h2><code>qcp</code></h2>
 
-<p>The QUIC Copier (qcp) is an experimental high-performance remote file copy utility for long-distance internet connections. It is intended as a drop-in replacement for scp.</p>
+<p>
+  The QUIC Copier (qcp) is an experimental high-performance remote file copy
+  utility for long-distance internet connections. It is intended as a drop-in
+  replacement for scp.
+</p>
 
-<p>qcp offers similar security to scp using existing, well-known mechanisms, and better throughput on congested networks.</p>
+<p>
+  qcp offers similar security to scp using existing, well-known mechanisms, and
+  better throughput on congested networks.
+</p>
 
-<p>e.g.   qcp some/file my-server:some-directory/</p>
+<p>e.g. qcp some/file my-server:some-directory/</p>
 
 <p>Exactly one of source and destination must be remote.</p>
 
 <p>Long options may be abbreviated where unambiguous.</p>
 
-<p>qcp will read your ssh config file to resolve any host name aliases you may have defined. The idea is, if you can ssh directly to a given host, you should be able to qcp to it by the same name. However, some particularly complicated ssh config files may be too much for qcp to understand. (In particular, Match directives are not currently supported.) In that case, you can use --ssh-config to provide an alternative configuration (or set it in your qcp configuration file).</p>
+<p>
+  qcp will read your ssh config file to resolve any host name aliases you may
+  have defined. The idea is, if you can ssh directly to a given host, you should
+  be able to qcp to it by the same name. However, some particularly complicated
+  ssh config files may be too much for qcp to understand. (In particular, Match
+  directives are not currently supported.) In that case, you can use
+  --ssh-config to provide an alternative configuration (or set it in your qcp
+  configuration file).
+</p>
 
 <p><strong>Usage:</strong> <code>qcp [OPTIONS] [SOURCE] [DESTINATION]</code></p>
 
 <h6><strong>Arguments:</strong></h6>
 
 <ul>
-<li><code>&lt;SOURCE&gt;</code> — The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE</li>
-<li><p><code>&lt;DESTINATION&gt;</code> — Destination. This may be a file or directory. It may be local or remote.</p>
+  <li>
+    <code>&lt;SOURCE&gt;</code> — The source file. This may be a local filename,
+    or remote specified as HOST:FILE or USER@HOST:FILE
+  </li>
+  <li>
+    <p>
+      <code>&lt;DESTINATION&gt;</code> — Destination. This may be a file or
+      directory. It may be local or remote.
+    </p>
 
-<p>If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there.</p></li>
+    <p>
+      If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply
+      HOST: or USER@HOST: to copy to your home directory there.
+    </p>
+  </li>
 </ul>
 
 <h6><strong>Options:</strong></h6>
 
 <ul>
-<li><p><code>--rx &lt;bytes&gt;</code>
-— The maximum network bandwidth we expect receiving data FROM the remote system.
-[default: 12.5M]</p>
+  <li>
+    <p>
+      <code>--rx &lt;bytes&gt;</code>
+      — The maximum network bandwidth we expect receiving data FROM the remote
+      system. [default: 12.5M]
+    </p>
 
-<p>This is the single most important configuration necessary for good performance!
-If you configure nothing else, at least set this to suit your network.</p>
+    <p>
+      This is the single most important configuration necessary for good
+      performance! If you configure nothing else, at least set this to suit your
+      network.
+    </p>
 
-<p>This parameter is always interpreted as the <em>local</em> bandwidth, whether operating in client or server mode.</p>
+    <p>
+      This parameter is always interpreted as the <em>local</em> bandwidth,
+      whether operating in client or server mode.
+    </p>
 
-<p>This may be specified directly as a number, or as an SI quantity
-like <code>10M</code> or <code>256k</code>. Note that this is described in BYTES, not bits;
-if (for example) you expect to fill a 1Gbit ethernet connection,
-125M would be a suitable setting.</p></li>
-<li><p><code>--tx &lt;bytes&gt;</code>
-— The maximum network bandwidth we expect sending data TO the remote system,
-if it is different from the bandwidth FROM the system.
-(For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)</p>
+    <p>
+      This may be specified directly as a number, or as an SI quantity like
+      <code>10M</code> or <code>256k</code>. Note that this is described in
+      BYTES, not bits; if (for example) you expect to fill a 1Gbit ethernet
+      connection, 125M would be a suitable setting.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--tx &lt;bytes&gt;</code>
+      — The maximum network bandwidth we expect sending data TO the remote
+      system, if it is different from the bandwidth FROM the system. (For
+      example, when you are connected via an asymmetric last-mile DSL or fibre
+      profile.)
+    </p>
 
-<p>Specify as a number, or as an SI quantity (e.g. <code>10M</code>).</p>
+    <p>Specify as a number, or as an SI quantity (e.g. <code>10M</code>).</p>
 
-<p>This parameter is always interpreted as the <em>local</em> bandwidth, whether operating in client or server mode.
-If not specified or 0, uses the value of <code>rx</code>.</p></li>
-<li><code>--rtt &lt;ms&gt;</code> — The expected network Round Trip time to the target system, in milliseconds. [default: 300]</li>
-<li><p><code>--congestion &lt;algorithm&gt;</code> — Specifies the congestion control algorithm to use. [default: cubic]</p>
+    <p>
+      This parameter is always interpreted as the <em>local</em> bandwidth,
+      whether operating in client or server mode. If not specified or 0, uses
+      the value of <code>rx</code>.
+    </p>
+  </li>
+  <li>
+    <code>--rtt &lt;ms&gt;</code> — The expected network Round Trip time to the
+    target system, in milliseconds. [default: 300]
+  </li>
+  <li>
+    <p>
+      <code>--congestion &lt;algorithm&gt;</code> — Specifies the congestion
+      control algorithm to use. [default: cubic]
+    </p>
 
-<p>Possible values:</p>
+    <p>Possible values:</p>
 
-<ul>
-<li><code>cubic</code>:
-The congestion algorithm TCP uses. This is good for most cases</li>
-<li><code>bbr</code>:
-(Use with caution!) An experimental algorithm created by Google, which increases goodput in some situations (particularly long and fat connections where the intervening buffers are shallow). However this comes at the cost of having more data in-flight, and much greater packet retransmission. See <code>https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/</code> for more discussion</li>
-<li><code>newreno</code>:
-The traditional "NewReno" congestion algorithm. This was the algorithm used in TCP before the introduction of Cubic</li>
-</ul></li>
-<li><p><code>--initial-congestion-window &lt;bytes&gt;</code>
-— (Network wizards only!)</p>
+    <ul>
+      <li>
+        <code>cubic</code>: The congestion algorithm TCP uses. This is good for
+        most cases
+      </li>
+      <li>
+        <code>bbr</code>: (Use with caution!) An experimental algorithm created
+        by Google, which increases goodput in some situations (particularly long
+        and fat connections where the intervening buffers are shallow). However
+        this comes at the cost of having more data in-flight, and much greater
+        packet retransmission. See <code
+        >https://blog.apnic.net/2020/01/10/when-to-use-and-not-use-bbr/</code>
+        for more discussion
+      </li>
+      <li>
+        <code>newreno</code>: The traditional "NewReno" congestion algorithm.
+        This was the algorithm used in TCP before the introduction of Cubic
+      </li>
+    </ul>
+  </li>
+  <li>
+    <p>
+      <code>--initial-congestion-window &lt;bytes&gt;</code>
+      — (Network wizards only!)
+    </p>
 
-<p>The initial value for the sending congestion control window, in bytes.
-If unspecified, the active congestion control algorithm decides.</p>
+    <p>
+      The initial value for the sending congestion control window, in bytes. If
+      unspecified, the active congestion control algorithm decides.
+    </p>
 
-<p>Setting this value too high reduces performance!</p>
+    <p>Setting this value too high reduces performance!</p>
 
-<p>This may be specified directly as a number, or as an SI quantity like <code>10k</code>.</p></li>
-<li><p><code>--port &lt;M-N&gt;</code> — Uses the given UDP port or range on the <strong>local</strong> endpoint. This can be useful when there is a firewall between the endpoints.</p>
+    <p>
+      This may be specified directly as a number, or as an SI quantity like
+      <code>10k</code>.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--port &lt;M-N&gt;</code> — Uses the given UDP port or range on the
+      <strong>local</strong> endpoint. This can be useful when there is a
+      firewall between the endpoints.
+    </p>
 
-<p>For example: <code>12345</code>, <code>20000-20100</code></p>
+    <p>For example: <code>12345</code>, <code>20000-20100</code></p>
 
-<p>If unspecified, uses any available UDP port.</p></li>
-<li><p><code>--timeout &lt;sec&gt;</code> — Connection timeout for the QUIC endpoints [seconds; default 5]</p>
+    <p>If unspecified, uses any available UDP port.</p>
+  </li>
+  <li>
+    <p>
+      <code>--timeout &lt;sec&gt;</code> — Connection timeout for the QUIC
+      endpoints [seconds; default 5]
+    </p>
 
-<p>This needs to be long enough for your network connection, but short enough to provide a timely indication that UDP may be blocked.</p></li>
-<li><p><code>--udp-buffer &lt;bytes&gt;</code> — Size of the UDP kernel buffer in bytes.</p>
+    <p>
+      This needs to be long enough for your network connection, but short enough
+      to provide a timely indication that UDP may be blocked.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--udp-buffer &lt;bytes&gt;</code> — Size of the UDP kernel buffer in
+      bytes.
+    </p>
 
-<p>Specify as an integer or as an SI quantity, e.g. 4M.</p>
+    <p>Specify as an integer or as an SI quantity, e.g. 4M.</p>
 
-<p>The default, 4M, should be good for most cases. However there may be high-bandwidth situations (10Gbps or more) where this becomes a bottleneck, or situations where you wish to restrict memory consumption.</p></li>
-<li><p><code>--packet-threshold &lt;packets&gt;</code> — Packet reordering loss detection threshold</p>
+    <p>
+      The default, 4M, should be good for most cases. However there may be
+      high-bandwidth situations (10Gbps or more) where this becomes a
+      bottleneck, or situations where you wish to restrict memory consumption.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--packet-threshold &lt;packets&gt;</code> — Packet reordering loss
+      detection threshold
+    </p>
 
-<p>The default, 3, should be good for most cases. See RFC 9002 s6.1 for more details.</p></li>
-<li><p><code>--time-threshold &lt;multiples of RTT&gt;</code> — Time reordering loss detection threshold</p>
+    <p>
+      The default, 3, should be good for most cases. See RFC 9002 s6.1 for more
+      details.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--time-threshold &lt;multiples of RTT&gt;</code> — Time reordering
+      loss detection threshold
+    </p>
 
-<p>The default, 1.125, should be good for most cases. See RFC 9002 s6.1 for more details.</p></li>
-<li><p><code>--initial-mtu &lt;bytes&gt;</code> — The maximum UDP payload size to use before initial MTU discovery has completed (default: 1200)</p>
+    <p>
+      The default, 1.125, should be good for most cases. See RFC 9002 s6.1 for
+      more details.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--initial-mtu &lt;bytes&gt;</code> — The maximum UDP payload size to
+      use before initial MTU discovery has completed (default: 1200)
+    </p>
 
-<p>QUIC runs dynamic Path MTU detection, so this option is not necessary.</p>
+    <p>
+      QUIC runs dynamic Path MTU detection, so this option is not necessary.
+    </p>
 
-<p>Setting it appropriately can speed up the initial transfer phase, particularly if jumbo frames are in use.</p>
+    <p>
+      Setting it appropriately can speed up the initial transfer phase,
+      particularly if jumbo frames are in use.
+    </p>
 
-<p>Setting it higher than supported will cause very poor performance while QUIC deals with blackhole events and figures out what the network is actually capable of.</p></li>
-<li><p><code>--min-mtu &lt;bytes&gt;</code> — The minimum MTU that the network is guaranteed to support.</p>
+    <p>
+      Setting it higher than supported will cause very poor performance while
+      QUIC deals with blackhole events and figures out what the network is
+      actually capable of.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--min-mtu &lt;bytes&gt;</code> — The minimum MTU that the network is
+      guaranteed to support.
+    </p>
 
-<p>Unless you have very good control over all the network infrastructure in use, this setting is unlikely to help you. The default, 1200, is the protocol minimum.</p>
+    <p>
+      Unless you have very good control over all the network infrastructure in
+      use, this setting is unlikely to help you. The default, 1200, is the
+      protocol minimum.
+    </p>
 
-<p>Setting this higher than the network actually supports will cause very poor performance and unpredictable effects; it may not be possible to complete a file transfer in a reasonable time.</p></li>
-<li><p><code>--max-mtu &lt;bytes&gt;</code> — The maximum value that Path MTU discovery will search for (default: 1452)</p>
+    <p>
+      Setting this higher than the network actually supports will cause very
+      poor performance and unpredictable effects; it may not be possible to
+      complete a file transfer in a reasonable time.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--max-mtu &lt;bytes&gt;</code> — The maximum value that Path MTU
+      discovery will search for (default: 1452)
+    </p>
 
-<p>The maximum MTU only really affects the sending direction of the connection.</p>
+    <p>
+      The maximum MTU only really affects the sending direction of the
+      connection.
+    </p>
 
-<p>If jumbo frames are possible with your end-to-end network connection, set this appropriately.</p>
+    <p>
+      If jumbo frames are possible with your end-to-end network connection, set
+      this appropriately.
+    </p>
 
-<p>The default is reasonably conservative. Depending on your network connection and any tunnelling or VPN in use, hosts connected by ethernet may be able to support a slightly higher maximum MTU.</p>
+    <p>
+      The default is reasonably conservative. Depending on your network
+      connection and any tunnelling or VPN in use, hosts connected by ethernet
+      may be able to support a slightly higher maximum MTU.
+    </p>
 
-<p>Some connections do not support even this MTU, so for best efficiency - particularly with small file transfers - it may be worth setting this lower to avoid the penalty caused by MTU detection triggering black hole behaviour.</p>
+    <p>
+      Some connections do not support even this MTU, so for best efficiency -
+      particularly with small file transfers - it may be worth setting this
+      lower to avoid the penalty caused by MTU detection triggering black hole
+      behaviour.
+    </p>
 
-<p>It is safe to set a high limit, but that may reduce efficiency as MTU discovery will take longer to complete.</p></li>
-<li><code>--address-family &lt;family&gt;</code> — Forces use of a particular IP version when connecting to the remote. [default: any]</li>
-<li><code>--ssh &lt;ssh-client&gt;</code> — Specifies the ssh client program to use [default: <code>ssh</code>]</li>
-<li><code>--remote-qcp-binary &lt;PATH&gt;</code> — Path to the qcp binary on the remote host; qcp will run <code>&lt;path&gt; --server</code> after connecting. Use this if qcp is installed outside the remote PATH.</li>
-<li><p><code>-S &lt;ssh-option&gt;</code>
-— Provides an additional option or argument to pass to the ssh client. [default: none]</p>
+    <p>
+      It is safe to set a high limit, but that may reduce efficiency as MTU
+      discovery will take longer to complete.
+    </p>
+  </li>
+  <li>
+    <code>--address-family &lt;family&gt;</code> — Forces use of a particular IP
+    version when connecting to the remote. [default: any]
+  </li>
+  <li>
+    <code>--ssh &lt;ssh-client&gt;</code> — Specifies the ssh client program to
+    use [default: <code>ssh</code>]
+  </li>
+  <li>
+    <code>--remote-qcp-binary &lt;PATH&gt;</code> — Path to the qcp binary on
+    the remote host; qcp will run <code>&lt;path&gt; --server</code> after
+    connecting. Use this if qcp is installed outside the remote PATH.
+  </li>
+  <li>
+    <p>
+      <code>-S &lt;ssh-option&gt;</code>
+      — Provides an additional option or argument to pass to the ssh client.
+      [default: none]
+    </p>
 
-<p>On the command line, you must repeat <code>-S</code> for each argument.
-For example, to pass <code>-i /dev/null</code> to ssh, specify: <code>-S -i -S /dev/null</code></p></li>
-<li><p><code>-P</code>, <code>--remote-port &lt;M-N&gt;</code> — Uses the given UDP port or range on the <strong>remote</strong> endpoint. This can be useful when there is a firewall between the endpoints.</p>
+    <p>
+      On the command line, you must repeat <code>-S</code> for each argument.
+      For example, to pass <code>-i /dev/null</code> to ssh, specify: <code>-S
+        -i -S /dev/null</code>
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>-P</code>, <code>--remote-port &lt;M-N&gt;</code> — Uses the given
+      UDP port or range on the <strong>remote</strong> endpoint. This can be
+      useful when there is a firewall between the endpoints.
+    </p>
 
-<p>For example: <code>12345</code>, <code>20000-20100</code></p>
+    <p>For example: <code>12345</code>, <code>20000-20100</code></p>
 
-<p>If unspecified, uses any available UDP port.</p></li>
-<li><p><code>-l</code>, <code>--remote-user &lt;login_name&gt;</code> — Specifies the user on the remote machine to connect as.</p>
+    <p>If unspecified, uses any available UDP port.</p>
+  </li>
+  <li>
+    <p>
+      <code>-l</code>, <code>--remote-user &lt;login_name&gt;</code> — Specifies
+      the user on the remote machine to connect as.
+    </p>
 
-<p>This is functionally the same as specifying a remote filename <code>user@host:file</code>. If unspecified, we leave it up to ssh to determine.</p></li>
-<li><code>--time-format &lt;FORMAT&gt;</code> — Specifies the time format to use when printing messages to the console or to file [default: local]</li>
-<li><p><code>--ssh-config &lt;FILE&gt;</code> — Alternative ssh config file(s)</p>
+    <p>
+      This is functionally the same as specifying a remote filename <code
+      >user@host:file</code>. If unspecified, we leave it up to ssh to
+      determine.
+    </p>
+  </li>
+  <li>
+    <code>--time-format &lt;FORMAT&gt;</code> — Specifies the time format to use
+    when printing messages to the console or to file [default: local]
+  </li>
+  <li>
+    <p>
+      <code>--ssh-config &lt;FILE&gt;</code> — Alternative ssh config file(s)
+    </p>
 
-<p>By default, qcp reads your user and system ssh config files to look for Hostname aliases. In some cases the logic in qcp may not read them successfully; this is an escape hatch, allowing you to specify one or more alternative files to read instead (which may be empty, nonexistent or /dev/null).</p>
+    <p>
+      By default, qcp reads your user and system ssh config files to look for
+      Hostname aliases. In some cases the logic in qcp may not read them
+      successfully; this is an escape hatch, allowing you to specify one or more
+      alternative files to read instead (which may be empty, nonexistent or
+      /dev/null).
+    </p>
 
-<p>This option is really intended to be used in a qcp configuration file. On the command line, you can repeat <code>--ssh-config file</code> as many times as needed.</p></li>
-<li><p><code>--ssh-subsystem</code> — Ssh subsystem mode</p>
+    <p>
+      This option is really intended to be used in a qcp configuration file. On
+      the command line, you can repeat <code>--ssh-config file</code> as many
+      times as needed.
+    </p>
+  </li>
+  <li>
+    <p><code>--ssh-subsystem</code> — Ssh subsystem mode</p>
 
-<p>This mode causes qcp to run <code>ssh &lt;host&gt; -s qcp</code> instead of <code>ssh &lt;host&gt; qcp --server</code>.</p>
+    <p>
+      This mode causes qcp to run <code>ssh &lt;host&gt; -s qcp</code> instead
+      of <code>ssh &lt;host&gt; qcp --server</code>.
+    </p>
 
-<p>This is useful where the remote system has a locked-down <code>PATH</code> and the qcp binary is not resident on that <code>PATH</code>. The remote system sshd has to be configured with a line like this:</p>
+    <p>
+      This is useful where the remote system has a locked-down <code>PATH</code>
+      and the qcp binary is not resident on that <code>PATH</code>. The remote
+      system sshd has to be configured with a line like this:
+    </p>
 
-<p><code>Subsystem qcp /usr/local/bin/qcp --server</code></p></li>
-<li><p><code>--color &lt;mode&gt;</code> — Colour mode for console output (default: auto)</p>
+    <p><code>Subsystem qcp /usr/local/bin/qcp --server</code></p>
+  </li>
+  <li>
+    <p>
+      <code>--color &lt;mode&gt;</code> — Colour mode for console output
+      (default: auto)
+    </p>
 
-<p>Passing <code>--color</code> without a value is equivalent to <code>--color always</code>.</p>
+    <p>
+      Passing <code>--color</code> without a value is equivalent to <code
+      >--color always</code>.
+    </p>
 
-<p>Note that color configuration is not shared with the remote system, so the color output
-from the remote system (log messages, remote-config) will be coloured per the
-config file on the remote system.</p>
+    <p>
+      Note that color configuration is not shared with the remote system, so the
+      color output from the remote system (log messages, remote-config) will be
+      coloured per the config file on the remote system.
+    </p>
 
-<p>qcp also supports the <code>CLICOLOR</code>, <code>CLICOLOR_FORCE</code> and <code>NO_COLOR</code> environment variables.
-See https://bixense.com/clicolors/ for more details.</p>
+    <p>
+      qcp also supports the <code>CLICOLOR</code>, <code>CLICOLOR_FORCE</code>
+      and <code>NO_COLOR</code> environment variables. See
+      https://bixense.com/clicolors/ for more details.
+    </p>
 
-<p>CLI options take precedence over the configuration file, which takes precedence over environment variables.</p>
+    <p>
+      CLI options take precedence over the configuration file, which takes
+      precedence over environment variables.
+    </p>
 
-<p>Possible values:</p>
+    <p>Possible values:</p>
 
-<ul>
-<li><code>always</code>:
-Forces colours on, whatever is happening</li>
-<li><code>never</code>:
-Never use colours</li>
-<li><code>auto</code>:
-Use colours only when writing to a terminal. This is the default behaviour</li>
-</ul></li>
-<li><p><code>--tls-auth-type &lt;type&gt;</code> — Forces the use of a particular TLS authentication type (default: any)</p>
+    <ul>
+      <li>
+        <code>always</code>: Forces colours on, whatever is happening
+      </li>
+      <li>
+        <code>never</code>: Never use colours
+      </li>
+      <li>
+        <code>auto</code>: Use colours only when writing to a terminal. This is
+        the default behaviour
+      </li>
+    </ul>
+  </li>
+  <li>
+    <p>
+      <code>--tls-auth-type &lt;type&gt;</code> — Forces the use of a particular
+      TLS authentication type (default: any)
+    </p>
 
-<p>Possible values:</p>
+    <p>Possible values:</p>
 
-<ul>
-<li><code>any</code>:
-No preference. Autodetects based on protocol compatibility</li>
-<li><code>x509</code>:
-Self-signed X509 certificate</li>
-<li><code>rawpublickey</code>:
-Raw (RFC7250) public key</li>
-</ul></li>
-<li><p><code>--aes256</code> — Use only AES256 cipher suites as far as possible</p>
+    <ul>
+      <li>
+        <code>any</code>: No preference. Autodetects based on protocol
+        compatibility
+      </li>
+      <li>
+        <code>x509</code>: Self-signed X509 certificate
+      </li>
+      <li>
+        <code>rawpublickey</code>: Raw (RFC7250) public key
+      </li>
+    </ul>
+  </li>
+  <li>
+    <p>
+      <code>--aes256</code> — Use only AES256 cipher suites as far as possible
+    </p>
 
-<p>This option is included for those who have a preference to use only AES256-based algorithms (aka CNSA 2.0). Note this option does not fully disable AES128, which is required for the QUIC 1.0 Initial Packet.</p></li>
-<li><p><code>--show-config</code> — Outputs the local configuration, then exits.</p>
+    <p>
+      This option is included for those who have a preference to use only
+      AES256-based algorithms (aka CNSA 2.0). Note this option does not fully
+      disable AES128, which is required for the QUIC 1.0 Initial Packet.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--show-config</code> — Outputs the local configuration, then exits.
+    </p>
 
-<p>If a remote <code>SOURCE</code> or <code>DESTINATION</code> argument is given, outputs the configuration we would use for operations to that host.</p>
+    <p>
+      If a remote <code>SOURCE</code> or <code>DESTINATION</code> argument is
+      given, outputs the configuration we would use for operations to that host.
+    </p>
 
-<p>If not, outputs only global settings from configuration, which may be overridden by <code>Host</code> blocks in configuration files.</p></li>
-<li><p><code>--config-files</code> — Outputs the paths to configuration file(s), then exits.</p>
+    <p>
+      If not, outputs only global settings from configuration, which may be
+      overridden by <code>Host</code> blocks in configuration files.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--config-files</code> — Outputs the paths to configuration file(s),
+      then exits.
+    </p>
 
-<p>This option cannot be used with any other option.</p></li>
-<li><p><code>--help-buffers</code> — Outputs additional information about kernel UDP buffer sizes and platform-specific tips.</p>
+    <p>This option cannot be used with any other option.</p>
+  </li>
+  <li>
+    <p>
+      <code>--help-buffers</code> — Outputs additional information about kernel
+      UDP buffer sizes and platform-specific tips.
+    </p>
 
-<p>Note that the recommendations are based on the <code>udp_buffer</code> field in your configuration, which you can also set on the CLI.</p></li>
-<li><p><code>--list-features</code> — Outputs all known protocol features with their compatibility levels.</p>
+    <p>
+      Note that the recommendations are based on the <code>udp_buffer</code>
+      field in your configuration, which you can also set on the CLI.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--list-features</code> — Outputs all known protocol features with
+      their compatibility levels.
+    </p>
 
-<p>This option cannot be used with any other option.</p></li>
-<li><p><code>--debug</code> — Enable detailed debug output</p>
+    <p>This option cannot be used with any other option.</p>
+  </li>
+  <li>
+    <p><code>--debug</code> — Enable detailed debug output</p>
 
-<p>This has the same effect as setting <code>RUST_LOG=qcp=debug</code> in the environment. If present, <code>RUST_LOG</code> overrides this option.</p></li>
-<li><p><code>--log-file &lt;FILE&gt;</code> — Log to a file</p>
+    <p>
+      This has the same effect as setting <code>RUST_LOG=qcp=debug</code> in the
+      environment. If present, <code>RUST_LOG</code> overrides this option.
+    </p>
+  </li>
+  <li>
+    <p><code>--log-file &lt;FILE&gt;</code> — Log to a file</p>
 
-<p>By default the log receives everything printed to stderr. To override this behaviour, set the environment variable <code>RUST_LOG_FILE_DETAIL</code> (same semantics as <code>RUST_LOG</code>).</p></li>
-<li><p><code>-q</code>, <code>--quiet</code> — Quiet mode</p>
+    <p>
+      By default the log receives everything printed to stderr. To override this
+      behaviour, set the environment variable <code>RUST_LOG_FILE_DETAIL</code>
+      (same semantics as <code>RUST_LOG</code>).
+    </p>
+  </li>
+  <li>
+    <p><code>-q</code>, <code>--quiet</code> — Quiet mode</p>
 
-<p>Switches off progress display and statistics; reports only errors</p></li>
-<li><code>-s</code>, <code>--statistics</code> — Show additional transfer statistics</li>
-<li><code>--remote-debug</code> — Enables detailed debug output from the remote endpoint (this may interfere with transfer speeds)</li>
-<li><code>--profile</code> — Output timing profile data after completion</li>
-<li><code>--dry-run</code> — Connects to a remote server but does not actually transfer any files. This is useful to test that the control channel works and when debugging the negotiated bandwidth parameters (see also <code>--remote-config</code>)</li>
-<li><p><code>--remote-config</code> — Outputs the server's configuration for this connection. (Unlike <code>--show-config</code>, this option does not prevent a file transfer. However, you can do so by selecting <code>--dry-run</code> mode.)</p>
+    <p>Switches off progress display and statistics; reports only errors</p>
+  </li>
+  <li>
+    <code>-s</code>, <code>--statistics</code> — Show additional transfer
+    statistics
+  </li>
+  <li>
+    <code>--remote-debug</code> — Enables detailed debug output from the remote
+    endpoint (this may interfere with transfer speeds)
+  </li>
+  <li><code>--profile</code> — Output timing profile data after completion</li>
+  <li>
+    <code>--dry-run</code> — Connects to a remote server but does not actually
+    transfer any files. This is useful to test that the control channel works
+    and when debugging the negotiated bandwidth parameters (see also <code
+    >--remote-config</code>)
+  </li>
+  <li>
+    <p>
+      <code>--remote-config</code> — Outputs the server's configuration for this
+      connection. (Unlike <code>--show-config</code>, this option does not
+      prevent a file transfer. However, you can do so by selecting <code
+      >--dry-run</code> mode.)
+    </p>
 
-<p>The output shows both the server's <em>static</em> configuration (by reading config files) and its <em>final</em> configuration (taking account of the client's expressed preferences).</p></li>
-<li><code>-p</code>, <code>--preserve</code> — Preserves file modification times and permissions as far as possible</li>
-<li><p><code>-4</code> — Forces use of IPv4</p>
+    <p>
+      The output shows both the server's <em>static</em> configuration (by
+      reading config files) and its <em>final</em> configuration (taking account
+      of the client's expressed preferences).
+    </p>
+  </li>
+  <li>
+    <code>-p</code>, <code>--preserve</code> — Preserves file modification times
+    and permissions as far as possible
+  </li>
+  <li>
+    <p><code>-4</code> — Forces use of IPv4</p>
 
-<p>This is a convenience alias for <code>--address-family inet</code></p></li>
-<li><p><code>-6</code> — Forces use of IPv6</p>
+    <p>This is a convenience alias for <code>--address-family inet</code></p>
+  </li>
+  <li>
+    <p><code>-6</code> — Forces use of IPv6</p>
 
-<p>This is a convenience alias for <code>--address-family inet6</code></p></li>
+    <p>This is a convenience alias for <code>--address-family inet6</code></p>
+  </li>
 </ul>
 
-<hr/>
+<hr />
 
-<p><small><i>
-    This document was generated automatically by
-    <a href="https://crates.io/crates/clap-markdown"><code>clap-markdown</code></a>.
-</i></small></p>
+<p>
+  <small><i>
+      This document was generated automatically by
+      <a href="https://crates.io/crates/clap-markdown"><code
+        >clap-markdown</code></a>.
+    </i></small>
+</p>

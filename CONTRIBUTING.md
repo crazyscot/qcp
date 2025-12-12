@@ -29,11 +29,11 @@ If you're thinking of contributing something non-trivial, it might be best to ra
 | Check                 | How to run it yourself                                    | Notes                                                                     |
 | --------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------- |
 | Code style            | `cargo fmt --all --check`                                 | For VS Code users, `editor.formatOnSave=true` is set                      |
-| Everything must build | `cargo build --all-targets`                               |
-| Unit tests pass       | `cargo test`                                              |
+| Everything must build | `cargo build --all-targets`                               |                                                                           |
+| Unit tests pass       | `cargo test`                                              |                                                                           |
 | Lints                 | `cargo clippy --all-targets`                              | This is a reasonably pedantic set of lints, which I make no apologies for |
-| Docs build            | `cargo doc --no-deps`                                     |
-| Code coverage         | `./scripts/coverage`, then examine `target/coverage/html` |
+| Docs build            | `cargo doc --no-deps`                                     |                                                                           |
+| Code coverage         | `./scripts/coverage`, then examine `target/coverage/html` |                                                                           |
 
 [issue]: https://github.com/crazyscot/qcp/issues/new/choose
 [issues list]: https://github.com/crazyscot/qcp/issues

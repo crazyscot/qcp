@@ -77,9 +77,8 @@ jobs:
         with:
           target: ${{ matrix.target }}
       - name: Additional rust tools for packaging
-        uses:
-          taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
-          # this action is used in multiple places
+        uses: taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
+        # this action is used in multiple places
         with:
           tool: cargo-cyclonedx@0.5.7${{ env.Q_BUILD_DEB == '1' && ',cargo-deb@3.6.0' || ''}}
           checksum: true
@@ -93,9 +92,8 @@ jobs:
       # 31 Mar 2025: Disabled cacheing.
       # Full cacheing with `cache-targets` saves 30-40s per platform, but at a high space cost.
       # Cacheing with cache-targets: false is a net slowdown.
-      - uses:
-          Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
-          # this action is used in multiple places
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
+        # this action is used in multiple places
         with:
           key: ${{ inputs.test && 'test' || 'package' }}
           cache-on-failure: true
@@ -120,6 +118,7 @@ jobs:
           ref: refs/tags/dry-run # silence a warning
           token: ${{ secrets.GITHUB_TOKEN }} # Needs write permission on release
           target: ${{ matrix.target }}
+          # pretty-yaml-ignore
           include: "\
             README.md,LICENSE,CHANGELOG.md,\
             qcp/qcp.cdx.xml,\
@@ -150,9 +149,8 @@ jobs:
         env:
           # Compute the flag to pass to the script
           RELEASE_FLAG: ${{ inputs.release && '--release' || '--no-release' }}
-        run:
-          scripts/make-debian-package $RELEASE_FLAG ${{ matrix.target }}
-          # this script sets the output `deb`
+        run: scripts/make-debian-package $RELEASE_FLAG ${{ matrix.target }}
+      # this script sets the output `deb`
       - name: Upload deb artifact to CI result
         if: env.Q_BUILD_DEB == '1'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
