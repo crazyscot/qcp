@@ -10,7 +10,7 @@
   "yaml": {
   },
   "excludes": [
-    "**/*-lock.json"
+    "CHANGELOG.md"
   ],
   "plugins": [
     "https://plugins.dprint.dev/json-0.21.0.wasm",
