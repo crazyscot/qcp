@@ -297,9 +297,16 @@
     use [default: <code>ssh</code>]
   </li>
   <li>
-    <code>--remote-qcp-binary &lt;PATH&gt;</code> — Path to the qcp binary on
-    the remote host; qcp will run <code>&lt;path&gt; --server</code> after
-    connecting. Use this if qcp is installed outside the remote PATH.
+    <p>
+      <code>--remote-qcp-binary &lt;PATH&gt;</code> — Specifies the path to the
+      qcp binary on the remote machine. [default: <code>qcp</code>]
+    </p>
+
+    <p>
+      This is useful where the remote system has a locked-down <code>PATH</code>
+      and the qcp binary is installed in a non-standard location. qcp will run
+      <code>&lt;path&gt; --server</code> after logging in.
+    </p>
   </li>
   <li>
     <p>

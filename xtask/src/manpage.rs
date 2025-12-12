@@ -42,6 +42,7 @@ pub(crate) fn manpage(mut args: Arguments) -> Result<()> {
         .env("QCP_MANPAGE_OUT_DIR", outdir.clone())
         .run()?;
     println!("Man pages written to {outdir}/");
+    // dprint doesn't know about roff files
     Ok(())
 }
 
@@ -71,7 +72,9 @@ pub(crate) fn cli_doc(mut args: Arguments) -> Result<()> {
 
     let cmd = cmd!(sh, "markdown {outdir}/qcp.md").output()?;
     let html = String::from_utf8_lossy(&cmd.stdout);
-    std::fs::write(format!("{outdir}/qcp.html"), html.to_string())?;
+    let path = format!("{outdir}/qcp.html");
+    std::fs::write(&path, html.to_string())?;
     println!("HTML written to {outdir}/qcp.html");
+    super::dprint_fmt(&[path])?;
     Ok(())
 }

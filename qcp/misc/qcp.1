@@ -8,7 +8,7 @@ qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH SYNOPSIS
-\fBqcp\fR [\fB\-\-rx\fR] [\fB\-\-tx\fR] [\fB\-\-rtt\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-\-port\fR] [\fB\-\-timeout\fR] [\fB\-\-udp\-buffer\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-initial\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-address\-family\fR] [\fB\-\-ssh\fR] [\fB\-S \fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-time\-format\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-color\fR] [\fB\-\-tls\-auth\-type\fR] [\fB\-\-aes256\fR] [\fB\-\-show\-config\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-\-list\-features\fR] [\fB\-\-debug\fR] [\fB\-\-log\-file\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-profile\fR] [\fB\-\-dry\-run\fR] [\fB\-\-remote\-config\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
+\fBqcp\fR [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-\-address\-family\fR] [\fB\-\-config\-files\fR] [\fB\-\-congestion\fR] [\fB\-\-debug\fR] [\fB\-\-dry\-run\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-log\-file\fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-\-port\fR] [\fB\-\-profile\fR] [\fB\-\-remote\-config\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-remote\-qcp\-binary\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-S \fR] [\fB\-\-show\-config\fR] [\fB\-\-ssh\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-time\-format\fR] [\fB\-\-timeout\fR] [\fB\-\-tls\-auth\-type\fR] [\fB\-\-rx\fR] [\fB\-\-tx\fR] [\fB\-\-udp\-buffer\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-rtt\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-initial\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-color\fR] [\fB\-\-aes256\fR] [\fB\-\-list\-features\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-\-help\-buffers\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE\fR] [\fIDESTINATION\fR] 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH DESCRIPTION
@@ -192,34 +192,23 @@ Some connections do not support even this MTU, so for best efficiency \- particu
 It is safe to set a high limit, but that may reduce efficiency as MTU discovery will take longer to complete.
 .SH CONNECTION
 .TP
-\fB\-\-port\fR \fI<M\-N>\fR
-Uses the given UDP port or range on the **local** endpoint. This can be useful when there is a firewall between the endpoints.
+\fB\-4\fR
+Forces use of IPv4
 
-For example: `12345`, `20000\-20100`
-
-If unspecified, uses any available UDP port.
+This is a convenience alias for `\-\-address\-family inet`
 .TP
-\fB\-\-timeout\fR \fI<sec>\fR
-Connection timeout for the QUIC endpoints [seconds; default 5]
+\fB\-6\fR
+Forces use of IPv6
 
-This needs to be long enough for your network connection, but short enough to provide a timely indication that UDP may be blocked.
+This is a convenience alias for `\-\-address\-family inet6`
 .TP
 \fB\-\-address\-family\fR \fI<family>\fR
 Forces use of a particular IP version when connecting to the remote. [default: any]
 .TP
-\fB\-\-ssh\fR \fI<ssh\-client>\fR
-Specifies the ssh client program to use [default: `ssh`]
-.TP
-\fB\-\-remote\-qcp\-binary\fR \fI<PATH>\fR
-Specifies the path to the qcp binary on the remote machine. qcp will run `<path> \-\-server` after connecting.
-Use this if qcp is installed outside the remote PATH. [default: `qcp`]
-.TP
-\fB\-S\fR \fI<ssh\-option>\fR
+\fB\-l\fR, \fB\-\-remote\-user\fR \fI<login_name>\fR
+Specifies the user on the remote machine to connect as.
 
-Provides an additional option or argument to pass to the ssh client. [default: none]
-
-On the command line, you must repeat `\-S` for each argument.
-For example, to pass `\-i /dev/null` to ssh, specify: `\-S \-i \-S /dev/null`
+This is functionally the same as specifying a remote filename `user@host:file`. If unspecified, we leave it up to ssh to determine.
 .TP
 \fB\-P\fR, \fB\-\-remote\-port\fR \fI<M\-N>\fR
 Uses the given UDP port or range on the **remote** endpoint. This can be useful when there is a firewall between the endpoints.
@@ -228,10 +217,27 @@ For example: `12345`, `20000\-20100`
 
 If unspecified, uses any available UDP port.
 .TP
-\fB\-l\fR, \fB\-\-remote\-user\fR \fI<login_name>\fR
-Specifies the user on the remote machine to connect as.
+\fB\-\-port\fR \fI<M\-N>\fR
+Uses the given UDP port or range on the **local** endpoint. This can be useful when there is a firewall between the endpoints.
 
-This is functionally the same as specifying a remote filename `user@host:file`. If unspecified, we leave it up to ssh to determine.
+For example: `12345`, `20000\-20100`
+
+If unspecified, uses any available UDP port.
+.TP
+\fB\-\-remote\-qcp\-binary\fR \fI<PATH>\fR
+Specifies the path to the qcp binary on the remote machine. [default: `qcp`]
+
+This is useful where the remote system has a locked\-down `PATH` and the qcp binary is installed in a non\-standard location. qcp will run `<path> \-\-server` after logging in.
+.TP
+\fB\-S\fR \fI<ssh\-option>\fR
+
+Provides an additional option or argument to pass to the ssh client. [default: none]
+
+On the command line, you must repeat `\-S` for each argument.
+For example, to pass `\-i /dev/null` to ssh, specify: `\-S \-i \-S /dev/null`
+.TP
+\fB\-\-ssh\fR \fI<ssh\-client>\fR
+Specifies the ssh client program to use [default: `ssh`]
 .TP
 \fB\-\-ssh\-config\fR \fI<FILE>\fR
 Alternative ssh config file(s)
@@ -248,6 +254,11 @@ This mode causes qcp to run `ssh <host> \-s qcp` instead of `ssh <host> qcp \-\-
 This is useful where the remote system has a locked\-down `PATH` and the qcp binary is not resident on that `PATH`. The remote system sshd has to be configured with a line like this:
 
 `Subsystem qcp /usr/local/bin/qcp \-\-server`
+.TP
+\fB\-\-timeout\fR \fI<sec>\fR
+Connection timeout for the QUIC endpoints [seconds; default 5]
+
+This needs to be long enough for your network connection, but short enough to provide a timely indication that UDP may be blocked.
 .TP
 \fB\-\-tls\-auth\-type\fR \fI<type>\fR
 Forces the use of a particular TLS authentication type (default: any)
@@ -268,44 +279,27 @@ rawpublickey: Raw (RFC7250) public key
 Use only AES256 cipher suites as far as possible
 
 This option is included for those who have a preference to use only AES256\-based algorithms (aka CNSA 2.0). Note this option does not fully disable AES128, which is required for the QUIC 1.0 Initial Packet.
-.TP
-\fB\-4\fR
-Forces use of IPv4
-
-This is a convenience alias for `\-\-address\-family inet`
-.TP
-\fB\-6\fR
-Forces use of IPv6
-
-This is a convenience alias for `\-\-address\-family inet6`
 .SH OUTPUT
-.TP
-\fB\-\-time\-format\fR \fI<FORMAT>\fR
-Specifies the time format to use when printing messages to the console or to file [default: local]
 .TP
 \fB\-\-log\-file\fR \fI<FILE>\fR
 Log to a file
 
 By default the log receives everything printed to stderr. To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
 .TP
-\fB\-q\fR, \fB\-\-quiet\fR
-Quiet mode
-
-Switches off progress display and statistics; reports only errors
+\fB\-\-profile\fR
+Output timing profile data after completion
 .TP
 \fB\-s\fR, \fB\-\-statistics\fR
 Show additional transfer statistics
 .TP
-\fB\-\-profile\fR
-Output timing profile data after completion
-.SH CONFIGURATION
+\fB\-\-time\-format\fR \fI<FORMAT>\fR
+Specifies the time format to use when printing messages to the console or to file [default: local]
 .TP
-\fB\-\-show\-config\fR
-Outputs the local configuration, then exits.
+\fB\-q\fR, \fB\-\-quiet\fR
+Quiet mode
 
-If a remote `SOURCE` or `DESTINATION` argument is given, outputs the configuration we would use for operations to that host.
-
-If not, outputs only global settings from configuration, which may be overridden by `Host` blocks in configuration files.
+Switches off progress display and statistics; reports only errors
+.SH CONFIGURATION
 .TP
 \fB\-\-config\-files\fR
 Outputs the paths to configuration file(s), then exits.
@@ -319,6 +313,13 @@ Connects to a remote server but does not actually transfer any files. This is us
 Outputs the server\*(Aqs configuration for this connection. (Unlike `\-\-show\-config`, this option does not prevent a file transfer. However, you can do so by selecting `\-\-dry\-run` mode.)
 
 The output shows both the server\*(Aqs _static_ configuration (by reading config files) and its _final_ configuration (taking account of the client\*(Aqs expressed preferences).
+.TP
+\fB\-\-show\-config\fR
+Outputs the local configuration, then exits.
+
+If a remote `SOURCE` or `DESTINATION` argument is given, outputs the configuration we would use for operations to that host.
+
+If not, outputs only global settings from configuration, which may be overridden by `Host` blocks in configuration files.
 .SH COMPATIBILITY
 .TP
 \fB\-\-list\-features\fR

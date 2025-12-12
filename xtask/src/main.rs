@@ -2,7 +2,7 @@
 //! See <https://github.com/matklad/cargo-xtask>
 // (c) 2025 Ross Younger
 
-use std::{fs::File, io::BufReader, path::PathBuf, process::Command};
+use std::{ffi::OsStr, fs::File, io::BufReader, path::PathBuf, process::Command};
 
 use anyhow::{Context as _, Result};
 use flate2::{Compression, GzBuilder};
@@ -110,5 +110,14 @@ fn gzip(from: PathBuf, to: PathBuf) -> Result<()> {
         .write(outfile, Compression::default());
     std::io::copy(&mut inbuffer, &mut gz)?;
     let _ = gz.finish()?;
+    Ok(())
+}
+
+fn dprint_fmt<P: AsRef<OsStr>>(paths: &[P]) -> Result<()> {
+    let mut c = Command::new("dprint");
+    c.args(["fmt"]).args(paths);
+    eprintln!("{c:?}");
+    let res = c.spawn().context("Invoking dprint fmt")?.wait()?;
+    anyhow::ensure!(res.success(), "dprint fmt: {res}");
     Ok(())
 }
