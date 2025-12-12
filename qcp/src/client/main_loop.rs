@@ -25,7 +25,10 @@ use anyhow::{Context, Result};
 use futures_util::TryFutureExt as _;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
-use std::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::{
+    future::Future,
+    net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6},
+};
 use tokio::{
     self,
     process::{ChildStdin, ChildStdout},
@@ -192,30 +195,17 @@ impl Client {
 
         self.spinner.set_message("Transferring data");
         self.timers.next(SHOW_TIME);
-        let mut aggregate_stats = CommandStats::new();
-        let mut overall_success = true;
-        for job in &prep_result.job_specs {
-            let stream_pair =
-                SendReceivePair::from(connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?);
-            let result = self
-                .manage_request(
-                    stream_pair,
-                    job.clone(),
-                    &config,
-                    self.parameters.quiet,
-                    qcp_conn.control.selected_compat,
-                )
-                .await;
-
-            aggregate_stats.payload_bytes += result.stats.payload_bytes;
-            aggregate_stats.peak_transfer_rate = aggregate_stats
-                .peak_transfer_rate
-                .max(result.stats.peak_transfer_rate);
-            if !result.success {
-                overall_success = false;
-                break;
-            }
-        }
+        let quiet = self.parameters.quiet;
+        let compat = qcp_conn.control.selected_compat;
+        let (overall_success, aggregate_stats) = process_job_requests(
+            &prep_result.job_specs,
+            || async {
+                let bi = connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?;
+                Ok(SendReceivePair::from(bi))
+            },
+            |stream_pair, job| self.manage_request(stream_pair, job, &config, quiet, compat),
+        )
+        .await?;
 
         // Closedown ----------------------
         let remote_stats = self.closedown(&config, qcp_conn).await?;
@@ -468,18 +458,56 @@ impl Client {
     }
 }
 
+async fn process_job_requests<S, R, OpenStream, OpenFut, HandleJob, HandleFut>(
+    jobs: &[CopyJobSpec],
+    mut open_stream: OpenStream,
+    mut handle_job: HandleJob,
+) -> anyhow::Result<(bool, CommandStats)>
+where
+    OpenStream: FnMut() -> OpenFut,
+    OpenFut: Future<Output = anyhow::Result<SendReceivePair<S, R>>>,
+    HandleJob: FnMut(SendReceivePair<S, R>, CopyJobSpec) -> HandleFut,
+    HandleFut: Future<Output = RequestResult>,
+    S: SendingStream + 'static,
+    R: ReceivingStream + 'static,
+{
+    let mut aggregate_stats = CommandStats::new();
+    let mut overall_success = true;
+    for job in jobs {
+        let stream_pair = open_stream().await?;
+        let result = handle_job(stream_pair, job.clone()).await;
+
+        aggregate_stats.payload_bytes += result.stats.payload_bytes;
+        aggregate_stats.peak_transfer_rate = aggregate_stats
+            .peak_transfer_rate
+            .max(result.stats.peak_transfer_rate);
+        if !result.success {
+            overall_success = false;
+            break;
+        }
+    }
+    Ok((overall_success, aggregate_stats))
+}
+
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use indicatif::MultiProgress;
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
     use std::{net::Ipv4Addr, str::FromStr};
     use tokio::io::AsyncWriteExt;
+
+    use super::{RequestResult, process_job_requests};
 
     #[cfg(unix)]
     use crate::control::create_fake;
 
+    use crate::session::CommandStats;
     use crate::{
-        Configuration, FileSpec, Parameters,
+        Configuration, CopyJobSpec, FileSpec, Parameters,
         client::main_loop::Client,
         config::{Configuration_Optional, Manager},
         protocol::{common::ProtocolMessage as _, test_helpers::new_test_plumbing},
@@ -635,5 +663,104 @@ mod test {
         );
         let r = manage_fut.await;
         println!("Result: {r:?}");
+    }
+
+    #[tokio::test]
+    async fn process_job_requests_aggregates_stats() {
+        let jobs = vec![
+            CopyJobSpec::from_parts("file1", "host:dir", false).unwrap(),
+            CopyJobSpec::from_parts("file2", "host:dir", false).unwrap(),
+        ];
+
+        let open_calls = AtomicUsize::new(0);
+        let handle_calls = AtomicUsize::new(0);
+        let results = Mutex::new(vec![
+            RequestResult::new(
+                true,
+                CommandStats {
+                    payload_bytes: 10,
+                    peak_transfer_rate: 100,
+                },
+            ),
+            RequestResult::new(
+                true,
+                CommandStats {
+                    payload_bytes: 5,
+                    peak_transfer_rate: 200,
+                },
+            ),
+        ]);
+
+        let (success, stats) = process_job_requests(
+            &jobs,
+            || {
+                let _ = open_calls.fetch_add(1, Ordering::SeqCst);
+                async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
+            },
+            |stream_pair, _job| {
+                let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
+                drop(stream_pair);
+                async { results.lock().unwrap().remove(0) }
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(success);
+        assert_eq!(open_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(handle_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(stats.payload_bytes, 15);
+        assert_eq!(stats.peak_transfer_rate, 200);
+    }
+
+    #[tokio::test]
+    async fn process_job_requests_stops_on_failure() {
+        let jobs = vec![
+            CopyJobSpec::from_parts("file1", "host:dir", false).unwrap(),
+            CopyJobSpec::from_parts("file2", "host:dir", false).unwrap(),
+            CopyJobSpec::from_parts("file3", "host:dir", false).unwrap(),
+        ];
+
+        let open_calls = AtomicUsize::new(0);
+        let handle_calls = AtomicUsize::new(0);
+        let results = Mutex::new(vec![
+            RequestResult::new(
+                true,
+                CommandStats {
+                    payload_bytes: 10,
+                    peak_transfer_rate: 100,
+                },
+            ),
+            RequestResult::new(false, CommandStats::new()),
+            // This would only be consumed if we failed to stop early.
+            RequestResult::new(
+                true,
+                CommandStats {
+                    payload_bytes: 999,
+                    peak_transfer_rate: 999,
+                },
+            ),
+        ]);
+
+        let (success, stats) = process_job_requests(
+            &jobs,
+            || {
+                let _ = open_calls.fetch_add(1, Ordering::SeqCst);
+                async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
+            },
+            |stream_pair, _job| {
+                let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
+                drop(stream_pair);
+                async { results.lock().unwrap().remove(0) }
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(!success);
+        assert_eq!(open_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(handle_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(stats.payload_bytes, 10);
+        assert_eq!(stats.peak_transfer_rate, 100);
     }
 }

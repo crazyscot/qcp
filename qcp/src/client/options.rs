@@ -274,6 +274,7 @@ impl Parameters {
                 if let Some(existing) = remote_user {
                     if existing != u {
                         // Conflicting usernames; we cannot pick one reliably.
+                        remote_user = None;
                         break;
                     }
                 } else {
@@ -293,6 +294,7 @@ impl Parameters {
 mod tests {
     use super::*;
     use clap::Parser;
+    use figment::{Profile, Provider as _};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -418,5 +420,104 @@ mod tests {
             err.to_string()
                 .contains("Only one remote user is supported")
         );
+    }
+
+    #[test]
+    fn local_to_local_rejected() {
+        let params = Parameters::parse_from(["test", "file1", "downloads"]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(err.to_string().contains("One file argument must be remote"));
+    }
+
+    #[test]
+    fn multiple_remote_hosts_rejected() {
+        let params = Parameters::parse_from([
+            "test",
+            "alice@host1:/tmp/a",
+            "alice@host2:/tmp/b",
+            "downloads",
+        ]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Only one remote host is supported")
+        );
+    }
+
+    #[test]
+    fn remote_destination_with_trailing_slash_is_joined_cleanly() {
+        let params = Parameters::parse_from(["test", "file1", "file2", "user@host:remote_dir/"]);
+        let specs: Vec<CopyJobSpec> = (&params).try_into().unwrap();
+        assert_eq!(specs.len(), 2);
+        assert_eq!(
+            specs[0].destination.to_string(),
+            "user@host:remote_dir/file1"
+        );
+        assert_eq!(
+            specs[1].destination.to_string(),
+            "user@host:remote_dir/file2"
+        );
+    }
+
+    #[test]
+    fn remote_destination_home_dir_is_supported() {
+        let params = Parameters::parse_from(["test", "file1", "file2", "user@host:"]);
+        let specs: Vec<CopyJobSpec> = (&params).try_into().unwrap();
+        assert_eq!(specs.len(), 2);
+        assert_eq!(specs[0].destination.to_string(), "user@host:file1");
+        assert_eq!(specs[1].destination.to_string(), "user@host:file2");
+    }
+
+    #[test]
+    fn source_basename_is_required_for_multi_source_copy() {
+        let params = Parameters::parse_from(["test", "user@host:", "user@host:/tmp/b", "."]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(err.to_string().contains("must contain a filename"));
+    }
+
+    #[test]
+    fn sources_and_destination_requires_two_paths() {
+        let params = Parameters::parse_from(["test", "user@host:file1"]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("source and destination are required")
+        );
+    }
+
+    #[test]
+    fn remote_host_lossy_rejects_multiple_hosts() {
+        let params =
+            Parameters::parse_from(["test", "user@host1:file1", "user@host2:file2", "downloads"]);
+        let err = params.remote_host_lossy().unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Only one remote host is supported")
+        );
+    }
+
+    #[test]
+    fn remote_host_lossy_empty_paths() {
+        let params = Parameters::parse_from(["test"]);
+        assert_eq!(params.remote_host_lossy().unwrap(), None);
+    }
+
+    #[test]
+    fn remote_user_as_config_is_set_when_consistent() {
+        let params = Parameters::parse_from(["test", "user@host:source.txt", "destination.txt"]);
+        let cfg = params.remote_user_as_config();
+        let data = cfg.data().unwrap();
+        let dict = data.get(&Profile::Global).unwrap();
+        assert_eq!(dict.get("remote_user").unwrap().as_str(), Some("user"));
+    }
+
+    #[test]
+    fn remote_user_as_config_ignored_on_conflict() {
+        let params =
+            Parameters::parse_from(["test", "alice@host:file1", "bob@host:file2", "downloads"]);
+        let cfg = params.remote_user_as_config();
+        let data = cfg.data().unwrap();
+        let dict = data.get(&Profile::Global).unwrap();
+        assert!(dict.get("remote_user").is_none());
     }
 }
