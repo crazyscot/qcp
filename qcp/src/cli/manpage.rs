@@ -103,9 +103,7 @@ mod test {
             italic("hybrid"),
             roman(" protocol. We use "),
             italic("ssh"),
-            roman(
-                " to establish a control channel and exchange ephemeral TLS certificates, then a ",
-            ),
+            roman(" to establish a control channel and exchange ephemeral TLS keys, then a "),
             italic("QUIC"),
             roman(" connection to transport data."),
         ]);

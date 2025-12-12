@@ -13,7 +13,7 @@
 //!    * qcp uses ssh to connect to the _remote_ machine and start a `qcp --server` process there.
 //!    * We call this link between the two processes the _control channel_.
 //!    * The _remote_ machine is also known as the _server_, in keeping with other communication protocols.
-//! 1. Both sides generate ephemeral self-signed TLS certificates.
+//! 1. Both sides generate ephemeral TLS keypairs, either as self-signed TLS certificates or RFC7250 raw public keys.
 //! 1. The remote machine binds to a UDP port and sets up a [QUIC] _endpoint_.
 //! 1. The two machines exchange messages over the [control] channel containing:
 //!    * cryptographic identities
@@ -64,7 +64,7 @@
 //! but not so useful in this case; I don't want to run a web server on my home net connection.)
 //!
 //! After some thought I realised that the solution lay in a hybrid, bootstrapping protocol.
-//! * Each endpoint generates a fresh, ephemeral TLS key every time.
+//! * Each endpoint generates a fresh, ephemeral TLS keypair every time.
 //! * With ssh connecting the two endpoints, we have an easy way to ensure that TLS
 //!   credentials genuinely belong to the other end.
 //!

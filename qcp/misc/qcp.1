@@ -342,7 +342,7 @@ Enables detailed debug output from the remote endpoint (this may interfere with 
 The qcp utility exits 0 on success, and >0 if an error occurs.
 .SH "NETWORK PROTOCOL"
 .TP
-qcp is a \fIhybrid\fR protocol. We use \fIssh\fR to establish a control channel and exchange ephemeral TLS certificates, then a \fIQUIC\fR connection to transport data.
+qcp is a \fIhybrid\fR protocol. We use \fIssh\fR to establish a control channel and exchange ephemeral TLS keys, then a \fIQUIC\fR connection to transport data.
 .TP
 Detailed protocol documentation can be found at
 .UR https://docs.rs/qcp/latest/qcp/protocol/
