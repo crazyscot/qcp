@@ -9,8 +9,6 @@ publish = false
 qcp = { path = "../qcp", features = ["unstable-test-helpers"] }
 
 anstyle = { workspace = true }
-assertables = "9.8.2"
-cfg-if = { workspace = true }
 colorchoice = { workspace = true }
 console = { workspace = true }
 dunce = "1.0.5"
@@ -20,13 +18,9 @@ rusty-fork = { workspace = true }
 static_str_ops = "0.1.2"
 tempfile = { workspace = true }
 tokio = { workspace = true }
-tokio-test = "0.4.4"
 
 [target.'cfg(unix)'.dev-dependencies]
 libc = "0.2.178"
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(coverage_nightly)'] }
-
-[dependencies]
-anyhow.workspace = true
