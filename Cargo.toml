@@ -1,7 +1,9 @@
 [workspace]
 members = ["qcp", "qcp-unsafe-tests", "xtask"]
 resolver = "2"
-package.edition = "2024"
+
+[workspace.package]
+edition = "2024"
 
 [workspace.dependencies]
 anstyle = { version = "1.0.13", default-features = false }
