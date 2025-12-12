@@ -585,6 +585,7 @@ mod test {
         assert_eq!(res.remote_address, Ipv4Addr::new(8, 8, 8, 8));
         assert_eq!(res.job_specs[0].source, remote_file_spec());
         assert_eq!(res.job_specs[0].destination, local_file_spec());
+        assert!(!res.preserve());
         eprintln!("{res:?}");
     }
     #[test]
