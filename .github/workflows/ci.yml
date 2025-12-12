@@ -27,7 +27,7 @@ jobs:
           - rust-version: nightly
             cache: false
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Install Rust ${{ matrix.rust-version }}
@@ -36,6 +36,10 @@ jobs:
         with:
           toolchain: ${{ matrix.rust-version }}
           components: rustfmt,clippy,rust-src
+      - uses: taiki-e/install-action@cf46383a970594553a83cc6140075ef6a7f54dee # v2.62.64
+        with:
+          tool: typos,dprint,cargo-machete,cargo-shear
+          checksum: true
 
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
       - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
@@ -51,6 +55,17 @@ jobs:
       # maximum information to the developer.
       - run: cargo fmt --all --check
         if: ${{ !cancelled() }}
+      - run: typos
+        if: ${{ !cancelled() }}
+      - run: dprint check --list-different
+        # to fix: dprint fmt
+        if: ${{ !cancelled() }}
+      - run: dprint fmt --diff
+        if: ${{ failure() }}
+      - run: cargo machete --with-metadata
+        if: ${{ !cancelled() }}
+      - run: cargo shear
+        if: ${{ !cancelled() }}
       - run: cargo clippy --locked --tests --workspace
         if: ${{ !cancelled() }}
 
@@ -60,7 +75,7 @@ jobs:
     env:
       RUSTDOCFLAGS: -Dwarnings
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@6d653acede28d24f02e3cd41383119e8b1b35921 # 2025-09-17
@@ -86,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Install Rust
@@ -96,7 +111,7 @@ jobs:
           # update periodically
           toolchain: nightly-2025-07-31
           components: llvm-tools-preview,rust-src
-      - uses: taiki-e/install-action@33734a118689b0b418824fb78ea2bf18e970b43b # v2.50.4
+      - uses: taiki-e/install-action@cf46383a970594553a83cc6140075ef6a7f54dee # v2.62.64
         # this action is used in multiple places
         with:
           tool: cargo-llvm-cov
@@ -129,6 +144,7 @@ jobs:
 
   cargo-deny:
     runs-on: ubuntu-latest
+    timeout-minutes: 1
     strategy:
       matrix:
         checks:
