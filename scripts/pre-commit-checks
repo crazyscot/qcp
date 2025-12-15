@@ -1,0 +1,13 @@
+#!/bin/bash -e
+#
+# These are the cheap checks that also run in CI.
+# You might care to set this up as your git pre-commit script for the repo.
+#
+# Tools you may need to install:
+#   cargo install --locked cargo-machete cargo-shear dprint typos-cli@1.39.0
+
+typos
+cargo fmt --all --check
+dprint check
+cargo machete --with-metadata
+cargo shear --locked

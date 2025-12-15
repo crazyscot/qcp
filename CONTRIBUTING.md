@@ -30,14 +30,24 @@ If you're thinking of contributing something non-trivial, it might be best to ra
 
 ## ☑️ CI checks applied
 
-| Check                 | How to run it yourself                                    | Notes                                                                     |
-| --------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Code style            | `cargo fmt --all --check`                                 | For VS Code users, `editor.formatOnSave=true` is set                      |
-| Everything must build | `cargo build --all-targets`                               |                                                                           |
-| Unit tests pass       | `cargo test`                                              |                                                                           |
-| Lints                 | `cargo clippy --all-targets`                              | This is a reasonably pedantic set of lints, which I make no apologies for |
-| Docs build            | `cargo doc --no-deps`                                     |                                                                           |
-| Code coverage         | `./scripts/coverage`, then examine `target/coverage/html` |                                                                           |
+There is a utility script `scripts/pre-commit-checks` which runs the non-compiling checks. It is intended to be used as a git pre-commit script.
+
+To use it you may need to install some additional tooling:
+
+- cargo install --locked cargo-machete cargo-shear dprint typos-cli@1.39.0
+
+| Check                                   | How to run it yourself          | Notes                                                                     |
+| --------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
+| Spellcheck                              | `typos`                         | `cargo install typos-cli@1.39.0 --locked`                                 |
+| Code style                              | `cargo fmt --all --check`       | For VS Code users, `editor.formatOnSave=true` is set                      |
+| Non-code style (.md, .toml, .yml files) | `dprint check` or `dprint fmt`  | `cargo install --locked dprint`                                           |
+| Dependencies check                      | `cargo machete --with-metadata` | `cargo install --locked cargo-machete`                                    |
+| Dependencies check 2                    | `cargo shear --locked`          | `cargo install --locked cargo-shear`                                      |
+| Everything must build                   | `cargo build --all-targets`     |                                                                           |
+| Unit tests pass                         | `cargo test`                    |                                                                           |
+| Lints                                   | `cargo clippy --all-targets`    | This is a reasonably pedantic set of lints, which I make no apologies for |
+| Docs build                              | `cargo doc --no-deps`           |                                                                           |
+| Code coverage                           | `./scripts/coverage`            | Output is in `target/coverage/html`                                       |
 
 [issue]: https://github.com/crazyscot/qcp/issues/new/choose
 [issues list]: https://github.com/crazyscot/qcp/issues
