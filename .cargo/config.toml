@@ -20,4 +20,4 @@ frequency = 'always'
 rustflags = ["-C", "target-feature=+crt-static"]
 
 [alias]
-xtask = "run --package xtask --"
+xtask = "run --package xtask --locked --"
