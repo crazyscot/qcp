@@ -94,6 +94,3 @@
 //! ```
 //!
 //! (This was with a 100MB test file, which isn't always enough for the protocol to get fully up to speed.)
-
-#[allow(dead_code)]
-fn workaround_cargo_shear_1_9_0() {}
