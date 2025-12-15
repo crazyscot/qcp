@@ -116,3 +116,6 @@
 //! UDP packets.
 //!
 //! Check the OSX firewall first. [See above](#2-allow-access-through-the-osx-firewall).
+
+#[allow(dead_code)]
+fn workaround_cargo_shear_1_9_0() {}
