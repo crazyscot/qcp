@@ -23,8 +23,11 @@ pub(crate) fn manpage(mut args: Arguments) -> Result<()> {
     let outdir = if let Some(out) = outdir {
         out
     } else {
-        // default: <topdir>/qcp/misc
-        let pb = PathBuf::from(top_level()?).join("qcp").join("misc");
+        // default: <topdir>/qcp/misc/generated
+        let pb = PathBuf::from(top_level()?)
+            .join("qcp")
+            .join("misc")
+            .join("generated");
         pb.to_str().unwrap().to_string()
     };
 
@@ -57,8 +60,11 @@ pub(crate) fn cli_doc(mut args: Arguments) -> Result<()> {
     let outdir = if let Some(out) = outdir {
         out
     } else {
-        // default: <topdir>/qcp/misc
-        let pb = PathBuf::from(top_level()?).join("qcp").join("misc");
+        // default: <topdir>/qcp/misc.generated
+        let pb = PathBuf::from(top_level()?)
+            .join("qcp")
+            .join("misc")
+            .join("generated");
         pb.to_str().unwrap().to_string()
     };
 

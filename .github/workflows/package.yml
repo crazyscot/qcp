@@ -68,7 +68,7 @@ jobs:
       # Linux sysctl defs
       Q_PACK_1: ${{ contains(matrix.target, 'linux') && ',qcp/misc/20-qcp.conf' || '' }}
       # Man pages - Unix only
-      Q_PACK_2: ${{ !contains(matrix.target, 'windows') && ',qcp/misc/qcp.1,qcp/misc/qcp_config.5' || '' }}
+      Q_PACK_2: ${{ !contains(matrix.target, 'windows') && ',qcp/misc/generated/qcp.1,qcp/misc/generated/qcp_config.5' || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -123,7 +123,7 @@ jobs:
             README.md,LICENSE,CHANGELOG.md,\
             qcp/qcp.cdx.xml,\
             qcp/misc/qcp.conf,\
-            qcp/misc/qcp.html,\
+            qcp/misc/generated/qcp.html,\
             qcp/misc/qcp_sshd.conf\
             ${{ env.Q_PACK_1 }}\
             ${{ env.Q_PACK_2 }}\

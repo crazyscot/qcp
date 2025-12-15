@@ -1,10 +1,10 @@
-/// Quasi-test that generates the qcp.1 manpage
+/// Quasi-test that generates CLI documentation
 ///
 /// This is mildly unorthodox.
 /// Why on earth have this as a test, you might ask?
 ///
 /// Rationale:
-/// - xtasks should not depend on building the entire package
+/// - xtasks should not (generally) depend on building the entire package
 /// - tests already do depend on qcp, so it's pretty cheap in terms of build time to do this here
 /// - either way, the mangen/roff machinery does not bloat the main binary
 /// - buildability of the man page is in fact a meaningful test

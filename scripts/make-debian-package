@@ -25,7 +25,7 @@ esac
 
 set -x
 
-gzip -9n < CHANGELOG.md > qcp/misc/changelog.gz
+gzip -9n < CHANGELOG.md > qcp/misc/generated/changelog.gz
 
 cargo xtask dch -p qcp
 gzip -9n < qcp/debian/changelog > qcp/debian/changelog.Debian.gz
