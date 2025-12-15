@@ -52,7 +52,16 @@ mod test {
         buffer.extend_from_slice(ROFF_AUTOGEN_BANNER.as_bytes());
         man.render_title(&mut buffer)?;
         man.render_name_section(&mut buffer)?;
-        man.render_synopsis_section(&mut buffer)?;
+
+        {
+            let mut btemp: Vec<u8> = Vec::default();
+            man.render_synopsis_section(&mut btemp)?;
+            let stemp = String::from_utf8(btemp)?;
+            let stemp = stemp.replace(r"[\fIPATH\fR]", r"\fISOURCE\fR\&... \fIDESTINATION\fR");
+            let btemp = stemp.into_bytes();
+            buffer.extend_from_slice(&btemp);
+        }
+
         man.render_description_section(&mut buffer)?;
         usage(&cmd, &mut buffer)?;
         man.render_options_section(&mut buffer)?;
@@ -68,7 +77,7 @@ mod test {
         let mut roff = Roff::default();
         roff.control("SH", ["USAGE"]);
         roff.control("TP", []);
-        roff.control("BI", ["qcp ", "[OPTIONS] ", "[SOURCE] ", "[DESTINATION]"]);
+        roff.control("BI", ["qcp ", "[OPTIONS] ", r"SOURCE\&... ", "DESTINATION"]);
         if let Some(about) = cmd.get_before_long_help().or_else(|| cmd.get_before_help()) {
             for line in about.to_string().lines() {
                 if line.trim().is_empty() {
@@ -80,7 +89,7 @@ mod test {
         }
         roff.control("SS", ["LIMITATIONS"]);
         roff.control("TP", []);
-        roff.text([roman("You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection-tracking NAT, things work just fine. This is the case for the vast majority of home and business network connections.)")]);
+        roff.text([roman("You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection-tracking NAT, things work just fine. This is the case for the vast majority of home and many business network connections.)")]);
 
         roff.control("TP", []);
         roff.text([roman(

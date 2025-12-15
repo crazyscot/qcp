@@ -32,7 +32,7 @@
 //! I was inspired to write this when I needed to copy a load of multi-GB files from a server on the other side of the planet.
 //!
 //! #### Limitations
-//! - You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection-tracking NAT, things work just fine. This is the case for the vast majority of home and business network connections. If need be, you can configure qcp to use a particular port range.)
+//! - You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection-tracking NAT, things work just fine. This is the case for many network connections. If need be, you can configure qcp to use a particular port range.)
 //! - Network security systems can't readily identify QUIC traffic as such. It's opaque, and high bandwidth. Some security systems might flag it as a potential threat.
 //!
 //! #### What qcp is not
@@ -47,7 +47,7 @@
 //!
 //! * You must have ssh access to the target machine.
 //! * You must also be able to connect to the target on a given UDP port.
-//!   - If the local machine is behind connection-tracking NAT, things usually work just fine. This is the case for the vast majority of home and business network connections.
+//!   - If the local machine is behind connection-tracking NAT, things usually work just fine. This is the case for the vast majority of home and many business network connections.
 //!   - If the target is behind a firewall, you need to configure the firewall so at least some small set of UDP ports is
 //!     accessible, and **not subject to network port translation**.
 //!     (You can configure qcp to use a particular port range if you need to; see `--port` / `--remote-port`.)

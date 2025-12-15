@@ -83,11 +83,13 @@ pub struct Parameters {
 
     // JOB SPECIFICAION ====================================================================
     // (POSITIONAL ARGUMENTS!)
-    /// Sources and destination. Provide one or more SOURCE paths followed by a DESTINATION path.
+    /// One or more SOURCE paths followed by a DESTINATION path.
     ///
     /// The last path is always treated as the destination. All preceding paths are treated as sources.
-    /// Exactly one side of the transfer (sources or destination) must be remote.
-    #[arg(value_name = "PATH", num_args = 0..)]
+    ///
+    /// Exactly one side of the transfer (all sources, or the destination) must be remote.
+    /// Remote paths take the form `server:path` or `user@server:path` (as in rcp or scp).
+    #[arg(value_name = "SOURCE|DESTINATION", display_order(1), num_args = 0..)]
     pub paths: Vec<FileSpec>,
 }
 
