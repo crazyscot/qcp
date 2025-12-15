@@ -219,3 +219,10 @@ depends = "$auto,debconf"
 
 [package.metadata.cargo-machete]
 ignored = ["cfg_aliases"] # used by build.rs
+
+[package.metadata.cargo-shear]
+ignored-paths = [
+  "src/doc/performance.rs",
+  "src/doc/troubleshooting.rs",
+  "src/os/osx.rs",
+]
