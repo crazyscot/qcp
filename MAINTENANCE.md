@@ -1,5 +1,15 @@
 ## Development notes
 
+### Documents in `qcp/misc/generated` are auto-generated
+
+Short version:
+
+1. Update CLI doc comments
+2. Run `scripts/generate-cli-docs`
+
+If you want to see what's going on under the hood, check out
+`scripts/generate-cli-docs` and `qcp/src/cli/manpage.rs`.
+
 ### rust-analyzer (VS Code) issues
 
 The rust-analyzer plugin for Visual Studio Code comes bundled with a specific version of rust-analyzer.
@@ -33,7 +43,7 @@ The recommended fix for this is:
 - Update the News section in README.md if appropriate.
 - Update the template `qcp.conf` if any options have been added.
 - Update man page & packaged HTML docs if required:
-  - `cargo xtask man && cargo xtask clidoc`
+  - `./scripts/generate-cli-docs`
     - _N.B. This isn't automated in CI to save repeating work across multiple builds._
   - Commit it
 - Create PR:

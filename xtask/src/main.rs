@@ -10,7 +10,6 @@ use pico_args::Arguments;
 
 mod dch;
 mod licenses;
-mod manpage;
 
 // ---------------------------------------------------------------------------------------------
 // Task definition
@@ -19,18 +18,12 @@ mod manpage;
 
 #[allow(clippy::type_complexity)]
 const TASKS: &[(&str, fn(Arguments) -> Result<()>, &str)] = &[
-    ("man", manpage::manpage, "Build the qcp manual pages"),
     (
         "licenses",
         licenses::licenses,
         "Generate licenses.html  (prerequisite: `cargo install about`)",
     ),
     ("dch", dch::changelog, "Generate the dummy debian changelog"),
-    (
-        "clidoc",
-        manpage::cli_doc,
-        "Generate CLI docs (prerequisite: `apt install markdown`)",
-    ),
     ("help", help, "Output help"),
 ];
 
@@ -113,6 +106,7 @@ fn gzip(from: PathBuf, to: PathBuf) -> Result<()> {
     Ok(())
 }
 
+#[allow(unused)]
 fn dprint_fmt<P: AsRef<OsStr>>(paths: &[P]) -> Result<()> {
     let mut c = Command::new("dprint");
     c.args(["fmt"]).args(paths);
