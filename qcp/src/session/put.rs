@@ -108,7 +108,8 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
 
         // A server-side abort might happen part-way through a large transfer.
         trace!("send payload");
-        let result = crate::util::io::copy_large(&mut file, &mut outbound).await;
+        let result =
+            crate::util::io::copy_large(&mut file, &mut outbound, config.io_buffer_size).await;
 
         match result {
             Ok(sent) if sent == src_meta.len() => (),
@@ -167,7 +168,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         })
     }
 
-    async fn handle(&mut self) -> Result<()> {
+    async fn handle(&mut self, io_buffer_size: u64) -> Result<()> {
         let Some(ref args) = self.args else {
             anyhow::bail!("PUT handler called without args");
         };
@@ -235,7 +236,13 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         self.stream.send.flush().await?;
 
         trace!("receiving file payload");
-        let result = limited_copy(&mut self.stream.recv, header.size.0, &mut file).await;
+        let result = limited_copy(
+            &mut self.stream.recv,
+            header.size.0,
+            &mut file,
+            io_buffer_size,
+        )
+        .await;
         if let Err(e) = result {
             error!("Failed to write to destination: {e}");
             return send_response(&mut self.stream.send, Status::IoError, Some(&e.to_string()))
@@ -267,9 +274,10 @@ async fn limited_copy(
     recv: &mut dyn ReceivingStream,
     n: u64,
     f: &mut TokioFile,
+    buffer_size: u64,
 ) -> Result<u64, std::io::Error> {
     let mut limited = recv.take(n);
-    crate::util::io::copy_large(&mut limited, f).await
+    crate::util::io::copy_large(&mut limited, f, buffer_size).await
 }
 
 #[cfg(test)]
@@ -290,6 +298,7 @@ mod test {
             test_helpers::{new_test_plumbing, read_from_stream},
         },
         session::{CommandStats, Put},
+        util::io::DEFAULT_COPY_BUFFER_SIZE,
         util::time::SystemTimeExt as _,
     };
     use littertray::LitterTray;
@@ -359,7 +368,7 @@ mod test {
         // The second difference is that the receiver might send a failure response and shut down the stream.
         // This isn't well simulated by our test pipe.
         let mut handler = Put::boxed(pipe2, Some(args), Compatibility::Level(server_level));
-        let (r1, r2) = tokio::join!(sender_fut, handler.handle());
+        let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
         Ok((r1, r2))
     }
 
@@ -512,7 +521,7 @@ mod test {
         let (_pipe1, pipe2) = new_test_plumbing();
         assert!(
             Put::boxed(pipe2, None, Compatibility::Level(2))
-                .handle()
+                .handle(DEFAULT_COPY_BUFFER_SIZE)
                 .await
                 .is_err()
         );

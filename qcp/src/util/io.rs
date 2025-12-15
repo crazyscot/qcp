@@ -30,14 +30,22 @@ pub(crate) async fn read_available_non_blocking<R: AsyncRead + Unpin>(
 /// `tokio::io::copy` uses an internal 8KiB buffer, which can become CPU-bound at
 /// higher throughputs; qcp's typical use-case is large transfers, so we use a
 /// larger buffer.
-pub(crate) const DEFAULT_COPY_BUFFER_SIZE: usize = 1024 * 1024;
+pub(crate) const DEFAULT_COPY_BUFFER_SIZE: u64 = 1024 * 1024;
 
-pub(crate) async fn copy_large<R, W>(reader: &mut R, writer: &mut W) -> Result<u64, std::io::Error>
+/// `tokio::io::copy` uses an internal 8KiB buffer, which can become CPU-bound at
+/// higher throughputs; qcp's typical use-case is large transfers, so we use a
+/// larger buffer.
+pub(crate) async fn copy_large<R, W, Z>(
+    reader: &mut R,
+    writer: &mut W,
+    buffer_size: Z,
+) -> Result<u64, std::io::Error>
 where
     R: AsyncRead + Unpin + ?Sized,
     W: AsyncWrite + Unpin + ?Sized,
+    Z: num_traits::cast::AsPrimitive<usize>,
 {
-    let mut reader = tokio::io::BufReader::with_capacity(DEFAULT_COPY_BUFFER_SIZE, reader);
+    let mut reader = tokio::io::BufReader::with_capacity(buffer_size.as_(), reader);
     tokio::io::copy_buf(&mut reader, writer).await
 }
 
@@ -105,7 +113,7 @@ mod microbench {
         let mut reader = file.take(bytes);
         let mut writer = tokio::io::sink();
         let start = std::time::Instant::now();
-        let copied = copy_large(&mut reader, &mut writer)
+        let copied = copy_large(&mut reader, &mut writer, DEFAULT_COPY_BUFFER_SIZE)
             .await
             .context("copy_large failed")?;
         anyhow::ensure!(
@@ -145,9 +153,7 @@ mod microbench {
             bytes.human_count_bytes(),
             warmup_bytes.human_count_bytes(),
             iters,
-            u64::try_from(DEFAULT_COPY_BUFFER_SIZE)
-                .unwrap_or(u64::MAX)
-                .human_count_bytes()
+            DEFAULT_COPY_BUFFER_SIZE.human_count_bytes()
         );
 
         // Warm up caches/jit/etc.

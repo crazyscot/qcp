@@ -449,6 +449,7 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
     )]
     pub ssh_subsystem: bool,
 
+    // OTHER PARAMETERS ================================================================================
     /// Colour mode for console output (default: auto)
     ///
     /// Passing `--color` without a value is equivalent to `--color always`.
@@ -483,7 +484,6 @@ CLI options take precedence over the configuration file, which takes precedence 
     )]
     pub color: ColourMode,
 
-    // OTHER PARAMETERS ================================================================================
     /// Forces the use of a particular TLS authentication type
     /// (default: any)
     #[arg(
@@ -510,6 +510,29 @@ CLI options take precedence over the configuration file, which takes precedence 
         help_heading("Connection"),
     )]
     pub aes256: bool,
+
+    /// File transfer buffer size (bytes).
+    ///
+    /// With very high speed connections it may be worth experimenting with larger values to improve throughput and reduce CPU overhead.
+    ///
+    /// **Both sides of the connection must configure this setting independently.** It is not negotiated between client and server.
+    ///
+    /// This setting may be specified directly as a number, or as an SI quantity like `10M` or `256k`.
+    /// The default is 1MB.
+    ///
+    /// Note that this setting changes only the size of the I/O buffer used to spool data to and from disk.
+    /// It does not directly affect what appears on the network.
+    #[arg(long,
+        help_heading("File copying"),
+        value_name = "bytes",
+        value_parser (clap::builder::StringValueParser::new().try_map(|s| EngineeringQuantity::<u64>::from_str(&s)).map(|v| u64::from(v))),
+    )]
+    #[serde(with = "EQHelper")]
+    #[deftly(
+        serde = "default, deserialize_with = \"EQHelper::deserialize_optional\"",
+        serialize_with = "EQHelper::to_string_figment"
+    )]
+    pub io_buffer_size: u64,
 }
 
 static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
@@ -540,6 +563,7 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     ssh_config: Vec::new(),
     ssh_subsystem: false,
     color: ColourMode::Auto,
+    io_buffer_size: crate::util::io::DEFAULT_COPY_BUFFER_SIZE,
 
     // Other
     tls_auth_type: CredentialsType::Any,

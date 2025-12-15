@@ -75,7 +75,7 @@ pub struct Parameters {
     pub remote_config: bool,
 
     /// Preserves file modification times and permissions as far as possible.
-    #[arg(short, long)]
+    #[arg(short, long, help_heading("File copying"))]
     pub preserve: bool,
 
     // JOB SPECIFICAION ====================================================================

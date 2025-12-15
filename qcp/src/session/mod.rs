@@ -56,5 +56,5 @@ pub(crate) trait SessionCommandImpl: Send {
     /// traffic. Does not return until completion (or error).
     ///
     /// If the command has arguments, the object constructor is expected to set them up.
-    async fn handle(&mut self) -> Result<()>;
+    async fn handle(&mut self, io_buffer_size: u64) -> Result<()>;
 }

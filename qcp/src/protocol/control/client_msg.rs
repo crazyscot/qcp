@@ -556,6 +556,7 @@ mod test {
             color: None,
             tls_auth_type: None,
             aes256: None,
+            io_buffer_size: None,
         };
 
         let cmsg = {

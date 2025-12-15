@@ -12,6 +12,7 @@ use tracing::{Instrument as _, trace, trace_span};
 pub(super) async fn handle_stream<W, R>(
     mut sp: SendReceivePair<W, R>,
     compat: Compatibility,
+    io_buffer_size: u64,
 ) -> anyhow::Result<()>
 where
     R: ReceivingStream + 'static, // AsyncRead + Unpin + Send,
@@ -40,7 +41,7 @@ where
         ),
     };
 
-    handler.handle().instrument(span).await
+    handler.handle(io_buffer_size).instrument(span).await
 }
 
 #[cfg(test)]
@@ -51,6 +52,7 @@ mod tests {
         control::Compatibility,
         session::{Command, GetArgs, PutArgs, Response, ResponseV1, Status},
     };
+    use crate::util::io::DEFAULT_COPY_BUFFER_SIZE;
 
     use super::handle_stream;
     use tokio::io::simplex;
@@ -74,6 +76,7 @@ mod tests {
         handle_stream(
             SendReceivePair::from((out_write, mock_recv)),
             Compatibility::Level(1),
+            DEFAULT_COPY_BUFFER_SIZE,
         )
         .await
         .unwrap();
@@ -111,6 +114,7 @@ mod tests {
         let result = handle_stream(
             SendReceivePair::from((mock_send, mock_recv)),
             Compatibility::Level(1),
+            DEFAULT_COPY_BUFFER_SIZE,
         )
         .await;
         assert!(result.is_ok());

@@ -56,6 +56,8 @@ async fn server_main_inner<
 
     let mut tasks = JoinSet::new();
 
+    let io_buffer_size = result.config.io_buffer_size;
+
     // Main loop:
     // Wait for a successful connection OR timeout OR for stdin to be closed (implicitly handled).
     // We have tight control over what we expect (TLS peer certificate/name) so only need to handle one successful connection,
@@ -67,7 +69,7 @@ async fn server_main_inner<
         .context("Timed out waiting for QUIC connection")?
     {
         let _ = tasks.spawn(async move {
-            let result = connection::handle_incoming(conn, compat).await;
+            let result = connection::handle_incoming(conn, compat, io_buffer_size).await;
             match result {
                 Err(e) => error!("inward stream failed: {reason}", reason = e.to_string()),
                 Ok(conn_stats) => {

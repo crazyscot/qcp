@@ -114,7 +114,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
 
         let mut inbound = inbound.take(header.size.0);
         trace!("payload");
-        let _ = crate::util::io::copy_large(&mut inbound, &mut file).await?;
+        let _ = crate::util::io::copy_large(&mut inbound, &mut file, config.io_buffer_size).await?;
         // Retrieve the stream from within the Take wrapper for further operations
         let mut inbound = inbound.into_inner();
 
@@ -138,7 +138,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         })
     }
 
-    async fn handle(&mut self) -> Result<()> {
+    async fn handle(&mut self, io_buffer_size: u64) -> Result<()> {
         let Some(ref args) = self.args else {
             anyhow::bail!("GET handler called without args");
         };
@@ -168,7 +168,8 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         hdr.to_writer_async_framed(&mut self.stream.send).await?;
 
         trace!("sending file payload");
-        let result = crate::util::io::copy_large(&mut file, &mut self.stream.send).await;
+        let result =
+            crate::util::io::copy_large(&mut file, &mut self.stream.send, io_buffer_size).await;
         anyhow::ensure!(result.is_ok(), "copy ended prematurely");
         anyhow::ensure!(
             result.is_ok_and(|r| r == file_original_meta.len()),
@@ -205,6 +206,7 @@ pub(crate) mod test_shared {
             test_helpers::{new_test_plumbing, read_from_stream},
         },
         session::{CommandStats, Get},
+        util::io::DEFAULT_COPY_BUFFER_SIZE,
     };
 
     /// Run a GET to completion, return the results from sender & receiver.
@@ -253,7 +255,7 @@ pub(crate) mod test_shared {
         };
 
         let mut handler = Get::boxed(pipe2, Some(args), Compatibility::Level(server_level));
-        let (r1, r2) = tokio::join!(fut, handler.handle());
+        let (r1, r2) = tokio::join!(fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
         Ok((r1, r2))
     }
 }
@@ -272,6 +274,7 @@ mod test {
         protocol::test_helpers::new_test_plumbing,
         protocol::{control::Compatibility, session::Status},
         session::{CommandStats, Get},
+        util::io::DEFAULT_COPY_BUFFER_SIZE,
         util::time::SystemTimeExt as _,
     };
     use std::{fs::FileTimes, time::SystemTime};
@@ -347,7 +350,7 @@ mod test {
         let (_pipe1, pipe2) = new_test_plumbing();
         assert!(
             Get::boxed(pipe2, None, Compatibility::Level(1))
-                .handle()
+                .handle(DEFAULT_COPY_BUFFER_SIZE)
                 .await
                 .is_err()
         );
