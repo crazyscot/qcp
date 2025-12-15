@@ -165,9 +165,9 @@ assets = [
     "usr/share/doc/qcp/",
     "644",
   ],
-  # gzip -9n < CHANGELOG.md > misc/changelog.gz # done by make-debian-package
+  # gzip -9n < CHANGELOG.md > misc/generated/changelog.gz # done by make-debian-package
   [
-    "misc/changelog.gz",
+    "misc/generated/changelog.gz",
     "usr/share/doc/qcp/",
     "644",
   ],
@@ -183,12 +183,12 @@ assets = [
     "644",
   ], # this is automatically recognised as a conffile
   [
-    "misc/qcp.1",
+    "misc/generated/qcp.1",
     "usr/share/man/man1/",
     "644",
   ],
   [
-    "misc/qcp_config.5",
+    "misc/generated/qcp_config.5",
     "usr/share/man/man5/",
     "644",
   ],
@@ -209,7 +209,7 @@ assets = [
     "644",
   ],
   [
-    "misc/qcp.html",
+    "misc/generated/qcp.html",
     "usr/share/doc/qcp/",
     "644",
   ],
