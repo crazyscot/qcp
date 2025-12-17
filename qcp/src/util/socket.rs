@@ -173,7 +173,22 @@ mod test {
     #[test]
     fn bind_ipv6() {
         let range = PortRange::default();
-        let s = bind_range_for_family(ConnectionType::Ipv6, range).unwrap();
+        let s = match bind_range_for_family(ConnectionType::Ipv6, range) {
+            Ok(s) => s,
+            Err(err) => {
+                let is_ipv6_unsupported = err.chain().any(|cause| {
+                    let Some(io_err) = cause.downcast_ref::<std::io::Error>() else {
+                        return false;
+                    };
+                    matches!(io_err.raw_os_error(), Some(97 | 47 | 10047))
+                });
+                if is_ipv6_unsupported {
+                    eprintln!("IPv6 not supported on this host; skipping: {err:#}");
+                    return;
+                }
+                panic!("{err:#}");
+            }
+        };
         let a = s.local_addr().unwrap();
         assert!(a.is_ipv6());
     }
