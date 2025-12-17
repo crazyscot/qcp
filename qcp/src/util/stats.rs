@@ -1,6 +1,7 @@
 //! Statistics processing and output
 // (c) 2024 Ross Younger
 
+use engineering_repr::EngineeringRepr as _;
 use human_repr::{HumanCount, HumanDuration, HumanThroughput};
 use num_format::ToFormattedString as _;
 use quinn::ConnectionStats;
@@ -15,7 +16,7 @@ use crate::{
     config::Configuration,
     protocol::{
         Variant,
-        control::{ClosedownReportExtension, ClosedownReportV1},
+        control::{ClosedownReportExtension, ClosedownReportV1, Direction},
     },
     session::CommandStats,
 };
@@ -66,6 +67,7 @@ pub(crate) fn process_statistics(
     remote_stats: &ClosedownReportV1,
     bandwidth: &Configuration,
     show_statistics: bool,
+    direction: Direction,
 ) {
     #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
@@ -122,6 +124,14 @@ pub(crate) fn process_statistics(
         advanced_statistics(stats, command_stats, remote_stats);
     }
     check_rtt(stats, bandwidth);
+    suggest_bandwidth_tuning(
+        stats,
+        command_stats,
+        transport_time,
+        remote_stats,
+        bandwidth,
+        direction,
+    );
 }
 
 fn advanced_statistics(
@@ -193,6 +203,98 @@ fn check_rtt(stats: &ConnectionStats, bandwidth: &Configuration) {
             rtt_measured = stats.path.rtt,
             rtt_arg = bandwidth.rtt,
             rtt_param = stats.path.rtt.as_millis() + 1, // round up
+        );
+    }
+}
+
+fn suggest_bandwidth_tuning(
+    stats: &ConnectionStats,
+    command_stats: CommandStats,
+    transport_time: Option<Duration>,
+    remote_stats: &ClosedownReportV1,
+    config: &Configuration,
+    direction: Direction,
+) {
+    let payload_bytes = command_stats.payload_bytes;
+    if payload_bytes == 0 {
+        return;
+    }
+
+    let rtt_ms = u64::try_from(stats.path.rtt.as_millis()).unwrap_or(0);
+    let rtt_ms = if rtt_ms == 0 {
+        u64::from(config.rtt)
+    } else {
+        rtt_ms
+    };
+    if rtt_ms == 0 {
+        return;
+    }
+
+    let (sender_cwnd, current_bw, sender_frame_stats) = match direction {
+        Direction::ClientToServer => (stats.path.cwnd, config.tx(), &stats.frame_tx),
+        Direction::ServerToClient => (remote_stats.cwnd.0, config.rx(), &stats.frame_rx),
+        Direction::Both => return,
+    };
+    if sender_cwnd == 0 || current_bw == 0 {
+        return;
+    }
+    let blocked_data = sender_frame_stats.data_blocked;
+    let blocked_stream = sender_frame_stats.stream_data_blocked;
+    let flow_control_blocked = blocked_data > 0 || blocked_stream > 0;
+
+    let bw_from_cwnd = {
+        let numerator = u128::from(sender_cwnd).saturating_mul(1000);
+        let denominator = u128::from(rtt_ms);
+        let bw = (numerator + denominator - 1) / denominator; // ceil
+        u64::try_from(bw).unwrap_or(u64::MAX)
+    };
+
+    // Also consider the observed average rate, if available.
+    let bw_from_average = DataRate::new(payload_bytes, transport_time)
+        .byte_rate()
+        .and_then(|r| u64::try_from(r.ceil() as u128).ok())
+        .unwrap_or(0);
+
+    // Add some headroom: flow control updates are not continuous, so "exact BDP" can still stall.
+    let mut suggested_bw = bw_from_cwnd.max(bw_from_average);
+    suggested_bw =
+        u64::try_from((u128::from(suggested_bw).saturating_mul(5) + 3) / 4).unwrap_or(u64::MAX);
+
+    // If we observed flow-control blocking, push harder to help the next run converge in fewer iterations.
+    if flow_control_blocked && suggested_bw <= current_bw {
+        suggested_bw = current_bw.saturating_mul(2);
+    }
+
+    // Don't suggest decreases; this flag is about "fastest transfer" tuning.
+    suggested_bw = suggested_bw.max(current_bw);
+
+    let flag = match direction {
+        Direction::ClientToServer => "--tx",
+        Direction::ServerToClient => "--rx",
+        Direction::Both => unreachable!(),
+    };
+
+    let rtt_str = if stats.path.rtt.as_millis() == 0 {
+        config.rtt_duration().human_duration().to_string()
+    } else {
+        stats.path.rtt.human_duration().to_string()
+    };
+    let cwnd_str = sender_cwnd.human_count_bytes();
+    let suggested_str = suggested_bw.to_eng(4);
+    let current_str = current_bw.to_eng(4);
+
+    let increase_substantial = suggested_bw > current_bw.saturating_mul(11) / 10;
+    if !flow_control_blocked && !increase_substantial {
+        return;
+    }
+
+    if flow_control_blocked {
+        warn!(
+            "Observed flow-control blocking (DATA_BLOCKED={blocked_data}, STREAM_DATA_BLOCKED={blocked_stream}); measured RTT {rtt_str}, sender cwnd {cwnd_str}; for better performance, next time try {flag} {suggested_str} (current {current_str})"
+        );
+    } else {
+        warn!(
+            "Measured RTT {rtt_str}, sender cwnd {cwnd_str}; for better performance, next time try {flag} {suggested_str} (current {current_str})"
         );
     }
 }

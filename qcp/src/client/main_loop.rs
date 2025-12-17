@@ -170,6 +170,7 @@ impl Client {
 
         // Show time! ---------------------
 
+        let direction = prep_result.job_spec.direction();
         self.spinner.set_message("Transferring data");
         self.timers.next(SHOW_TIME);
         let stream_pair =
@@ -197,6 +198,7 @@ impl Client {
                 &remote_stats,
                 &config,
                 self.parameters.statistics,
+                direction,
             );
         }
 
