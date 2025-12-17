@@ -245,20 +245,29 @@ fn suggest_bandwidth_tuning(
     let bw_from_cwnd = {
         let numerator = u128::from(sender_cwnd).saturating_mul(1000);
         let denominator = u128::from(rtt_ms);
-        let bw = (numerator + denominator - 1) / denominator; // ceil
+        let bw = numerator.div_ceil(denominator);
         u64::try_from(bw).unwrap_or(u64::MAX)
     };
 
     // Also consider the observed average rate, if available.
-    let bw_from_average = DataRate::new(payload_bytes, transport_time)
-        .byte_rate()
-        .and_then(|r| u64::try_from(r.ceil() as u128).ok())
+    let bw_from_average = transport_time
+        .and_then(|t| {
+            let nanos = t.as_nanos();
+            (nanos != 0).then(|| {
+                let bytes = u128::from(payload_bytes);
+                bytes
+                    .saturating_mul(1_000_000_000)
+                    .div_ceil(nanos)
+                    .min(u128::from(u64::MAX))
+            })
+        })
+        .and_then(|v| u64::try_from(v).ok())
         .unwrap_or(0);
 
     // Add some headroom: flow control updates are not continuous, so "exact BDP" can still stall.
     let mut suggested_bw = bw_from_cwnd.max(bw_from_average);
     suggested_bw =
-        u64::try_from((u128::from(suggested_bw).saturating_mul(5) + 3) / 4).unwrap_or(u64::MAX);
+        u64::try_from(u128::from(suggested_bw).saturating_mul(5).div_ceil(4)).unwrap_or(u64::MAX);
 
     // If we observed flow-control blocking, push harder to help the next run converge in fewer iterations.
     if flow_control_blocked && suggested_bw <= current_bw {
