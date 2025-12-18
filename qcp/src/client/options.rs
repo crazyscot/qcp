@@ -1,6 +1,9 @@
 //! Options specific to qcp client-mode
 // (c) 2024 Ross Younger
 
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+
 use super::{CopyJobSpec, FileSpec};
 use crate::config::Source as ConfigSource;
 use clap::Parser;
@@ -80,52 +83,181 @@ pub struct Parameters {
 
     // JOB SPECIFICAION ====================================================================
     // (POSITIONAL ARGUMENTS!)
-    /// The source file. This may be a local filename, or remote specified as HOST:FILE or USER@HOST:FILE.
-    #[arg(value_name = "SOURCE")]
-    pub source: Option<FileSpec>,
-
-    /// Destination. This may be a file or directory. It may be local or remote.
+    /// Sources and destination. Provide one or more SOURCE paths followed by a DESTINATION path.
     ///
-    /// If remote, specify as HOST:DESTINATION or USER@HOST:DESTINATION; or simply HOST: or USER@HOST: to copy to your home directory there.
-    #[arg(value_name = "DESTINATION")]
-    pub destination: Option<FileSpec>,
+    /// The last path is always treated as the destination. All preceding paths are treated as sources.
+    /// Exactly one side of the transfer (sources or destination) must be remote.
+    #[arg(value_name = "PATH", num_args = 0..)]
+    pub paths: Vec<FileSpec>,
 }
 
-impl TryFrom<&Parameters> for CopyJobSpec {
+fn basename_of(path: &str) -> anyhow::Result<String> {
+    let path = Path::new(path);
+    let Some(filename) = path.file_name() else {
+        anyhow::bail!("Source path \"{}\" must contain a filename", path.display());
+    };
+    let filename = filename.to_string_lossy();
+    anyhow::ensure!(
+        !filename.is_empty(),
+        "Source path \"{}\" must contain a filename",
+        path.display()
+    );
+    Ok(filename.to_string())
+}
+
+fn join_local_path(base: &str, leaf: &str) -> String {
+    if base.is_empty() {
+        return leaf.to_string();
+    }
+    PathBuf::from(base).join(leaf).to_string_lossy().to_string()
+}
+
+/// Join a remote path using forward slashes, independent of the client's OS.
+///
+/// This avoids emitting `\` on Windows clients when the remote host is Unix-like.
+fn join_remote_path(base: &str, leaf: &str) -> String {
+    if base.is_empty() {
+        return leaf.to_string();
+    }
+    if base.ends_with('/') {
+        format!("{base}{leaf}")
+    } else {
+        format!("{base}/{leaf}")
+    }
+}
+
+impl TryFrom<&Parameters> for Vec<CopyJobSpec> {
     type Error = anyhow::Error;
 
     fn try_from(args: &Parameters) -> Result<Self, Self::Error> {
-        let source = args
-            .source
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
-            .clone();
-        let destination = args
-            .destination
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("source and destination are required"))?
-            .clone();
-        CopyJobSpec::try_new(source, destination, args.preserve)
+        let (sources, destination) = args.sources_and_destination()?;
+        let destination_is_remote = destination.user_at_host.is_some();
+
+        let mut remote_hosts = HashSet::new();
+        let mut remote_user: Option<&str> = None;
+        for spec in sources.iter().chain(std::iter::once(&destination)) {
+            if let Some(host) = spec.hostname() {
+                let _ = remote_hosts.insert(host);
+            }
+            if let Some(user) = spec.remote_user() {
+                if let Some(existing) = remote_user {
+                    anyhow::ensure!(existing == user, "Only one remote user is supported");
+                } else {
+                    remote_user = Some(user);
+                }
+            }
+        }
+        anyhow::ensure!(remote_hosts.len() <= 1, "Only one remote host is supported");
+
+        let remote_sources: Vec<_> = sources
+            .iter()
+            .filter(|s| s.user_at_host.is_some())
+            .collect();
+        if destination_is_remote {
+            anyhow::ensure!(
+                remote_sources.is_empty(),
+                "Only one remote side is supported"
+            );
+        } else {
+            anyhow::ensure!(
+                !remote_sources.is_empty(),
+                "One file argument must be remote"
+            );
+        }
+
+        let multiple_sources = sources.len() > 1;
+        let mut jobs = Vec::with_capacity(sources.len());
+
+        if destination_is_remote {
+            for source in sources {
+                anyhow::ensure!(
+                    source.user_at_host.is_none(),
+                    "Only one remote side is supported"
+                );
+                let dest_filename = if multiple_sources {
+                    let leaf = basename_of(&source.filename)?;
+                    join_remote_path(&destination.filename, &leaf)
+                } else {
+                    destination.filename.clone()
+                };
+                jobs.push(CopyJobSpec::try_new(
+                    source,
+                    FileSpec {
+                        user_at_host: destination.user_at_host.clone(),
+                        filename: dest_filename,
+                    },
+                    args.preserve,
+                )?);
+            }
+        } else {
+            for source in sources {
+                anyhow::ensure!(
+                    source.user_at_host.is_some(),
+                    "Only one remote side is supported"
+                );
+                let dest_filename = if multiple_sources {
+                    let leaf = basename_of(&source.filename)?;
+                    join_local_path(&destination.filename, &leaf)
+                } else {
+                    destination.filename.clone()
+                };
+                jobs.push(CopyJobSpec::try_new(
+                    source,
+                    FileSpec {
+                        user_at_host: None,
+                        filename: dest_filename,
+                    },
+                    args.preserve,
+                )?);
+            }
+        }
+        Ok(jobs)
     }
 }
 
 impl Parameters {
+    fn sources_and_destination(&self) -> anyhow::Result<(Vec<FileSpec>, FileSpec)> {
+        anyhow::ensure!(self.paths.len() >= 2, "source and destination are required");
+        let mut paths = self.paths.clone();
+        let destination = paths.pop().expect("destination must be present");
+        Ok((paths, destination))
+    }
+
     /// A best-effort attempt to extract a single remote host string from the parameters.
     ///
     /// # Returns
-    /// If neither source nor dest are present, `Ok("")`
-    /// If at most one of source and dest contains a remote host, `Ok(<host>)`
+    /// If no remote hosts are present, `Ok(None)`
+    /// If all remote paths use the same host and only one side of the transfer is remote, `Ok(Some(<host>))`
     ///
     /// # Errors
-    /// If both source and dest contain a remote host, Err("Only one remote file argument is supported")
+    /// If remote paths refer to multiple hosts or both the sources _and_ destination are remote
+    /// an error is returned.
     pub(crate) fn remote_host_lossy(&self) -> anyhow::Result<Option<&str>> {
-        let src_host = self.source.as_ref().and_then(FileSpec::hostname);
-        let dst_host = self.destination.as_ref().and_then(FileSpec::hostname);
+        if self.paths.is_empty() {
+            return Ok(None);
+        }
+        let mut host: Option<&str> = None;
+        let mut remote_in_sources = false;
+        let mut remote_in_destination = false;
+        for (idx, spec) in self.paths.iter().enumerate() {
+            if let Some(h) = spec.hostname() {
+                if let Some(existing) = host {
+                    anyhow::ensure!(existing == h, "Only one remote host is supported");
+                } else {
+                    host = Some(h);
+                }
+                if idx == self.paths.len() - 1 {
+                    remote_in_destination = true;
+                } else {
+                    remote_in_sources = true;
+                }
+            }
+        }
         anyhow::ensure!(
-            src_host.is_none() || dst_host.is_none(),
-            "Only one remote file argument is supported"
+            !(remote_in_sources && remote_in_destination),
+            "Only one remote side is supported"
         );
-        Ok(src_host.or(dst_host))
+        Ok(host)
     }
 
     /// Extracts the remote username from the jobspec, if there was one.
@@ -135,10 +267,22 @@ impl Parameters {
     /// * our configuration file
     pub(crate) fn remote_user_as_config(&self) -> ConfigSource {
         let mut cfg = ConfigSource::new(META_JOBSPEC);
-        let src = self.source.as_ref().and_then(FileSpec::remote_user);
-        let dest = self.destination.as_ref().and_then(FileSpec::remote_user);
-        let either = src.or(dest);
-        if let Some(u) = either {
+        let mut remote_user: Option<&str> = None;
+        for spec in &self.paths {
+            let user = spec.remote_user();
+            if let Some(u) = user {
+                if let Some(existing) = remote_user {
+                    if existing != u {
+                        // Conflicting usernames; we cannot pick one reliably.
+                        remote_user = None;
+                        break;
+                    }
+                } else {
+                    remote_user = Some(u);
+                }
+            }
+        }
+        if let Some(u) = remote_user {
             cfg.add("remote_user", u.into());
         }
         cfg
@@ -150,6 +294,7 @@ impl Parameters {
 mod tests {
     use super::*;
     use clap::Parser;
+    use figment::{Profile, Provider as _};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -191,8 +336,8 @@ mod tests {
     #[test]
     fn test_source_and_destination() {
         let params = Parameters::parse_from(["test", "source.txt", "destination.txt"]);
-        assert_eq!(params.source.unwrap().to_string(), "source.txt");
-        assert_eq!(params.destination.unwrap().to_string(), "destination.txt");
+        assert_eq!(params.paths[0].to_string(), "source.txt");
+        assert_eq!(params.paths[1].to_string(), "destination.txt");
     }
 
     #[test]
@@ -205,12 +350,20 @@ mod tests {
 
         let params = Parameters::parse_from(["test", "source.txt", "destination.txt"]);
         assert_eq!(params.remote_host_lossy().unwrap(), None);
+
+        let params = Parameters::parse_from(["test", "user@host:"]);
+        assert_eq!(params.remote_host_lossy().unwrap(), Some("host"));
+
+        let params = Parameters::parse_from(["test", "source.txt"]);
+        assert_eq!(params.remote_host_lossy().unwrap(), None);
     }
 
     #[test]
     fn test_copy_job_spec_conversion() {
         let params = Parameters::parse_from(["test", "user@host:source.txt", "destination.txt"]);
-        let copy_job_spec = CopyJobSpec::try_from(&params).unwrap();
+        let specs: Vec<CopyJobSpec> = (&params).try_into().unwrap();
+        assert_eq!(specs.len(), 1);
+        let copy_job_spec = specs.first().unwrap();
         assert_eq!(copy_job_spec.source.to_string(), "user@host:source.txt");
         assert_eq!(copy_job_spec.destination.to_string(), "destination.txt");
         assert_eq!(copy_job_spec.remote_host(), "host");
@@ -222,7 +375,198 @@ mod tests {
     fn there_can_be_only_one_remote() {
         let params =
             Parameters::parse_from(["test", "user@host:source.txt", "user@host:destination.txt"]);
-        let _ = CopyJobSpec::try_from(&params).expect_err("but there can be only one!");
+        let _ = <Vec<CopyJobSpec>>::try_from(&params).expect_err("but there can be only one!");
         assert!(params.remote_host_lossy().is_err());
+    }
+
+    #[test]
+    fn multiple_local_sources_to_remote_destination() {
+        let params = Parameters::parse_from(["test", "file1", "file2", "user@host:remote_dir"]);
+        let specs: Vec<CopyJobSpec> = (&params).try_into().unwrap();
+        assert_eq!(specs.len(), 2);
+        assert_eq!(specs[0].source.to_string(), "file1");
+        assert_eq!(
+            specs[0].destination.to_string(),
+            "user@host:remote_dir/file1"
+        );
+        assert_eq!(
+            specs[1].destination.to_string(),
+            "user@host:remote_dir/file2"
+        );
+    }
+
+    #[test]
+    fn multiple_remote_sources_to_local_destination() {
+        let params =
+            Parameters::parse_from(["test", "user@host:/tmp/a", "user@host:/tmp/b", "downloads"]);
+        let specs: Vec<CopyJobSpec> = (&params).try_into().unwrap();
+        assert_eq!(specs.len(), 2);
+        assert_eq!(
+            specs[0].destination.to_string(),
+            join_local_path("downloads", "a")
+        );
+        assert_eq!(
+            specs[1].destination.to_string(),
+            join_local_path("downloads", "b")
+        );
+    }
+
+    #[test]
+    fn conflicting_remote_users_rejected() {
+        let params =
+            Parameters::parse_from(["test", "alice@host:file1", "bob@host:file2", "downloads"]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Only one remote user is supported")
+        );
+    }
+
+    #[test]
+    fn local_to_local_rejected() {
+        let params = Parameters::parse_from(["test", "file1", "downloads"]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(err.to_string().contains("One file argument must be remote"));
+    }
+
+    #[test]
+    fn multiple_remote_hosts_rejected() {
+        let params = Parameters::parse_from([
+            "test",
+            "alice@host1:/tmp/a",
+            "alice@host2:/tmp/b",
+            "downloads",
+        ]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Only one remote host is supported")
+        );
+    }
+
+    #[test]
+    fn remote_destination_with_trailing_slash_is_joined_cleanly() {
+        let params = Parameters::parse_from(["test", "file1", "file2", "user@host:remote_dir/"]);
+        let specs: Vec<CopyJobSpec> = (&params).try_into().unwrap();
+        assert_eq!(specs.len(), 2);
+        assert_eq!(
+            specs[0].destination.to_string(),
+            "user@host:remote_dir/file1"
+        );
+        assert_eq!(
+            specs[1].destination.to_string(),
+            "user@host:remote_dir/file2"
+        );
+    }
+
+    #[test]
+    fn remote_destination_home_dir_is_supported() {
+        let params = Parameters::parse_from(["test", "file1", "file2", "user@host:"]);
+        let specs: Vec<CopyJobSpec> = (&params).try_into().unwrap();
+        assert_eq!(specs.len(), 2);
+        assert_eq!(specs[0].destination.to_string(), "user@host:file1");
+        assert_eq!(specs[1].destination.to_string(), "user@host:file2");
+    }
+
+    #[test]
+    fn source_basename_is_required_for_multi_source_copy() {
+        let params = Parameters::parse_from(["test", "user@host:", "user@host:/tmp/b", "."]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(err.to_string().contains("must contain a filename"));
+    }
+
+    #[test]
+    fn sources_and_destination_requires_two_paths() {
+        let params = Parameters::parse_from(["test", "user@host:file1"]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("source and destination are required")
+        );
+    }
+
+    #[test]
+    fn remote_host_lossy_rejects_multiple_hosts() {
+        let params =
+            Parameters::parse_from(["test", "user@host1:file1", "user@host2:file2", "downloads"]);
+        let err = params.remote_host_lossy().unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Only one remote host is supported")
+        );
+    }
+
+    #[test]
+    fn remote_host_lossy_empty_paths() {
+        let params = Parameters::parse_from(["test"]);
+        assert_eq!(params.remote_host_lossy().unwrap(), None);
+    }
+
+    #[test]
+    fn remote_user_as_config_is_set_when_consistent() {
+        let params = Parameters::parse_from(["test", "user@host:source.txt", "destination.txt"]);
+        let cfg = params.remote_user_as_config();
+        let data = cfg.data().unwrap();
+        let dict = data.get(&Profile::Global).unwrap();
+        assert_eq!(dict.get("remote_user").unwrap().as_str(), Some("user"));
+    }
+
+    #[test]
+    fn remote_user_as_config_ignored_on_conflict() {
+        let params =
+            Parameters::parse_from(["test", "alice@host:file1", "bob@host:file2", "downloads"]);
+        let cfg = params.remote_user_as_config();
+        let data = cfg.data().unwrap();
+        let dict = data.get(&Profile::Global).unwrap();
+        assert!(dict.get("remote_user").is_none());
+    }
+
+    #[test]
+    fn join_local_path_with_empty_base_returns_leaf() {
+        assert_eq!(join_local_path("", "file"), "file");
+    }
+
+    #[test]
+    fn single_local_source_to_remote_destination_is_supported() {
+        let params = Parameters::parse_from(["test", "file1", "user@host:remote_file"]);
+        let specs: Vec<CopyJobSpec> = (&params).try_into().unwrap();
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].destination.to_string(), "user@host:remote_file");
+    }
+
+    #[test]
+    fn remote_user_as_config_is_not_set_when_no_user_is_provided() {
+        let params = Parameters::parse_from(["test", "host:source.txt", "destination.txt"]);
+        let cfg = params.remote_user_as_config();
+        let data = cfg.data().unwrap();
+        let dict = data.get(&Profile::Global).unwrap();
+        assert!(dict.get("remote_user").is_none());
+    }
+
+    #[test]
+    fn mixed_local_and_remote_sources_to_local_destination_rejected() {
+        let params = Parameters::parse_from(["test", "file1", "user@host:/tmp/b", "downloads"]);
+        let err = <Vec<CopyJobSpec>>::try_from(&params).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Only one remote side is supported")
+        );
+    }
+
+    #[test]
+    fn remote_host_lossy_allows_multiple_sources_same_host() {
+        let params =
+            Parameters::parse_from(["test", "user@host:file1", "user@host:file2", "downloads"]);
+        assert_eq!(params.remote_host_lossy().unwrap(), Some("host"));
+    }
+
+    #[test]
+    fn remote_user_as_config_allows_multiple_paths_same_user() {
+        let params =
+            Parameters::parse_from(["test", "alice@host:file1", "alice@host:file2", "downloads"]);
+        let cfg = params.remote_user_as_config();
+        let data = cfg.data().unwrap();
+        let dict = data.get(&Profile::Global).unwrap();
+        assert_eq!(dict.get("remote_user").unwrap().as_str(), Some("alice"));
     }
 }

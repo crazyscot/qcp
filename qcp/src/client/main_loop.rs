@@ -10,7 +10,7 @@ use crate::{
         TaggedData,
         common::{ReceivingStream, SendReceivePair, SendingStream},
         compat::Feature,
-        control::{ClosedownReportV1, Compatibility, CredentialsType, ServerMessageV2},
+        control::{ClosedownReportV1, Compatibility, CredentialsType, Direction, ServerMessageV2},
         session::{CommandParam, Get2Args},
     },
     session::CommandStats,
@@ -22,10 +22,13 @@ use crate::{
 };
 
 use anyhow::{Context, Result};
-use futures_util::TryFutureExt as _;
+use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
-use std::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::{
+    future::Future,
+    net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6},
+};
 use tokio::{
     self,
     process::{ChildStdin, ChildStdout},
@@ -71,10 +74,50 @@ struct Client {
 #[derive(Debug, PartialEq)]
 struct PrepResult {
     remote_address: IpAddr,
-    job_spec: CopyJobSpec,
+    job_specs: Vec<CopyJobSpec>,
+}
+
+impl PrepResult {
+    fn primary_job(&self) -> &CopyJobSpec {
+        self.job_specs
+            .first()
+            .expect("prep should always produce at least one job")
+    }
+
+    fn remote_host(&self) -> &str {
+        self.primary_job().remote_host()
+    }
+
+    fn direction(&self) -> Direction {
+        self.primary_job().direction()
+    }
+
+    fn preserve(&self) -> bool {
+        self.primary_job().preserve
+    }
 }
 
 type ControlChannelType = ControlChannel<ChildStdin, ChildStdout>;
+
+#[async_trait]
+trait BiStreamOpener {
+    type Send: SendingStream + 'static;
+    type Recv: ReceivingStream + 'static;
+
+    async fn open_bi_stream(&self) -> Result<SendReceivePair<Self::Send, Self::Recv>>;
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))] // thin adapter around quinn
+#[async_trait]
+impl BiStreamOpener for QuinnConnection {
+    type Send = quinn::SendStream;
+    type Recv = quinn::RecvStream;
+
+    async fn open_bi_stream(&self) -> Result<SendReceivePair<Self::Send, Self::Recv>> {
+        let bi = self.open_bi().await.map_err(|e| anyhow::anyhow!(e))?;
+        Ok(SendReceivePair::from(bi))
+    }
+}
 
 struct QcpConnection {
     ssh_client: ProcessWrapper,
@@ -172,17 +215,15 @@ impl Client {
 
         self.spinner.set_message("Transferring data");
         self.timers.next(SHOW_TIME);
-        let stream_pair =
-            SendReceivePair::from(connection.open_bi().map_err(|e| anyhow::anyhow!(e)).await?);
-        let result = self
-            .manage_request(
-                stream_pair,
-                prep_result.job_spec,
+        let (overall_success, aggregate_stats) = self
+            .transfer_jobs(
+                &connection,
+                &prep_result.job_specs,
                 &config,
                 self.parameters.quiet,
                 qcp_conn.control.selected_compat,
             )
-            .await;
+            .await?;
 
         // Closedown ----------------------
         let remote_stats = self.closedown(&config, qcp_conn).await?;
@@ -192,7 +233,7 @@ impl Client {
             let transport_time = self.timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
             crate::util::stats::process_statistics(
                 &connection.stats(),
-                result.stats,
+                aggregate_stats,
                 transport_time,
                 &remote_stats,
                 &config,
@@ -204,7 +245,7 @@ impl Client {
             info!("Elapsed time by phase:\n{}", self.timers);
         }
         self.display.clear()?;
-        Ok(result.success)
+        Ok(overall_success)
     }
 
     pub(crate) fn prep(
@@ -219,8 +260,11 @@ impl Client {
         self.spinner.set_message("Preparing");
         self.spinner.enable_steady_tick(Duration::from_millis(150));
 
-        let job_spec = crate::client::CopyJobSpec::try_from(&self.parameters)?;
-        let remote_ssh_hostname = job_spec.remote_host();
+        let job_specs: Vec<CopyJobSpec> = (&self.parameters).try_into()?;
+        let remote_ssh_hostname = job_specs
+            .first()
+            .expect("at least one job spec is required")
+            .remote_host();
 
         let ssh_config_files = super::ssh::SshConfigFiles::new(
             working_config
@@ -243,7 +287,7 @@ impl Client {
         )?;
         Ok(PrepResult {
             remote_address,
-            job_spec,
+            job_specs,
         })
     }
 
@@ -260,7 +304,7 @@ impl Client {
             &self.display,
             working_config,
             &self.parameters,
-            prep_result.job_spec.remote_host(),
+            prep_result.remote_host(),
             prep_result.remote_address.into(),
         )?;
         let mut qcp_conn = QcpConnection::try_from(ssh_client)?;
@@ -272,7 +316,7 @@ impl Client {
                 prep_result.remote_address.into(),
                 &mut self.manager,
                 &self.parameters,
-                prep_result.job_spec.direction(),
+                prep_result.direction(),
                 None,
             )
             .await?;
@@ -283,9 +327,7 @@ impl Client {
             .context("assembling final client configuration from server message")?;
 
         // Are any warnings necessary?
-        if prep_result.job_spec.preserve
-            && !qcp_conn.control.selected_compat.supports(Feature::PRESERVE)
-        {
+        if prep_result.preserve() && !qcp_conn.control.selected_compat.supports(Feature::PRESERVE) {
             warn!("--preserve requested, but remote does not support this option");
         }
         Ok((config, qcp_conn))
@@ -338,7 +380,7 @@ impl Client {
             peer_credentials,
             server_address_port.into(),
             config,
-            prep_result.job_spec.direction().client_mode(),
+            prep_result.direction().client_mode(),
             false,
             compat,
         )?;
@@ -376,6 +418,22 @@ impl Client {
         self.timers.stop();
 
         Ok(remote_stats)
+    }
+
+    async fn transfer_jobs<C: BiStreamOpener>(
+        &self,
+        connection: &C,
+        jobs: &[CopyJobSpec],
+        config: &Configuration,
+        quiet: bool,
+        compat: Compatibility,
+    ) -> anyhow::Result<(bool, CommandStats)> {
+        process_job_requests(
+            jobs,
+            || connection.open_bi_stream(),
+            |stream_pair, job| self.manage_request(stream_pair, job, config, quiet, compat),
+        )
+        .await
     }
 
     /// Do whatever it is we were asked to.
@@ -434,18 +492,64 @@ impl Client {
     }
 }
 
+async fn process_job_requests<S, R, OpenStream, OpenFut, HandleJob, HandleFut>(
+    jobs: &[CopyJobSpec],
+    mut open_stream: OpenStream,
+    mut handle_job: HandleJob,
+) -> anyhow::Result<(bool, CommandStats)>
+where
+    OpenStream: FnMut() -> OpenFut,
+    OpenFut: Future<Output = anyhow::Result<SendReceivePair<S, R>>>,
+    HandleJob: FnMut(SendReceivePair<S, R>, CopyJobSpec) -> HandleFut,
+    HandleFut: Future<Output = RequestResult>,
+    S: SendingStream + 'static,
+    R: ReceivingStream + 'static,
+{
+    let mut aggregate_stats = CommandStats::new();
+    let mut overall_success = true;
+    for job in jobs {
+        let stream_pair = open_stream().await?;
+        let result = handle_job(stream_pair, job.clone()).await;
+
+        aggregate_stats.payload_bytes += result.stats.payload_bytes;
+        aggregate_stats.peak_transfer_rate = aggregate_stats
+            .peak_transfer_rate
+            .max(result.stats.peak_transfer_rate);
+        if !result.success {
+            overall_success = false;
+            break;
+        }
+    }
+    Ok((overall_success, aggregate_stats))
+}
+
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use indicatif::MultiProgress;
-    use std::{net::Ipv4Addr, str::FromStr};
+    use std::path::Path;
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use std::{
+        net::{Ipv4Addr, SocketAddrV4},
+        str::FromStr,
+    };
     use tokio::io::AsyncWriteExt;
+    use tokio::time::{Duration, timeout};
+
+    use async_trait::async_trait;
+    use littertray::LitterTray;
+
+    use super::{BiStreamOpener, RequestResult, process_job_requests};
 
     #[cfg(unix)]
     use crate::control::create_fake;
 
+    use crate::session::CommandStats;
     use crate::{
-        Configuration, FileSpec, Parameters,
+        Configuration, CopyJobSpec, FileSpec, Parameters,
         client::main_loop::Client,
         config::{Configuration_Optional, Manager},
         protocol::{common::ProtocolMessage as _, test_helpers::new_test_plumbing},
@@ -454,8 +558,10 @@ mod test {
     fn make_uut<F: FnOnce(&mut Manager, &mut Parameters)>(f: F, src: &str, dest: &str) -> Client {
         let mut mgr = Manager::without_default(None);
         let mut params = Parameters {
-            source: Some(FileSpec::from_str(src).unwrap()),
-            destination: Some(FileSpec::from_str(dest).unwrap()),
+            paths: vec![
+                FileSpec::from_str(src).unwrap(),
+                FileSpec::from_str(dest).unwrap(),
+            ],
             ..Default::default()
         };
         f(&mut mgr, &mut params);
@@ -477,8 +583,9 @@ mod test {
         let working = Configuration_Optional::default();
         let res = uut.prep(&working, Configuration::system_default()).unwrap();
         assert_eq!(res.remote_address, Ipv4Addr::new(8, 8, 8, 8));
-        assert_eq!(res.job_spec.source, remote_file_spec());
-        assert_eq!(res.job_spec.destination, local_file_spec());
+        assert_eq!(res.job_specs[0].source, remote_file_spec());
+        assert_eq!(res.job_specs[0].destination, local_file_spec());
+        assert!(!res.preserve());
         eprintln!("{res:?}");
     }
     #[test]
@@ -530,6 +637,77 @@ mod test {
         eprintln!("Closedown report: {report:?}");
     }
 
+    #[cfg_attr(target_os = "macos", ignore)]
+    #[cfg_attr(target_os = "windows", ignore = "fails under Wine in CI")]
+    #[tokio::test]
+    async fn quinn_connection_open_bi_stream_adapter_works() {
+        use crate::protocol::control::{Compatibility, ConnectionType};
+        use crate::transport::ThroughputMode;
+        use crate::util::Credentials;
+
+        let compat = Compatibility::Level(1);
+        let config = Configuration::system_default();
+
+        let server_creds = Credentials::generate().unwrap();
+        let client_creds = Credentials::generate().unwrap();
+        let server_cert = server_creds.to_tagged_data(compat, None).unwrap();
+        let client_cert = client_creds.to_tagged_data(compat, None).unwrap();
+
+        let (server_endpoint, _) = crate::control::create_endpoint(
+            &server_creds,
+            &client_cert,
+            ConnectionType::Ipv4,
+            config,
+            ThroughputMode::Both,
+            true,
+            compat,
+        )
+        .unwrap();
+        let server_port = server_endpoint.local_addr().unwrap().port();
+        let server_addr: std::net::SocketAddr =
+            SocketAddrV4::new(Ipv4Addr::LOCALHOST, server_port).into();
+
+        let server_task = tokio::spawn(async move {
+            let incoming = timeout(Duration::from_secs(5), server_endpoint.accept())
+                .await
+                .expect("timed out waiting for QUIC connection")
+                .expect("endpoint closed unexpectedly");
+
+            let connection = incoming.await.expect("incoming connection failed");
+            let _ = connection.accept_bi().await.expect("accept_bi failed");
+
+            server_endpoint.close(0u32.into(), "test".as_bytes());
+            server_endpoint.wait_idle().await;
+        });
+
+        let (client_endpoint, _) = crate::control::create_endpoint(
+            &client_creds,
+            &server_cert,
+            ConnectionType::Ipv4,
+            config,
+            ThroughputMode::Both,
+            false,
+            compat,
+        )
+        .unwrap();
+
+        let connecting = client_endpoint
+            .connect(server_addr, &server_creds.hostname)
+            .unwrap();
+        let connection = timeout(Duration::from_secs(5), connecting)
+            .await
+            .expect("timed out connecting")
+            .expect("connection failed");
+
+        let _ = connection.open_bi_stream().await.unwrap();
+
+        connection.close(0u32.into(), "test".as_bytes());
+        client_endpoint.close(0u32.into(), "test".as_bytes());
+        let _ = timeout(Duration::from_secs(5), client_endpoint.wait_idle()).await;
+
+        let _ = timeout(Duration::from_secs(5), server_task).await;
+    }
+
     #[tokio::test]
     async fn handle_get_succeeding() {
         use littertray::LitterTray;
@@ -541,7 +719,7 @@ mod test {
 
         let manage_fut = uut.manage_request(
             plumbing.0,
-            prep_result.job_spec.clone(),
+            prep_result.job_specs[0].clone(),
             Configuration::system_default(),
             false,
             crate::protocol::control::Compatibility::Level(1),
@@ -592,12 +770,263 @@ mod test {
 
         let manage_fut = uut.manage_request(
             plumbing.0,
-            prep_result.job_spec.clone(),
+            prep_result.job_specs[0].clone(),
             Configuration::system_default(),
             false,
             crate::protocol::control::Compatibility::Level(1),
         );
         let r = manage_fut.await;
         println!("Result: {r:?}");
+    }
+
+    #[tokio::test]
+    async fn transfer_jobs_copies_multiple_files_over_reused_connection() {
+        const DATA1: &[u8] = b"alpha";
+        const DATA2: &[u8] = b"beta beta";
+        const OUT1: &str = "out1";
+        const OUT2: &str = "out2";
+
+        let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1);
+
+        let jobs = vec![
+            CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file2", OUT2, false).unwrap(),
+        ];
+
+        let conn = FakeBiConnection::new(vec![
+            encode_get_success_response(DATA1),
+            encode_get_success_response(DATA2),
+        ]);
+
+        let (success, stats) = LitterTray::try_with_async(async |_| {
+            let (success, stats) = uut
+                .transfer_jobs(
+                    &conn,
+                    &jobs,
+                    Configuration::system_default(),
+                    false,
+                    crate::protocol::control::Compatibility::Level(1),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(std::fs::read(OUT1)?, DATA1);
+            assert_eq!(std::fs::read(OUT2)?, DATA2);
+
+            Ok((success, stats))
+        })
+        .await
+        .unwrap();
+
+        assert!(success);
+        assert_eq!(conn.open_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(stats.payload_bytes, (DATA1.len() + DATA2.len()) as u64);
+    }
+
+    #[tokio::test]
+    async fn transfer_jobs_stops_after_failure() {
+        const DATA1: &[u8] = b"alpha";
+        const OUT1: &str = "out1";
+        const OUT2: &str = "out2";
+        const OUT3: &str = "out3";
+
+        let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1);
+
+        let jobs = vec![
+            CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file2", OUT2, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file3", OUT3, false).unwrap(),
+        ];
+
+        let conn = FakeBiConnection::new(vec![
+            encode_get_success_response(DATA1),
+            encode_get_error_response(),
+        ]);
+
+        let (success, stats) = LitterTray::try_with_async(async |_| {
+            let (success, stats) = uut
+                .transfer_jobs(
+                    &conn,
+                    &jobs,
+                    Configuration::system_default(),
+                    false,
+                    crate::protocol::control::Compatibility::Level(1),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(std::fs::read(OUT1)?, DATA1);
+            assert!(!Path::new(OUT2).exists());
+            assert!(!Path::new(OUT3).exists());
+
+            Ok((success, stats))
+        })
+        .await
+        .unwrap();
+
+        assert!(!success);
+        assert_eq!(conn.open_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(stats.payload_bytes, DATA1.len() as u64);
+    }
+
+    #[tokio::test]
+    async fn process_job_requests_aggregates_stats() {
+        let jobs = vec![
+            CopyJobSpec::from_parts("file1", "host:dir", false).unwrap(),
+            CopyJobSpec::from_parts("file2", "host:dir", false).unwrap(),
+        ];
+
+        let open_calls = AtomicUsize::new(0);
+        let handle_calls = AtomicUsize::new(0);
+        let results = Mutex::new(vec![
+            RequestResult::new(
+                true,
+                CommandStats {
+                    payload_bytes: 10,
+                    peak_transfer_rate: 100,
+                },
+            ),
+            RequestResult::new(
+                true,
+                CommandStats {
+                    payload_bytes: 5,
+                    peak_transfer_rate: 200,
+                },
+            ),
+        ]);
+
+        let (success, stats) = process_job_requests(
+            &jobs,
+            || {
+                let _ = open_calls.fetch_add(1, Ordering::SeqCst);
+                async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
+            },
+            |stream_pair, _job| {
+                let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
+                drop(stream_pair);
+                async { results.lock().unwrap().remove(0) }
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(success);
+        assert_eq!(open_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(handle_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(stats.payload_bytes, 15);
+        assert_eq!(stats.peak_transfer_rate, 200);
+    }
+
+    #[tokio::test]
+    async fn process_job_requests_stops_on_failure() {
+        let jobs = vec![
+            CopyJobSpec::from_parts("file1", "host:dir", false).unwrap(),
+            CopyJobSpec::from_parts("file2", "host:dir", false).unwrap(),
+            CopyJobSpec::from_parts("file3", "host:dir", false).unwrap(),
+        ];
+
+        let open_calls = AtomicUsize::new(0);
+        let handle_calls = AtomicUsize::new(0);
+        let results = Mutex::new(vec![
+            RequestResult::new(
+                true,
+                CommandStats {
+                    payload_bytes: 10,
+                    peak_transfer_rate: 100,
+                },
+            ),
+            RequestResult::new(false, CommandStats::new()),
+            // This would only be consumed if we failed to stop early.
+            RequestResult::new(
+                true,
+                CommandStats {
+                    payload_bytes: 999,
+                    peak_transfer_rate: 999,
+                },
+            ),
+        ]);
+
+        let (success, stats) = process_job_requests(
+            &jobs,
+            || {
+                let _ = open_calls.fetch_add(1, Ordering::SeqCst);
+                async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
+            },
+            |stream_pair, _job| {
+                let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
+                drop(stream_pair);
+                async { results.lock().unwrap().remove(0) }
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(!success);
+        assert_eq!(open_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(handle_calls.load(Ordering::SeqCst), 2);
+        assert_eq!(stats.payload_bytes, 10);
+        assert_eq!(stats.peak_transfer_rate, 100);
+    }
+
+    fn encode_get_success_response(data: &[u8]) -> Vec<u8> {
+        let mut send_buf = Vec::new();
+        crate::protocol::session::Response::V1(crate::protocol::session::ResponseV1 {
+            status: crate::protocol::session::Status::Ok.into(),
+            message: None,
+        })
+        .to_writer_framed(&mut send_buf)
+        .unwrap();
+        crate::protocol::session::FileHeader::new_v1(data.len() as u64, "file")
+            .to_writer_framed(&mut send_buf)
+            .unwrap();
+        send_buf.extend_from_slice(data);
+        crate::protocol::session::FileTrailer::V1
+            .to_writer_framed(&mut send_buf)
+            .unwrap();
+        send_buf
+    }
+
+    fn encode_get_error_response() -> Vec<u8> {
+        let mut send_buf = Vec::new();
+        crate::protocol::session::Response::V1(crate::protocol::session::ResponseV1 {
+            status: crate::protocol::session::Status::FileNotFound.into(),
+            message: Some("nope".to_string()),
+        })
+        .to_writer_framed(&mut send_buf)
+        .unwrap();
+        send_buf
+    }
+
+    struct FakeBiConnection {
+        responses: Mutex<Vec<Vec<u8>>>,
+        open_calls: AtomicUsize,
+    }
+
+    impl FakeBiConnection {
+        fn new(responses: Vec<Vec<u8>>) -> Self {
+            Self {
+                responses: Mutex::new(responses),
+                open_calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl BiStreamOpener for FakeBiConnection {
+        type Send = tokio::io::WriteHalf<tokio::io::SimplexStream>;
+        type Recv = tokio::io::ReadHalf<tokio::io::SimplexStream>;
+
+        async fn open_bi_stream(
+            &self,
+        ) -> anyhow::Result<crate::protocol::common::SendReceivePair<Self::Send, Self::Recv>>
+        {
+            let (client_side, mut server_side) = new_test_plumbing();
+            let _ = self.open_calls.fetch_add(1, Ordering::SeqCst);
+            let response = self.responses.lock().unwrap().remove(0);
+            std::mem::drop(tokio::spawn(async move {
+                let _ = server_side.send.write_all(&response).await;
+            }));
+            Ok(client_side)
+        }
     }
 }
