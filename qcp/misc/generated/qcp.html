@@ -38,8 +38,8 @@
   be able to qcp to it by the same name. However, some particularly complicated
   ssh config files may be too much for qcp to understand. (In particular, Match
   directives are not currently supported.) In that case, you can use
-  &ndash;ssh-config to provide an alternative configuration (or set it in your
-  qcp configuration file).
+  --ssh-config to provide an alternative configuration (or set it in your qcp
+  configuration file).
 </p>
 
 <p>
@@ -52,14 +52,19 @@
 <ul>
   <li>
     <p>
-      <code>&lt;PATH&gt;</code> — Sources and destination. Provide one or more
-      SOURCE paths followed by a DESTINATION path.
+      <code>&lt;SOURCE|DESTINATION&gt;</code> — One or more SOURCE paths
+      followed by a DESTINATION path.
     </p>
 
     <p>
       The last path is always treated as the destination. All preceding paths
-      are treated as sources. Exactly one side of the transfer (sources or
-      destination) must be remote.
+      are treated as sources.
+    </p>
+
+    <p>
+      Exactly one side of the transfer (all sources, or the destination) must be
+      remote. Remote paths take the form <code>server:path</code> or <code
+      >user@server:path</code> (as in rcp or scp).
     </p>
   </li>
 </ul>
@@ -136,9 +141,8 @@
         for more discussion
       </li>
       <li>
-        <code>newreno</code>: The traditional &ldquo;NewReno&rdquo; congestion
-        algorithm. This was the algorithm used in TCP before the introduction of
-        Cubic
+        <code>newreno</code>: The traditional "NewReno" congestion algorithm.
+        This was the algorithm used in TCP before the introduction of Cubic
       </li>
     </ul>
   </li>
@@ -463,6 +467,33 @@
   </li>
   <li>
     <p>
+      <code>--io-buffer-size &lt;bytes&gt;</code> — File transfer buffer size
+      (bytes).
+    </p>
+
+    <p>
+      With very high speed connections it may be worth experimenting with larger
+      values to improve throughput and reduce CPU overhead.
+    </p>
+
+    <p>
+      <strong>Both sides of the connection must configure this setting
+        independently.</strong> It is not negotiated between client and server.
+    </p>
+
+    <p>
+      This setting may be specified directly as a number, or as an SI quantity
+      like <code>10M</code> or <code>256k</code>. The default is 1MB.
+    </p>
+
+    <p>
+      Note that this setting changes only the size of the I/O buffer used to
+      spool data to and from disk. It does not directly affect what appears on
+      the network.
+    </p>
+  </li>
+  <li>
+    <p>
       <code>--show-config</code> — Outputs the local configuration, then exits.
     </p>
 
@@ -542,16 +573,16 @@
   </li>
   <li>
     <p>
-      <code>--remote-config</code> — Outputs the server&rsquo;s configuration
-      for this connection. (Unlike <code>--show-config</code>, this option does
-      not prevent a file transfer. However, you can do so by selecting <code
+      <code>--remote-config</code> — Outputs the server's configuration for this
+      connection. (Unlike <code>--show-config</code>, this option does not
+      prevent a file transfer. However, you can do so by selecting <code
       >--dry-run</code> mode.)
     </p>
 
     <p>
-      The output shows both the server&rsquo;s <em>static</em> configuration (by
+      The output shows both the server's <em>static</em> configuration (by
       reading config files) and its <em>final</em> configuration (taking account
-      of the client&rsquo;s expressed preferences).
+      of the client's expressed preferences).
     </p>
   </li>
   <li>

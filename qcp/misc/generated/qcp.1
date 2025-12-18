@@ -14,7 +14,7 @@ qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH SYNOPSIS
-\fBqcp\fR [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-\-address\-family\fR] [\fB\-\-config\-files\fR] [\fB\-\-congestion\fR] [\fB\-\-debug\fR] [\fB\-\-dry\-run\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-log\-file\fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-\-port\fR] [\fB\-\-profile\fR] [\fB\-\-remote\-config\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-remote\-qcp\-binary\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-S \fR] [\fB\-\-show\-config\fR] [\fB\-\-ssh\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-time\-format\fR] [\fB\-\-timeout\fR] [\fB\-\-tls\-auth\-type\fR] [\fB\-\-rx\fR] [\fB\-\-tx\fR] [\fB\-\-udp\-buffer\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-rtt\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-initial\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-color\fR] [\fB\-\-aes256\fR] [\fB\-\-list\-features\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-\-help\-buffers\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIPATH\fR] 
+\fBqcp\fR [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-\-address\-family\fR] [\fB\-\-config\-files\fR] [\fB\-\-congestion\fR] [\fB\-\-debug\fR] [\fB\-\-dry\-run\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-log\-file\fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-\-port\fR] [\fB\-\-profile\fR] [\fB\-\-remote\-config\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-remote\-qcp\-binary\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-S \fR] [\fB\-\-show\-config\fR] [\fB\-\-ssh\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-time\-format\fR] [\fB\-\-timeout\fR] [\fB\-\-tls\-auth\-type\fR] [\fB\-\-rx\fR] [\fB\-\-tx\fR] [\fB\-\-udp\-buffer\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-rtt\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-initial\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-color\fR] [\fB\-\-aes256\fR] [\fB\-\-io\-buffer\-size\fR] [\fB\-\-list\-features\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-\-help\-buffers\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE|DESTINATION\fR] 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH DESCRIPTION
@@ -25,7 +25,7 @@ qcp offers similar security to scp using existing, well\-known mechanisms, and b
 .el .ds Aq '
 .SH USAGE
 .TP
-.BI "qcp " "[OPTIONS] " "[SOURCE] " [DESTINATION]
+.BI "qcp " "[OPTIONS] " "SOURCE\&... " DESTINATION
 e.g.   qcp some/file my\-server:some\-directory/
 .PP
 Exactly one side (source(s) or destination) must be remote.
@@ -36,7 +36,7 @@ qcp will read your ssh config file to resolve any host name aliases you may have
 .PP
 .SS LIMITATIONS
 .TP
-You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection\-tracking NAT, things work just fine. This is the case for the vast majority of home and business network connections.)
+You must be able to ssh directly to the remote machine, and exchange UDP packets with it on a given port. (If the local machine is behind connection\-tracking NAT, things work just fine. This is the case for the vast majority of home and many business network connections.)
 .TP
 Be aware that network security systems can’t readily identify QUIC traffic as such. It’s opaque, and high bandwidth. Some security systems might flag it as a potential threat.
 
@@ -73,16 +73,15 @@ never: Never use colours
 auto: Use colours only when writing to a terminal. This is the default behaviour
 .RE
 .TP
-\fB\-p\fR, \fB\-\-preserve\fR
-Preserves file modification times and permissions as far as possible
-.TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)
 .TP
-[\fIPATH\fR]
-Sources and destination. Provide one or more SOURCE paths followed by a DESTINATION path.
+[\fISOURCE|DESTINATION\fR]
+One or more SOURCE paths followed by a DESTINATION path.
 
-The last path is always treated as the destination. All preceding paths are treated as sources. Exactly one side of the transfer (sources or destination) must be remote.
+The last path is always treated as the destination. All preceding paths are treated as sources.
+
+Exactly one side of the transfer (all sources, or the destination) must be remote. Remote paths take the form `server:path` or `user@server:path` (as in rcp or scp).
 .SH "NETWORK TUNING"
 .TP
 \fB\-\-rx\fR \fI<bytes>\fR
@@ -302,6 +301,21 @@ Specifies the time format to use when printing messages to the console or to fil
 Quiet mode
 
 Switches off progress display and statistics; reports only errors
+.SH "FILE COPYING"
+.TP
+\fB\-\-io\-buffer\-size\fR \fI<bytes>\fR
+File transfer buffer size (bytes).
+
+With very high speed connections it may be worth experimenting with larger values to improve throughput and reduce CPU overhead.
+
+**Both sides of the connection must configure this setting independently.** It is not negotiated between client and server.
+
+This setting may be specified directly as a number, or as an SI quantity like `10M` or `256k`. The default is 1MB.
+
+Note that this setting changes only the size of the I/O buffer used to spool data to and from disk. It does not directly affect what appears on the network.
+.TP
+\fB\-p\fR, \fB\-\-preserve\fR
+Preserves file modification times and permissions as far as possible
 .SH CONFIGURATION
 .TP
 \fB\-\-config\-files\fR
