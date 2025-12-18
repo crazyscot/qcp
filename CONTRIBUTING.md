@@ -12,9 +12,9 @@ Bug reports and feature requests are welcome, please open an [issue].
 If you're thinking of contributing something non-trivial, it might be best to raise it in [discussions] first so you can get feedback early. This is particularly important for new features, to ensure they are aligned with the project goals and your approach is suitable.
 
 - Changes should normally be based on the `dev` branch. _(Exception: hotfixes may be branched against `main`.)_
-- PRs must pass the full set of CI checks (see below). No exceptions.
+- PRs are expected to pass the full set of CI checks (see below).
 - Unit tests are encouraged, particularly those which fail before and pass after a fix.
-  - The CI workflow runs code coverage analysis.
+  - The CI workflow runs code coverage analysis. Reasonable coverage is expected on newly added code (this may not satisfy the codecov bot; that's OK).
 - Refactoring for its own sake is OK if driven by a feature or bugfix.
 - Clean commit histories are preferred, but don't be discouraged if you don't know how to do this. git can be a tricky tool.
 - Commit messages should follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
@@ -38,11 +38,11 @@ To use it you may need to install some additional tooling:
 
 | Check                                   | How to run it yourself          | Notes                                                                     |
 | --------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
-| Spellcheck                              | `typos`                         | `cargo install typos-cli@1.39.0 --locked`                                 |
+| Spellcheck                              | `typos`                         |                                                                           |
 | Code style                              | `cargo fmt --all --check`       | For VS Code users, `editor.formatOnSave=true` is set                      |
-| Non-code style (.md, .toml, .yml files) | `dprint check` or `dprint fmt`  | `cargo install --locked dprint`                                           |
-| Dependencies check                      | `cargo machete --with-metadata` | `cargo install --locked cargo-machete`                                    |
-| Dependencies check 2                    | `cargo shear --locked`          | `cargo install --locked cargo-shear`                                      |
+| Non-code style (.md, .toml, .yml files) | `dprint check` or `dprint fmt`  |                                                                           |
+| Dependencies check                      | `cargo machete --with-metadata` |                                                                           |
+| Dependencies check 2                    | `cargo shear --locked`          |                                                                           |
 | Everything must build                   | `cargo build --all-targets`     |                                                                           |
 | Unit tests pass                         | `cargo test`                    |                                                                           |
 | Lints                                   | `cargo clippy --all-targets`    | This is a reasonably pedantic set of lints, which I make no apologies for |
