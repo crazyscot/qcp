@@ -213,7 +213,7 @@ impl Client {
 
         // Show time! ---------------------
 
-        let direction = prep_result.job_spec.direction();
+        let direction = prep_result.direction();
         self.spinner.set_message("Transferring data");
         self.timers.next(SHOW_TIME);
         let (overall_success, aggregate_stats) = self
