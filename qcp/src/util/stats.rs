@@ -147,6 +147,8 @@ pub(crate) fn process_statistics(
     );
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
+// this is a cosmetic function, it is not practical to test in its current form
 fn advanced_statistics(
     stats: &ConnectionStats,
     command_stats: CommandStats,
@@ -204,6 +206,8 @@ fn advanced_statistics(
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
+// this is a cosmetic function, it is not practical to test in its current form
 fn check_rtt(stats: &ConnectionStats, bandwidth: &Configuration) {
     // Warn when RTT is 10% worse than the configuration.
     // No, seriously, nobody is going to have an RTT exceeding 2^64 ms. Even 2^32 (~49 days) is beyond unlikely.
@@ -220,6 +224,8 @@ fn check_rtt(stats: &ConnectionStats, bandwidth: &Configuration) {
     }
 }
 
+#[cfg_attr(coverage_nightly, coverage(off))]
+// this is a cosmetic function, it is not practical to test in its current form
 fn suggest_bandwidth_tuning(
     stats: &ConnectionStats,
     command_stats: CommandStats,
