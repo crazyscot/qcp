@@ -1,8 +1,6 @@
 //! Common functions within the session protocol
 // (c) 2024-5 Ross Younger
 
-use std::path::PathBuf;
-
 use anyhow::Result;
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
 use tokio::io::AsyncWriteExt;
@@ -36,26 +34,24 @@ where
 pub(super) fn progress_bar_for(
     display: &MultiProgress,
     job: &CopyJobSpec,
+    filename_width: usize,
     steps: u64,
     quiet: bool,
 ) -> Result<ProgressBar> {
     if quiet {
         return Ok(ProgressBar::hidden());
     }
-    let display_filename = {
-        let component = PathBuf::from(&job.source.filename);
-        component
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string()
-    };
+    let name = format!(
+        "{:width$}",
+        job.display_filename().to_string_lossy(),
+        width = filename_width
+    );
     Ok(display.add(
         ProgressBar::new(steps)
             .with_style(indicatif::ProgressStyle::with_template(style_for(
-                display_filename.len(),
+                filename_width,
             ))?)
-            .with_message(display_filename)
+            .with_message(name)
             .with_finish(ProgressFinish::Abandon),
     ))
 }
@@ -141,13 +137,13 @@ mod tests {
         };
 
         // Test quiet mode
-        let pb = progress_bar_for(&display, &job, 100, true).unwrap();
+        let pb = progress_bar_for(&display, &job, 12, 100, true).unwrap();
         assert!(pb.is_hidden());
         assert_eq!(pb.length(), None);
         assert_eq!(pb.message(), "");
 
         // Test visible mode
-        let pb = progress_bar_for(&display, &job, 100, false).unwrap();
+        let pb = progress_bar_for(&display, &job, 12, 100, false).unwrap();
         // Checking is_hidden() isn't sound in a CI environment; if stderr isn't to a terminal, is_hidden() always returns true.
         // This can be provoked by rusty_fork_test.
         // But we can still assert about the length and message, which do work as expected (cf. the hidden progress bar above)

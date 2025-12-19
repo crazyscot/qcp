@@ -433,7 +433,9 @@ impl Client {
         process_job_requests(
             jobs,
             || connection.open_bi_stream(),
-            |stream_pair, job| self.manage_request(stream_pair, job, config, quiet, compat),
+            |stream_pair, job, filename_width| {
+                self.manage_request(stream_pair, job, config, quiet, compat, filename_width)
+            },
         )
         .await
     }
@@ -448,6 +450,7 @@ impl Client {
         config: &Configuration,
         quiet: bool,
         compat: Compatibility,
+        filename_width: usize,
     ) -> RequestResult
     where
         S: SendingStream + 'static,
@@ -474,7 +477,7 @@ impl Client {
             )
         };
         let result = handler
-            .send(&copy_spec, display, spinner, config, quiet)
+            .send(&copy_spec, display, filename_width, spinner, config, quiet)
             .instrument(span)
             .await;
 
@@ -502,16 +505,18 @@ async fn process_job_requests<S, R, OpenStream, OpenFut, HandleJob, HandleFut>(
 where
     OpenStream: FnMut() -> OpenFut,
     OpenFut: Future<Output = anyhow::Result<SendReceivePair<S, R>>>,
-    HandleJob: FnMut(SendReceivePair<S, R>, CopyJobSpec) -> HandleFut,
+    HandleJob: FnMut(SendReceivePair<S, R>, CopyJobSpec, usize) -> HandleFut,
     HandleFut: Future<Output = RequestResult>,
     S: SendingStream + 'static,
     R: ReceivingStream + 'static,
 {
     let mut aggregate_stats = CommandStats::new();
     let mut overall_success = true;
+    let filename_width = longest_filename(jobs);
+
     for job in jobs {
         let stream_pair = open_stream().await?;
-        let result = handle_job(stream_pair, job.clone()).await;
+        let result = handle_job(stream_pair, job.clone(), filename_width).await;
 
         aggregate_stats.payload_bytes += result.stats.payload_bytes;
         aggregate_stats.peak_transfer_rate = aggregate_stats
@@ -733,6 +738,7 @@ mod test {
             Configuration::system_default(),
             false,
             crate::protocol::control::Compatibility::Level(1),
+            10,
         );
 
         // We are not really testing the protocol here, that is done in get.rs / put.rs.
@@ -784,6 +790,7 @@ mod test {
             Configuration::system_default(),
             false,
             crate::protocol::control::Compatibility::Level(1),
+            10,
         );
         let r = manage_fut.await;
         println!("Result: {r:?}");
@@ -911,7 +918,7 @@ mod test {
                 let _ = open_calls.fetch_add(1, Ordering::SeqCst);
                 async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
             },
-            |stream_pair, _job| {
+            |stream_pair, _job, _filename_width| {
                 let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
                 drop(stream_pair);
                 async { results.lock().unwrap().remove(0) }
@@ -962,7 +969,7 @@ mod test {
                 let _ = open_calls.fetch_add(1, Ordering::SeqCst);
                 async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
             },
-            |stream_pair, _job| {
+            |stream_pair, _job, _filename_width| {
                 let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
                 drop(stream_pair);
                 async { results.lock().unwrap().remove(0) }

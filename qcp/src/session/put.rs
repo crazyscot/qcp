@@ -49,6 +49,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         &mut self,
         job: &crate::client::CopyJobSpec,
         display: indicatif::MultiProgress,
+        filename_width: usize,
         spinner: indicatif::ProgressBar,
         config: &crate::config::Configuration,
         quiet: bool,
@@ -68,7 +69,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         // Marshalled commands are currently 48 bytes + filename length
         // File headers are currently 36 + filename length; Trailers are 16 bytes.
         let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
-        let progress_bar = progress_bar_for(&display, job, steps, quiet)?;
+        let progress_bar = progress_bar_for(&display, job, filename_width, steps, quiet)?;
         let mut outbound = progress_bar.wrap_async_write(&mut self.stream.send);
         let mut meter =
             crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, config.tx());
@@ -337,6 +338,7 @@ mod test {
         let sender_fut = sender.send(
             &spec,
             indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
+            10,
             indicatif::ProgressBar::hidden(),
             Configuration::system_default(),
             true,

@@ -47,6 +47,7 @@ pub(crate) trait SessionCommandImpl: Send {
         &mut self,
         job: &CopyJobSpec,
         display: MultiProgress,
+        filename_width: usize,
         spinner: ProgressBar,
         config: &Configuration,
         quiet: bool,
