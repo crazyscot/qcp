@@ -12,6 +12,11 @@ repository = "https://github.com/crazyscot/qcp/"
 rust-version = "1.88.0"
 description = "Secure remote file copy utility which uses the QUIC protocol over UDP"
 
+[[bin]]
+name = "qcp"
+
+[lib]
+
 [features]
 default = ["rustls-log", "quinn-log", "secure-alloc"]
 ## Enables rustls debug messages. You still have to request them using the environment variable, e.g. `RUST_LOG="rustls=debug"`.
