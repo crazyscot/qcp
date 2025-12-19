@@ -17,14 +17,13 @@ use crate::{
     util::{
         self, Credentials, lookup_host_by_family,
         process::ProcessWrapper,
+        stats::format_rate,
         time::{Stopwatch, StopwatchChain},
     },
 };
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use core::cmp::max;
-use human_repr::{HumanCount, HumanDuration, HumanThroughput};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
 use std::{
@@ -489,19 +488,9 @@ impl Client {
 
         match result {
             Ok(st) => {
-                let rate = crate::util::stats::DataRate::new(st.payload_bytes, Some(elapsed));
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let peak = max(
-                    st.peak_transfer_rate,
-                    rate.byte_rate().unwrap_or_default() as u64,
-                );
                 info!(
-                    "{filename}: transferred {bytes} in {time}; average {rate}; peak {peak}",
-                    filename = filename,
-                    bytes = st.payload_bytes.human_count_bytes(),
-                    time = elapsed.human_duration(),
-                    rate = rate,
-                    peak = peak.human_throughput_bytes(),
+                    "{filename}: transferred {}",
+                    format_rate(st.payload_bytes, Some(elapsed), st.peak_transfer_rate,)
                 );
                 RequestResult::new(true, st)
             }

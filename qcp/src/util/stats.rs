@@ -41,20 +41,38 @@ impl DataRate {
             },
         }
     }
-    /// Accessor
-    #[must_use]
-    pub(crate) fn byte_rate(&self) -> Option<f64> {
-        self.rate
+}
+impl From<DataRate> for f64 {
+    fn from(d: DataRate) -> Self {
+        d.rate.unwrap_or_default()
+    }
+}
+impl From<DataRate> for u64 {
+    fn from(d: DataRate) -> Self {
+        use num_traits::AsPrimitive as _;
+        d.rate.unwrap_or_default().as_()
     }
 }
 
 impl Display for DataRate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.byte_rate() {
+        match self.rate {
             None => f.write_str("unknown"),
             Some(rate) => rate.human_throughput_bytes().fmt(f),
         }
     }
+}
+
+pub(crate) fn format_rate(size: u64, time: Option<Duration>, measured_peak: u64) -> String {
+    let average_rate = DataRate::new(size, time);
+    let actual_peak = max(measured_peak, average_rate.into());
+    format!(
+        "{size} in {time}; average {rate}; peak {peak}",
+        size = size.human_count_bytes(),
+        time = time.map_or("unknown".to_string(), |d| d.human_duration().to_string()),
+        rate = average_rate,
+        peak = actual_peak.human_throughput_bytes(),
+    )
 }
 
 /// Output the end-of-game statistics
@@ -73,19 +91,14 @@ pub(crate) fn process_statistics(
 
     let locale = &num_format::Locale::en;
     let payload_bytes = command_stats.payload_bytes;
-    if payload_bytes != 0 {
-        let size = payload_bytes.human_count_bytes();
-        let rate = crate::util::stats::DataRate::new(payload_bytes, transport_time);
-        let transport_time_str =
-            transport_time.map_or("unknown".to_string(), |d| d.human_duration().to_string());
-
-        let peak_rate = max(
+    info!(
+        "Transferred {}",
+        format_rate(
+            payload_bytes,
+            transport_time,
             command_stats.peak_transfer_rate,
-            rate.byte_rate().unwrap_or_default() as u64,
-        );
-        let peak = peak_rate.human_throughput_bytes();
-        info!("Transferred {size} in {transport_time_str}; average {rate}; peak {peak}");
-    }
+        )
+    );
     if show_statistics {
         info!(
             "Total packets sent: {} by us; {} by remote",
@@ -310,6 +323,7 @@ fn suggest_bandwidth_tuning(
 
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::DataRate;
     use pretty_assertions::assert_eq;
@@ -318,23 +332,35 @@ mod tests {
     #[test]
     fn unknown() {
         let r = DataRate::new(1234, None);
+        assert_eq!(u64::from(r), 0);
+        assert_eq!(f64::from(r), 0.);
         assert_eq!(format!("{r}"), "unknown");
     }
     #[test]
     fn zero() {
         let r = DataRate::new(1234, Some(Duration::from_secs(0)));
+        assert_eq!(u64::from(r), 0);
+        assert_eq!(f64::from(r), 0.);
         assert_eq!(format!("{r}"), "unknown");
     }
 
-    fn test_case(bytes: u64, time: u64, expect: &str) {
+    fn test_case(bytes: u64, time: u64, expect_u: u64, expect_s: &str) {
         let r = DataRate::new(bytes, Some(Duration::from_secs(time)));
-        assert_eq!(format!("{r}"), expect);
+        assert_eq!(u64::from(r), expect_u);
+        assert_eq!(format!("{r}"), expect_s);
     }
     #[test]
-    fn valid() {
-        test_case(42, 1, "42B/s");
-        test_case(1234, 1, "1.2kB/s");
-        test_case(10_000_000_000, 500, "20MB/s");
-        test_case(1_000_000_000_000_000, 1234, "810.37GB/s");
+    fn correctness() {
+        test_case(42, 1, 42, "42B/s");
+        test_case(1234, 1, 1234, "1.2kB/s");
+        test_case(10_000_000_000, 500, 20_000_000, "20MB/s");
+        test_case(1_000_000_000_000_000, 1234, 810_372_771_474, "810.37GB/s");
+    }
+    #[test]
+    fn format_rate_() {
+        assert_eq!(
+            super::format_rate(10_000_000_000, Some(Duration::from_secs(500)), 40_000_000),
+            "10GB in 8:20; average 20MB/s; peak 40MB/s"
+        );
     }
 }
