@@ -525,6 +525,14 @@ where
     Ok((overall_success, aggregate_stats))
 }
 
+fn longest_filename(jobs: &[CopyJobSpec]) -> usize {
+    let mut result = 0;
+    for j in jobs {
+        result = result.max(j.display_filename().len());
+    }
+    result
+}
+
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
@@ -1030,5 +1038,21 @@ mod test {
             }));
             Ok(client_side)
         }
+    }
+
+    #[test]
+    fn longest_filenames() {
+        use super::longest_filename;
+        let jobs = [
+            CopyJobSpec::from_parts("server:somedir/file1", "otherdir/file2", false).unwrap(),
+            CopyJobSpec::from_parts("s:somedir/a", "a", false).unwrap(),
+            CopyJobSpec::from_parts(
+                "s:really/really-long-name",
+                "this-name-is-even-longer-but-loses-as-it-is-destination",
+                false,
+            )
+            .unwrap(),
+        ];
+        assert_eq!(longest_filename(&jobs), 16);
     }
 }

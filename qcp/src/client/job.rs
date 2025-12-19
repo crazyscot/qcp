@@ -1,7 +1,7 @@
 //! Job specifications for the client
 // (c) 2024 Ross Younger
 
-use std::str::FromStr;
+use std::{ffi::OsStr, path::Path, str::FromStr};
 
 use crate::protocol::control::Direction;
 
@@ -149,6 +149,13 @@ impl CopyJobSpec {
             Direction::ClientToServer
         }
     }
+
+    /// The display filename for a job spec. This is the source filename.
+    pub(crate) fn display_filename<'a>(&'a self) -> &'a OsStr {
+        let s: &'a str = &self.source.filename;
+        let p = Path::new(s);
+        p.file_name().unwrap_or_default()
+    }
 }
 
 #[cfg(test)]
@@ -236,5 +243,11 @@ mod test {
         let dir = Direction::Both;
         assert_eq!(dir.server_mode(), ThroughputMode::Both);
         assert_eq!(dir.client_mode(), ThroughputMode::Both);
+    }
+
+    #[test]
+    fn display_filename() {
+        let js = CopyJobSpec::from_parts("server:somedir/file1", "otherdir/file2", false).unwrap();
+        assert_eq!(js.display_filename(), "file1");
     }
 }
