@@ -118,7 +118,7 @@ jobs:
       - uses: taiki-e/install-action@cf46383a970594553a83cc6140075ef6a7f54dee # v2.62.64
         # this action is used in multiple places
         with:
-          tool: cargo-llvm-cov
+          tool: cargo-llvm-cov,cargo-nextest
           checksum: true
       - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
         # this action is used in multiple places
@@ -128,12 +128,14 @@ jobs:
       - name: Run coverage tests
         # Note that we do NOT run +nightly here, as we installed an explicit nightly version above.
         # (We currently prefer cacheability over tracking nightly features.)
-        run: cargo llvm-cov --all-features --workspace --exclude xtask@0.0.0 --lcov --output-path lcov.info --locked --show-instantiations
+        # Note that this does not include doctests, which are only supported with a nightly compiler.
+        run: ./scripts/coverage --ci
+
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: lcov.info
-          path: lcov.info
+          path: target/coverage/lcov.info
       #- name: Send result to coveralls
       #  uses: coverallsapp/github-action@648a8eb78e6d50909eff900e4ec85cab4524a45b # v2.3.6
       #  continue-on-error: true
