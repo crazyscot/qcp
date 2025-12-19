@@ -23,6 +23,8 @@ use crate::{
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use core::cmp::max;
+use human_repr::{HumanCount, HumanDuration, HumanThroughput};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
 use std::{
@@ -476,13 +478,32 @@ impl Client {
                 trace_span!("PUTx", filename = copy_spec.source.filename.clone()),
             )
         };
+        let filename = copy_spec.display_filename().to_string_lossy();
+        let timer = std::time::Instant::now();
         let result = handler
             .send(&copy_spec, display, filename_width, spinner, config, quiet)
             .instrument(span)
             .await;
+        let elapsed = timer.elapsed();
 
         match result {
-            Ok(st) => RequestResult::new(true, st),
+            Ok(st) => {
+                let rate = crate::util::stats::DataRate::new(st.payload_bytes, Some(elapsed));
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let peak = max(
+                    st.peak_transfer_rate,
+                    rate.byte_rate().unwrap_or_default() as u64,
+                );
+                info!(
+                    "{filename}: transferred {bytes} in {time}; average {rate}; peak {peak}",
+                    filename = filename,
+                    bytes = st.payload_bytes.human_count_bytes(),
+                    time = elapsed.human_duration(),
+                    rate = rate,
+                    peak = peak.human_throughput_bytes(),
+                );
+                RequestResult::new(true, st)
+            }
             Err(e) => {
                 if let Some(src) = e.source() {
                     // Some error conditions come with an anyhow Context.
