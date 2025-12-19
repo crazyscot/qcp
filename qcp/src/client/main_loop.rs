@@ -438,6 +438,7 @@ impl Client {
             |stream_pair, job, filename_width| {
                 self.manage_request(stream_pair, job, config, quiet, compat, filename_width)
             },
+            Some(&self.spinner),
         )
         .await
     }
@@ -522,6 +523,7 @@ async fn process_job_requests<S, R, OpenStream, OpenFut, HandleJob, HandleFut>(
     jobs: &[CopyJobSpec],
     mut open_stream: OpenStream,
     mut handle_job: HandleJob,
+    spinner: Option<&ProgressBar>,
 ) -> anyhow::Result<(bool, CommandStats)>
 where
     OpenStream: FnMut() -> OpenFut,
@@ -534,8 +536,17 @@ where
     let mut aggregate_stats = CommandStats::new();
     let mut overall_success = true;
     let filename_width = longest_filename(jobs);
+    let n_jobs = jobs.len();
 
-    for job in jobs {
+    for (index, job) in jobs.iter().enumerate() {
+        if n_jobs > 1
+            && let Some(spinner) = spinner
+        {
+            spinner.set_message(format!(
+                "Transferring data (file {} of {n_jobs})",
+                index + 1,
+            ));
+        }
         let stream_pair = open_stream().await?;
         let result = handle_job(stream_pair, job.clone(), filename_width).await;
 
@@ -944,6 +955,7 @@ mod test {
                 drop(stream_pair);
                 async { results.lock().unwrap().remove(0) }
             },
+            None,
         )
         .await
         .unwrap();
@@ -995,6 +1007,7 @@ mod test {
                 drop(stream_pair);
                 async { results.lock().unwrap().remove(0) }
             },
+            None,
         )
         .await
         .unwrap();
