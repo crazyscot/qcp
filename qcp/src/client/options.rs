@@ -18,26 +18,20 @@ pub struct Parameters {
     ///
     /// This has the same effect as setting `RUST_LOG=qcp=debug` in the environment.
     /// If present, `RUST_LOG` overrides this option.
-    #[arg(long, help_heading("Debug"), display_order(0))]
+    #[arg(long, help_heading("Debug"), display_order(10))]
     pub debug: bool,
 
     /// Log to a file
     ///
     /// By default the log receives everything printed to stderr.
     /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
-    #[arg(
-        long,
-        value_name("FILE"),
-        help_heading("Output"),
-        next_line_help(true),
-        display_order(0)
-    )]
+    #[arg(long, value_name("FILE"), display_order(0))]
     pub log_file: Option<String>,
 
     /// Quiet mode
     ///
     /// Switches off progress display and statistics; reports only errors
-    #[arg(short, long, conflicts_with("debug"), help_heading("Output"))]
+    #[arg(short, long, conflicts_with("debug"), display_order(0))]
     pub quiet: bool,
 
     /// Show additional transfer statistics
@@ -46,39 +40,38 @@ pub struct Parameters {
         long,
         alias("stats"),
         conflicts_with("quiet"),
-        help_heading("Output"),
         display_order(0)
     )]
     pub statistics: bool,
 
     /// Enables detailed debug output from the remote endpoint
     /// (this may interfere with transfer speeds)
-    #[arg(long, help_heading("Debug"), display_order(0))]
+    #[arg(long, help_heading("Debug"), display_order(10))]
     pub remote_debug: bool,
 
     /// Enables super-detailed trace output from the remote endpoint
     /// (this may interfere with transfer speeds)
-    #[arg(hide = true, long, help_heading("Debug"), display_order(0))]
+    #[arg(hide = true, long, help_heading("Debug"), display_order(10))]
     pub remote_trace: bool,
 
     /// Output timing profile data after completion
-    #[arg(long, help_heading("Output"), display_order(0))]
+    #[arg(long, display_order(0))]
     pub profile: bool,
 
     /// Connects to a remote server but does not actually transfer any files.
     /// This is useful to test that the control channel works and when debugging the negotiated bandwidth parameters (see also `--remote-config`).
-    #[arg(long, help_heading("Configuration"), display_order(0))]
+    #[arg(long, help_heading("Debug"), display_order(10))]
     pub dry_run: bool,
     /// Outputs the server's configuration for this connection.
     /// (Unlike `--show-config`, this option does not prevent a file transfer. However, you can do so by selecting `--dry-run` mode.)
     ///
     /// The output shows both the server's _static_ configuration (by reading config files)
     /// and its _final_ configuration (taking account of the client's expressed preferences).
-    #[arg(long, help_heading("Configuration"), display_order(0))]
+    #[arg(long, help_heading("Debug"), display_order(10))]
     pub remote_config: bool,
 
     /// Preserves file modification times and permissions as far as possible.
-    #[arg(short, long, help_heading("File copying"))]
+    #[arg(short, long, display_order(0))]
     pub preserve: bool,
 
     // JOB SPECIFICAION ====================================================================
@@ -89,7 +82,7 @@ pub struct Parameters {
     ///
     /// Exactly one side of the transfer (all sources, or the destination) must be remote.
     /// Remote paths take the form `server:path` or `user@server:path` (as in rcp or scp).
-    #[arg(value_name = "SOURCE|DESTINATION", display_order(1), num_args = 0..)]
+    #[arg(value_name = "SOURCE|DESTINATION", num_args = 0..)]
     pub paths: Vec<FileSpec>,
 }
 

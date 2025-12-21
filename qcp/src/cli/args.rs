@@ -43,18 +43,16 @@ Long options may be abbreviated where unambiguous.
 
 qcp will read your ssh config file to resolve any host name aliases you may have defined. The idea is, if you can ssh directly to a given host, you should be able to qcp to it by the same name. However, some particularly complicated ssh config files may be too much for qcp to understand. (In particular, Match directives are not currently supported.) In that case, you can use --ssh-config to provide an alternative configuration (or set it in your qcp configuration file).
     ",
-    infer_long_args(true)
-)]
-#[command(help_template(
+    infer_long_args(true),
+    help_template(
     "\
 {name} version {version}
 {about-with-newline}
 {usage-heading} {usage}
 {before-help}
 {all-args}{after-help}
-"
-))]
-#[command(styles=super::styles::CLAP_STYLES)]
+"),
+    styles=super::styles::CLAP_STYLES)]
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct CliArgs {
     // MODE SELECTION ======================================================================
@@ -77,12 +75,6 @@ pub(crate) struct CliArgs {
     #[arg(long, hide = true, exclusive(true))]
     pub server: bool,
 
-    // CONFIGURABLE OPTIONS ================================================================
-    #[command(flatten)]
-    /// The set of options which may be set in a config file or via command-line.
-    /// See [`Configuration`](crate::config::Configuration).
-    pub config: crate::config::Configuration_Optional,
-
     // MODE SELECTION, part 2 ==============================================================
     // (These are down here to control clap's output ordering.)
     /// Outputs the local configuration, then exits.
@@ -93,25 +85,25 @@ pub(crate) struct CliArgs {
     /// If not, outputs only global settings from configuration, which may be overridden by
     /// `Host` blocks in configuration files.
     ///
-    #[arg(long, help_heading("Configuration"), display_order(0))]
+    #[arg(long, help_heading("Debug"), display_order(100))]
     pub show_config: bool,
     /// Outputs the paths to configuration file(s), then exits.
     ///
     /// This option cannot be used with any other option.
-    #[arg(long, help_heading("Configuration"), display_order(0), exclusive(true))]
+    #[arg(long, help_heading("Debug"), exclusive(true), display_order(100))]
     pub config_files: bool,
 
     /// Outputs additional information about kernel UDP buffer sizes and platform-specific tips.
     ///
     /// Note that the recommendations are based on the `udp_buffer` field in your configuration,
     /// which you can also set on the CLI.
-    #[arg(long, help_heading("Network tuning"), display_order(100))]
+    #[arg(long, help_heading("Tuning"), display_order(100))]
     pub help_buffers: bool,
 
-    /// Outputs all known protocol features with their compatibility levels.
+    /// Outputs all known protocol features with their compatibility levels, then exits.
     ///
     /// This option cannot be used with any other option.
-    #[arg(long, help_heading("Compatibility"), exclusive(true))]
+    #[arg(long, help_heading("Debug"), exclusive(true), display_order(100))]
     pub list_features: bool,
 
     // CLIENT-SIDE NON-CONFIGURABLE OPTIONS ================================================
@@ -144,6 +136,12 @@ pub(crate) struct CliArgs {
         display_order(0)
     )]
     pub ipv6_alias__: bool,
+
+    // CONFIGURABLE OPTIONS ================================================================
+    #[command(flatten)]
+    /// The set of options which may be set in a config file or via command-line.
+    /// See [`Configuration`](crate::config::Configuration).
+    pub config: crate::config::Configuration_Optional,
 }
 
 impl CliArgs {

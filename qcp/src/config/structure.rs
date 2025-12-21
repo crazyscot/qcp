@@ -92,10 +92,10 @@ pub struct Configuration {
     #[arg(
         long,
         alias("rx-bw"),
-        display_order(1),
         value_name = "bytes",
         value_parser (clap::builder::StringValueParser::new().try_map(|s| EngineeringQuantity::<u64>::from_str(&s)).map(|v| u64::from(v))),
-        help_heading("Network tuning"),
+        help_heading("Tuning"),
+        display_order(0),
         long_help(r"
 The maximum network bandwidth we expect receiving data FROM the remote system.
 [default: 12.5M]
@@ -131,10 +131,10 @@ if (for example) you expect to fill a 1Gbit ethernet connection,
     #[arg(
         long,
         alias("tx-bw"),
-        display_order(1),
         value_name = "bytes",
         value_parser (clap::builder::StringValueParser::new().try_map(|s| EngineeringQuantity::<u64>::from_str(&s)).map(|v| u64::from(v))),
-        help_heading("Network tuning"),
+        help_heading("Tuning"),
+        display_order(0),
         long_help(r"
 The maximum network bandwidth we expect sending data TO the remote system,
 if it is different from the bandwidth FROM the system.
@@ -155,19 +155,14 @@ If not specified or 0, uses the value of `rx`.
 
     /// The expected network Round Trip time to the target system, in milliseconds.
     /// [default: 300]
-    #[arg(
-        long,
-        help_heading("Network tuning"),
-        display_order(10),
-        value_name("ms")
-    )]
+    #[arg(long, help_heading("Tuning"), value_name("ms"), display_order(1))]
     pub rtt: u16,
 
     /// Specifies the congestion control algorithm to use.
     /// [default: cubic]
     #[arg(
         long,
-        value_name = "algorithm",
+        value_name = "ALGORITHM",
         value_enum,
         ignore_case(true),
         help_heading("Advanced network tuning"),
@@ -196,8 +191,8 @@ If not specified or 0, uses the value of `rx`.
         long,
         value_name = "bytes",
         alias("cwnd"),
-        display_order(0),
         help_heading("Advanced network tuning"),
+        display_order(0),
         long_help(
             r"
 (Network wizards only!)
@@ -238,7 +233,12 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     ///
     /// This needs to be long enough for your network connection, but short enough to provide
     /// a timely indication that UDP may be blocked.
-    #[arg(long, value_name("sec"), help_heading("Connection"), display_order(0))]
+    #[arg(
+        long,
+        value_name("seconds"),
+        help_heading("Connection"),
+        display_order(0)
+    )]
     pub timeout: u16,
 
     /// Size of the UDP kernel buffer in bytes.
@@ -250,6 +250,7 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     /// or situations where you wish to restrict memory consumption.
     #[arg(long,
         help_heading("Advanced network tuning"),
+         display_order(0),
         value_name("bytes"),
         value_parser(clap::builder::StringValueParser::new().try_map(|s| EngineeringQuantity::<u64>::from_str(&s)).map(|v| u64::from(v))))
     ]
@@ -264,17 +265,23 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     ///
     /// The default, 3, should be good for most cases.
     /// See RFC 9002 s6.1 for more details.
-    #[arg(long, help_heading("Advanced network tuning"), value_name = "packets")]
+    #[arg(
+        long,
+        help_heading("Advanced network tuning"),
+        display_order(0),
+        value_name = "N"
+    )]
     pub packet_threshold: u32,
 
-    /// Time reordering loss detection threshold
+    /// Time reordering loss detection threshold, in multiples of RTT
     ///
     /// The default, 1.125, should be good for most cases.
     /// See RFC 9002 s6.1 for more details.
     #[arg(
         long,
         help_heading("Advanced network tuning"),
-        value_name = "multiples of RTT"
+        display_order(0),
+        value_name = "M"
     )]
     pub time_threshold: f32,
 
@@ -287,7 +294,12 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     ///
     /// Setting it higher than supported will cause very poor performance while QUIC deals with blackhole
     /// events and figures out what the network is actually capable of.
-    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
+    #[arg(
+        long,
+        help_heading("Advanced network tuning"),
+        display_order(0),
+        value_name = "bytes"
+    )]
     pub initial_mtu: u16,
 
     /// The minimum MTU that the network is guaranteed to support.
@@ -297,7 +309,12 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     ///
     /// Setting this higher than the network actually supports will cause very poor performance and unpredictable
     /// effects; it may not be possible to complete a file transfer in a reasonable time.
-    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
+    #[arg(
+        long,
+        help_heading("Advanced network tuning"),
+        display_order(0),
+        value_name = "bytes"
+    )]
     pub min_mtu: u16,
 
     /// The maximum value that Path MTU discovery will search for (default: 1452)
@@ -315,7 +332,12 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     ///
     /// It is safe to set a high limit, but that may reduce efficiency as MTU discovery will take longer
     /// to complete.
-    #[arg(long, help_heading("Advanced network tuning"), value_name = "bytes")]
+    #[arg(
+        long,
+        help_heading("Advanced network tuning"),
+        display_order(0),
+        value_name = "bytes"
+    )]
     pub max_mtu: u16,
 
     // CLIENT OPTIONS ==================================================================================
@@ -326,19 +348,14 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
         long,
         help_heading("Connection"),
         group("ip address"),
-        value_name("family"),
-        ignore_case(true),
-        display_order(0)
+        value_name("FAMILY"),
+        display_order(0),
+        ignore_case(true)
     )]
     pub address_family: AddressFamily,
 
     /// Specifies the ssh client program to use [default: `ssh`]
-    #[arg(
-        long,
-        help_heading("Connection"),
-        display_order(0),
-        value_name("ssh-client")
-    )]
+    #[arg(long, help_heading("Connection"), display_order(0), value_name("PATH"))]
     pub ssh: String,
 
     /// Specifies the path to the qcp binary on the remote machine. [default: `qcp`]
@@ -348,16 +365,16 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     #[arg(long, value_name("PATH"), help_heading("Connection"), display_order(0))]
     pub remote_qcp_binary: String,
 
-    /// Provides an additional option or argument to pass to the ssh client. [default: none]
+    /// Provides an additional option or argument to pass to the ssh client. May be repeated.
     ///
     /// **On the command line** you must repeat `-S` for each argument.
     /// For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`
     #[arg(
         short = 'S',
-        value_name("ssh-option"),
+        value_name("SSH OPTION"),
         allow_hyphen_values(true),
-        display_order(0),
         help_heading("Connection"),
+        display_order(0),
         long_help(
             r"
 Provides an additional option or argument to pass to the ssh client. [default: none]
@@ -400,7 +417,7 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
     #[arg(
         short = 'l',
         long,
-        value_name("login_name"),
+        value_name("NAME"),
         help_heading("Connection"),
         display_order(0)
     )]
@@ -408,13 +425,7 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
 
     /// Specifies the time format to use when printing messages to the console or to file
     /// [default: local]
-    #[arg(
-        long,
-        value_name("FORMAT"),
-        help_heading("Output"),
-        next_line_help(true),
-        display_order(0)
-    )]
+    #[arg(long, value_name("FORMAT"), display_order(0))]
     pub time_format: TimeFormat,
 
     /// Alternative ssh config file(s)
@@ -467,8 +478,9 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
         alias("colour"),
         default_missing_value("always"), // to support `--color`
         num_args(0..=1),
-        value_name("mode"),
+        value_name("MODE"),
         ignore_case(true),
+        display_order(0),
         long_help(r"Colour mode for console output (default: auto)
 
 Passing `--color` without a value is equivalent to `--color always`.
@@ -488,11 +500,11 @@ CLI options take precedence over the configuration file, which takes precedence 
     /// (default: any)
     #[arg(
         long,
-        value_name("type"),
+        value_name("TYPE"),
         help_heading("Connection"),
+        display_order(0),
         value_enum,
-        ignore_case = true,
-        display_order(0)
+        ignore_case = true
     )]
     // DeserializeEnum trait must be in scope for this to work
     #[serde(deserialize_with = "CredentialsType::deserialize_str")]
@@ -507,11 +519,12 @@ CLI options take precedence over the configuration file, which takes precedence 
     #[arg(
         long,
         action = clap::ArgAction::SetTrue,
+        display_order(0),
         help_heading("Connection"),
     )]
     pub aes256: bool,
 
-    /// File transfer buffer size (bytes).
+    /// Local I/O buffer size (bytes).
     ///
     /// With very high speed connections it may be worth experimenting with larger values to improve throughput and reduce CPU overhead.
     ///
@@ -523,7 +536,8 @@ CLI options take precedence over the configuration file, which takes precedence 
     /// Note that this setting changes only the size of the I/O buffer used to spool data to and from disk.
     /// It does not directly affect what appears on the network.
     #[arg(long,
-        help_heading("File copying"),
+        help_heading("Advanced network tuning"),
+        display_order(10),
         value_name = "bytes",
         value_parser (clap::builder::StringValueParser::new().try_map(|s| EngineeringQuantity::<u64>::from_str(&s)).map(|v| u64::from(v))),
     )]
