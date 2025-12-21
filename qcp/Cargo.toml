@@ -75,6 +75,7 @@ struct-field-names-as-array = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 tabled = { workspace = true }
+termsize = "0.1.9"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

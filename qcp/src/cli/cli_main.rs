@@ -134,12 +134,38 @@ fn list_features() -> bool {
     true
 }
 fn list_features_data() -> String {
-    use tabled::settings::{Alignment, object::Columns};
+    use tabled::settings::{Alignment, Width, object::Column};
+
+    let terminal_width = match termsize::get() {
+        None => 80,
+        Some(termsize::Size { rows: _, cols: c }) => c,
+    } as usize;
 
     let mut tbl = crate::protocol::compat::pretty_list();
+    let mut longest_name = 0;
+    for line in tbl.get_records().iter() {
+        longest_name = longest_name.max(
+            line.first()
+                .map(tabled::grid::records::vec_records::Cell::width)
+                .unwrap_or_default(),
+        );
+    }
+
+    // there must be a nicer way to do this?
+    // | <longest feature name> | Level | <AVAILABLE SPACE> |
+    // => space for notes column = terminal_width - 15 - (length of longest feature name)
+
+    let last_column_avail = terminal_width - 15 - longest_name;
+
     let _ = tbl
         .with(crate::cli::styles::TABLE_STYLE.clone())
-        .modify(Columns::last(), Alignment::center());
+        .modify(Column::from(1), Alignment::center());
+    if last_column_avail > 10 {
+        let _ = tbl.modify(
+            Column::from(2),
+            Width::wrap(last_column_avail).keep_words(true),
+        );
+    } // else it's going to look terrible, whatever we do
     format!("{tbl}")
 }
 

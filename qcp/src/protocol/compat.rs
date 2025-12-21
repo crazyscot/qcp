@@ -13,19 +13,20 @@ macro_rules! def_enum {
     (
         $(#[$attr:meta])*
         $vis:vis $name:ident => $ty:ty {
-            $( $(#[$v_attr:meta])* $variant:ident => $val:expr),+
+            $( $(#[$v_attr:meta])* $variant:ident => $val:expr => $comment:literal),+
             $(,)?
         }
     ) => {
         $(#[$attr])*
         #[derive(PartialEq, Debug, Copy, Clone)]
         #[non_exhaustive]
-        $vis struct $name($ty, &'static str);
+        $vis struct $name($ty, &'static str, &'static str);
 
         impl $name {
             $(
                 $(#[$v_attr])*
-                $vis const $variant: Self = Self($val, stringify!($variant));
+                #[doc = $comment]
+                $vis const $variant: Self = Self($val, stringify!($variant), $comment);
             )+
         }
         impl strum::VariantArray for $name {
@@ -51,18 +52,15 @@ def_enum!(
     /// assert_eq!(Feature::BASIC_PROTOCOL.level(), Compatibility::Level(1));
     /// assert_eq!(Feature::BASIC_PROTOCOL.name(), "BASIC_PROTOCOL");
     /// ```
-
     pub Feature => Compatibility {
-        /// The original base protocol introduced in qcp v0.3.0
-        BASIC_PROTOCOL => Compatibility::Level(1),
-        /// Support for the `NewReno` congestion control algorithm
-        NEW_RENO => Compatibility::Level(2),
-        /// Support for preserving file metadata
-        PRESERVE => Compatibility::Level(2),
-        /// Get2 and Put2 commands, `FileHeader2` and `FileTrailer2` structures
-        GET2_PUT2 => Compatibility::Level(2),
-        /// `ClientMessage2`, `ServerMessage2`, `CredentialsType`, `ClientMessage2Attributes`
-        CMSG_SMSG_2 => Compatibility::Level(3),
+        // Syntax: SYMBOL => LEVEL => DOC COMMENT
+        // N.B. doc comments are made available at runtime, so have to go through the macro
+
+        BASIC_PROTOCOL => Compatibility::Level(1) => "The original base protocol introduced in qcp v0.3.0",
+        NEW_RENO => Compatibility::Level(2) => "Support for the `NewReno` congestion control algorithm",
+        PRESERVE => Compatibility::Level(2) => "Support for preserving file metadata",
+        GET2_PUT2 => Compatibility::Level(2) => "Get2 and Put2 commands with extensible options.\n`FileHeaderV2` and `FileTrailerV2` structures with extensible metadata.",
+        CMSG_SMSG_2 => Compatibility::Level(3) => "Version 2 of `ClientMessage` and `ServerMessage` with extensible attributes.\n`CredentialsType` enum.",
     }
     // Note: When adding a new compatibility level, don't forget to update OUR_COMPATIBILITY_LEVEL.
 );
@@ -84,6 +82,12 @@ impl Feature {
     pub const fn name(&self) -> &'static str {
         self.1
     }
+
+    /// Returns the doc comment for a feature
+    #[must_use]
+    pub const fn comment(&self) -> &'static str {
+        self.2
+    }
 }
 
 impl Compatibility {
@@ -104,7 +108,10 @@ impl Compatibility {
 struct TableRow {
     #[tabled(rename = "Feature")]
     name: String,
+    #[tabled(rename = "Level")]
     compat: u16,
+    #[tabled(rename = "Notes")]
+    notes: String,
 }
 
 impl From<&Feature> for TableRow {
@@ -112,6 +119,7 @@ impl From<&Feature> for TableRow {
         Self {
             name: f.name().to_upper_camel_case(),
             compat: f.level().into(),
+            notes: f.comment().into(),
         }
     }
 }
