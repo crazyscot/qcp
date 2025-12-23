@@ -222,7 +222,6 @@ impl Client {
                 &connection,
                 &prep_result.job_specs,
                 &config,
-                self.parameters.quiet,
                 qcp_conn.control.selected_compat,
             )
             .await?;
@@ -428,14 +427,20 @@ impl Client {
         connection: &C,
         jobs: &[CopyJobSpec],
         config: &Configuration,
-        quiet: bool,
         compat: Compatibility,
     ) -> anyhow::Result<(bool, CommandStats)> {
         process_job_requests(
             jobs,
             || connection.open_bi_stream(),
             |stream_pair, job, filename_width| {
-                self.manage_request(stream_pair, job, config, quiet, compat, filename_width)
+                self.manage_request(
+                    stream_pair,
+                    job,
+                    config,
+                    self.parameters.quiet,
+                    compat,
+                    filename_width,
+                )
             },
             Some(&self.spinner),
         )
@@ -842,7 +847,6 @@ mod test {
                     &conn,
                     &jobs,
                     Configuration::system_default(),
-                    false,
                     crate::protocol::control::Compatibility::Level(1),
                 )
                 .await
@@ -887,7 +891,6 @@ mod test {
                     &conn,
                     &jobs,
                     Configuration::system_default(),
-                    false,
                     crate::protocol::control::Compatibility::Level(1),
                 )
                 .await
