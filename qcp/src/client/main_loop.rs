@@ -482,7 +482,7 @@ impl Client {
                 filename_width,
                 spinner,
                 config,
-                self.args.client_params.quiet,
+                self.args.client_params,
             )
             .instrument(span)
             .await;
