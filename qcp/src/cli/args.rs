@@ -118,6 +118,13 @@ pub(crate) struct CliArgs {
     /// The set of options which may only be provided via command-line.
     pub client_params: crate::client::Parameters,
 
+    /// Log to a file
+    ///
+    /// By default the log receives everything printed to stderr.
+    /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
+    #[arg(long, value_name("FILE"), display_order(0))]
+    pub log_file: Option<String>,
+
     /// Forces use of IPv4
     ///
     /// This is a convenience alias for `--address-family inet`

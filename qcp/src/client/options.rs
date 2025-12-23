@@ -3,7 +3,7 @@
 
 use clap::Parser;
 
-#[derive(Debug, Parser, Clone, Default)]
+#[derive(Debug, Parser, Clone, Copy, Default)]
 #[allow(clippy::struct_excessive_bools)]
 /// Client-side options which may be provided on the command line, but are not persistent configuration options.
 pub struct Parameters {
@@ -13,13 +13,6 @@ pub struct Parameters {
     /// If present, `RUST_LOG` overrides this option.
     #[arg(long, help_heading("Debug"), display_order(10))]
     pub debug: bool,
-
-    /// Log to a file
-    ///
-    /// By default the log receives everything printed to stderr.
-    /// To override this behaviour, set the environment variable `RUST_LOG_FILE_DETAIL` (same semantics as `RUST_LOG`).
-    #[arg(long, value_name("FILE"), display_order(0))]
-    pub log_file: Option<String>,
 
     /// Quiet mode
     ///
@@ -86,8 +79,8 @@ mod tests {
 
     #[test]
     fn test_log_file_option() {
-        let params = Parameters::parse_from(["test", "--log-file", "log.txt"]);
-        assert_eq!(params.log_file, Some("log.txt".to_string()));
+        let args = CliArgs::parse_from(["test", "--log-file", "log.txt"]);
+        assert_eq!(args.log_file, Some("log.txt".to_string()));
     }
 
     #[test]
