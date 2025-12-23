@@ -431,14 +431,7 @@ impl Client {
             jobs,
             || connection.open_bi_stream(),
             |stream_pair, job, filename_width| {
-                self.manage_request(
-                    stream_pair,
-                    job,
-                    config,
-                    self.args.client_params.quiet,
-                    compat,
-                    filename_width,
-                )
+                self.manage_request(stream_pair, job, config, compat, filename_width)
             },
             Some(&self.spinner),
         )
@@ -453,7 +446,6 @@ impl Client {
         stream_pair: SendReceivePair<S, R>,
         copy_spec: CopyJobSpec,
         config: &Configuration,
-        quiet: bool,
         compat: Compatibility,
         filename_width: usize,
     ) -> RequestResult
@@ -484,7 +476,14 @@ impl Client {
         let filename = copy_spec.display_filename().to_string_lossy();
         let timer = std::time::Instant::now();
         let result = handler
-            .send(&copy_spec, display, filename_width, spinner, config, quiet)
+            .send(
+                &copy_spec,
+                display,
+                filename_width,
+                spinner,
+                config,
+                self.args.client_params.quiet,
+            )
             .instrument(span)
             .await;
         let elapsed = timer.elapsed();
@@ -762,7 +761,6 @@ mod test {
             plumbing.0,
             prep_result.job_specs[0].clone(),
             Configuration::system_default(),
-            false,
             crate::protocol::control::Compatibility::Level(1),
             10,
         );
@@ -814,7 +812,6 @@ mod test {
             plumbing.0,
             prep_result.job_specs[0].clone(),
             Configuration::system_default(),
-            false,
             crate::protocol::control::Compatibility::Level(1),
             10,
         );
