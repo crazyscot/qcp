@@ -1,12 +1,18 @@
 //! Command-line argument definition and processing
 // (c) 2024 Ross Younger
 
+use std::collections::HashSet;
 use std::ffi::OsString;
 
 use anyhow::Result;
 use clap::{ArgAction::SetTrue, Args as _, FromArgMatches as _, Parser};
 
-use crate::{config::Manager, util::AddressFamily};
+use crate::config::Source as ConfigSource;
+use crate::util::path;
+use crate::{CopyJobSpec, FileSpec, config::Manager, util::AddressFamily};
+
+const META_JOBSPEC: &str = "command-line (user@host)";
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, clap::ValueEnum)]
 #[value(rename_all = "kebab-case")]
 pub(crate) enum MainMode {
@@ -142,6 +148,17 @@ pub(crate) struct CliArgs {
     /// The set of options which may be set in a config file or via command-line.
     /// See [`Configuration`](crate::config::Configuration).
     pub config: crate::config::Configuration_Optional,
+
+    // JOB SPECIFICATION ====================================================================
+    // (POSITIONAL ARGUMENTS!)
+    /// One or more SOURCE paths followed by a DESTINATION path.
+    ///
+    /// The last path is always treated as the destination. All preceding paths are treated as sources.
+    ///
+    /// Exactly one side of the transfer (all sources, or the destination) must be remote.
+    /// Remote paths take the form `server:path` or `user@server:path` (as in rcp or scp).
+    #[arg(value_name = "SOURCE|DESTINATION", num_args = 0..)]
+    pub paths: Vec<FileSpec>,
 }
 
 impl CliArgs {
@@ -165,7 +182,164 @@ impl CliArgs {
 
     /// Applies any options derived from the jobspec to this configuration
     fn apply_jobspec_to(&self, mgr: &mut Manager) {
-        mgr.merge_provider(self.client_params.remote_user_as_config());
+        mgr.merge_provider(self.remote_user_as_config());
+    }
+
+    fn sources_and_destination(&self) -> anyhow::Result<(Vec<FileSpec>, FileSpec)> {
+        anyhow::ensure!(self.paths.len() >= 2, "source and destination are required");
+        let mut paths = self.paths.clone();
+        let destination = paths.pop().expect("destination must be present");
+        Ok((paths, destination))
+    }
+
+    pub(crate) fn jobspecs(&self) -> Result<Vec<CopyJobSpec>, anyhow::Error> {
+        let (sources, destination) = self.sources_and_destination()?;
+        let destination_is_remote = destination.user_at_host.is_some();
+
+        let mut remote_hosts = HashSet::new();
+        let mut remote_user: Option<&str> = None;
+        for spec in sources.iter().chain(std::iter::once(&destination)) {
+            if let Some(host) = spec.hostname() {
+                let _ = remote_hosts.insert(host);
+            }
+            if let Some(user) = spec.remote_user() {
+                if let Some(existing) = remote_user {
+                    anyhow::ensure!(existing == user, "Only one remote user is supported");
+                } else {
+                    remote_user = Some(user);
+                }
+            }
+        }
+        anyhow::ensure!(remote_hosts.len() <= 1, "Only one remote host is supported");
+
+        let remote_sources: Vec<_> = sources
+            .iter()
+            .filter(|s| s.user_at_host.is_some())
+            .collect();
+        if destination_is_remote {
+            anyhow::ensure!(
+                remote_sources.is_empty(),
+                "Only one remote side is supported"
+            );
+        } else {
+            anyhow::ensure!(
+                !remote_sources.is_empty(),
+                "One file argument must be remote"
+            );
+        }
+
+        let multiple_sources = sources.len() > 1;
+        let mut jobs = Vec::with_capacity(sources.len());
+
+        if destination_is_remote {
+            for source in sources {
+                anyhow::ensure!(
+                    source.user_at_host.is_none(),
+                    "Only one remote side is supported"
+                );
+                let dest_filename = if multiple_sources {
+                    let leaf = path::basename_of(&source.filename)?;
+                    path::join_remote(&destination.filename, &leaf)
+                } else {
+                    destination.filename.clone()
+                };
+                jobs.push(CopyJobSpec::try_new(
+                    source,
+                    FileSpec {
+                        user_at_host: destination.user_at_host.clone(),
+                        filename: dest_filename,
+                    },
+                    self.client_params.preserve,
+                )?);
+            }
+        } else {
+            for source in sources {
+                anyhow::ensure!(
+                    source.user_at_host.is_some(),
+                    "Only one remote side is supported"
+                );
+                let dest_filename = if multiple_sources {
+                    let leaf = path::basename_of(&source.filename)?;
+                    path::join_local(&destination.filename, &leaf)
+                } else {
+                    destination.filename.clone()
+                };
+                jobs.push(CopyJobSpec::try_new(
+                    source,
+                    FileSpec {
+                        user_at_host: None,
+                        filename: dest_filename,
+                    },
+                    self.client_params.preserve,
+                )?);
+            }
+        }
+        Ok(jobs)
+    }
+
+    /// A best-effort attempt to extract a single remote host string from the parameters.
+    ///
+    /// # Returns
+    /// If no remote hosts are present, `Ok(None)`
+    /// If all remote paths use the same host and only one side of the transfer is remote, `Ok(Some(<host>))`
+    ///
+    /// # Errors
+    /// If remote paths refer to multiple hosts or both the sources _and_ destination are remote
+    /// an error is returned.
+    pub(crate) fn remote_host_lossy(&self) -> anyhow::Result<Option<&str>> {
+        if self.paths.is_empty() {
+            return Ok(None);
+        }
+        let mut host: Option<&str> = None;
+        let mut remote_in_sources = false;
+        let mut remote_in_destination = false;
+        for (idx, spec) in self.paths.iter().enumerate() {
+            if let Some(h) = spec.hostname() {
+                if let Some(existing) = host {
+                    anyhow::ensure!(existing == h, "Only one remote host is supported");
+                } else {
+                    host = Some(h);
+                }
+                if idx == self.paths.len() - 1 {
+                    remote_in_destination = true;
+                } else {
+                    remote_in_sources = true;
+                }
+            }
+        }
+        anyhow::ensure!(
+            !(remote_in_sources && remote_in_destination),
+            "Only one remote side is supported"
+        );
+        Ok(host)
+    }
+
+    /// Extracts the remote username from the jobspec, if there was one.
+    /// We do this as a configuration because we allow it to be specified in multiple ways:
+    /// * -l username  # same as for ssh/scp
+    /// * `user@host:file`
+    /// * our configuration file
+    pub(crate) fn remote_user_as_config(&self) -> ConfigSource {
+        let mut cfg = ConfigSource::new(META_JOBSPEC);
+        let mut remote_user: Option<&str> = None;
+        for spec in &self.paths {
+            let user = spec.remote_user();
+            if let Some(u) = user {
+                if let Some(existing) = remote_user {
+                    if existing != u {
+                        // Conflicting usernames; we cannot pick one reliably.
+                        remote_user = None;
+                        break;
+                    }
+                } else {
+                    remote_user = Some(u);
+                }
+            }
+        }
+        if let Some(u) = remote_user {
+            cfg.add("remote_user", u.into());
+        }
+        cfg
     }
 }
 
@@ -173,7 +347,7 @@ impl TryFrom<&CliArgs> for Manager {
     type Error = anyhow::Error;
 
     fn try_from(value: &CliArgs) -> Result<Self, Self::Error> {
-        let host = value.client_params.remote_host_lossy()?;
+        let host = value.remote_host_lossy()?;
 
         let mut mgr = Manager::standard(host);
         mgr.merge_provider(&value.config);
@@ -192,7 +366,7 @@ mod test {
     use rusty_fork::rusty_fork_test;
 
     use crate::{
-        FileSpec, Parameters,
+        FileSpec,
         config::{Configuration_Optional, Manager, Source},
         util::AddressFamily,
     };
@@ -211,10 +385,7 @@ mod test {
             FileSpec::from_str("myfile").unwrap()
         };
         CliArgs {
-            client_params: Parameters {
-                paths: vec![src_spec, dst_spec],
-                ..Default::default()
-            },
+            paths: vec![src_spec, dst_spec],
             ..Default::default()
         }
     }
@@ -294,7 +465,7 @@ mod test {
             let args = ["qcp", alias, "myuser@myhost:myfile", "."];
             let result = CliArgs::custom_parse(args).unwrap();
             assert_eq!(
-                result.client_params.paths[0],
+                result.paths[0],
                 FileSpec::from_str("myuser@myhost:myfile").unwrap()
             );
             assert_eq!(result.config.address_family.unwrap(), family);

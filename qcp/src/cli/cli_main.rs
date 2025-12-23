@@ -6,7 +6,6 @@ use std::{ffi::OsString, io::Write as _};
 
 use super::args::{CliArgs, MainMode};
 use crate::{
-    Parameters,
     cli::styles::{configure_colours, error, reset, use_colours},
     client::MAX_UPDATE_FPS,
     config::{Configuration, Manager},
@@ -72,7 +71,7 @@ where
     let config_manager = Manager::try_from(&*args)?;
     setup_colours(&config_manager, args.mode_)?;
 
-    handle_mode(args.mode_, config_manager, args.client_params)
+    handle_mode(args, config_manager)
 }
 
 fn parse_args<I, T>(args: I) -> Result<Option<Box<CliArgs>>>
@@ -111,12 +110,8 @@ fn setup_colours(manager: &Manager, mode: MainMode) -> Result<()> {
 // MODE HANDLERS ///////////////////////////////////////////////////////////
 
 #[tokio::main(flavor = "current_thread")]
-async fn handle_mode(
-    mode: MainMode,
-    config_manager: Manager,
-    client_params: Parameters,
-) -> Result<bool> {
-    match mode {
+async fn handle_mode(args: Box<CliArgs>, config_manager: Manager) -> Result<bool> {
+    match args.mode_ {
         MainMode::HelpBuffers => print_help_buffers(config_manager),
         MainMode::ShowConfigFiles => {
             println!("{:?}", Manager::config_files());
@@ -124,7 +119,7 @@ async fn handle_mode(
         }
         MainMode::ShowConfig => show_config(config_manager),
         MainMode::Server => run_server().await,
-        MainMode::Client => run_client(config_manager, client_params).await,
+        MainMode::Client => run_client(config_manager, args).await,
         MainMode::ListFeatures => Ok(list_features()),
     }
 }
@@ -201,7 +196,7 @@ async fn run_server() -> Result<bool> {
         .is_ok())
 }
 
-async fn run_client(config_manager: Manager, client_params: Parameters) -> Result<bool> {
+async fn run_client(config_manager: Manager, args: Box<CliArgs>) -> Result<bool> {
     let progress =
         MultiProgress::with_draw_target(ProgressDrawTarget::stderr_with_hz(MAX_UPDATE_FPS));
     {
@@ -213,7 +208,7 @@ async fn run_client(config_manager: Manager, client_params: Parameters) -> Resul
     }
 
     // this mode may return false
-    crate::client_main(config_manager, progress, client_params).await
+    crate::client_main(config_manager, progress, args).await
 }
 
 #[cfg(test)]
@@ -221,10 +216,12 @@ async fn run_client(config_manager: Manager, client_params: Parameters) -> Resul
 mod tests {
     use assertables::assert_contains;
 
-    use super::{MainMode, handle_mode};
+    use super::MainMode;
     use crate::{
-        Parameters,
-        cli::cli_main::{help_buffers_data, list_features_data, show_config_data},
+        cli::{
+            CliArgs,
+            cli_main::{help_buffers_data, list_features_data, show_config_data},
+        },
         config::Manager,
     };
 
@@ -258,11 +255,11 @@ mod tests {
         assert_contains!(data, "AddressFamily");
     }
     #[test]
-    fn show_config_files() {
-        let params = Parameters {
-            ..Default::default()
-        };
-        assert!(handle_mode(MainMode::ShowConfigFiles, test_mgr(), params).unwrap());
+    fn show_config_files_requires_no_paths() {
+        let args = &["qcp", "--config-files"];
+        let parsed = CliArgs::custom_parse(args).unwrap();
+        let mgr = Manager::standard(None);
+        assert!(crate::cli::cli_main::handle_mode(Box::new(parsed), mgr).unwrap());
     }
 
     #[test]

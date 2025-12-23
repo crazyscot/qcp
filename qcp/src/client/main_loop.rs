@@ -2,7 +2,7 @@
 // (c) 2024 Ross Younger
 
 use crate::{
-    cli::styles::use_colours,
+    cli::{CliArgs, styles::use_colours},
     client::progress::SPINNER_TEMPLATE,
     config::{Configuration, Configuration_Optional, Manager},
     control::{ControlChannel, create, create_endpoint},
@@ -37,7 +37,6 @@ use tokio::{
 };
 use tracing::{Instrument as _, debug, error, info, trace, trace_span, warn};
 
-use super::Parameters as ClientParameters;
 use super::job::CopyJobSpec;
 
 /// a shared definition string used in a couple of places
@@ -52,9 +51,9 @@ const SHOW_TIME: &str = "file transfer";
 pub(crate) async fn client_main(
     manager: Manager,
     display: MultiProgress,
-    parameters: ClientParameters,
+    args: Box<crate::cli::CliArgs>,
 ) -> anyhow::Result<bool> {
-    Client::new(manager, display, parameters)?.run().await
+    Client::new(manager, display, args)?.run().await
 }
 
 #[derive(Default, Debug, derive_more::Constructor)]
@@ -66,10 +65,10 @@ struct RequestResult {
 struct Client {
     manager: Manager,
     display: MultiProgress,
-    parameters: ClientParameters,
     credentials: Credentials,
     timers: StopwatchChain,
     spinner: ProgressBar,
+    args: Box<CliArgs>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -141,8 +140,8 @@ impl TryFrom<ProcessWrapper> for QcpConnection {
 }
 
 impl Client {
-    fn new(manager: Manager, display: MultiProgress, parameters: ClientParameters) -> Result<Self> {
-        let spinner = if parameters.quiet {
+    fn new(manager: Manager, display: MultiProgress, args: Box<CliArgs>) -> Result<Self> {
+        let spinner = if args.client_params.quiet {
             ProgressBar::hidden()
         } else {
             display.add(
@@ -154,10 +153,10 @@ impl Client {
         Ok(Self {
             manager,
             display,
-            parameters,
             credentials: Credentials::generate()?,
             timers: StopwatchChain::default(),
             spinner,
+            args,
         })
     }
 
@@ -169,16 +168,15 @@ impl Client {
     // Caution: As we are using ProgressBar, anything to be printed to console should use progress.println() !
     pub(crate) async fn run(&mut self) -> anyhow::Result<bool> {
         self.timers.next("Setup");
-
         let working_config = self
             .manager
             .get::<Configuration_Optional>()
             .unwrap_or_default();
 
         util::setup_tracing(
-            util::trace_level(&self.parameters),
+            util::trace_level(&self.args.client_params),
             util::ConsoleTraceType::Indicatif(self.display.clone()),
-            self.parameters.log_file.as_ref(),
+            self.args.client_params.log_file.as_ref(),
             working_config.time_format.unwrap_or_default(),
             use_colours(),
         )?; // to provoke error: set RUST_LOG=.
@@ -197,7 +195,7 @@ impl Client {
             .context("while establishing control channel")?;
 
         // Dry run mode ends here! -------
-        if self.parameters.dry_run {
+        if self.args.client_params.dry_run {
             info!("Dry run mode selected, not connecting to data channel");
             info!(
                 "Negotiated network configuration: {}",
@@ -230,7 +228,7 @@ impl Client {
         let remote_stats = self.closedown(&config, qcp_conn).await?;
 
         // Post-transfer chatter -----------
-        if !self.parameters.quiet {
+        if !self.args.client_params.quiet {
             let transport_time = self.timers.find(SHOW_TIME).and_then(Stopwatch::elapsed);
             crate::util::stats::process_statistics(
                 &connection.stats(),
@@ -238,12 +236,12 @@ impl Client {
                 transport_time,
                 &remote_stats,
                 &config,
-                self.parameters.statistics,
+                self.args.client_params.statistics,
                 direction,
             );
         }
 
-        if self.parameters.profile {
+        if self.args.client_params.profile {
             info!("Elapsed time by phase:\n{}", self.timers);
         }
         self.display.clear()?;
@@ -262,7 +260,7 @@ impl Client {
         self.spinner.set_message("Preparing");
         self.spinner.enable_steady_tick(Duration::from_millis(150));
 
-        let job_specs: Vec<CopyJobSpec> = (&self.parameters).try_into()?;
+        let job_specs: Vec<CopyJobSpec> = self.args.jobspecs()?;
         let remote_ssh_hostname = job_specs
             .first()
             .expect("at least one job spec is required")
@@ -305,7 +303,7 @@ impl Client {
         let ssh_client = create(
             &self.display,
             working_config,
-            &self.parameters,
+            &self.args.client_params,
             prep_result.remote_host(),
             prep_result.remote_address.into(),
         )?;
@@ -317,7 +315,7 @@ impl Client {
                 &self.credentials,
                 prep_result.remote_address.into(),
                 &mut self.manager,
-                &self.parameters,
+                &self.args.client_params,
                 prep_result.direction(),
                 None,
             )
@@ -437,7 +435,7 @@ impl Client {
                     stream_pair,
                     job,
                     config,
-                    self.parameters.quiet,
+                    self.args.client_params.quiet,
                     compat,
                     filename_width,
                 )
@@ -585,6 +583,7 @@ mod test {
 
     use super::{BiStreamOpener, RequestResult, process_job_requests};
 
+    use crate::cli::CliArgs;
     #[cfg(unix)]
     use crate::control::create_fake;
 
@@ -598,16 +597,17 @@ mod test {
 
     fn make_uut<F: FnOnce(&mut Manager, &mut Parameters)>(f: F, src: &str, dest: &str) -> Client {
         let mut mgr = Manager::without_default(None);
-        let mut params = Parameters {
+        let mut args = Box::new(CliArgs {
             paths: vec![
                 FileSpec::from_str(src).unwrap(),
                 FileSpec::from_str(dest).unwrap(),
             ],
             ..Default::default()
-        };
-        f(&mut mgr, &mut params);
+        });
 
-        Client::new(Manager::without_default(None), MultiProgress::new(), params).unwrap()
+        f(&mut mgr, &mut args.client_params);
+
+        Client::new(Manager::without_default(None), MultiProgress::new(), args).unwrap()
     }
     const REMOTE_FILE: &str = "8.8.8.8:file";
     const LOCAL_FILE: &str = "file";
