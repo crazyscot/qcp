@@ -10,6 +10,7 @@ use tracing::{debug, error, trace};
 
 use super::{CommandStats, SessionCommandImpl};
 
+use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::control::Compatibility;
@@ -52,7 +53,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         filename_width: usize,
         spinner: indicatif::ProgressBar,
         config: &crate::config::Configuration,
-        quiet: bool,
+        params: Parameters,
     ) -> Result<CommandStats> {
         let src_filename = &job.source.filename;
         let dest_filename = &job.destination.filename;
@@ -69,7 +70,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         // Marshalled commands are currently 48 bytes + filename length
         // File headers are currently 36 + filename length; Trailers are 16 bytes.
         let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
-        let progress_bar = progress_bar_for(&display, job, filename_width, steps, quiet)?;
+        let progress_bar = progress_bar_for(&display, job, filename_width, steps, params.quiet)?;
         let mut outbound = progress_bar.wrap_async_write(&mut self.stream.send);
         let mut meter =
             crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, config.tx());
@@ -291,7 +292,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        Configuration,
+        Configuration, Parameters,
         client::CopyJobSpec,
         protocol::{
             control::Compatibility,
@@ -299,8 +300,7 @@ mod test {
             test_helpers::{new_test_plumbing, read_from_stream},
         },
         session::{CommandStats, Put},
-        util::io::DEFAULT_COPY_BUFFER_SIZE,
-        util::time::SystemTimeExt as _,
+        util::{io::DEFAULT_COPY_BUFFER_SIZE, time::SystemTimeExt as _},
     };
     use littertray::LitterTray;
 
@@ -335,13 +335,17 @@ mod test {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2, preserve).unwrap();
         let mut sender = Put::boxed(pipe1, None, Compatibility::Level(client_level));
+        let params = Parameters {
+            quiet: true,
+            ..Default::default()
+        };
         let sender_fut = sender.send(
             &spec,
             indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
             10,
             indicatif::ProgressBar::hidden(),
             Configuration::system_default(),
-            true,
+            params,
         );
         tokio::pin!(sender_fut);
 

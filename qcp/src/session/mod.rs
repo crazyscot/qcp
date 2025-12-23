@@ -16,7 +16,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar};
 
-use crate::{client::CopyJobSpec, config::Configuration};
+use crate::{Parameters, client::CopyJobSpec, config::Configuration};
 
 #[derive(Debug, Default, Copy, Clone)]
 /// Internal statistics for a completed command
@@ -50,7 +50,7 @@ pub(crate) trait SessionCommandImpl: Send {
         filename_width: usize,
         spinner: ProgressBar,
         config: &Configuration,
-        quiet: bool,
+        params: Parameters,
     ) -> Result<CommandStats>;
 
     /// Server side implementation, takes care of handling the command and all its

@@ -11,6 +11,7 @@ use tracing::trace;
 
 use super::{CommandStats, SessionCommandImpl};
 
+use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::control::Compatibility;
@@ -63,7 +64,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         filename_width: usize,
         spinner: indicatif::ProgressBar,
         config: &crate::config::Configuration,
-        quiet: bool,
+        params: Parameters,
     ) -> Result<CommandStats> {
         let filename = &job.source.filename;
         let dest = &job.destination.filename;
@@ -104,9 +105,14 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         // Unfortunately, the file data is already well in flight at this point, leading to a flood of packets
         // that causes the estimated rate to spike unhelpfully at the beginning of the transfer.
         // Therefore we incorporate time in flight so far to get the estimate closer to reality.
-        let progress_bar =
-            progress_bar_for(&display, job, filename_width, header.size.0 + 17, quiet)?
-                .with_elapsed(Instant::now().duration_since(real_start));
+        let progress_bar = progress_bar_for(
+            &display,
+            job,
+            filename_width,
+            header.size.0 + 17,
+            params.quiet,
+        )?
+        .with_elapsed(Instant::now().duration_since(real_start));
 
         let mut meter =
             crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, config.rx());
@@ -200,7 +206,7 @@ pub(crate) mod test_shared {
     use either::Left;
 
     use crate::{
-        Configuration,
+        Configuration, Parameters,
         client::CopyJobSpec,
         protocol::{
             control::Compatibility,
@@ -232,13 +238,17 @@ pub(crate) mod test_shared {
             options,
         };
         let mut sender = Get::boxed(pipe1, Some(args), Compatibility::Level(client_level));
+        let params = Parameters {
+            quiet: true,
+            ..Default::default()
+        };
         let fut = sender.send(
             &spec,
             indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
             10,
             indicatif::ProgressBar::hidden(),
             Configuration::system_default(),
-            true,
+            params,
         );
         tokio::pin!(fut);
 
