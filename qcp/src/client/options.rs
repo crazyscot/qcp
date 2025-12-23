@@ -2,10 +2,10 @@
 // (c) 2024 Ross Younger
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
 
 use super::{CopyJobSpec, FileSpec};
 use crate::config::Source as ConfigSource;
+use crate::util::path;
 use clap::Parser;
 
 const META_JOBSPEC: &str = "command-line (user@host)";
@@ -86,41 +86,6 @@ pub struct Parameters {
     pub paths: Vec<FileSpec>,
 }
 
-fn basename_of(path: &str) -> anyhow::Result<String> {
-    let path = Path::new(path);
-    let Some(filename) = path.file_name() else {
-        anyhow::bail!("Source path \"{}\" must contain a filename", path.display());
-    };
-    let filename = filename.to_string_lossy();
-    anyhow::ensure!(
-        !filename.is_empty(),
-        "Source path \"{}\" must contain a filename",
-        path.display()
-    );
-    Ok(filename.to_string())
-}
-
-fn join_local_path(base: &str, leaf: &str) -> String {
-    if base.is_empty() {
-        return leaf.to_string();
-    }
-    PathBuf::from(base).join(leaf).to_string_lossy().to_string()
-}
-
-/// Join a remote path using forward slashes, independent of the client's OS.
-///
-/// This avoids emitting `\` on Windows clients when the remote host is Unix-like.
-fn join_remote_path(base: &str, leaf: &str) -> String {
-    if base.is_empty() {
-        return leaf.to_string();
-    }
-    if base.ends_with('/') {
-        format!("{base}{leaf}")
-    } else {
-        format!("{base}/{leaf}")
-    }
-}
-
 impl TryFrom<&Parameters> for Vec<CopyJobSpec> {
     type Error = anyhow::Error;
 
@@ -170,8 +135,8 @@ impl TryFrom<&Parameters> for Vec<CopyJobSpec> {
                     "Only one remote side is supported"
                 );
                 let dest_filename = if multiple_sources {
-                    let leaf = basename_of(&source.filename)?;
-                    join_remote_path(&destination.filename, &leaf)
+                    let leaf = path::basename_of(&source.filename)?;
+                    path::join_remote(&destination.filename, &leaf)
                 } else {
                     destination.filename.clone()
                 };
@@ -191,8 +156,8 @@ impl TryFrom<&Parameters> for Vec<CopyJobSpec> {
                     "Only one remote side is supported"
                 );
                 let dest_filename = if multiple_sources {
-                    let leaf = basename_of(&source.filename)?;
-                    join_local_path(&destination.filename, &leaf)
+                    let leaf = path::basename_of(&source.filename)?;
+                    path::join_local(&destination.filename, &leaf)
                 } else {
                     destination.filename.clone()
                 };
@@ -398,11 +363,11 @@ mod tests {
         assert_eq!(specs.len(), 2);
         assert_eq!(
             specs[0].destination.to_string(),
-            join_local_path("downloads", "a")
+            path::join_local("downloads", "a")
         );
         assert_eq!(
             specs[1].destination.to_string(),
-            join_local_path("downloads", "b")
+            path::join_local("downloads", "b")
         );
     }
 
@@ -518,7 +483,7 @@ mod tests {
 
     #[test]
     fn join_local_path_with_empty_base_returns_leaf() {
-        assert_eq!(join_local_path("", "file"), "file");
+        assert_eq!(path::join_local("", "file"), "file");
     }
 
     #[test]

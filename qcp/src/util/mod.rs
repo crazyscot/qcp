@@ -18,6 +18,7 @@ mod metadata_ext;
 pub(crate) use metadata_ext::FsMetadataExt;
 
 pub(crate) mod io;
+pub(crate) mod path;
 pub(crate) mod process;
 pub(crate) mod socket;
 pub(crate) mod stats;
