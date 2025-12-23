@@ -176,7 +176,7 @@ impl Client {
         util::setup_tracing(
             util::trace_level(&self.args.client_params),
             util::ConsoleTraceType::Indicatif(self.display.clone()),
-            self.args.client_params.log_file.as_ref(),
+            self.args.log_file.as_ref(),
             working_config.time_format.unwrap_or_default(),
             use_colours(),
         )?; // to provoke error: set RUST_LOG=.
