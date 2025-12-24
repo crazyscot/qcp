@@ -9,7 +9,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::Instant;
 use tracing::trace;
 
-use super::{CommandStats, SessionCommandImpl};
+use super::{CommandStats, SessionCommandImpl, error_and_return};
 
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
@@ -21,7 +21,7 @@ use crate::protocol::session::{
 };
 
 use crate::protocol::Variant;
-use crate::session::common::{progress_bar_for, send_response};
+use crate::session::common::progress_bar_for;
 
 // Extension trait!
 use crate::util::FileExt as _;
@@ -156,18 +156,15 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
 
         let (mut file, file_original_meta) = match TokioFile::open_with_meta(&args.filename).await {
             Ok(res) => res,
-            Err(e) => {
-                let (status, message) = crate::util::io::status_from_error(&e);
-                return send_response(&mut self.stream.send, status, message.as_deref()).await;
-            }
+            Err(e) => error_and_return!(self, e),
         };
         if file_original_meta.is_dir() {
-            return send_response(&mut self.stream.send, Status::ItIsADirectory, None).await;
+            error_and_return!(self, Status::ItIsADirectory);
         }
 
         // We believe we can fulfil this request.
         trace!("responding OK");
-        send_response(&mut self.stream.send, Status::Ok, None).await?;
+        crate::session::common::send_ok(&mut self.stream.send).await?;
 
         let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
 

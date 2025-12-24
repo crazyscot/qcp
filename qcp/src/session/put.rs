@@ -8,7 +8,7 @@ use tokio::fs::File as TokioFile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, error, trace};
 
-use super::{CommandStats, SessionCommandImpl};
+use super::{CommandStats, SessionCommandImpl, error_and_return};
 
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
@@ -18,7 +18,7 @@ use crate::protocol::session::{
     Command, CommandParam, FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Put2Args, PutArgs,
     Response, Status,
 };
-use crate::session::common::{progress_bar_for, send_response};
+use crate::session::common::progress_bar_for;
 
 // Extension trait for TokioFile!
 use crate::util::FileExt as _;
@@ -202,8 +202,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
                 false // destination path is fully specified, do not append filename
             } else {
                 // No parent directory
-                return send_response(&mut self.stream.send, Status::DirectoryDoesNotExist, None)
-                    .await;
+                error_and_return!(self, Status::DirectoryDoesNotExist);
             }
         };
 
@@ -220,21 +219,14 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             Err(e) => {
                 let str = e.to_string();
                 debug!("Could not write to destination: {str}");
-                let st = if str.contains("Permission denied") {
-                    Status::IncorrectPermissions
-                } else if str.contains("Is a directory") {
-                    Status::ItIsADirectory
-                } else {
-                    Status::IoError
-                };
-                return send_response(&mut self.stream.send, st, Some(&e.to_string())).await;
+                error_and_return!(self, e);
             }
         };
 
         // So far as we can tell, we believe we will be able to fulfil this request.
         // We might still fail with an I/O error.
         trace!("responding OK");
-        send_response(&mut self.stream.send, Status::Ok, None).await?;
+        crate::session::common::send_ok(&mut self.stream.send).await?;
         self.stream.send.flush().await?;
 
         trace!("receiving file payload");
@@ -247,8 +239,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         .await;
         if let Err(e) = result {
             error!("Failed to write to destination: {e}");
-            return send_response(&mut self.stream.send, Status::IoError, Some(&e.to_string()))
-                .await;
+            error_and_return!(self, e);
         }
 
         trace!("receiving trailer");
@@ -262,7 +253,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         file = file.update_metadata(&trailer.metadata).await?;
         drop(file);
 
-        send_response(&mut self.stream.send, Status::Ok, None).await?;
+        crate::session::common::send_ok(&mut self.stream.send).await?;
         self.stream.send.flush().await?;
         trace!("complete");
         Ok(())
@@ -506,15 +497,10 @@ mod test {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "s:/dev/", false).await?;
             let r1 = r1.unwrap_err();
-            let msg = r1.root_cause().to_string();
-
-            if cfg!(unix) {
-                assert_eq!(Status::from(r1), Status::IncorrectPermissions);
-            } else if cfg!(msvc) {
+            if cfg!(msvc) {
                 assert_eq!(Status::from(r1), Status::DirectoryDoesNotExist);
             } else {
-                assert_contains!(msg, "Access denied");
-                assert_eq!(Status::from(r1), Status::IoError);
+                assert_eq!(Status::from(r1), Status::IncorrectPermissions);
             }
             assert!(r2.is_ok());
             Ok(())

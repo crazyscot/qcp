@@ -1,17 +1,8 @@
 //! File & async I/O helpers
 // (c) 2024-5 Ross Younger
 
-use crate::protocol::session::Status;
-use std::{io::ErrorKind, pin::Pin};
+use std::pin::Pin;
 use tokio::io::{AsyncRead, AsyncWrite};
-
-pub(crate) fn status_from_error(e: &tokio::io::Error) -> (Status, Option<String>) {
-    match e.kind() {
-        ErrorKind::NotFound => (Status::FileNotFound, None),
-        ErrorKind::PermissionDenied => (Status::IncorrectPermissions, None),
-        _ => (Status::IoError, Some(e.to_string())),
-    }
-}
 
 pub(crate) async fn read_available_non_blocking<R: AsyncRead + Unpin>(
     mut reader: R,

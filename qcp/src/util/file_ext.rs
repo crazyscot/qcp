@@ -120,7 +120,10 @@ impl FileExt for TokioFile {
                 dest_path.push(header.filename.clone());
             } else if !meta.is_file() {
                 // Disallow writing to pre-existing non-regular files (sockets, device nodes)
-                anyhow::bail!("Destination path exists but is not a regular file");
+                return Err(std::io::Error::other(
+                    "Destination path exists but is not a regular file",
+                )
+                .into());
             }
         } // error ignored; file doesn't exist is perfectly OK with us :-)
         let mut options = tokio::fs::OpenOptions::new();
