@@ -135,7 +135,9 @@ impl Status {
     }
 }
 
-// ergonomic convenience
+// ergonomic convenience for tests
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 impl From<anyhow::Error> for Status {
     fn from(e: anyhow::Error) -> Self {
         if let Some(st) = e.downcast_ref::<Status>() {
@@ -153,7 +155,9 @@ impl From<anyhow::Error> for Status {
     }
 }
 
-// ergonomic convenience
+// ergonomic convenience for tests
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 impl<R: std::fmt::Debug> From<anyhow::Result<R>> for Status {
     fn from(r: anyhow::Result<R>) -> Self {
         Self::from(r.unwrap_err())
