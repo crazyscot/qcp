@@ -4,9 +4,11 @@
 mod common;
 
 mod get;
+mod mkdir;
 mod put;
+mod set_meta;
 
-pub(crate) use {get::Get, put::Put};
+pub(crate) use {get::Get, mkdir::CreateDirectory, put::Put, set_meta::SetMetadata};
 
 #[cfg(feature = "unstable-test-helpers")]
 #[allow(unused_imports)] // Selectively exported by qcp::test_helpers
@@ -26,15 +28,6 @@ pub struct CommandStats {
     pub payload_bytes: u64,
     /// Peak transfer rate observed (in bytes per second); this is not terribly accurate at the moment, particularly on PUT commands
     pub peak_transfer_rate: u64,
-}
-
-impl CommandStats {
-    pub(crate) fn new() -> Self {
-        CommandStats {
-            payload_bytes: 0,
-            peak_transfer_rate: 0,
-        }
-    }
 }
 
 /// Common structure for session protocol commands

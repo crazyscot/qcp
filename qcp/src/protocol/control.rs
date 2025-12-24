@@ -64,7 +64,7 @@ pub const BANNER: &str = "qcp-server-2\n";
 pub const OLD_BANNER: &str = "qcp-server-1\n";
 
 /// The protocol compatibility version implemented by this crate
-pub(crate) const OUR_COMPATIBILITY_NUMERIC: u16 = 3;
+pub(crate) const OUR_COMPATIBILITY_NUMERIC: u16 = 4;
 /// The protocol compatibility version implemented by this crate
 pub const OUR_COMPATIBILITY_LEVEL: Compatibility = Compatibility::Level(OUR_COMPATIBILITY_NUMERIC);
 

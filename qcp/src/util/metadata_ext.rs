@@ -1,7 +1,7 @@
 //! Extension trait for std::fs::Metadata
 // (c) 2025 Ross Younger
 
-use crate::protocol::{TaggedData, session::MetadataAttr};
+use crate::protocol::{TaggedData, control::Compatibility, session::MetadataAttr};
 
 /// Extension trait for `std::fs::Metadata`
 pub(crate) trait FsMetadataExt: std::marker::Sized {
@@ -9,6 +9,9 @@ pub(crate) trait FsMetadataExt: std::marker::Sized {
     fn mode(&self) -> u32;
     /// Convert filesystem metadata to QCP protocol metadata
     fn to_tagged_data(&self, times: bool) -> Vec<TaggedData<MetadataAttr>>;
+
+    /// Convert filesystem metadata to QCP protocol metadata for a directory
+    fn tagged_data_for_dir(&self, compat: Compatibility) -> Vec<TaggedData<MetadataAttr>>;
 }
 
 impl FsMetadataExt for std::fs::Metadata {
@@ -73,5 +76,10 @@ impl FsMetadataExt for std::fs::Metadata {
             }
         }
         vec
+    }
+
+    fn tagged_data_for_dir(&self, _compat: Compatibility) -> Vec<TaggedData<MetadataAttr>> {
+        static_assertions::assert_cfg!(any(unix, windows), "This OS is not currently supported");
+        self.to_tagged_data(false)
     }
 }
