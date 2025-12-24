@@ -20,6 +20,20 @@ use indicatif::{MultiProgress, ProgressBar};
 
 use crate::{Parameters, client::CopyJobSpec, config::Configuration};
 
+/// Helper macro for making error returns
+///
+/// Typically called within a command handler as `error_and_return!(self, SomeError)`.
+macro_rules! error_and_return {
+    ($obj:expr, $inner:expr) => {
+        return crate::session::common::send_error(
+            &mut $obj.stream.send,
+            &anyhow::Error::from($inner),
+        )
+        .await
+    };
+}
+use error_and_return; // export within this crate
+
 #[derive(Debug, Default, Copy, Clone)]
 /// Internal statistics for a completed command
 #[allow(unreachable_pub)] // Selectively exported by qcp::test_helpers
@@ -50,5 +64,7 @@ pub(crate) trait SessionCommandImpl: Send {
     /// traffic. Does not return until completion (or error).
     ///
     /// If the command has arguments, the object constructor is expected to set them up.
+    ///
+    /// See also the [`crate::session::common::send_ok`] and [`crate::session::common::send_error`] helpers.
     async fn handle(&mut self, io_buffer_size: u64) -> Result<()>;
 }

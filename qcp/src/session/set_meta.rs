@@ -7,7 +7,7 @@ use cfg_if::cfg_if;
 use tokio::io::AsyncWriteExt;
 use tracing::trace;
 
-use super::{CommandStats, SessionCommandImpl};
+use super::{CommandStats, SessionCommandImpl, error_and_return};
 
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
@@ -15,11 +15,9 @@ use crate::protocol::compat::Feature;
 use crate::protocol::control::Compatibility;
 use crate::protocol::session::{Command, MetadataAttr, Response, SetMetadataArgs, Status};
 
-use crate::session::common::send_response;
 // Extension trait for std::fs::Metadata
 use crate::util::FsMetadataExt as _;
 
-use std::io::ErrorKind;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
 
@@ -93,17 +91,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for SetMetadata<S,
 
         let localmeta = match tokio::fs::metadata(&path).await {
             Ok(m) => m,
-            Err(e) => {
-                let st = if e.kind() == ErrorKind::NotFound {
-                    Status::FileNotFound
-                } else {
-                    Status::IoError
-                };
-                return send_response(&mut self.stream.send, st, Some(&e.to_string())).await;
-            }
+            Err(e) => error_and_return!(self, e),
         };
         if !localmeta.is_dir() {
-            return send_response(&mut self.stream.send, Status::ItIsAFile, None).await;
+            error_and_return!(self, Status::ItIsAFile);
         }
 
         for md in &args.metadata {
@@ -120,15 +111,12 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for SetMetadata<S,
                         cfg_if! {
                             if #[cfg(unix)] {
                                 perms.set_mode(mode);
-                                let (st, msg) = match tokio::fs::set_permissions(&path, perms).await {
-                                    Ok(()) => (Status::Ok, None),
-                                    Err(e) => (Status::IoError, Some(e.to_string())),
-                                };
-                                return send_response(&mut self.stream.send, st, msg.as_deref()).await;
+                                if let Err(e)= tokio::fs::set_permissions(&path, perms).await {
+                                    error_and_return!(self, e);
+                                }
                             } else if #[cfg(windows)] {
                                 // The Windows 'read only' attribute is not useful on a directory. Ignore for now.
                                 // TODO: Use NTFS permissions
-                                return send_response(&mut self.stream.send, Status::Ok, None).await;
                             }
                         }
                     }
@@ -136,7 +124,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for SetMetadata<S,
                 Some(t) => anyhow::bail!("unknown metadata tag {t}"),
             }
         }
-        unreachable!()
+        crate::session::common::send_ok(&mut self.stream.send).await
     }
 }
 

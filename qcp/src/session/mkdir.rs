@@ -6,14 +6,14 @@ use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, trace};
 
-use super::{CommandStats, SessionCommandImpl};
+use super::{CommandStats, SessionCommandImpl, error_and_return};
 
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::control::Compatibility;
 use crate::protocol::session::{Command, CreateDirectoryArgs, Response, Status};
-use crate::session::common::send_response;
+use crate::session::common::send_ok;
 
 pub(crate) struct CreateDirectory<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
@@ -79,7 +79,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for CreateDirector
         let meta = tokio::fs::metadata(&path).await;
         if let Ok(meta) = meta {
             if meta.is_file() {
-                return send_response(&mut self.stream.send, Status::ItIsAFile, None).await;
+                error_and_return!(self, Status::ItIsAFile);
             }
             if meta.is_dir() {
                 // it already exists: this is not an error.
@@ -94,10 +94,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for CreateDirector
             if let Err(e) = result {
                 let str = e.to_string();
                 debug!("Could not mkdir: {str}");
-                return send_response(&mut self.stream.send, Status::IoError, Some(&str)).await;
+                error_and_return!(self, e);
             }
         }
-        send_response(&mut self.stream.send, Status::Ok, None).await
+        send_ok(&mut self.stream.send).await
     }
 }
 
@@ -173,7 +173,7 @@ mod test {
             assert!(r2.is_ok());
             let err = r1.expect_err("r1 should have errored");
             let st = Status::from(err);
-            assert_eq!(st, Status::IoError);
+            assert_eq!(st, Status::FileNotFound); // TODO: This should really be DirectoryDoesNotExist
             Ok(())
         })
         .await

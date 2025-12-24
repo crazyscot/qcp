@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
+use std::io::ErrorKind;
 use tokio::io::AsyncWriteExt;
 
 use crate::{
@@ -14,11 +15,7 @@ use crate::{
 };
 
 /// Sends a response message
-pub(super) async fn send_response<W>(
-    send: &mut W,
-    status: Status,
-    message: Option<&str>,
-) -> anyhow::Result<()>
+async fn send_response<W>(send: &mut W, status: Status, message: Option<&str>) -> anyhow::Result<()>
 where
     W: AsyncWriteExt + std::marker::Unpin + Send,
 {
@@ -28,6 +25,41 @@ where
     ))
     .to_writer_async_framed(send)
     .await
+}
+
+/// Helper function for sending an OK response
+pub(super) async fn send_ok<W>(send: &mut W) -> anyhow::Result<()>
+where
+    W: AsyncWriteExt + std::marker::Unpin + Send,
+{
+    Response::V1(ResponseV1::new(Status::Ok.into(), None))
+        .to_writer_async_framed(send)
+        .await
+}
+
+fn error_to_status(err: &anyhow::Error) -> (Status, Option<String>) {
+    if let Some(st) = err.downcast_ref::<Status>() {
+        (*st, None)
+    } else if let Some(io) = err.downcast_ref::<std::io::Error>() {
+        match io.kind() {
+            ErrorKind::NotFound => (Status::FileNotFound, None),
+            ErrorKind::PermissionDenied => (Status::IncorrectPermissions, None),
+            ErrorKind::IsADirectory => (Status::ItIsADirectory, None),
+            ErrorKind::StorageFull => (Status::DiskFull, None),
+            _ => (Status::IoError, Some(io.to_string())),
+        }
+    } else {
+        (Status::UnknownError, Some(err.to_string()))
+    }
+}
+
+/// Helper function for sending a Response from an Error
+pub(super) async fn send_error<W>(send: &mut W, err: &anyhow::Error) -> anyhow::Result<()>
+where
+    W: AsyncWriteExt + std::marker::Unpin + Send,
+{
+    let (st, msg) = error_to_status(err);
+    send_response(send, st, msg.as_deref()).await
 }
 
 /// Adds a progress bar to the stack (in `MultiProgress`) for the current job
@@ -149,5 +181,16 @@ mod tests {
         // But we can still assert about the length and message, which do work as expected (cf. the hidden progress bar above)
         assert_eq!(pb.length(), Some(100));
         assert_eq!(pb.message(), "test_file.txt");
+    }
+
+    #[test]
+    fn unknown_error_status() {
+        #[derive(thiserror::Error, Debug, derive_more::Display)]
+        #[display("the answer is {_0}")]
+        struct MyError(u32);
+
+        let (st, msg) = super::error_to_status(&anyhow::anyhow!(MyError(42)));
+        assert_eq!(st, Status::UnknownError);
+        assert_eq!(msg.unwrap(), "the answer is 42");
     }
 }

@@ -106,6 +106,7 @@ pub enum Status {
     ItIsADirectory = 7,
     // CAUTION: CompatibilityLevel 1 panics when unmarshalling statuses above 7
     ItIsAFile = 8,
+    UnknownError = 9,
 }
 
 impl From<Status> for Uint {
