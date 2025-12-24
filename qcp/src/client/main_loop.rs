@@ -504,7 +504,7 @@ impl Client {
                 } else {
                     error!("{e}");
                 }
-                RequestResult::new(false, CommandStats::new())
+                RequestResult::new(false, CommandStats::default())
             }
         }
     }
@@ -524,7 +524,7 @@ where
     S: SendingStream + 'static,
     R: ReceivingStream + 'static,
 {
-    let mut aggregate_stats = CommandStats::new();
+    let mut aggregate_stats = CommandStats::default();
     let mut overall_success = true;
     let filename_width = longest_filename(jobs);
     let n_jobs = jobs.len();
@@ -974,7 +974,7 @@ mod test {
                     peak_transfer_rate: 100,
                 },
             ),
-            RequestResult::new(false, CommandStats::new()),
+            RequestResult::new(false, CommandStats::default()),
             // This would only be consumed if we failed to stop early.
             RequestResult::new(
                 true,

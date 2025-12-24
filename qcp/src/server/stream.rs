@@ -5,6 +5,7 @@ use crate::protocol::common::{
     ProtocolMessage as _, ReceivingStream, SendReceivePair, SendingStream,
 };
 use crate::protocol::control::Compatibility;
+use crate::protocol::display_vec_td;
 use crate::protocol::session::Command;
 
 use tracing::{Instrument as _, trace, trace_span};
@@ -38,6 +39,18 @@ where
         Command::Put2(args) => (
             trace_span!("SERVER:PUT2", filename = args.filename.clone()),
             session::Put::boxed(sp, Some(args), compat),
+        ),
+        Command::CreateDirectory(args) => (
+            trace_span!("SERVER:MKDIR", filename = args.dir_name.clone()),
+            session::CreateDirectory::boxed(sp, Some(args), compat),
+        ),
+        Command::SetMetadata(args) => (
+            trace_span!(
+                "SERVER:SETMETA",
+                filename = args.path.clone(),
+                metadata = display_vec_td(&args.metadata),
+            ),
+            session::SetMetadata::boxed(sp, Some(args), compat),
         ),
     };
 

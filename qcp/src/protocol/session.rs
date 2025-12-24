@@ -71,6 +71,9 @@ use crate::{
 
 use super::common::ProtocolMessage;
 
+mod commands;
+pub use commands::*;
+
 /// Machine-readable codes advising of the status of an operation.
 ///
 /// See also [`Status::to_string`] which copes correctly with unrecognised status values.
@@ -102,6 +105,7 @@ pub enum Status {
     NotYetImplemented = 6,
     ItIsADirectory = 7,
     // CAUTION: CompatibilityLevel 1 panics when unmarshalling statuses above 7
+    ItIsAFile = 8,
 }
 
 impl From<Status> for Uint {
@@ -335,6 +339,16 @@ pub enum Command {
     ///
     /// If the server needs to abort the transfer, it may send a Response explaining why, then close the stream.
     Put2(Put2Args),
+
+    /// Ensures that a directory on the remote exists, creating it if necessary.
+    ///
+    /// This command was introduced in qcp 0.8 with compatibility level 4.
+    CreateDirectory(CreateDirectoryArgs),
+
+    /// Updates file or directory metadata on the remote.
+    ///
+    /// This command was introduced in qcp 0.8 with compatibility level 4.
+    SetMetadata(SetMetadataArgs),
 }
 impl ProtocolMessage for Command {}
 
