@@ -177,31 +177,41 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         let destination = &args.filename;
         trace!("begin");
 
-        // Initial checks. Is the destination valid?
-        let mut path = PathBuf::from(destination.clone());
+        // Initial checks. Is the destination valid, do we need to append the filename (from the `FileHeader`) to the destination path?
         // This is moderately tricky. It might validly be empty, a directory, a file, it might be a nonexistent file in an extant directory.
-
-        if path.as_os_str().is_empty() {
-            // This is the case "qcp some-file host:"
-            // Copy to the current working directory
-            path.push(".");
-        }
-
-        let append_filename = if path.is_dir() || path.is_file() {
-            // Destination exists: append filename only if it is a directory
+        let mut path = PathBuf::from(destination.clone());
+        let append_filename = if destination.is_empty() || destination == "." {
+            // Easy case: copying to current working directory
+            true
+        } else if path.is_dir() || path.is_file() {
+            // The destination exists. This is another easy case; append filename only if it is a directory.
             path.is_dir()
         } else {
-            // Is it a nonexistent file in a valid directory?
-            let mut path_test = path.clone();
-            let _ = path_test.pop();
-            if path_test.as_os_str().is_empty() {
-                // We're writing a file to the current working directory, so apply the is_dir writability check
-                path_test.push(".");
+            // The given destination does not exist. The possible cases here are:
+            // - The destination is clearly intended as a directory (ends with / or \).
+            //   This is an error (there's a separate CreateDirectory command for that).
+            if destination.ends_with(std::path::MAIN_SEPARATOR) {
+                // N.B. Path.has_trailing_sep() is currently only available in nightly
+                debug!("Nonexistent destination directory {destination}");
+                error_and_return!(self, Status::DirectoryDoesNotExist);
             }
-            if path_test.is_dir() {
+
+            // - The destination's parent directory exists => do not append the path
+            // - The destination's parent directory does not exist => error
+
+            let mut parent_dir = {
+                let mut tmp = path.clone();
+                let _ = tmp.pop();
+                tmp
+            };
+
+            if parent_dir.as_os_str().is_empty() {
+                // We're writing a file to the current working directory, so apply the is_dir check
+                parent_dir.push(".");
+            }
+            if parent_dir.is_dir() {
                 false // destination path is fully specified, do not append filename
             } else {
-                // No parent directory
                 error_and_return!(self, Status::DirectoryDoesNotExist);
             }
         };
@@ -479,10 +489,10 @@ mod test {
             let (r1, r2) = test_put_main("file1", "s:destdir/", false).await?;
             let r1 = r1.unwrap_err();
             let status = Status::from(r1);
-            if cfg!(linux) {
-                assert_eq!(status, Status::ItIsADirectory);
-            } else {
+            if cfg!(windows) {
                 assert_eq!(status, Status::IoError);
+            } else {
+                assert_eq!(status, Status::DirectoryDoesNotExist);
             }
             assert!(r2.is_ok());
             Ok(())
