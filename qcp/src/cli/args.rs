@@ -205,6 +205,8 @@ impl CliArgs {
 
         let mut remote_hosts = HashSet::new();
         let mut remote_user: Option<&str> = None;
+
+        // Remote username must not vary
         for spec in sources.iter().chain(std::iter::once(&destination)) {
             if let Some(host) = spec.hostname() {
                 let _ = remote_hosts.insert(host);
@@ -223,63 +225,44 @@ impl CliArgs {
             .iter()
             .filter(|s| s.user_at_host.is_some())
             .collect();
-        if destination_is_remote {
+
+        // Check correct number of remotes, determine the path joiner function to use
+        let join_fn = if destination_is_remote {
             anyhow::ensure!(
-                remote_sources.is_empty(),
+                remote_sources.is_empty() && sources.iter().all(|src| src.user_at_host.is_none()),
                 "Only one remote side is supported"
             );
+            path::join_remote
         } else {
             anyhow::ensure!(
                 !remote_sources.is_empty(),
                 "One file argument must be remote"
             );
-        }
+            anyhow::ensure!(
+                sources.iter().all(|src| src.user_at_host.is_some()),
+                "Only one remote side is supported"
+            );
+            path::join_local
+        };
 
         let multiple_sources = sources.len() > 1;
         let mut jobs = Vec::with_capacity(sources.len());
-
-        if destination_is_remote {
-            for source in sources {
-                anyhow::ensure!(
-                    source.user_at_host.is_none(),
-                    "Only one remote side is supported"
-                );
-                let dest_filename = if multiple_sources {
-                    let leaf = path::basename_of(&source.filename)?;
-                    path::join_remote(&destination.filename, &leaf)
-                } else {
-                    destination.filename.clone()
-                };
-                jobs.push(CopyJobSpec::try_new(
-                    source,
-                    FileSpec {
-                        user_at_host: destination.user_at_host.clone(),
-                        filename: dest_filename,
-                    },
-                    self.client_params.preserve,
-                )?);
-            }
-        } else {
-            for source in sources {
-                anyhow::ensure!(
-                    source.user_at_host.is_some(),
-                    "Only one remote side is supported"
-                );
-                let dest_filename = if multiple_sources {
-                    let leaf = path::basename_of(&source.filename)?;
-                    path::join_local(&destination.filename, &leaf)
-                } else {
-                    destination.filename.clone()
-                };
-                jobs.push(CopyJobSpec::try_new(
-                    source,
-                    FileSpec {
-                        user_at_host: None,
-                        filename: dest_filename,
-                    },
-                    self.client_params.preserve,
-                )?);
-            }
+        // Convert filenames into job specs
+        for source in sources {
+            let dest_filename = if multiple_sources {
+                let leaf = path::basename_of(&source.filename)?;
+                join_fn(&destination.filename, &leaf)
+            } else {
+                destination.filename.clone()
+            };
+            jobs.push(CopyJobSpec::try_new(
+                source,
+                FileSpec {
+                    user_at_host: destination.user_at_host.clone(),
+                    filename: dest_filename,
+                },
+                self.client_params.preserve,
+            )?);
         }
         Ok(jobs)
     }
