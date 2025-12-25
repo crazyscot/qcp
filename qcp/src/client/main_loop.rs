@@ -829,8 +829,8 @@ mod test {
         let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1);
 
         let jobs = vec![
-            CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false).unwrap(),
-            CopyJobSpec::from_parts("127.0.0.1:file2", OUT2, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file2", OUT2, false, false).unwrap(),
         ];
 
         let conn = FakeBiConnection::new(vec![
@@ -872,9 +872,9 @@ mod test {
         let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1);
 
         let jobs = vec![
-            CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false).unwrap(),
-            CopyJobSpec::from_parts("127.0.0.1:file2", OUT2, false).unwrap(),
-            CopyJobSpec::from_parts("127.0.0.1:file3", OUT3, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file2", OUT2, false, false).unwrap(),
+            CopyJobSpec::from_parts("127.0.0.1:file3", OUT3, false, false).unwrap(),
         ];
 
         let conn = FakeBiConnection::new(vec![
@@ -910,8 +910,8 @@ mod test {
     #[tokio::test]
     async fn process_job_requests_aggregates_stats() {
         let jobs = vec![
-            CopyJobSpec::from_parts("file1", "host:dir", false).unwrap(),
-            CopyJobSpec::from_parts("file2", "host:dir", false).unwrap(),
+            CopyJobSpec::from_parts("file1", "host:dir", false, false).unwrap(),
+            CopyJobSpec::from_parts("file2", "host:dir", false, false).unwrap(),
         ];
 
         let open_calls = AtomicUsize::new(0);
@@ -959,9 +959,9 @@ mod test {
     #[tokio::test]
     async fn process_job_requests_stops_on_failure() {
         let jobs = vec![
-            CopyJobSpec::from_parts("file1", "host:dir", false).unwrap(),
-            CopyJobSpec::from_parts("file2", "host:dir", false).unwrap(),
-            CopyJobSpec::from_parts("file3", "host:dir", false).unwrap(),
+            CopyJobSpec::from_parts("file1", "host:dir", false, false).unwrap(),
+            CopyJobSpec::from_parts("file2", "host:dir", false, false).unwrap(),
+            CopyJobSpec::from_parts("file3", "host:dir", false, false).unwrap(),
         ];
 
         let open_calls = AtomicUsize::new(0);
@@ -1074,11 +1074,13 @@ mod test {
     fn longest_filenames() {
         use super::longest_filename;
         let jobs = [
-            CopyJobSpec::from_parts("server:somedir/file1", "otherdir/file2", false).unwrap(),
-            CopyJobSpec::from_parts("s:somedir/a", "a", false).unwrap(),
+            CopyJobSpec::from_parts("server:somedir/file1", "otherdir/file2", false, false)
+                .unwrap(),
+            CopyJobSpec::from_parts("s:somedir/a", "a", false, false).unwrap(),
             CopyJobSpec::from_parts(
                 "s:really/really-long-name",
                 "this-name-is-even-longer-but-loses-as-it-is-destination",
+                false,
                 false,
             )
             .unwrap(),

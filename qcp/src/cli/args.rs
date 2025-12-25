@@ -262,6 +262,7 @@ impl CliArgs {
                     filename: dest_filename,
                 },
                 self.client_params.preserve,
+                false,
             )?);
         }
         Ok(jobs)
