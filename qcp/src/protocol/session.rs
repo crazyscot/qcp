@@ -360,7 +360,7 @@ impl ProtocolMessage for Command {}
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 /// Arguments for the `GET` command
 pub struct GetArgs {
-    /// This is a file name only, without any directory components
+    /// This is a file name, with leading directory components as required
     pub filename: String,
 }
 
@@ -368,7 +368,7 @@ pub struct GetArgs {
 /// Arguments for the `GET2` command.
 /// This was introduced in qcp 0.5 with `VersionCompatibility=V2`.
 pub struct Get2Args {
-    /// This is a file name only, without any directory components
+    /// This is a file name, with leading directory components as required
     pub filename: String,
 
     /// Extended options for the GET command
@@ -388,14 +388,16 @@ impl From<GetArgs> for Get2Args {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default, Clone)]
 /// Arguments for the `PUT` command
 pub struct PutArgs {
-    /// This is a file name only, without any directory components
+    /// This is the destination file or directory name, with leading directory components as required.
+    /// If it is a directory name, the filename given in the protocol `FileHeader` is appended.
     pub filename: String,
 }
 #[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
 /// Arguments for the `PUT2` command.
 /// This was introduced in qcp 0.5 with `VersionCompatibility=V2`.
 pub struct Put2Args {
-    /// This is a file name only, without any directory components
+    /// This is the destination file or directory name, with leading directory components as required.
+    /// If it is a directory name, the filename given in the protocol `FileHeader` is appended.
     pub filename: String,
 
     /// Extended options for the PUT command
