@@ -334,7 +334,7 @@ mod test {
         preserve: bool,
     ) -> Result<(Result<CommandStats>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let spec = CopyJobSpec::from_parts(file1, file2, preserve).unwrap();
+        let spec = CopyJobSpec::from_parts(file1, file2, preserve, false).unwrap();
         let mut sender = Put::boxed(pipe1, None, Compatibility::Level(client_level));
         let params = Parameters {
             quiet: true,

@@ -225,7 +225,7 @@ pub(crate) mod test_shared {
         preserve: bool,
     ) -> Result<(Result<CommandStats>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let spec = CopyJobSpec::from_parts(file1, file2, preserve).unwrap();
+        let spec = CopyJobSpec::from_parts(file1, file2, preserve, false).unwrap();
         let mut options = Vec::new();
         if preserve {
             options.push(CommandParam::PreserveMetadata.into());

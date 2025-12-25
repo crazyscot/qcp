@@ -93,7 +93,12 @@ pub struct CopyJobSpec {
     /// The `[user@]host` part of whichever of the source or destination contained one.
     /// (There can be only one.)
     pub(crate) user_at_host: String,
+    /// If set, we want to preserve times and permissions as far as possible.
     pub(crate) preserve: bool,
+    /// Is this entry for a directory?
+    ///
+    /// **This flag does not provide any information regarding recursion.** That is up to the caller to determine from context.
+    pub(crate) directory: bool,
 }
 
 impl CopyJobSpec {
@@ -102,6 +107,7 @@ impl CopyJobSpec {
         source: FileSpec,
         destination: FileSpec,
         preserve: bool,
+        directory: bool,
     ) -> anyhow::Result<Self> {
         if !(source.user_at_host.is_none() ^ destination.user_at_host.is_none()) {
             anyhow::bail!("One file argument must be remote");
@@ -116,6 +122,7 @@ impl CopyJobSpec {
             destination,
             user_at_host,
             preserve,
+            directory,
         })
     }
 
@@ -124,10 +131,11 @@ impl CopyJobSpec {
         source: &str,
         destination: &str,
         preserve: bool,
+        directory: bool,
     ) -> anyhow::Result<Self> {
         let source = FileSpec::from_str(source)?;
         let destination = FileSpec::from_str(destination)?;
-        Self::try_new(source, destination, preserve)
+        Self::try_new(source, destination, preserve, directory)
     }
 
     /// The hostname portion of whichever of the arguments contained one.
@@ -232,11 +240,11 @@ mod test {
 
     #[test]
     fn direction() {
-        let js = CopyJobSpec::from_parts("server:file", "file", false).unwrap();
+        let js = CopyJobSpec::from_parts("server:file", "file", false, false).unwrap();
         assert_eq!(js.direction(), Direction::ServerToClient);
         assert_eq!(js.direction().server_mode(), ThroughputMode::Tx);
         assert_eq!(js.direction().client_mode(), ThroughputMode::Rx);
-        let js = CopyJobSpec::from_parts("file", "server:file", false).unwrap();
+        let js = CopyJobSpec::from_parts("file", "server:file", false, false).unwrap();
         assert_eq!(js.direction(), Direction::ClientToServer);
         assert_eq!(js.direction().server_mode(), ThroughputMode::Rx);
         assert_eq!(js.direction().client_mode(), ThroughputMode::Tx);
@@ -247,7 +255,8 @@ mod test {
 
     #[test]
     fn display_filename() {
-        let js = CopyJobSpec::from_parts("server:somedir/file1", "otherdir/file2", false).unwrap();
+        let js = CopyJobSpec::from_parts("server:somedir/file1", "otherdir/file2", false, false)
+            .unwrap();
         assert_eq!(js.display_filename(), "file1");
     }
 }

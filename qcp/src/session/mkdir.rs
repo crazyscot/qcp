@@ -123,7 +123,8 @@ mod test {
 
     async fn test_mkdir_main(path: &str) -> Result<(Result<CommandStats>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let spec = CopyJobSpec::from_parts(path, &format!("somehost:{path}"), false).unwrap();
+        let spec =
+            CopyJobSpec::from_parts(path, &format!("somehost:{path}"), false, false).unwrap();
         let mut sender = CreateDirectory::boxed(pipe1, None, Compatibility::Level(4));
         let params = Parameters::default();
         let sender_fut = sender.send(

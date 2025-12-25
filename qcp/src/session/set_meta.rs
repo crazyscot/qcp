@@ -153,7 +153,8 @@ mod test {
     ) -> Result<(Result<CommandStats>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec =
-            CopyJobSpec::from_parts(local_path, &format!("somehost:{remote_path}"), false).unwrap();
+            CopyJobSpec::from_parts(local_path, &format!("somehost:{remote_path}"), false, false)
+                .unwrap();
         let mut sender = SetMetadata::boxed(pipe1, None, Compatibility::Level(4));
         let params = Parameters::default();
         let sender_fut = sender.send(
