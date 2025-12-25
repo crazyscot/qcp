@@ -14,13 +14,5 @@
   "[hbs]": {
     "editor.defaultFormatter": "dprint.dprint"
   },
-  "rust-analyzer.linkedProjects": [
-    "./Cargo.toml"
-  ],
-  "rust-analyzer.showUnlinkedFileNotification": false,
-  // rustup component add rust-analyzer, then set this in ~/.config/Code/User/settings.json:
-  // "rust-analyzer.server.path": "${userHome}/.cargo/bin/rust-analyzer",
-
-  // "rust-analyzer.cargo.features": ["unstable-test-helpers"],
   "editor.formatOnSave": true
 }
