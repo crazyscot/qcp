@@ -46,11 +46,12 @@ document-features = { workspace = true }
 dtype_variant = { workspace = true }
 either = { workspace = true }
 engineering-repr = { workspace = true, features = ["serde"] }
+enumflags2 = "0.7.12"
 enumscribe = { workspace = true }
 figment = { workspace = true, features = ["env"] }
 futures-util = { workspace = true }
 gethostname = { workspace = true }
-glob = { workspace = true }
+glob.workspace = true
 heck = { workspace = true }
 hex = { workspace = true }
 homedir = { workspace = true }
@@ -80,6 +81,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "chrono"] }
+walkdir = "2.5.0"
 wildmatch = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
