@@ -17,6 +17,8 @@ pub(crate) use file_ext::FileExt;
 mod metadata_ext;
 pub(crate) use metadata_ext::FsMetadataExt;
 
+pub(crate) mod dirwalk;
+
 pub(crate) mod io;
 pub(crate) mod path;
 pub(crate) mod process;
