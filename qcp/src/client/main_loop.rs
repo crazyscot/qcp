@@ -459,6 +459,7 @@ impl Client {
         let spinner = self.spinner.clone();
 
         let (mut handler, span) = if copy_spec.source.user_at_host.is_some() {
+            // We are GETting something
             let mut args = Get2Args::default();
             if copy_spec.preserve {
                 args.options.push(CommandParam::PreserveMetadata.into());
@@ -468,10 +469,18 @@ impl Client {
                 trace_span!("GETx", filename = copy_spec.source.filename.clone()),
             )
         } else {
-            (
-                session::Put::boxed(stream_pair, None, compat),
-                trace_span!("PUTx", filename = copy_spec.source.filename.clone()),
-            )
+            // We are PUTting something
+            if copy_spec.directory {
+                (
+                    session::CreateDirectory::boxed(stream_pair, None, compat),
+                    trace_span!("MKDIR", filename = copy_spec.destination.filename.clone()),
+                )
+            } else {
+                (
+                    session::Put::boxed(stream_pair, None, compat),
+                    trace_span!("PUTx", filename = copy_spec.source.filename.clone()),
+                )
+            }
         };
         let filename = copy_spec.display_filename().to_string_lossy();
         let timer = std::time::Instant::now();
