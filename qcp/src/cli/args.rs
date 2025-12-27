@@ -8,7 +8,7 @@ use anyhow::Result;
 use clap::{ArgAction::SetTrue, Args as _, FromArgMatches as _, Parser};
 
 use crate::config::Source as ConfigSource;
-use crate::util::path;
+use crate::util::{dirwalk, path};
 use crate::{CopyJobSpec, FileSpec, config::Manager, util::AddressFamily};
 
 const META_JOBSPEC: &str = "command-line (user@host)";
@@ -247,23 +247,36 @@ impl CliArgs {
 
         let multiple_sources = sources.len() > 1;
         let mut jobs = Vec::with_capacity(sources.len());
-        // Convert filenames into job specs
-        for source in sources {
-            let dest_filename = if multiple_sources {
-                let leaf = path::basename_of(&source.filename)?;
-                join_fn(&destination.filename, &leaf)
-            } else {
-                destination.filename.clone()
-            };
-            jobs.push(CopyJobSpec::try_new(
-                source,
-                FileSpec {
-                    user_at_host: destination.user_at_host.clone(),
-                    filename: dest_filename,
-                },
-                self.client_params.preserve,
-                false,
-            )?);
+
+        if self.client_params.recurse {
+            for source in sources {
+                dirwalk::recurse_local_source(
+                    &source,
+                    &destination,
+                    dirwalk::Options::EMPTY,
+                    false, /* TODO: preserve */
+                    &mut jobs,
+                )?;
+            }
+        } else {
+            // Convert filenames into job specs
+            for source in sources {
+                let dest_filename = if multiple_sources {
+                    let leaf = path::basename_of(&source.filename)?;
+                    join_fn(&destination.filename, &leaf)
+                } else {
+                    destination.filename.clone()
+                };
+                jobs.push(CopyJobSpec::try_new(
+                    source,
+                    FileSpec {
+                        user_at_host: destination.user_at_host.clone(),
+                        filename: dest_filename,
+                    },
+                    self.client_params.preserve,
+                    false,
+                )?);
+            }
         }
         Ok(jobs)
     }
@@ -551,5 +564,16 @@ mod test {
         ];
         let res = CliArgs::custom_parse(args).inspect_err(|e| eprintln!("{e}"));
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn recurse_jobspecs() {
+        let args = &["qcp", "-r", "no-such-dir/", "desthost:otherdir"];
+        let res = CliArgs::custom_parse(args)
+            .inspect_err(|e| eprintln!("{e}"))
+            .unwrap();
+        let _ = res
+            .jobspecs()
+            .expect_err("nonexistent directory should have failed to recurse");
     }
 }

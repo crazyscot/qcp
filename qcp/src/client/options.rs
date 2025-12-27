@@ -59,6 +59,10 @@ pub struct Parameters {
     /// Preserves file modification times and permissions as far as possible.
     #[arg(short, long, display_order(0))]
     pub preserve: bool,
+
+    /// Copies directories recursively. Symbolic links will be followed.
+    #[arg(short, long, display_order(0))]
+    pub recurse: bool,
 }
 
 #[cfg(test)]
