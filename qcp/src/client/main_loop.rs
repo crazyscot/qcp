@@ -13,7 +13,7 @@ use crate::{
         control::{ClosedownReportV1, Compatibility, CredentialsType, Direction, ServerMessageV2},
         session::{CommandParam, Get2Args},
     },
-    session::CommandStats,
+    session::{self, CommandStats},
     util::{
         self, Credentials, lookup_host_by_family,
         process::ProcessWrapper,
@@ -75,6 +75,13 @@ struct Client {
 struct PrepResult {
     remote_address: IpAddr,
     job_specs: Vec<CopyJobSpec>,
+}
+
+enum SessionPass {
+    // Get, Put, Mkdir
+    FileTransfer,
+    // SetMetadata to fix up directory permissions once we're done
+    PostTransfer,
 }
 
 impl PrepResult {
@@ -430,8 +437,8 @@ impl Client {
         process_job_requests(
             jobs,
             || connection.open_bi_stream(),
-            |stream_pair, job, filename_width| {
-                self.manage_request(stream_pair, job, config, compat, filename_width)
+            |stream_pair, job, filename_width, pass| {
+                self.manage_request(stream_pair, job, config, compat, filename_width, pass)
             },
             Some(&self.spinner),
         )
@@ -442,6 +449,36 @@ impl Client {
     /// On success: returns statistics about the transfer.
     /// On error: returns the transfer statistics, as far as we know, up to the point of failure
     async fn manage_request<S, R>(
+        &self,
+        stream_pair: SendReceivePair<S, R>,
+        copy_spec: CopyJobSpec,
+        config: &Configuration,
+        compat: Compatibility,
+        filename_width: usize,
+        pass: SessionPass,
+    ) -> RequestResult
+    where
+        S: SendingStream + 'static,
+        R: ReceivingStream + 'static,
+    {
+        match pass {
+            SessionPass::FileTransfer => {
+                self.manage_file_transfer_request(
+                    stream_pair,
+                    copy_spec,
+                    config,
+                    compat,
+                    filename_width,
+                )
+                .await
+            }
+            SessionPass::PostTransfer => {
+                self.manage_post_transfer_request(stream_pair, copy_spec, config, compat)
+                    .await
+            }
+        }
+    }
+    async fn manage_file_transfer_request<S, R>(
         &self,
         stream_pair: SendReceivePair<S, R>,
         copy_spec: CopyJobSpec,
@@ -517,6 +554,41 @@ impl Client {
             }
         }
     }
+
+    async fn manage_post_transfer_request<S, R>(
+        &self,
+        stream_pair: SendReceivePair<S, R>,
+        copy_spec: CopyJobSpec,
+        config: &Configuration,
+        compat: Compatibility,
+    ) -> RequestResult
+    where
+        S: SendingStream + 'static,
+        R: ReceivingStream + 'static,
+    {
+        if copy_spec.preserve && copy_spec.directory {
+            let mut handler = session::SetMetadata::boxed(stream_pair, None, compat);
+            let result = handler
+                .send(
+                    &copy_spec,
+                    self.display.clone(),
+                    0,
+                    self.spinner.clone(),
+                    config,
+                    self.args.client_params,
+                )
+                .await;
+            if let Err(e) = result {
+                if let Some(src) = e.source() {
+                    error!("{e}: {src}");
+                } else {
+                    error!("{e}");
+                }
+                return RequestResult::new(false, CommandStats::default());
+            }
+        }
+        RequestResult::new(true, CommandStats::default())
+    }
 }
 
 async fn process_job_requests<S, R, OpenStream, OpenFut, HandleJob, HandleFut>(
@@ -528,7 +600,7 @@ async fn process_job_requests<S, R, OpenStream, OpenFut, HandleJob, HandleFut>(
 where
     OpenStream: FnMut() -> OpenFut,
     OpenFut: Future<Output = anyhow::Result<SendReceivePair<S, R>>>,
-    HandleJob: FnMut(SendReceivePair<S, R>, CopyJobSpec, usize) -> HandleFut,
+    HandleJob: FnMut(SendReceivePair<S, R>, CopyJobSpec, usize, SessionPass) -> HandleFut,
     HandleFut: Future<Output = RequestResult>,
     S: SendingStream + 'static,
     R: ReceivingStream + 'static,
@@ -538,6 +610,8 @@ where
     let filename_width = longest_filename(jobs);
     let n_jobs = jobs.len();
 
+    // Pass 1: Send files and create directories.
+    // The list of job specs must be in the appropriate order i.e. create a directory before attempting to put any files into it.
     for (index, job) in jobs.iter().enumerate() {
         if n_jobs > 1
             && let Some(spinner) = spinner
@@ -548,7 +622,13 @@ where
             ));
         }
         let stream_pair = open_stream().await?;
-        let result = handle_job(stream_pair, job.clone(), filename_width).await;
+        let result = handle_job(
+            stream_pair,
+            job.clone(),
+            filename_width,
+            SessionPass::FileTransfer,
+        )
+        .await;
 
         aggregate_stats.payload_bytes += result.stats.payload_bytes;
         aggregate_stats.peak_transfer_rate = aggregate_stats
@@ -559,6 +639,26 @@ where
             break;
         }
     }
+
+    // Pass 2: Apply preserve logic (permission bits) to any created directories.
+    // We do this in _reverse order_ in case the changed permissions prevent us from being able to traverse a directory we recently created.
+    if n_jobs > 1 {
+        let mut message_set = false;
+        for job in jobs.iter().rev() {
+            if job.directory && job.preserve {
+                let stream_pair = open_stream().await?;
+                if !message_set {
+                    let _ =
+                        spinner.inspect(|s| s.set_message("Finishing up directory permissions"));
+                    message_set = true;
+                }
+                let result =
+                    handle_job(stream_pair, job.clone(), 0, SessionPass::PostTransfer).await;
+                overall_success &= result.success;
+            }
+        }
+    }
+
     Ok((overall_success, aggregate_stats))
 }
 
@@ -592,6 +692,7 @@ mod test {
     use super::{BiStreamOpener, RequestResult, process_job_requests};
 
     use crate::cli::CliArgs;
+    use crate::client::main_loop::SessionPass;
     #[cfg(unix)]
     use crate::control::create_fake;
 
@@ -772,6 +873,7 @@ mod test {
             Configuration::system_default(),
             crate::protocol::control::Compatibility::Level(1),
             10,
+            SessionPass::FileTransfer,
         );
 
         // We are not really testing the protocol here, that is done in get.rs / put.rs.
@@ -823,6 +925,7 @@ mod test {
             Configuration::system_default(),
             crate::protocol::control::Compatibility::Level(1),
             10,
+            SessionPass::FileTransfer,
         );
         let r = manage_fut.await;
         println!("Result: {r:?}");
@@ -948,7 +1051,7 @@ mod test {
                 let _ = open_calls.fetch_add(1, Ordering::SeqCst);
                 async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
             },
-            |stream_pair, _job, _filename_width| {
+            |stream_pair, _job, _filename_width, _pass| {
                 let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
                 drop(stream_pair);
                 async { results.lock().unwrap().remove(0) }
@@ -1000,7 +1103,7 @@ mod test {
                 let _ = open_calls.fetch_add(1, Ordering::SeqCst);
                 async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
             },
-            |stream_pair, _job, _filename_width| {
+            |stream_pair, _job, _filename_width, _pass| {
                 let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
                 drop(stream_pair);
                 async { results.lock().unwrap().remove(0) }
@@ -1095,5 +1198,100 @@ mod test {
             .unwrap(),
         ];
         assert_eq!(longest_filename(&jobs), 16);
+    }
+
+    #[tokio::test]
+    async fn process_job_requests_handles_directory_preserve() {
+        let jobs = vec![
+            CopyJobSpec::from_parts("dir1", "host:dir1", true, true).unwrap(),
+            CopyJobSpec::from_parts("file", "host:dir1/", true, false).unwrap(),
+            CopyJobSpec::from_parts("dir2", "host:dir2", true, true).unwrap(),
+        ];
+
+        let open_calls = AtomicUsize::new(0);
+        let handle_calls = AtomicUsize::new(0);
+        let results = Mutex::new(vec![
+            // Each directory is handled twice, so we expect to see five results.
+            // pass 1:
+            RequestResult::new(true, CommandStats::default()),
+            RequestResult::new(
+                true,
+                // this is file1
+                CommandStats {
+                    payload_bytes: 10,
+                    peak_transfer_rate: 100,
+                },
+            ),
+            RequestResult::new(true, CommandStats::default()),
+            // pass 2:
+            RequestResult::new(true, CommandStats::default()),
+            RequestResult::new(true, CommandStats::default()),
+        ]);
+
+        let (success, stats) = process_job_requests(
+            &jobs,
+            || {
+                let _ = open_calls.fetch_add(1, Ordering::SeqCst);
+                async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
+            },
+            |stream_pair, _job, _filename_width, _pass| {
+                let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
+                drop(stream_pair);
+                async { results.lock().unwrap().remove(0) }
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(success);
+        assert_eq!(open_calls.load(Ordering::SeqCst), 5);
+        assert_eq!(handle_calls.load(Ordering::SeqCst), 5);
+        assert_eq!(stats.payload_bytes, 10);
+        assert_eq!(stats.peak_transfer_rate, 100);
+    }
+
+    #[tokio::test]
+    async fn handle_post_transfer() {
+        use littertray::LitterTray;
+
+        let mut uut = make_uut(|_, _| (), "srcdir", "127.0.0.1:destdir");
+        uut.args.client_params.preserve = true;
+        uut.args.client_params.recurse = true;
+        let working = Configuration_Optional::default();
+        let r = LitterTray::try_with_async(async |tray| {
+            let _ = tray.make_dir("srcdir");
+            let _ = tray.make_dir("destdir");
+            let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
+            let mut plumbing = new_test_plumbing();
+
+            let manage_fut = uut.manage_request(
+                plumbing.0,
+                prep_result.job_specs[0].clone(),
+                Configuration::system_default(),
+                crate::protocol::control::Compatibility::Level(4),
+                0,
+                SessionPass::PostTransfer,
+            );
+
+            // We are not really testing the protocol here, only the main loop behaviour.
+            let mut send_buf = Vec::new();
+            crate::protocol::session::Response::V1(crate::protocol::session::ResponseV1 {
+                status: crate::protocol::session::Status::Ok.into(),
+                message: None,
+            })
+            .to_writer_framed(&mut send_buf)
+            .unwrap();
+            let send_fut = plumbing.1.send.write_all(&send_buf);
+
+            let (a, b) = tokio::join!(send_fut, manage_fut);
+            a.unwrap();
+            Ok(b)
+        })
+        .await
+        .unwrap();
+        println!("Result: {r:?}");
+        assert!(r.success);
+        assert_eq!(r.stats.payload_bytes, 0);
     }
 }
