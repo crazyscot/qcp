@@ -254,7 +254,7 @@ impl CliArgs {
                     &source,
                     &destination,
                     dirwalk::Options::EMPTY,
-                    false, /* TODO: preserve */
+                    self.client_params.preserve,
                     &mut jobs,
                 )?;
             }
