@@ -1,12 +1,11 @@
 // (c) 2025 Ross Younger
 //! Variant object type
 
-use std::{collections::BTreeMap, convert::identity, fmt::Write};
-
 use dtype_variant::DType;
 use paste::paste;
 use serde::{Deserialize, Serialize};
 use serde_bare::{Int, Uint};
+use std::{collections::BTreeMap, convert::identity, fmt::Write};
 
 /// A list ([`Vec<Variant>`]). This can itself be stored in a [`Variant`].
 pub type VariantList = Vec<Variant>;

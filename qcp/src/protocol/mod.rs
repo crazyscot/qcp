@@ -121,6 +121,7 @@
 //! [LetsEncrypt]: <https://letsencrypt.org/>
 
 pub mod common;
+pub use common::ProtocolMessage;
 pub mod compat;
 pub mod control;
 pub mod session;
@@ -128,9 +129,18 @@ pub mod session;
 mod data_tag;
 mod variant;
 
-pub(crate) use data_tag::display_vec_td;
 pub use data_tag::{DataTag, FindTag, TaggedData};
 pub use variant::{Variant, VariantConversionFailed, VariantList, VariantMap};
+
+/// Convenient includes for protocol building blocks
+pub mod prelude {
+    pub use crate::protocol::compat::Feature;
+    pub use crate::protocol::control::Compatibility;
+    pub(crate) use crate::protocol::data_tag::display_vec_td;
+    pub use crate::protocol::{DataTag, FindTag as _, ProtocolMessage, TaggedData, Variant};
+    pub use serde::{Deserialize, Serialize};
+    pub use serde_bare::Uint;
+}
 
 #[cfg(any(test, feature = "unstable-test-helpers"))]
 #[cfg_attr(coverage_nightly, coverage(off))]

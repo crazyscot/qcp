@@ -2,12 +2,10 @@
 // (c) 2025 Ross Younger
 
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
-
-use std::future::Future;
-use std::pin::Pin;
-
 use anyhow::Result;
 use either::{Either, Left, Right};
+use std::future::Future;
+use std::pin::Pin;
 use tokio::io::{ReadHalf, SimplexStream, WriteHalf, simplex};
 
 type TestStreamPair = SendReceivePair<WriteHalf<SimplexStream>, ReadHalf<SimplexStream>>;

@@ -26,12 +26,11 @@
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 //! [serde_bare]: https://docs.rs/serde_bare/latest/serde_bare/
 
+use crate::util::io::read_available_non_blocking;
 use anyhow::Error;
 use bytes::BytesMut;
 use serde_bare::error::Error as sbError;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-
-use crate::util::io::read_available_non_blocking;
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 // STREAM TYPEDEFS
