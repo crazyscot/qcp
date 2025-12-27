@@ -43,18 +43,12 @@
 //! [quic]: https://quicwg.github.io/
 //! [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 
-use std::net::{IpAddr, SocketAddr};
-
+use crate::util::{SerializeEnumAsString, ToStringForFigment};
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_bare::Uint;
 use serde_repr::{Deserialize_repr, Serialize_repr};
-
-use super::common::ProtocolMessage;
-use crate::{
-    protocol::display_vec_td,
-    util::{SerializeEnumAsString, ToStringForFigment},
-};
+use std::net::{IpAddr, SocketAddr};
 
 /// Server banner message, sent on stdout and checked by the client
 pub const BANNER: &str = "qcp-server-2\n";

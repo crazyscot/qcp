@@ -5,7 +5,7 @@ use crate::protocol::common::{
     ProtocolMessage as _, ReceivingStream, SendReceivePair, SendingStream,
 };
 use crate::protocol::control::Compatibility;
-use crate::protocol::display_vec_td;
+use crate::protocol::prelude::display_vec_td;
 use crate::protocol::session::Command;
 
 use tracing::{Instrument as _, trace, trace_span};

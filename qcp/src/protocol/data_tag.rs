@@ -2,11 +2,10 @@
 
 //! Data tagging for attributes in QCP protocol messages
 
+use crate::protocol::Variant;
 use serde::{Deserialize, Serialize};
 use serde_bare::Uint;
 use std::marker::PhantomData;
-
-use crate::protocol::Variant;
 
 /// Marker trait for enums that can be used in [`TaggedData`].
 ///

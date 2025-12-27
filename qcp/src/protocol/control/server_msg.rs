@@ -1,6 +1,9 @@
 //! ## Server Message
 // (c) 2024-25 Ross Younger
 
+use crate::Configuration;
+use crate::protocol::control::{CongestionController, CredentialsType};
+use crate::protocol::prelude::*;
 use engineering_repr::EngineeringRepr as _;
 use figment::{
     Profile, Provider,
@@ -8,19 +11,6 @@ use figment::{
 };
 use int_enum::IntEnum;
 use num_traits::AsPrimitive;
-use serde::{Deserialize, Serialize};
-use serde_bare::Uint;
-
-use super::ProtocolMessage;
-use crate::{
-    Configuration,
-    protocol::{
-        DataTag, TaggedData,
-        compat::Feature,
-        control::{Compatibility, CongestionController, CredentialsType},
-        display_vec_td,
-    },
-};
 
 #[derive(
     Clone,
@@ -368,19 +358,16 @@ impl Provider for ServerMessageV2 {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
+    use crate::protocol::prelude::*;
     use assertables::assert_contains;
     use pretty_assertions::assert_eq;
     use serde_bare::Uint;
 
     use crate::{
         config::{Configuration, Configuration_Optional, Manager},
-        protocol::{
-            DataTag, FindTag,
-            common::ProtocolMessage,
-            control::{
-                CongestionController, ServerMessage2Attributes, ServerMessageV1, ServerMessageV2,
-                test::dummy_credentials,
-            },
+        protocol::control::{
+            CongestionController, ServerMessage2Attributes, ServerMessageV1, ServerMessageV2,
+            test::dummy_credentials,
         },
     };
 
@@ -493,8 +480,6 @@ mod test {
 
     #[test]
     fn server_message_1_2_conversion() {
-        use FindTag as _;
-
         let mut msg1 = ServerMessageV1::default();
         msg1.warning.push('a');
         msg1.initial_congestion_window.0 = 42;

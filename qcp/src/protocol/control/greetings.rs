@@ -1,9 +1,7 @@
 //! ## Client/Server Greetings
 // (c) 2024-25 Ross Younger
 
-use serde::{Deserialize, Serialize};
-
-use crate::protocol::common::ProtocolMessage;
+use crate::protocol::prelude::*;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // CLIENT GREETING
@@ -54,9 +52,8 @@ impl ProtocolMessage for ServerGreeting {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-
-    use super::ClientGreeting;
-    use crate::protocol::{common::ProtocolMessage, control::ServerGreeting};
+    use super::{ClientGreeting, ServerGreeting};
+    use crate::protocol::prelude::*;
     use pretty_assertions::assert_eq;
 
     #[test]

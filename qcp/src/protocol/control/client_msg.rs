@@ -1,24 +1,16 @@
 //! ## Client Message
 // (c) 2024-25 Ross Younger
 
-use engineering_repr::EngineeringRepr as _;
-use int_enum::IntEnum;
-use num_traits::AsPrimitive;
-use serde::{Deserialize, Serialize};
-use serde_bare::Uint;
-
-use super::{
-    CongestionController, ConnectionType, ProtocolMessage, display_opt, display_opt_uint,
-    display_vec_td,
-};
+use super::{CongestionController, ConnectionType, display_opt, display_opt_uint};
+use crate::protocol::prelude::*;
 use crate::{
     config::Configuration_Optional,
-    protocol::{
-        DataTag, FindTag as _, TaggedData, Variant, compat::Feature, control::Compatibility,
-    },
     transport::ThroughputMode,
     util::{PortRange, serialization::SerializeEnumAsString},
 };
+use engineering_repr::EngineeringRepr as _;
+use int_enum::IntEnum;
+use num_traits::AsPrimitive;
 
 #[derive(
     Clone,
@@ -501,22 +493,18 @@ impl ClientMessageV1 {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
+    use crate::protocol::prelude::*;
     use assertables::{assert_contains, assert_matches};
     use pretty_assertions::{assert_eq, assert_str_eq};
     use serde_bare::Uint;
 
     use crate::{
         config::{Configuration_Optional, Manager},
-        protocol::{
-            DataTag, TaggedData,
-            common::ProtocolMessage,
-            control::{
-                ClientMessage2Attributes, ClientMessageAttributes, ClientMessageV1,
-                ClientMessageV2, Compatibility, CongestionController, ConnectionType,
-                CredentialsType, Direction, OriginalClientMessage, OriginalClientMessageV1,
-                test::{dummy_cert, dummy_credentials},
-            },
-            display_vec_td,
+        protocol::control::{
+            ClientMessage2Attributes, ClientMessageAttributes, ClientMessageV1, ClientMessageV2,
+            Compatibility, CongestionController, ConnectionType, CredentialsType, Direction,
+            OriginalClientMessage, OriginalClientMessageV1,
+            test::{dummy_cert, dummy_credentials},
         },
         util::PortRange,
     };

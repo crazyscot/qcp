@@ -1,12 +1,9 @@
 //! ## Closedown Report
 // (c) 2024-25 Ross Younger
 
+use crate::protocol::prelude::*;
 use int_enum::IntEnum;
 use quinn::ConnectionStats;
-use serde::{Deserialize, Serialize};
-use serde_bare::Uint;
-
-use crate::protocol::{DataTag, TaggedData, common::ProtocolMessage};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 /// The statistics sent by the server when the job is done
@@ -105,14 +102,10 @@ impl DataTag for ClosedownReportExtension {}
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-
+    use super::{ClosedownReport, ClosedownReportV1};
+    use crate::protocol::prelude::*;
     use pretty_assertions::assert_eq;
     use quinn::ConnectionStats;
-    use serde_bare::Uint;
-
-    use crate::protocol::{common::ProtocolMessage, control::ClosedownReport};
-
-    use super::ClosedownReportV1;
 
     #[test]
     fn test_closedown_report() {

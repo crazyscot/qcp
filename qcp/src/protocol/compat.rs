@@ -2,10 +2,9 @@
 
 //! Protocol feature compatibility definitions
 
+use super::control::Compatibility;
 use heck::ToUpperCamelCase;
 use strum::VariantArray as _;
-
-use super::control::Compatibility;
 
 // This macro exists to make it ergonomic to add more features.
 // See the feature definition list below.

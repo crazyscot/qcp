@@ -1,9 +1,7 @@
-//! Definition of session protocol commands
+//! Miscellaneous filesystem commands
 // (c) 2025 Ross Younger
 
-use crate::protocol::session::{CommandParam, MetadataAttr, TaggedData};
-
-use serde::{Deserialize, Serialize};
+use crate::protocol::session::prelude::*;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
 /// Arguments for the `CreateDirectory` command
