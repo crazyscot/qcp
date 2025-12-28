@@ -32,3 +32,18 @@ pub struct SetMetadataArgs {
     /// Extended options (not currently used; reserved for future expansion)
     pub options: Vec<TaggedData<CommandParam>>,
 }
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Default, Clone)]
+/// Arguments for the `ListFiles` command
+///
+/// This was introduced in qcp 0.8 with compatibility level 4.
+pub struct ListContentsArgs {
+    /// This is the path to list. It may be a relative or absolute path.
+    /// It may be a file or directory.
+    pub path: String,
+
+    /// Extended options.
+    ///
+    /// Supported options: [`CommandParam::Recurse`]
+    pub options: Vec<TaggedData<CommandParam>>,
+}

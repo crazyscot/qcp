@@ -52,6 +52,10 @@ where
             ),
             session::SetMetadata::boxed(sp, Some(args), compat),
         ),
+        Command::ListContents(args) => (
+            trace_span!("SERVER:LS", filename = args.path.clone()),
+            session::ListContents::boxed(sp, Some(args), compat),
+        ),
     };
 
     handler.handle(io_buffer_size).instrument(span).await
@@ -97,7 +101,9 @@ mod tests {
         let resp = Response::from_reader_async_framed(&mut out_read)
             .await
             .unwrap();
-        let Response::V1(r) = resp;
+        let Response::V1(r) = resp else {
+            panic!("unexpected response: {resp:?}");
+        };
         r
     }
 

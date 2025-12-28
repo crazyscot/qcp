@@ -1,0 +1,324 @@
+//! List Contents command (remote directory listing)
+// (c) 2025 Ross Younger
+
+use anyhow::Result;
+use async_trait::async_trait;
+use tokio::io::AsyncWriteExt;
+use tracing::trace;
+use walkdir::WalkDir;
+
+use super::{CommandStats, SessionCommandImpl};
+
+use crate::Parameters;
+use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
+use crate::protocol::session::prelude::*;
+use crate::protocol::session::{ListContentsArgs, ListContentsEntry, ListContentsResponse};
+use crate::session::common::{error_to_status, io_error_to_status};
+
+pub(crate) struct ListContents<S: SendingStream, R: ReceivingStream> {
+    stream: SendReceivePair<S, R>,
+    args: Option<ListContentsArgs>,
+    compat: Compatibility, // Selected compatibility level for the command
+    result: Option<Response>,
+}
+
+/// Boxing constructor
+impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ListContents<S, R> {
+    pub(crate) fn boxed(
+        stream: SendReceivePair<S, R>,
+        args: Option<ListContentsArgs>,
+        compat: Compatibility,
+    ) -> Box<dyn SessionCommandImpl> {
+        Box::new(Self {
+            stream,
+            args,
+            compat,
+            result: None,
+        })
+    }
+}
+
+impl<S: SendingStream, R: ReceivingStream> ListContents<S, R> {
+    /// Accessor
+    pub(crate) fn find_option(&self, opt: CommandParam) -> Option<&Variant> {
+        use crate::protocol::FindTag as _;
+        self.args.as_ref().and_then(|a| a.options.find_tag(opt))
+    }
+}
+
+#[async_trait]
+impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S, R> {
+    fn response(&mut self) -> Option<Response> {
+        self.result.take()
+    }
+
+    async fn send(
+        &mut self,
+        job: &crate::client::CopyJobSpec,
+        _display: indicatif::MultiProgress,
+        _filename_width: usize,
+        _spinner: indicatif::ProgressBar,
+        _config: &crate::config::Configuration,
+        params: Parameters,
+    ) -> Result<CommandStats> {
+        anyhow::ensure!(
+            self.compat.supports(Feature::MKDIR_SETMETA_LS),
+            "Operation not supported by remote"
+        );
+        let path = &job.destination.filename;
+
+        // This is a trivial operation, we do not bother with a progress bar.
+        trace!("sending command");
+        let mut outbound = &mut self.stream.send;
+        let mut options = vec![];
+        if params.recurse {
+            options.push(CommandParam::Recurse.into());
+        }
+        let cmd = Command::ListContents(ListContentsArgs {
+            path: path.clone(),
+            options,
+        });
+        cmd.to_writer_async_framed(&mut outbound).await?;
+        outbound.flush().await?;
+
+        trace!("await response");
+        let result = Response::from_reader_async_framed(&mut self.stream.recv).await?;
+        self.result = Some(result);
+        assert!(self.result.is_some());
+        Ok(CommandStats::default())
+    }
+
+    async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {
+        let Some(ref args) = self.args else {
+            anyhow::bail!("ListContents handler called without args");
+        };
+        let path = &args.path;
+        let recurse = self.find_option(CommandParam::Recurse).is_some();
+
+        let res = tokio::fs::metadata(path).await;
+        let meta = match res {
+            Ok(meta) => meta,
+            Err(e) => {
+                let (st, msg) = io_error_to_status(&e);
+                return Response::ListContents(ListContentsResponse {
+                    status: st.into(),
+                    message: msg,
+                    entries: vec![],
+                })
+                .to_writer_async_framed(&mut self.stream.send)
+                .await;
+            }
+        };
+        if meta.is_file() {
+            return Response::ListContents(ListContentsResponse {
+                status: Status::ItIsAFile.into(),
+                message: None,
+                entries: vec![],
+            })
+            .to_writer_async_framed(&mut self.stream.send)
+            .await;
+        }
+        let entries: Result<Vec<_>, walkdir::Error> = WalkDir::new(path)
+            // Omit the root
+            .min_depth(1)
+            .max_depth(if recurse { usize::MAX } else { 1 })
+            .into_iter()
+            .map(|e| e.map(ListContentsEntry::from))
+            .collect();
+
+        let lcr = match entries {
+            Ok(v) => ListContentsResponse {
+                status: Status::Ok.into(),
+                message: None,
+                entries: v,
+            },
+            Err(e) => {
+                let io = std::io::Error::from(e);
+                let (st, msg) = error_to_status(&io.into());
+                ListContentsResponse {
+                    status: st.into(),
+                    message: msg,
+                    entries: vec![],
+                }
+            }
+        };
+
+        Response::ListContents(lcr)
+            .to_writer_async_framed(&mut self.stream.send)
+            .await?;
+        self.stream.send.flush().await?;
+        trace!("complete");
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod test {
+    use std::collections::HashSet;
+    use std::path::MAIN_SEPARATOR;
+
+    use crate::protocol::session::{ListContentsResponse, prelude::*};
+    use crate::util::io::DEFAULT_COPY_BUFFER_SIZE;
+    use crate::{
+        Configuration, Parameters,
+        client::CopyJobSpec,
+        protocol::{
+            control::Compatibility,
+            session::{Command, Response, Status},
+            test_helpers::{new_test_plumbing, read_from_stream},
+        },
+        session::ListContents,
+    };
+    use anyhow::{Result, bail};
+    use littertray::LitterTray;
+    use pretty_assertions::assert_eq;
+
+    async fn test_ls_main(path: &str, recurse: bool) -> Result<ListContentsResponse> {
+        let (pipe1, mut pipe2) = new_test_plumbing();
+        let mut sender = ListContents::boxed(pipe1, None, Compatibility::Level(4));
+        let spec = CopyJobSpec::from_parts("", &format!("desthost:{path}"), false, false).unwrap();
+        let params = Parameters {
+            recurse,
+            ..Default::default()
+        };
+        {
+            // this subscope forces sender_fut to unborrow sender.
+            let sender_fut = sender.send(
+                &spec,
+                indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
+                10,
+                indicatif::ProgressBar::hidden(),
+                Configuration::system_default(),
+                params,
+            );
+            tokio::pin!(sender_fut);
+
+            let result = read_from_stream(&mut pipe2.recv, &mut sender_fut).await;
+            let cmd = result.expect_left("sender should not have completed early")?;
+            let Command::ListContents(args) = cmd else {
+                bail!("expected CreateDirectory command");
+            };
+
+            let mut handler = ListContents::boxed(pipe2, Some(args), Compatibility::Level(4));
+            let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
+            let _ = r1.expect("sender should not have failed");
+            r2.expect("handler should not have failed");
+        }
+        let response = sender.response().unwrap();
+        let Response::ListContents(lcr) = response else {
+            anyhow::bail!("remote sent unexpected ListContents response: {response:?}");
+        };
+        Ok(lcr)
+    }
+
+    // Check for expected results, allowing for walkdir and libc variations.
+    fn expected_result(lcr: ListContentsResponse, dir_prefix: &str, expected: &[&str]) {
+        assert_eq!(lcr.status, Uint::from(Status::Ok));
+        assert!(lcr.message.is_none());
+
+        let output = lcr
+            .entries
+            .into_iter()
+            .map(|it| it.name)
+            // Canonicalise output dirsep
+            .map(|n| n.replace(MAIN_SEPARATOR, "/"))
+            .collect::<Vec<_>>();
+
+        eprintln!("Canonicalised output: {output:?}");
+        // We are using walkdir in depth-first mode. That is to say, directories appear before the files within.
+        // However, the order of files within any directory may vary (this seems to be a libc thing).
+
+        // Therefore, we have two checks:
+        // - The output data set is same as the expected, **but in any order**;
+        // - Every item in the output is preceded by its parent.
+
+        // Contents check: sort both, test for equality.
+        {
+            let mut e_sorted = expected.to_vec();
+            e_sorted.sort_unstable();
+            let mut o_sorted = output.clone();
+            o_sorted.sort();
+            assert_eq!(e_sorted, o_sorted);
+        }
+
+        // Parent check: Use a hashset to confirm we've already seen each item's parent.
+        let mut seen = HashSet::new();
+        for item in output {
+            // Strip the output directory prefix as not relevant to the check
+            let it = item
+                .strip_prefix(dir_prefix)
+                .expect("output item did not contain expected prefix");
+            // Strip the leading slash
+            let it = it.strip_prefix('/').unwrap();
+            // Compute the parent, if present
+            let split = it.split_once('/');
+            if let Some((parent, _leaf)) = split {
+                assert!(
+                    seen.contains(parent),
+                    "Item {item} seen before its parent {parent}"
+                );
+            } // else it is at the root, so no check required
+
+            let _ = seen.insert(it.to_string());
+        }
+    }
+
+    #[tokio::test]
+    async fn no_recurse() {
+        let result = LitterTray::try_with_async(async |tray| {
+            let _ = tray.make_dir("d");
+            let _ = tray.make_dir("d/d2");
+            let _ = tray.make_dir("d/d2/e");
+            let _ = tray.make_dir("d/d2/e/f");
+            let _ = tray.create_text("d/d2/hi", "hi");
+            let _ = tray.make_dir("d/d2/x");
+            let _ = tray.create_text("d/d2/x/xyzy", "hi");
+            let _ = tray.create_text("f", "no");
+            let _ = tray.make_dir("no");
+
+            test_ls_main("d/d2", false).await
+        })
+        .await
+        .unwrap();
+        expected_result(result, "d/d2", &["d/d2/hi", "d/d2/e", "d/d2/x"]);
+    }
+
+    #[tokio::test]
+    async fn recurse() {
+        let result = LitterTray::try_with_async(async |tray| {
+            let _ = tray.make_dir("d");
+            let _ = tray.make_dir("d/d2");
+            let _ = tray.make_dir("d/d2/e");
+            let _ = tray.make_dir("d/d2/e/f");
+            let _ = tray.create_text("d/d2/hi", "hi");
+            let _ = tray.make_dir("d/d2/x");
+            let _ = tray.create_text("d/d2/x/xyzy", "hi");
+            let _ = tray.create_text("f", "no");
+            let _ = tray.make_dir("no");
+
+            test_ls_main("d/d2", true).await
+        })
+        .await
+        .unwrap();
+        expected_result(
+            result,
+            "d/d2",
+            &["d/d2/e", "d/d2/e/f", "d/d2/hi", "d/d2/x", "d/d2/x/xyzy"],
+        );
+    }
+
+    #[tokio::test]
+    async fn not_found() {
+        let result = LitterTray::try_with_async(async |tray| {
+            let _ = tray.make_dir("d");
+            test_ls_main("xyzy", true).await
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            Status::try_from(result.status).unwrap(),
+            Status::FileNotFound
+        );
+    }
+}

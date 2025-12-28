@@ -54,7 +54,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for SetMetadata<S,
         _params: Parameters,
     ) -> Result<CommandStats> {
         anyhow::ensure!(
-            self.compat.supports(Feature::MKDIR_SETMETA),
+            self.compat.supports(Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
         );
 

@@ -10,12 +10,15 @@ use std::fmt::Display;
 pub enum Response {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
     V1(ResponseV1),
+    /// ListContents was introduced in qcp 0.8 with compatibility level 4.
+    ListContents(ListContentsResponse),
 }
 
 impl Response {
     pub(crate) fn status(&self) -> Uint {
         match self {
             Response::V1(r) => r.status,
+            Response::ListContents(r) => r.status,
         }
     }
 
@@ -52,6 +55,69 @@ impl Display for ResponseV1 {
         match &self.message {
             Some(msg) => write!(f, "{str} with message {msg}"),
             None => write!(f, "{str}"),
+        }
+    }
+}
+
+/// ListContents was introduced in qcp 0.8 with compatibility level 4.
+#[derive(
+    Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor, thiserror::Error,
+)]
+pub struct ListContentsResponse {
+    /// Outcome of the operation.
+    /// This is a [`Status`] code.
+    pub status: Uint,
+
+    /// A human-readable message giving more information, if any is pertinent (used in case of error)
+    pub message: Option<String>,
+
+    /// Response detail
+    pub entries: Vec<ListContentsEntry>,
+}
+impl Display for ListContentsResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let msg = self.message.as_ref().map_or("<no message>", |v| v);
+        if self.status == Uint::from(Status::Ok) {
+            let _ = writeln!(f, "<ListContents: Ok, {msg}, [");
+            for it in &self.entries {
+                let _ = writeln!(f, "{it}");
+            }
+            writeln!(f, "]>")
+        } else {
+            write!(f, "<Error: {}: {msg}>", Status::to_string(self.status),)
+        }
+    }
+}
+
+/// A single file or directory entry returned by a `ListContents` request. See [`Command::ListContents`].
+#[derive(
+    Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor, thiserror::Error,
+)]
+pub struct ListContentsEntry {
+    /// Filename (UTF-8)
+    pub name: String,
+    /// Is this a directory?
+    pub directory: bool,
+    /// file size in bytes
+    pub size: Uint,
+}
+
+impl Display for ListContentsEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.directory {
+            write!(f, "<DIR> {}", self.name)
+        } else {
+            write!(f, "      {} {}", self.name, self.size.0)
+        }
+    }
+}
+
+impl From<walkdir::DirEntry> for ListContentsEntry {
+    fn from(value: walkdir::DirEntry) -> Self {
+        Self {
+            name: value.path().to_string_lossy().to_string(), // relative to root!
+            directory: value.file_type().is_dir(),
+            size: Uint(value.metadata().map_or(0, |m| m.len())),
         }
     }
 }
@@ -162,7 +228,7 @@ impl PartialEq<Status> for Uint {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::{Response, ResponseV1, Status};
-    use crate::protocol::session::prelude::*;
+    use crate::protocol::session::{ListContentsEntry, ListContentsResponse, prelude::*};
     use assertables::assert_contains;
     use pretty_assertions::assert_eq;
 
@@ -223,5 +289,43 @@ mod test {
     fn unknown_status_to_string() {
         let u = Uint(2u64.pow(63));
         assert_contains!(Status::to_string(u), "Unknown status code");
+    }
+
+    #[test]
+    fn list_contents_display() {
+        let lc = ListContentsResponse {
+            status: Uint(0),
+            message: None,
+            entries: vec![
+                ListContentsEntry {
+                    name: "aaa".to_string(),
+                    directory: false,
+                    size: Uint(42),
+                },
+                ListContentsEntry {
+                    name: "bbb".to_string(),
+                    directory: true,
+                    size: Uint(0),
+                },
+            ],
+        };
+        let str = lc.to_string();
+        eprintln!("{str}");
+        assert_contains!(str, "aaa");
+        assert_contains!(str, "bbb");
+    }
+
+    #[test]
+    fn list_contents_error() {
+        let resp = Response::ListContents(ListContentsResponse {
+            status: Uint(Status::DiskFull as u64),
+            message: Some("foobar".to_string()),
+            entries: vec![],
+        });
+        assert_eq!(resp.status(), Status::DiskFull);
+        let str = resp.to_string();
+        eprintln!("{str}");
+        assert_contains!(str, "DiskFull");
+        assert_contains!(str, "foobar");
     }
 }

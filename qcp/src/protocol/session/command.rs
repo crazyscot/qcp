@@ -2,7 +2,7 @@
 // (c) 2025 Ross Younger
 
 use super::get_put::{Get2Args, GetArgs, Put2Args, PutArgs};
-use super::misc_fs::{CreateDirectoryArgs, SetMetadataArgs};
+use super::misc_fs::{CreateDirectoryArgs, ListContentsArgs, SetMetadataArgs};
 use crate::protocol::prelude::*;
 #[allow(unused_imports, reason = "needed for docs")]
 use crate::protocol::session::Response;
@@ -76,6 +76,17 @@ pub enum Command {
     ///
     /// This command was introduced in qcp 0.8 with compatibility level 4.
     SetMetadata(SetMetadataArgs),
+
+    /// Lists the contents of the remote filesystem
+    ///
+    /// This command was introduced in qcp 0.8 with compatibility level 4.
+    ///
+    /// * Client ➡️ Server: `Get` command
+    /// * S➡️C: [`Response::ListContents`]
+    /// * Then close the stream.
+    ///
+    /// * Either side may close the stream early if it has a problem.
+    ListContents(ListContentsArgs),
 }
 impl ProtocolMessage for Command {}
 
@@ -109,6 +120,13 @@ pub enum CommandParam {
     ///
     /// Introduced in qcp 0.5 with `VersionCompatibility=V2`.
     PreserveMetadata,
+
+    /// Recurse into the target directory.
+    ///
+    /// The associated [`Variant`] data is empty (ignored).
+    ///
+    /// Introduced in qcp 0.8 with compatibility level 4
+    Recurse,
 }
 impl DataTag for CommandParam {}
 

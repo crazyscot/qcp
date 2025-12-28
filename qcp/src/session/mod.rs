@@ -4,11 +4,14 @@
 mod common;
 
 mod get;
+mod ls;
 mod mkdir;
 mod put;
 mod set_meta;
 
-pub(crate) use {get::Get, mkdir::CreateDirectory, put::Put, set_meta::SetMetadata};
+pub(crate) use {
+    get::Get, ls::ListContents, mkdir::CreateDirectory, put::Put, set_meta::SetMetadata,
+};
 
 #[cfg(feature = "unstable-test-helpers")]
 #[allow(unused_imports)] // Selectively exported by qcp::test_helpers
@@ -18,7 +21,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar};
 
-use crate::{Parameters, client::CopyJobSpec, config::Configuration};
+use crate::{Parameters, client::CopyJobSpec, config::Configuration, protocol::session::Response};
 
 /// Helper macro for making error returns
 ///
@@ -67,4 +70,13 @@ pub(crate) trait SessionCommandImpl: Send {
     ///
     /// See also the [`crate::session::common::send_ok`] and [`crate::session::common::send_error`] helpers.
     async fn handle(&mut self, io_buffer_size: u64) -> Result<()>;
+
+    /// Accessor for the stored response data, if there is any.
+    /// This takes ownership of the response data; future calls will return None.
+    ///
+    /// **TODO** This is a temporary wart for testing.
+    #[allow(dead_code)]
+    fn response(&mut self) -> Option<Response> {
+        None
+    }
 }

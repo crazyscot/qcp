@@ -134,31 +134,54 @@ pub(crate) fn recurse_local_source(
         destination.filename.clone()
     };
 
-    let mut entries = WalkDir::new(&source.filename).into_iter();
-    if bare_host {
-        // Skip the first, which corresponds to the source directory itself
-        let _ = entries.next();
+    let listing = contents_of(&source.filename, options, bare_host, &dest_separator_str)?;
+    for (entry, leaf_str) in listing {
+        let file_type = entry.file_type();
+        let path = entry.path();
+        let Some(src_str) = path.to_str() else {
+            return Err(anyhow::anyhow!(
+                "Path name {} could not be converted into Unicode string",
+                path.display()
+            )
+            .into());
+        };
+
+        let src_fs = FileSpec {
+            user_at_host: source.user_at_host.clone(),
+            filename: src_str.to_string(),
+        };
+        let dest_fs = FileSpec {
+            user_at_host: destination.user_at_host.clone(),
+            // TODO: use join_local instead of join_remote for remote source / local dest
+            filename: path::join_remote(&dest_stem, &leaf_str),
+        };
+        output.push(
+            CopyJobSpec::try_new(src_fs, dest_fs, preserve, file_type.is_dir())
+                .map_err(Error::from)?,
+        );
     }
-    for entry in entries.filter_entry(|f| !is_suppressed(f.path(), options)) {
+    Ok(())
+}
+
+fn contents_of(
+    path: &str,
+    options: BitFlags<Options>,
+    skip_root: bool,
+    separator: &str,
+) -> Result<Vec<(walkdir::DirEntry, String)>, Error> {
+    let mut output = vec![];
+    for entry in WalkDir::new(path)
+        // skip_root true => min_depth 1; false => min_depth 0
+        .min_depth(usize::from(skip_root))
+        .into_iter()
+        .filter_entry(|f| !is_suppressed(f.path(), options))
+    {
         match entry {
             Ok(entry) => {
                 // Walkdir gives us the path including the recursion root.
                 // We need the path relative to the recursion root.
                 let depth = entry.depth();
-                let file_type = entry.file_type();
-                let path = entry.into_path();
-
-                let Some(src_str) = path.to_str() else {
-                    return Err(anyhow::anyhow!(
-                        "Path name {} could not be converted into Unicode string",
-                        path.display()
-                    )
-                    .into());
-                };
-                let src_fs = FileSpec {
-                    user_at_host: source.user_at_host.clone(),
-                    filename: src_str.to_string(),
-                };
+                let path = entry.path();
 
                 let n_strip = path.iter().count() - depth;
                 let leaf = path
@@ -166,17 +189,9 @@ pub(crate) fn recurse_local_source(
                     .skip(n_strip)
                     .map(std::path::Component::as_os_str)
                     .collect::<Vec<_>>()
-                    .join_os_str(OsStr::new(&dest_separator_str));
+                    .join_os_str(OsStr::new(separator));
                 let leaf_str = leaf.to_string_checked()?;
-                let dest_fs = FileSpec {
-                    user_at_host: destination.user_at_host.clone(),
-                    // TODO: use join_local instead of join_remote for remote source / local dest
-                    filename: path::join_remote(&dest_stem, &leaf_str),
-                };
-                output.push(
-                    CopyJobSpec::try_new(src_fs, dest_fs, preserve, file_type.is_dir())
-                        .map_err(Error::from)?,
-                );
+                output.push((entry, leaf_str));
             }
 
             Err(wderr) => {
@@ -190,7 +205,7 @@ pub(crate) fn recurse_local_source(
             }
         }
     }
-    Ok(())
+    Ok(output)
 }
 
 #[cfg(test)]

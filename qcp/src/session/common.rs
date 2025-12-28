@@ -37,17 +37,21 @@ where
         .await
 }
 
-fn error_to_status(err: &anyhow::Error) -> (Status, Option<String>) {
+pub(crate) fn io_error_to_status(io: &std::io::Error) -> (Status, Option<String>) {
+    match io.kind() {
+        ErrorKind::NotFound => (Status::FileNotFound, None),
+        ErrorKind::PermissionDenied => (Status::IncorrectPermissions, None),
+        ErrorKind::IsADirectory => (Status::ItIsADirectory, None),
+        ErrorKind::StorageFull => (Status::DiskFull, None),
+        _ => (Status::IoError, Some(io.to_string())),
+    }
+}
+
+pub(crate) fn error_to_status(err: &anyhow::Error) -> (Status, Option<String>) {
     if let Some(st) = err.downcast_ref::<Status>() {
         (*st, None)
     } else if let Some(io) = err.downcast_ref::<std::io::Error>() {
-        match io.kind() {
-            ErrorKind::NotFound => (Status::FileNotFound, None),
-            ErrorKind::PermissionDenied => (Status::IncorrectPermissions, None),
-            ErrorKind::IsADirectory => (Status::ItIsADirectory, None),
-            ErrorKind::StorageFull => (Status::DiskFull, None),
-            _ => (Status::IoError, Some(io.to_string())),
-        }
+        io_error_to_status(io)
     } else {
         (Status::UnknownError, Some(err.to_string()))
     }
