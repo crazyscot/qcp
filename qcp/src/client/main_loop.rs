@@ -84,11 +84,11 @@ struct PrepResult {
     job_specs: Vec<CopyJobSpec>,
 }
 
-enum SessionPass {
+enum Phase {
     // Get, Put, Mkdir
-    FileTransfer,
+    Transfer,
     // SetMetadata to fix up directory permissions once we're done
-    PostTransfer,
+    Post,
 }
 
 impl PrepResult {
@@ -448,18 +448,18 @@ impl Client {
         stream_pair: SendReceivePair<S, R>,
         copy_spec: &CopyJobSpec,
         filename_width: usize,
-        pass: SessionPass,
+        pass: Phase,
     ) -> RequestResult
     where
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
         match pass {
-            SessionPass::FileTransfer => {
+            Phase::Transfer => {
                 self.manage_file_transfer_request(stream_pair, copy_spec, filename_width)
                     .await
             }
-            SessionPass::PostTransfer => {
+            Phase::Post => {
                 self.manage_post_transfer_request(stream_pair, copy_spec)
                     .await
             }
@@ -481,7 +481,7 @@ impl Client {
             panic!("logic error: manage_request called before negotiation completed");
         };
 
-        let (mut handler, span) = if copy_spec.source.user_at_host.is_some() {
+        let (mut cmd, span) = if copy_spec.source.user_at_host.is_some() {
             // We are GETting something
             let mut args = Get2Args::default();
             if copy_spec.preserve {
@@ -507,7 +507,7 @@ impl Client {
         };
         let filename = copy_spec.display_filename().to_string_lossy();
         let timer = std::time::Instant::now();
-        let result = handler
+        let result = cmd
             .send(
                 copy_spec,
                 self.display.clone(),
@@ -559,8 +559,8 @@ impl Client {
         );
 
         if copy_spec.preserve && copy_spec.directory {
-            let mut handler = session::SetMetadata::boxed(stream_pair, None, negotiated.compat);
-            let result = handler
+            let mut cmd = session::SetMetadata::boxed(stream_pair, None, negotiated.compat);
+            let result = cmd
                 .send(
                     copy_spec,
                     self.display.clone(),
@@ -591,7 +591,7 @@ impl Client {
     where
         OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
         JobRunner:
-            AsyncFnMut(SendReceivePair<S, R>, &'a CopyJobSpec, usize, SessionPass) -> RequestResult,
+            AsyncFnMut(SendReceivePair<S, R>, &'a CopyJobSpec, usize, Phase) -> RequestResult,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
@@ -613,7 +613,7 @@ impl Client {
                 ));
             }
             let stream_pair = open_stream().await?;
-            let result = run_job(stream_pair, job, filename_width, SessionPass::FileTransfer).await;
+            let result = run_job(stream_pair, job, filename_width, Phase::Transfer).await;
 
             aggregate_stats.payload_bytes += result.stats.payload_bytes;
             aggregate_stats.peak_transfer_rate = aggregate_stats
@@ -637,7 +637,7 @@ impl Client {
                             .set_message("Finishing up directory permissions");
                         message_set = true;
                     }
-                    let result = run_job(stream_pair, job, 0, SessionPass::PostTransfer).await;
+                    let result = run_job(stream_pair, job, 0, Phase::Post).await;
                     overall_success &= result.success;
                 }
             }
@@ -677,7 +677,7 @@ mod test {
     use super::{BiStreamOpener, RequestResult};
 
     use crate::cli::CliArgs;
-    use crate::client::main_loop::{Negotiated, SessionPass};
+    use crate::client::main_loop::{Negotiated, Phase};
     #[cfg(unix)]
     use crate::control::create_fake;
 
@@ -863,12 +863,8 @@ mod test {
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
         let mut plumbing = new_test_plumbing();
 
-        let manage_fut = uut.run_request(
-            plumbing.0,
-            &prep_result.job_specs[0],
-            10,
-            SessionPass::FileTransfer,
-        );
+        let manage_fut =
+            uut.run_request(plumbing.0, &prep_result.job_specs[0], 10, Phase::Transfer);
 
         // We are not really testing the protocol here, that is done in get.rs / put.rs.
         // But we are testing the main loop behaviour, so we need to send a valid response.
@@ -913,12 +909,8 @@ mod test {
         let mut plumbing = new_test_plumbing();
         plumbing.1.send.shutdown().await.unwrap(); // this causes the handler to error out
 
-        let manage_fut = uut.run_request(
-            plumbing.0,
-            &prep_result.job_specs[0],
-            10,
-            SessionPass::FileTransfer,
-        );
+        let manage_fut =
+            uut.run_request(plumbing.0, &prep_result.job_specs[0], 10, Phase::Transfer);
         let r = manage_fut.await;
         println!("Result: {r:?}");
     }
@@ -1267,12 +1259,7 @@ mod test {
             let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
             let mut plumbing = new_test_plumbing();
 
-            let manage_fut = uut.run_request(
-                plumbing.0,
-                &prep_result.job_specs[0],
-                0,
-                SessionPass::PostTransfer,
-            );
+            let manage_fut = uut.run_request(plumbing.0, &prep_result.job_specs[0], 0, Phase::Post);
 
             // We are not really testing the protocol here, only the main loop behaviour.
             let mut send_buf = Vec::new();
