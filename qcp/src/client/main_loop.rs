@@ -241,7 +241,7 @@ impl Client {
                 &prep_result.job_specs,
                 || connection.open_bi_stream(),
                 |stream_pair, job, filename_width, pass| {
-                    self.manage_request(stream_pair, job, filename_width, pass)
+                    self.run_request(stream_pair, job, filename_width, pass)
                 },
             )
             .await?;
@@ -445,7 +445,7 @@ impl Client {
     /// Do whatever it is we were asked to.
     /// On success: returns statistics about the transfer.
     /// On error: returns the transfer statistics, as far as we know, up to the point of failure
-    async fn manage_request<S, R>(
+    async fn run_request<S, R>(
         &self,
         stream_pair: SendReceivePair<S, R>,
         copy_spec: CopyJobSpec,
@@ -584,16 +584,16 @@ impl Client {
         RequestResult::new(true, CommandStats::default())
     }
 
-    async fn process_job_requests<S, R, OpenStream, OpenFut, HandleJob, HandleFut>(
+    async fn process_job_requests<S, R, OpenStream, OpenFut, JobRunner, HandleFut>(
         &self,
         jobs: &[CopyJobSpec],
         mut open_stream: OpenStream,
-        mut handle_job: HandleJob,
+        mut run_job: JobRunner,
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: FnMut() -> OpenFut,
         OpenFut: Future<Output = anyhow::Result<SendReceivePair<S, R>>>,
-        HandleJob: FnMut(SendReceivePair<S, R>, CopyJobSpec, usize, SessionPass) -> HandleFut,
+        JobRunner: FnMut(SendReceivePair<S, R>, CopyJobSpec, usize, SessionPass) -> HandleFut,
         HandleFut: Future<Output = RequestResult>,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
@@ -616,7 +616,7 @@ impl Client {
                 ));
             }
             let stream_pair = open_stream().await?;
-            let result = handle_job(
+            let result = run_job(
                 stream_pair,
                 job.clone(),
                 filename_width,
@@ -647,7 +647,7 @@ impl Client {
                         message_set = true;
                     }
                     let result =
-                        handle_job(stream_pair, job.clone(), 0, SessionPass::PostTransfer).await;
+                        run_job(stream_pair, job.clone(), 0, SessionPass::PostTransfer).await;
                     overall_success &= result.success;
                 }
             }
@@ -873,7 +873,7 @@ mod test {
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
         let mut plumbing = new_test_plumbing();
 
-        let manage_fut = uut.manage_request(
+        let manage_fut = uut.run_request(
             plumbing.0,
             prep_result.job_specs[0].clone(),
             10,
@@ -923,7 +923,7 @@ mod test {
         let mut plumbing = new_test_plumbing();
         plumbing.1.send.shutdown().await.unwrap(); // this causes the handler to error out
 
-        let manage_fut = uut.manage_request(
+        let manage_fut = uut.run_request(
             plumbing.0,
             prep_result.job_specs[0].clone(),
             10,
@@ -958,7 +958,7 @@ mod test {
                     &jobs,
                     || conn.open_bi_stream(),
                     |stream_pair, job, filename_width, pass| {
-                        uut.manage_request(stream_pair, job, filename_width, pass)
+                        uut.run_request(stream_pair, job, filename_width, pass)
                     },
                 )
                 .await
@@ -1003,7 +1003,7 @@ mod test {
                     &jobs,
                     || conn.open_bi_stream(),
                     |stream_pair, job, filename_width, pass| {
-                        uut.manage_request(stream_pair, job, filename_width, pass)
+                        uut.run_request(stream_pair, job, filename_width, pass)
                     },
                 )
                 .await
@@ -1272,7 +1272,7 @@ mod test {
             let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
             let mut plumbing = new_test_plumbing();
 
-            let manage_fut = uut.manage_request(
+            let manage_fut = uut.run_request(
                 plumbing.0,
                 prep_result.job_specs[0].clone(),
                 0,
