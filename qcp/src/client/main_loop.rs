@@ -448,7 +448,7 @@ impl Client {
     async fn run_request<S, R>(
         &self,
         stream_pair: SendReceivePair<S, R>,
-        copy_spec: CopyJobSpec,
+        copy_spec: &CopyJobSpec,
         filename_width: usize,
         pass: SessionPass,
     ) -> RequestResult
@@ -470,7 +470,7 @@ impl Client {
     async fn manage_file_transfer_request<S, R>(
         &self,
         stream_pair: SendReceivePair<S, R>,
-        copy_spec: CopyJobSpec,
+        copy_spec: &CopyJobSpec,
         filename_width: usize,
     ) -> RequestResult
     where
@@ -511,7 +511,7 @@ impl Client {
         let timer = std::time::Instant::now();
         let result = handler
             .send(
-                &copy_spec,
+                copy_spec,
                 self.display.clone(),
                 filename_width,
                 self.spinner.clone(),
@@ -546,7 +546,7 @@ impl Client {
     async fn manage_post_transfer_request<S, R>(
         &self,
         stream_pair: SendReceivePair<S, R>,
-        copy_spec: CopyJobSpec,
+        copy_spec: &CopyJobSpec,
     ) -> RequestResult
     where
         S: SendingStream + 'static,
@@ -564,7 +564,7 @@ impl Client {
             let mut handler = session::SetMetadata::boxed(stream_pair, None, negotiated.compat);
             let result = handler
                 .send(
-                    &copy_spec,
+                    copy_spec,
                     self.display.clone(),
                     0,
                     self.spinner.clone(),
@@ -584,16 +584,16 @@ impl Client {
         RequestResult::new(true, CommandStats::default())
     }
 
-    async fn process_job_requests<S, R, OpenStream, OpenFut, JobRunner, HandleFut>(
+    async fn process_job_requests<'a, S, R, OpenStream, OpenFut, JobRunner, HandleFut>(
         &self,
-        jobs: &[CopyJobSpec],
+        jobs: &'a [CopyJobSpec],
         mut open_stream: OpenStream,
         mut run_job: JobRunner,
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: FnMut() -> OpenFut,
         OpenFut: Future<Output = anyhow::Result<SendReceivePair<S, R>>>,
-        JobRunner: FnMut(SendReceivePair<S, R>, CopyJobSpec, usize, SessionPass) -> HandleFut,
+        JobRunner: FnMut(SendReceivePair<S, R>, &'a CopyJobSpec, usize, SessionPass) -> HandleFut,
         HandleFut: Future<Output = RequestResult>,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
@@ -616,13 +616,7 @@ impl Client {
                 ));
             }
             let stream_pair = open_stream().await?;
-            let result = run_job(
-                stream_pair,
-                job.clone(),
-                filename_width,
-                SessionPass::FileTransfer,
-            )
-            .await;
+            let result = run_job(stream_pair, job, filename_width, SessionPass::FileTransfer).await;
 
             aggregate_stats.payload_bytes += result.stats.payload_bytes;
             aggregate_stats.peak_transfer_rate = aggregate_stats
@@ -646,8 +640,7 @@ impl Client {
                             .set_message("Finishing up directory permissions");
                         message_set = true;
                     }
-                    let result =
-                        run_job(stream_pair, job.clone(), 0, SessionPass::PostTransfer).await;
+                    let result = run_job(stream_pair, job, 0, SessionPass::PostTransfer).await;
                     overall_success &= result.success;
                 }
             }
@@ -875,7 +868,7 @@ mod test {
 
         let manage_fut = uut.run_request(
             plumbing.0,
-            prep_result.job_specs[0].clone(),
+            &prep_result.job_specs[0],
             10,
             SessionPass::FileTransfer,
         );
@@ -925,7 +918,7 @@ mod test {
 
         let manage_fut = uut.run_request(
             plumbing.0,
-            prep_result.job_specs[0].clone(),
+            &prep_result.job_specs[0],
             10,
             SessionPass::FileTransfer,
         );
@@ -1274,7 +1267,7 @@ mod test {
 
             let manage_fut = uut.run_request(
                 plumbing.0,
-                prep_result.job_specs[0].clone(),
+                &prep_result.job_specs[0],
                 0,
                 SessionPass::PostTransfer,
             );
