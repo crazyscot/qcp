@@ -69,6 +69,15 @@ struct Client {
     timers: StopwatchChain,
     spinner: ProgressBar,
     args: Box<CliArgs>,
+    /// Before control channel negotiation, this is `None`.
+    /// After negotiation, this holds the agreed configuration and may be assumed to be `Some`.
+    negotiated: Option<Negotiated>,
+}
+
+/// Items negotiated between client and server
+struct Negotiated {
+    config: Configuration,
+    compat: Compatibility,
 }
 
 #[derive(Debug, PartialEq)]
@@ -164,6 +173,7 @@ impl Client {
             timers: StopwatchChain::default(),
             spinner,
             args,
+            negotiated: None,
         })
     }
 
@@ -222,25 +232,22 @@ impl Client {
         let direction = prep_result.direction();
         self.spinner.set_message("Transferring data");
         self.timers.next(SHOW_TIME);
+        self.negotiated = Some(Negotiated {
+            config,
+            compat: qcp_conn.control.selected_compat,
+        });
         let (overall_success, aggregate_stats) = self
             .process_job_requests(
                 &prep_result.job_specs,
                 || connection.open_bi_stream(),
                 |stream_pair, job, filename_width, pass| {
-                    self.manage_request(
-                        stream_pair,
-                        job,
-                        &config,
-                        qcp_conn.control.selected_compat,
-                        filename_width,
-                        pass,
-                    )
+                    self.manage_request(stream_pair, job, filename_width, pass)
                 },
             )
             .await?;
 
         // Closedown ----------------------
-        let remote_stats = self.closedown(&config, qcp_conn).await?;
+        let remote_stats = self.closedown(qcp_conn).await?;
 
         // Post-transfer chatter -----------
         if !self.args.client_params.quiet {
@@ -250,7 +257,7 @@ impl Client {
                 aggregate_stats,
                 transport_time,
                 &remote_stats,
-                &config,
+                &self.negotiated.as_ref().unwrap().config,
                 self.args.client_params.statistics,
                 direction,
             );
@@ -405,9 +412,9 @@ impl Client {
 
     async fn closedown(
         &mut self,
-        config: &Configuration,
         mut conn: QcpConnection, // ctrl_result is consumed
     ) -> anyhow::Result<ClosedownReportV1> {
+        let config = &self.negotiated.as_ref().unwrap().config;
         self.timers.next("shutdown");
         self.spinner.set_message("Shutting down");
         // Forcibly (but gracefully) tear down QUIC. All the requests have completed or errored.
@@ -442,8 +449,6 @@ impl Client {
         &self,
         stream_pair: SendReceivePair<S, R>,
         copy_spec: CopyJobSpec,
-        config: &Configuration,
-        compat: Compatibility,
         filename_width: usize,
         pass: SessionPass,
     ) -> RequestResult
@@ -453,17 +458,11 @@ impl Client {
     {
         match pass {
             SessionPass::FileTransfer => {
-                self.manage_file_transfer_request(
-                    stream_pair,
-                    copy_spec,
-                    config,
-                    compat,
-                    filename_width,
-                )
-                .await
+                self.manage_file_transfer_request(stream_pair, copy_spec, filename_width)
+                    .await
             }
             SessionPass::PostTransfer => {
-                self.manage_post_transfer_request(stream_pair, copy_spec, config, compat)
+                self.manage_post_transfer_request(stream_pair, copy_spec)
                     .await
             }
         }
@@ -472,8 +471,6 @@ impl Client {
         &self,
         stream_pair: SendReceivePair<S, R>,
         copy_spec: CopyJobSpec,
-        config: &Configuration,
-        compat: Compatibility,
         filename_width: usize,
     ) -> RequestResult
     where
@@ -482,6 +479,10 @@ impl Client {
     {
         use crate::session;
 
+        let Some(negotiated) = &self.negotiated else {
+            panic!("logic error: manage_request called before negotiation completed");
+        };
+
         let (mut handler, span) = if copy_spec.source.user_at_host.is_some() {
             // We are GETting something
             let mut args = Get2Args::default();
@@ -489,19 +490,19 @@ impl Client {
                 args.options.push(CommandParam::PreserveMetadata.into());
             }
             (
-                session::Get::boxed(stream_pair, Some(args), compat),
+                session::Get::boxed(stream_pair, Some(args), negotiated.compat),
                 trace_span!("GETx", filename = copy_spec.source.filename.clone()),
             )
         } else {
             // We are PUTting something
             if copy_spec.directory {
                 (
-                    session::CreateDirectory::boxed(stream_pair, None, compat),
+                    session::CreateDirectory::boxed(stream_pair, None, negotiated.compat),
                     trace_span!("MKDIR", filename = copy_spec.destination.filename.clone()),
                 )
             } else {
                 (
-                    session::Put::boxed(stream_pair, None, compat),
+                    session::Put::boxed(stream_pair, None, negotiated.compat),
                     trace_span!("PUTx", filename = copy_spec.source.filename.clone()),
                 )
             }
@@ -514,7 +515,7 @@ impl Client {
                 self.display.clone(),
                 filename_width,
                 self.spinner.clone(),
-                config,
+                &negotiated.config,
                 self.args.client_params,
             )
             .instrument(span)
@@ -546,22 +547,28 @@ impl Client {
         &self,
         stream_pair: SendReceivePair<S, R>,
         copy_spec: CopyJobSpec,
-        config: &Configuration,
-        compat: Compatibility,
     ) -> RequestResult
     where
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
+        let Some(negotiated) = &self.negotiated else {
+            panic!("logic error: manage_request called before negotiation completed");
+        };
+        assert!(
+            copy_spec.destination.user_at_host.is_some(),
+            "logic error: manage_post_transfer_request called for local destination"
+        );
+
         if copy_spec.preserve && copy_spec.directory {
-            let mut handler = session::SetMetadata::boxed(stream_pair, None, compat);
+            let mut handler = session::SetMetadata::boxed(stream_pair, None, negotiated.compat);
             let result = handler
                 .send(
                     &copy_spec,
                     self.display.clone(),
                     0,
                     self.spinner.clone(),
-                    config,
+                    &negotiated.config,
                     self.args.client_params,
                 )
                 .await;
@@ -595,6 +602,9 @@ impl Client {
         let mut overall_success = true;
         let filename_width = longest_filename(jobs);
         let n_jobs = jobs.len();
+        let destination_is_remote = jobs
+            .first()
+            .is_some_and(|j| j.destination.user_at_host.is_some());
 
         // Pass 1: Send files and create directories.
         // The list of job specs must be in the appropriate order i.e. create a directory before attempting to put any files into it.
@@ -626,7 +636,7 @@ impl Client {
 
         // Pass 2: Apply preserve logic (permission bits) to any created directories.
         // We do this in _reverse order_ in case the changed permissions prevent us from being able to traverse a directory we recently created.
-        if n_jobs > 1 {
+        if destination_is_remote && n_jobs > 1 {
             let mut message_set = false;
             for job in jobs.iter().rev() {
                 if job.directory && job.preserve {
@@ -677,7 +687,7 @@ mod test {
     use super::{BiStreamOpener, RequestResult};
 
     use crate::cli::CliArgs;
-    use crate::client::main_loop::SessionPass;
+    use crate::client::main_loop::{Negotiated, SessionPass};
     #[cfg(unix)]
     use crate::control::create_fake;
 
@@ -689,7 +699,12 @@ mod test {
         protocol::{common::ProtocolMessage as _, test_helpers::new_test_plumbing},
     };
 
-    fn make_uut<F: FnOnce(&mut Manager, &mut Parameters)>(f: F, src: &str, dest: &str) -> Client {
+    fn make_uut<F: FnOnce(&mut Manager, &mut Parameters)>(
+        f: F,
+        src: &str,
+        dest: &str,
+        compat_level: u16,
+    ) -> Client {
         let mut mgr = Manager::without_default(None);
         let mut args = Box::new(CliArgs {
             paths: vec![
@@ -701,7 +716,13 @@ mod test {
 
         f(&mut mgr, &mut args.client_params);
 
-        Client::new(Manager::without_default(None), MultiProgress::new(), args).unwrap()
+        let mut client =
+            Client::new(Manager::without_default(None), MultiProgress::new(), args).unwrap();
+        client.negotiated = Some(Negotiated {
+            config: Configuration::system_default().clone(),
+            compat: crate::protocol::control::Compatibility::Level(compat_level),
+        });
+        client
     }
     const REMOTE_FILE: &str = "8.8.8.8:file";
     const LOCAL_FILE: &str = "file";
@@ -714,7 +735,7 @@ mod test {
 
     #[test]
     fn prep_valid_hostname() {
-        let mut uut = make_uut(|_, _| (), REMOTE_FILE, LOCAL_FILE);
+        let mut uut = make_uut(|_, _| (), REMOTE_FILE, LOCAL_FILE, 1);
         let working = Configuration_Optional::default();
         let res = uut.prep(&working, Configuration::system_default()).unwrap();
         assert_eq!(res.remote_address, Ipv4Addr::new(8, 8, 8, 8));
@@ -725,7 +746,7 @@ mod test {
     }
     #[test]
     fn prep_invalid_hostname() {
-        let mut uut = make_uut(|_, _| (), "no-such-host.invalid:file", "file");
+        let mut uut = make_uut(|_, _| (), "no-such-host.invalid:file", "file", 1);
         let working = Configuration_Optional::default();
         let _ = uut
             .prep(&working, Configuration::system_default())
@@ -739,7 +760,7 @@ mod test {
         use crate::client::main_loop::QcpConnection;
         use crate::protocol::control::{ClosedownReport, ClosedownReportV1, Compatibility};
 
-        let mut uut = make_uut(|_, _| (), "127.0.0.1:file", LOCAL_FILE);
+        let mut uut = make_uut(|_, _| (), "127.0.0.1:file", LOCAL_FILE, 1);
         let working = Configuration_Optional::default();
         let config = Configuration::system_default().clone();
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
@@ -767,7 +788,7 @@ mod test {
         let mut qcp_conn = QcpConnection::try_from(ssh_client).unwrap();
         qcp_conn.endpoint = Some(endpoint);
 
-        let report = uut.closedown(&config, qcp_conn).await.unwrap();
+        let report = uut.closedown(qcp_conn).await.unwrap();
         assert_eq!(report, ClosedownReportV1::default());
         eprintln!("Closedown report: {report:?}");
     }
@@ -847,7 +868,7 @@ mod test {
     async fn handle_get_succeeding() {
         use littertray::LitterTray;
         const TEST_DATA: &[u8] = b"test";
-        let mut uut = make_uut(|_, _| (), "127.0.0.1:file", "outfile");
+        let mut uut = make_uut(|_, _| (), "127.0.0.1:file", "outfile", 1);
         let working = Configuration_Optional::default();
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
         let mut plumbing = new_test_plumbing();
@@ -855,8 +876,6 @@ mod test {
         let manage_fut = uut.manage_request(
             plumbing.0,
             prep_result.job_specs[0].clone(),
-            Configuration::system_default(),
-            crate::protocol::control::Compatibility::Level(1),
             10,
             SessionPass::FileTransfer,
         );
@@ -898,7 +917,7 @@ mod test {
 
     #[tokio::test]
     async fn handle_put_failing() {
-        let mut uut = make_uut(|_, _| (), "/tmp/file", "127.0.0.1:file");
+        let mut uut = make_uut(|_, _| (), "/tmp/file", "127.0.0.1:file", 1);
         let working = Configuration_Optional::default();
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
         let mut plumbing = new_test_plumbing();
@@ -907,8 +926,6 @@ mod test {
         let manage_fut = uut.manage_request(
             plumbing.0,
             prep_result.job_specs[0].clone(),
-            Configuration::system_default(),
-            crate::protocol::control::Compatibility::Level(1),
             10,
             SessionPass::FileTransfer,
         );
@@ -923,7 +940,7 @@ mod test {
         const OUT1: &str = "out1";
         const OUT2: &str = "out2";
 
-        let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1);
+        let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1, 1);
 
         let jobs = vec![
             CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false, false).unwrap(),
@@ -941,14 +958,7 @@ mod test {
                     &jobs,
                     || conn.open_bi_stream(),
                     |stream_pair, job, filename_width, pass| {
-                        uut.manage_request(
-                            stream_pair,
-                            job,
-                            Configuration::system_default(),
-                            crate::protocol::control::Compatibility::Level(1),
-                            filename_width,
-                            pass,
-                        )
+                        uut.manage_request(stream_pair, job, filename_width, pass)
                     },
                 )
                 .await
@@ -974,7 +984,7 @@ mod test {
         const OUT2: &str = "out2";
         const OUT3: &str = "out3";
 
-        let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1);
+        let uut = make_uut(|_, _| (), "127.0.0.1:file", OUT1, 1);
 
         let jobs = vec![
             CopyJobSpec::from_parts("127.0.0.1:file1", OUT1, false, false).unwrap(),
@@ -993,14 +1003,7 @@ mod test {
                     &jobs,
                     || conn.open_bi_stream(),
                     |stream_pair, job, filename_width, pass| {
-                        uut.manage_request(
-                            stream_pair,
-                            job,
-                            Configuration::system_default(),
-                            crate::protocol::control::Compatibility::Level(1),
-                            filename_width,
-                            pass,
-                        )
+                        uut.manage_request(stream_pair, job, filename_width, pass)
                     },
                 )
                 .await
@@ -1046,7 +1049,7 @@ mod test {
             ),
         ]);
 
-        let client = make_uut(|_, _| (), "src", "dest");
+        let client = make_uut(|_, _| (), "src", "dest", 1);
         let (success, stats) = client
             .process_job_requests(
                 &jobs,
@@ -1099,7 +1102,7 @@ mod test {
             ),
         ]);
 
-        let client = make_uut(|_, _| (), "src", "dest");
+        let client = make_uut(|_, _| (), "src", "dest", 1);
         let (success, stats) = client
             .process_job_requests(
                 &jobs,
@@ -1231,7 +1234,7 @@ mod test {
             RequestResult::new(true, CommandStats::default()),
         ]);
 
-        let client = make_uut(|_, _| (), "src", "dest");
+        let client = make_uut(|_, _| (), "src", "dest", 1);
         let (success, stats) = client
             .process_job_requests(
                 &jobs,
@@ -1259,7 +1262,7 @@ mod test {
     async fn handle_post_transfer() {
         use littertray::LitterTray;
 
-        let mut uut = make_uut(|_, _| (), "srcdir", "127.0.0.1:destdir");
+        let mut uut = make_uut(|_, _| (), "srcdir", "127.0.0.1:destdir", 4);
         uut.args.client_params.preserve = true;
         uut.args.client_params.recurse = true;
         let working = Configuration_Optional::default();
@@ -1272,8 +1275,6 @@ mod test {
             let manage_fut = uut.manage_request(
                 plumbing.0,
                 prep_result.job_specs[0].clone(),
-                Configuration::system_default(),
-                crate::protocol::control::Compatibility::Level(4),
                 0,
                 SessionPass::PostTransfer,
             );
