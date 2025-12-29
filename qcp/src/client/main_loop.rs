@@ -57,6 +57,7 @@ pub(crate) async fn client_main(
 struct RequestResult {
     success: bool,
     stats: CommandStats,
+    response: Option<crate::protocol::session::Response>,
 }
 
 struct Client {
@@ -525,7 +526,7 @@ impl Client {
                     "{filename}: transferred {}",
                     format_rate(st.payload_bytes, Some(elapsed), st.peak_transfer_rate,)
                 );
-                RequestResult::new(true, st)
+                RequestResult::new(true, st, None)
             }
             Err(e) => {
                 if let Some(src) = e.source() {
@@ -535,7 +536,7 @@ impl Client {
                 } else {
                     error!("{e}");
                 }
-                RequestResult::new(false, CommandStats::default())
+                RequestResult::new(false, CommandStats::default(), None)
             }
         }
     }
@@ -575,10 +576,10 @@ impl Client {
                 } else {
                     error!("{e}");
                 }
-                return RequestResult::new(false, CommandStats::default());
+                return RequestResult::new(false, CommandStats::default(), None);
             }
         }
-        RequestResult::new(true, CommandStats::default())
+        RequestResult::new(true, CommandStats::default(), None)
     }
 
     async fn process_job_requests<'a, S, R, OpenStream, JobRunner>(
@@ -1028,6 +1029,7 @@ mod test {
                     payload_bytes: 10,
                     peak_transfer_rate: 100,
                 },
+                None,
             ),
             RequestResult::new(
                 true,
@@ -1035,6 +1037,7 @@ mod test {
                     payload_bytes: 5,
                     peak_transfer_rate: 200,
                 },
+                None,
             ),
         ]);
 
@@ -1079,8 +1082,9 @@ mod test {
                     payload_bytes: 10,
                     peak_transfer_rate: 100,
                 },
+                None,
             ),
-            RequestResult::new(false, CommandStats::default()),
+            RequestResult::new(false, CommandStats::default(), None),
             // This would only be consumed if we failed to stop early.
             RequestResult::new(
                 true,
@@ -1088,6 +1092,7 @@ mod test {
                     payload_bytes: 999,
                     peak_transfer_rate: 999,
                 },
+                None,
             ),
         ]);
 
@@ -1208,7 +1213,7 @@ mod test {
         let results = Mutex::new(vec![
             // Each directory is handled twice, so we expect to see five results.
             // pass 1:
-            RequestResult::new(true, CommandStats::default()),
+            RequestResult::new(true, CommandStats::default(), None),
             RequestResult::new(
                 true,
                 // this is file1
@@ -1216,11 +1221,12 @@ mod test {
                     payload_bytes: 10,
                     peak_transfer_rate: 100,
                 },
+                None,
             ),
-            RequestResult::new(true, CommandStats::default()),
+            RequestResult::new(true, CommandStats::default(), None),
             // pass 2:
-            RequestResult::new(true, CommandStats::default()),
-            RequestResult::new(true, CommandStats::default()),
+            RequestResult::new(true, CommandStats::default(), None),
+            RequestResult::new(true, CommandStats::default(), None),
         ]);
 
         let client = make_uut(|_, _| (), "src", "dest", 1);
