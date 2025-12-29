@@ -26,10 +26,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
-use std::{
-    future::Future,
-    net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6},
-};
+use std::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use tokio::{
     self,
     process::{ChildStdin, ChildStdout},
@@ -584,17 +581,16 @@ impl Client {
         RequestResult::new(true, CommandStats::default())
     }
 
-    async fn process_job_requests<'a, S, R, OpenStream, OpenFut, JobRunner, HandleFut>(
+    async fn process_job_requests<'a, S, R, OpenStream, JobRunner>(
         &self,
         jobs: &'a [CopyJobSpec],
         mut open_stream: OpenStream,
         mut run_job: JobRunner,
     ) -> anyhow::Result<(bool, CommandStats)>
     where
-        OpenStream: FnMut() -> OpenFut,
-        OpenFut: Future<Output = anyhow::Result<SendReceivePair<S, R>>>,
-        JobRunner: FnMut(SendReceivePair<S, R>, &'a CopyJobSpec, usize, SessionPass) -> HandleFut,
-        HandleFut: Future<Output = RequestResult>,
+        OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
+        JobRunner:
+            AsyncFnMut(SendReceivePair<S, R>, &'a CopyJobSpec, usize, SessionPass) -> RequestResult,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
