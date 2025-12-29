@@ -434,7 +434,7 @@ impl Client {
         config: &Configuration,
         compat: Compatibility,
     ) -> anyhow::Result<(bool, CommandStats)> {
-        process_job_requests(
+        self.process_job_requests(
             jobs,
             || connection.open_bi_stream(),
             |stream_pair, job, filename_width, pass| {
@@ -589,77 +589,78 @@ impl Client {
         }
         RequestResult::new(true, CommandStats::default())
     }
-}
 
-async fn process_job_requests<S, R, OpenStream, OpenFut, HandleJob, HandleFut>(
-    jobs: &[CopyJobSpec],
-    mut open_stream: OpenStream,
-    mut handle_job: HandleJob,
-    spinner: Option<&ProgressBar>,
-) -> anyhow::Result<(bool, CommandStats)>
-where
-    OpenStream: FnMut() -> OpenFut,
-    OpenFut: Future<Output = anyhow::Result<SendReceivePair<S, R>>>,
-    HandleJob: FnMut(SendReceivePair<S, R>, CopyJobSpec, usize, SessionPass) -> HandleFut,
-    HandleFut: Future<Output = RequestResult>,
-    S: SendingStream + 'static,
-    R: ReceivingStream + 'static,
-{
-    let mut aggregate_stats = CommandStats::default();
-    let mut overall_success = true;
-    let filename_width = longest_filename(jobs);
-    let n_jobs = jobs.len();
+    async fn process_job_requests<S, R, OpenStream, OpenFut, HandleJob, HandleFut>(
+        &self,
+        jobs: &[CopyJobSpec],
+        mut open_stream: OpenStream,
+        mut handle_job: HandleJob,
+        spinner: Option<&ProgressBar>,
+    ) -> anyhow::Result<(bool, CommandStats)>
+    where
+        OpenStream: FnMut() -> OpenFut,
+        OpenFut: Future<Output = anyhow::Result<SendReceivePair<S, R>>>,
+        HandleJob: FnMut(SendReceivePair<S, R>, CopyJobSpec, usize, SessionPass) -> HandleFut,
+        HandleFut: Future<Output = RequestResult>,
+        S: SendingStream + 'static,
+        R: ReceivingStream + 'static,
+    {
+        let mut aggregate_stats = CommandStats::default();
+        let mut overall_success = true;
+        let filename_width = longest_filename(jobs);
+        let n_jobs = jobs.len();
 
-    // Pass 1: Send files and create directories.
-    // The list of job specs must be in the appropriate order i.e. create a directory before attempting to put any files into it.
-    for (index, job) in jobs.iter().enumerate() {
-        if n_jobs > 1
-            && let Some(spinner) = spinner
-        {
-            spinner.set_message(format!(
-                "Transferring data (file {} of {n_jobs})",
-                index + 1,
-            ));
-        }
-        let stream_pair = open_stream().await?;
-        let result = handle_job(
-            stream_pair,
-            job.clone(),
-            filename_width,
-            SessionPass::FileTransfer,
-        )
-        .await;
+        // Pass 1: Send files and create directories.
+        // The list of job specs must be in the appropriate order i.e. create a directory before attempting to put any files into it.
+        for (index, job) in jobs.iter().enumerate() {
+            if n_jobs > 1
+                && let Some(spinner) = spinner
+            {
+                spinner.set_message(format!(
+                    "Transferring data (file {} of {n_jobs})",
+                    index + 1,
+                ));
+            }
+            let stream_pair = open_stream().await?;
+            let result = handle_job(
+                stream_pair,
+                job.clone(),
+                filename_width,
+                SessionPass::FileTransfer,
+            )
+            .await;
 
-        aggregate_stats.payload_bytes += result.stats.payload_bytes;
-        aggregate_stats.peak_transfer_rate = aggregate_stats
-            .peak_transfer_rate
-            .max(result.stats.peak_transfer_rate);
-        if !result.success {
-            overall_success = false;
-            break;
-        }
-    }
-
-    // Pass 2: Apply preserve logic (permission bits) to any created directories.
-    // We do this in _reverse order_ in case the changed permissions prevent us from being able to traverse a directory we recently created.
-    if n_jobs > 1 {
-        let mut message_set = false;
-        for job in jobs.iter().rev() {
-            if job.directory && job.preserve {
-                let stream_pair = open_stream().await?;
-                if !message_set {
-                    let _ =
-                        spinner.inspect(|s| s.set_message("Finishing up directory permissions"));
-                    message_set = true;
-                }
-                let result =
-                    handle_job(stream_pair, job.clone(), 0, SessionPass::PostTransfer).await;
-                overall_success &= result.success;
+            aggregate_stats.payload_bytes += result.stats.payload_bytes;
+            aggregate_stats.peak_transfer_rate = aggregate_stats
+                .peak_transfer_rate
+                .max(result.stats.peak_transfer_rate);
+            if !result.success {
+                overall_success = false;
+                break;
             }
         }
-    }
 
-    Ok((overall_success, aggregate_stats))
+        // Pass 2: Apply preserve logic (permission bits) to any created directories.
+        // We do this in _reverse order_ in case the changed permissions prevent us from being able to traverse a directory we recently created.
+        if n_jobs > 1 {
+            let mut message_set = false;
+            for job in jobs.iter().rev() {
+                if job.directory && job.preserve {
+                    let stream_pair = open_stream().await?;
+                    if !message_set {
+                        let _ = spinner
+                            .inspect(|s| s.set_message("Finishing up directory permissions"));
+                        message_set = true;
+                    }
+                    let result =
+                        handle_job(stream_pair, job.clone(), 0, SessionPass::PostTransfer).await;
+                    overall_success &= result.success;
+                }
+            }
+        }
+
+        Ok((overall_success, aggregate_stats))
+    }
 }
 
 fn longest_filename(jobs: &[CopyJobSpec]) -> usize {
@@ -689,7 +690,7 @@ mod test {
     use async_trait::async_trait;
     use littertray::LitterTray;
 
-    use super::{BiStreamOpener, RequestResult, process_job_requests};
+    use super::{BiStreamOpener, RequestResult};
 
     use crate::cli::CliArgs;
     use crate::client::main_loop::SessionPass;
@@ -1045,21 +1046,23 @@ mod test {
             ),
         ]);
 
-        let (success, stats) = process_job_requests(
-            &jobs,
-            || {
-                let _ = open_calls.fetch_add(1, Ordering::SeqCst);
-                async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
-            },
-            |stream_pair, _job, _filename_width, _pass| {
-                let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
-                drop(stream_pair);
-                async { results.lock().unwrap().remove(0) }
-            },
-            None,
-        )
-        .await
-        .unwrap();
+        let client = make_uut(|_, _| (), "src", "dest");
+        let (success, stats) = client
+            .process_job_requests(
+                &jobs,
+                || {
+                    let _ = open_calls.fetch_add(1, Ordering::SeqCst);
+                    async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
+                },
+                |stream_pair, _job, _filename_width, _pass| {
+                    let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
+                    drop(stream_pair);
+                    async { results.lock().unwrap().remove(0) }
+                },
+                None,
+            )
+            .await
+            .unwrap();
 
         assert!(success);
         assert_eq!(open_calls.load(Ordering::SeqCst), 2);
@@ -1097,21 +1100,23 @@ mod test {
             ),
         ]);
 
-        let (success, stats) = process_job_requests(
-            &jobs,
-            || {
-                let _ = open_calls.fetch_add(1, Ordering::SeqCst);
-                async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
-            },
-            |stream_pair, _job, _filename_width, _pass| {
-                let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
-                drop(stream_pair);
-                async { results.lock().unwrap().remove(0) }
-            },
-            None,
-        )
-        .await
-        .unwrap();
+        let client = make_uut(|_, _| (), "src", "dest");
+        let (success, stats) = client
+            .process_job_requests(
+                &jobs,
+                || {
+                    let _ = open_calls.fetch_add(1, Ordering::SeqCst);
+                    async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
+                },
+                |stream_pair, _job, _filename_width, _pass| {
+                    let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
+                    drop(stream_pair);
+                    async { results.lock().unwrap().remove(0) }
+                },
+                None,
+            )
+            .await
+            .unwrap();
 
         assert!(!success);
         assert_eq!(open_calls.load(Ordering::SeqCst), 2);
@@ -1228,21 +1233,23 @@ mod test {
             RequestResult::new(true, CommandStats::default()),
         ]);
 
-        let (success, stats) = process_job_requests(
-            &jobs,
-            || {
-                let _ = open_calls.fetch_add(1, Ordering::SeqCst);
-                async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
-            },
-            |stream_pair, _job, _filename_width, _pass| {
-                let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
-                drop(stream_pair);
-                async { results.lock().unwrap().remove(0) }
-            },
-            None,
-        )
-        .await
-        .unwrap();
+        let client = make_uut(|_, _| (), "src", "dest");
+        let (success, stats) = client
+            .process_job_requests(
+                &jobs,
+                || {
+                    let _ = open_calls.fetch_add(1, Ordering::SeqCst);
+                    async { Ok::<_, anyhow::Error>(new_test_plumbing().0) }
+                },
+                |stream_pair, _job, _filename_width, _pass| {
+                    let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
+                    drop(stream_pair);
+                    async { results.lock().unwrap().remove(0) }
+                },
+                None,
+            )
+            .await
+            .unwrap();
 
         assert!(success);
         assert_eq!(open_calls.load(Ordering::SeqCst), 5);
