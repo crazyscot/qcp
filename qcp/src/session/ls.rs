@@ -7,7 +7,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::trace;
 use walkdir::WalkDir;
 
-use super::{CommandStats, SessionCommandImpl};
+use super::SessionCommandImpl;
 
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
@@ -60,7 +60,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S
         _spinner: indicatif::ProgressBar,
         _config: &crate::config::Configuration,
         params: Parameters,
-    ) -> Result<CommandStats> {
+    ) -> Result<RequestResult> {
         anyhow::ensure!(
             self.compat.supports(Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
@@ -85,7 +85,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S
         let result = Response::from_reader_async_framed(&mut self.stream.recv).await?;
         self.result = Some(result);
         assert!(self.result.is_some());
-        Ok(CommandStats::default())
+        Ok(RequestResult::default())
     }
 
     async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {

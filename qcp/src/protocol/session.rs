@@ -70,4 +70,5 @@ pub use file_transfer::*;
 pub mod prelude {
     pub use super::{Command, CommandParam, MetadataAttr, Response, Status};
     pub use crate::protocol::prelude::*;
+    pub use crate::session::RequestResult;
 }

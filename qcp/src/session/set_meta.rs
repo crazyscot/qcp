@@ -7,7 +7,7 @@ use cfg_if::cfg_if;
 use tokio::io::AsyncWriteExt;
 use tracing::trace;
 
-use super::{CommandStats, SessionCommandImpl, error_and_return};
+use super::{SessionCommandImpl, error_and_return};
 
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
@@ -15,6 +15,7 @@ use crate::protocol::compat::Feature;
 use crate::protocol::control::Compatibility;
 use crate::protocol::session::{Command, MetadataAttr, Response, SetMetadataArgs, Status};
 
+use crate::session::RequestResult;
 // Extension trait for std::fs::Metadata
 use crate::util::FsMetadataExt as _;
 
@@ -52,7 +53,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for SetMetadata<S,
         _spinner: indicatif::ProgressBar,
         _config: &crate::Configuration,
         _params: Parameters,
-    ) -> Result<CommandStats> {
+    ) -> Result<RequestResult> {
         anyhow::ensure!(
             self.compat.supports(Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
@@ -80,7 +81,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for SetMetadata<S,
         let _ = Response::from_reader_async_framed(&mut self.stream.recv)
             .await?
             .into_result()?;
-        Ok(CommandStats::default())
+        Ok(RequestResult::default())
     }
 
     async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {
@@ -142,7 +143,7 @@ mod test {
             session::Command,
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::{CommandStats, SetMetadata},
+        session::{RequestResult, SetMetadata},
         util::io::DEFAULT_COPY_BUFFER_SIZE,
     };
     use littertray::LitterTray;
@@ -150,7 +151,7 @@ mod test {
     async fn test_setmeta_main(
         local_path: &str,
         remote_path: &str,
-    ) -> Result<(Result<CommandStats>, Result<()>)> {
+    ) -> Result<(Result<RequestResult>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec =
             CopyJobSpec::from_parts(local_path, &format!("somehost:{remote_path}"), false, false)

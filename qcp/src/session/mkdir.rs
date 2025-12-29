@@ -6,13 +6,14 @@ use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, trace};
 
-use super::{CommandStats, SessionCommandImpl, error_and_return};
+use super::{SessionCommandImpl, error_and_return};
 
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::control::Compatibility;
 use crate::protocol::session::{Command, CreateDirectoryArgs, Response, Status};
+use crate::session::RequestResult;
 use crate::session::common::send_ok;
 
 pub(crate) struct CreateDirectory<S: SendingStream, R: ReceivingStream> {
@@ -46,7 +47,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for CreateDirector
         _spinner: indicatif::ProgressBar,
         _config: &crate::config::Configuration,
         _params: Parameters,
-    ) -> Result<CommandStats> {
+    ) -> Result<RequestResult> {
         anyhow::ensure!(
             self.compat.supports(Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
@@ -67,7 +68,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for CreateDirector
         let _ = Response::from_reader_async_framed(&mut self.stream.recv)
             .await?
             .into_result()?;
-        Ok(CommandStats::default())
+        Ok(RequestResult::default())
     }
 
     async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {
@@ -116,12 +117,12 @@ mod test {
             session::{Command, Status},
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::{CommandStats, CreateDirectory},
+        session::{CreateDirectory, RequestResult},
         util::io::DEFAULT_COPY_BUFFER_SIZE,
     };
     use littertray::LitterTray;
 
-    async fn test_mkdir_main(path: &str) -> Result<(Result<CommandStats>, Result<()>)> {
+    async fn test_mkdir_main(path: &str) -> Result<(Result<RequestResult>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec =
             CopyJobSpec::from_parts(path, &format!("somehost:{path}"), false, false).unwrap();

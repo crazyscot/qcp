@@ -13,14 +13,10 @@ use super::{CommandStats, SessionCommandImpl, error_and_return};
 
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
-use crate::protocol::compat::Feature;
-use crate::protocol::control::Compatibility;
+use crate::protocol::session::prelude::*;
 use crate::protocol::session::{
-    Command, CommandParam, FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Get2Args, GetArgs,
-    Response, Status,
+    FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Get2Args, GetArgs,
 };
-
-use crate::protocol::Variant;
 use crate::session::common::progress_bar_for;
 
 // Extension trait!
@@ -65,7 +61,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         spinner: indicatif::ProgressBar,
         config: &crate::config::Configuration,
         params: Parameters,
-    ) -> Result<CommandStats> {
+    ) -> Result<RequestResult> {
         let filename = &job.source.filename;
         let dest = &job.destination.filename;
 
@@ -140,10 +136,14 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
 
         trace!("complete");
         progress_bar.finish_and_clear();
-        Ok(CommandStats {
-            payload_bytes: header.size.0,
-            peak_transfer_rate: meter.peak(),
-        })
+        Ok(RequestResult::new(
+            true,
+            CommandStats {
+                payload_bytes: header.size.0,
+                peak_transfer_rate: meter.peak(),
+            },
+            None,
+        ))
     }
 
     async fn handle(&mut self, io_buffer_size: u64) -> Result<()> {
@@ -210,7 +210,7 @@ pub(crate) mod test_shared {
             session::{Command, CommandParam, Get2Args},
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::{CommandStats, Get},
+        session::{Get, RequestResult},
         util::io::DEFAULT_COPY_BUFFER_SIZE,
     };
 
@@ -223,7 +223,7 @@ pub(crate) mod test_shared {
         client_level: u16,
         server_level: u16,
         preserve: bool,
-    ) -> Result<(Result<CommandStats>, Result<()>)> {
+    ) -> Result<(Result<RequestResult>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2, preserve, false).unwrap();
         let mut options = Vec::new();
@@ -281,18 +281,19 @@ mod test {
 
     use super::test_shared::test_getx_main;
     use crate::{
-        protocol::test_helpers::new_test_plumbing,
-        protocol::{control::Compatibility, session::Status},
-        session::{CommandStats, Get},
-        util::io::DEFAULT_COPY_BUFFER_SIZE,
-        util::time::SystemTimeExt as _,
+        protocol::{control::Compatibility, session::Status, test_helpers::new_test_plumbing},
+        session::{Get, RequestResult},
+        util::{io::DEFAULT_COPY_BUFFER_SIZE, time::SystemTimeExt as _},
     };
     use std::{fs::FileTimes, time::SystemTime};
 
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt as _;
 
-    async fn test_get_main(file1: &str, file2: &str) -> Result<(Result<CommandStats>, Result<()>)> {
+    async fn test_get_main(
+        file1: &str,
+        file2: &str,
+    ) -> Result<(Result<RequestResult>, Result<()>)> {
         test_getx_main(file1, file2, 2, 2, false).await
     }
 
@@ -306,7 +307,7 @@ mod test {
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_get_main("s:file1", "file2").await?;
-            assert_eq!(r1?.payload_bytes, contents.len() as u64);
+            assert_eq!(r1?.stats.payload_bytes, contents.len() as u64);
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("file2")?;
             assert_eq!(readback, contents);

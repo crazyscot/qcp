@@ -47,6 +47,20 @@ pub struct CommandStats {
     pub peak_transfer_rate: u64,
 }
 
+/// Result of a completed request
+#[derive(Default, Debug, derive_more::Constructor)]
+pub struct RequestResult {
+    /// Whether the request was successful
+    pub success: bool,
+    /// Statistics for the command, if applicable (i.e. for file transfer commands)
+    pub stats: CommandStats,
+    /// Optional response data from the server.
+    ///
+    /// This is used for commands that return data which the client processes and may cause further commands,
+    /// for example `ListContents` returns directory entries which may cause further `Get` commands.
+    pub response: Option<Response>,
+}
+
 /// Common structure for session protocol commands
 #[async_trait]
 pub(crate) trait SessionCommandImpl: Send {
@@ -61,7 +75,7 @@ pub(crate) trait SessionCommandImpl: Send {
         spinner: ProgressBar,
         config: &Configuration,
         params: Parameters,
-    ) -> Result<CommandStats>;
+    ) -> Result<RequestResult>;
 
     /// Server side implementation, takes care of handling the command and all its
     /// traffic. Does not return until completion (or error).

@@ -13,7 +13,7 @@ use crate::{
         control::{ClosedownReportV1, Compatibility, CredentialsType, Direction, ServerMessageV2},
         session::{CommandParam, Get2Args},
     },
-    session::{self, CommandStats},
+    session::{self, CommandStats, RequestResult},
     util::{
         self, Credentials, lookup_host_by_family,
         process::ProcessWrapper,
@@ -51,13 +51,6 @@ pub(crate) async fn client_main(
     args: Box<crate::cli::CliArgs>,
 ) -> anyhow::Result<bool> {
     Client::new(manager, display, args)?.run().await
-}
-
-#[derive(Default, Debug, derive_more::Constructor)]
-struct RequestResult {
-    success: bool,
-    stats: CommandStats,
-    response: Option<crate::protocol::session::Response>,
 }
 
 struct Client {
@@ -521,12 +514,16 @@ impl Client {
         let elapsed = timer.elapsed();
 
         match result {
-            Ok(st) => {
+            Ok(rr) => {
                 info!(
                     "{filename}: transferred {}",
-                    format_rate(st.payload_bytes, Some(elapsed), st.peak_transfer_rate,)
+                    format_rate(
+                        rr.stats.payload_bytes,
+                        Some(elapsed),
+                        rr.stats.peak_transfer_rate,
+                    )
                 );
-                RequestResult::new(true, st, None)
+                RequestResult::new(true, rr.stats, None)
             }
             Err(e) => {
                 if let Some(src) = e.source() {
