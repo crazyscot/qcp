@@ -223,11 +223,20 @@ impl Client {
         self.spinner.set_message("Transferring data");
         self.timers.next(SHOW_TIME);
         let (overall_success, aggregate_stats) = self
-            .transfer_jobs(
-                &connection,
+            .process_job_requests(
                 &prep_result.job_specs,
-                &config,
-                qcp_conn.control.selected_compat,
+                || connection.open_bi_stream(),
+                |stream_pair, job, filename_width, pass| {
+                    self.manage_request(
+                        stream_pair,
+                        job,
+                        &config,
+                        qcp_conn.control.selected_compat,
+                        filename_width,
+                        pass,
+                    )
+                },
+                Some(&self.spinner),
             )
             .await?;
 
@@ -425,24 +434,6 @@ impl Client {
         self.timers.stop();
 
         Ok(remote_stats)
-    }
-
-    async fn transfer_jobs<C: BiStreamOpener>(
-        &self,
-        connection: &C,
-        jobs: &[CopyJobSpec],
-        config: &Configuration,
-        compat: Compatibility,
-    ) -> anyhow::Result<(bool, CommandStats)> {
-        self.process_job_requests(
-            jobs,
-            || connection.open_bi_stream(),
-            |stream_pair, job, filename_width, pass| {
-                self.manage_request(stream_pair, job, config, compat, filename_width, pass)
-            },
-            Some(&self.spinner),
-        )
-        .await
     }
 
     /// Do whatever it is we were asked to.
@@ -953,11 +944,20 @@ mod test {
 
         let (success, stats) = LitterTray::try_with_async(async |_| {
             let (success, stats) = uut
-                .transfer_jobs(
-                    &conn,
+                .process_job_requests(
                     &jobs,
-                    Configuration::system_default(),
-                    crate::protocol::control::Compatibility::Level(1),
+                    || conn.open_bi_stream(),
+                    |stream_pair, job, filename_width, pass| {
+                        uut.manage_request(
+                            stream_pair,
+                            job,
+                            Configuration::system_default(),
+                            crate::protocol::control::Compatibility::Level(1),
+                            filename_width,
+                            pass,
+                        )
+                    },
+                    None,
                 )
                 .await
                 .unwrap();
@@ -997,11 +997,20 @@ mod test {
 
         let (success, stats) = LitterTray::try_with_async(async |_| {
             let (success, stats) = uut
-                .transfer_jobs(
-                    &conn,
+                .process_job_requests(
                     &jobs,
-                    Configuration::system_default(),
-                    crate::protocol::control::Compatibility::Level(1),
+                    || conn.open_bi_stream(),
+                    |stream_pair, job, filename_width, pass| {
+                        uut.manage_request(
+                            stream_pair,
+                            job,
+                            Configuration::system_default(),
+                            crate::protocol::control::Compatibility::Level(1),
+                            filename_width,
+                            pass,
+                        )
+                    },
+                    None,
                 )
                 .await
                 .unwrap();
