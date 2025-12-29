@@ -236,7 +236,6 @@ impl Client {
                         pass,
                     )
                 },
-                Some(&self.spinner),
             )
             .await?;
 
@@ -483,9 +482,6 @@ impl Client {
     {
         use crate::session;
 
-        let display = self.display.clone();
-        let spinner = self.spinner.clone();
-
         let (mut handler, span) = if copy_spec.source.user_at_host.is_some() {
             // We are GETting something
             let mut args = Get2Args::default();
@@ -515,9 +511,9 @@ impl Client {
         let result = handler
             .send(
                 &copy_spec,
-                display,
+                self.display.clone(),
                 filename_width,
-                spinner,
+                self.spinner.clone(),
                 config,
                 self.args.client_params,
             )
@@ -586,7 +582,6 @@ impl Client {
         jobs: &[CopyJobSpec],
         mut open_stream: OpenStream,
         mut handle_job: HandleJob,
-        spinner: Option<&ProgressBar>,
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: FnMut() -> OpenFut,
@@ -604,10 +599,8 @@ impl Client {
         // Pass 1: Send files and create directories.
         // The list of job specs must be in the appropriate order i.e. create a directory before attempting to put any files into it.
         for (index, job) in jobs.iter().enumerate() {
-            if n_jobs > 1
-                && let Some(spinner) = spinner
-            {
-                spinner.set_message(format!(
+            if n_jobs > 1 {
+                self.spinner.set_message(format!(
                     "Transferring data (file {} of {n_jobs})",
                     index + 1,
                 ));
@@ -639,8 +632,8 @@ impl Client {
                 if job.directory && job.preserve {
                     let stream_pair = open_stream().await?;
                     if !message_set {
-                        let _ = spinner
-                            .inspect(|s| s.set_message("Finishing up directory permissions"));
+                        self.spinner
+                            .set_message("Finishing up directory permissions");
                         message_set = true;
                     }
                     let result =
@@ -957,7 +950,6 @@ mod test {
                             pass,
                         )
                     },
-                    None,
                 )
                 .await
                 .unwrap();
@@ -1010,7 +1002,6 @@ mod test {
                             pass,
                         )
                     },
-                    None,
                 )
                 .await
                 .unwrap();
@@ -1068,7 +1059,6 @@ mod test {
                     drop(stream_pair);
                     async { results.lock().unwrap().remove(0) }
                 },
-                None,
             )
             .await
             .unwrap();
@@ -1122,7 +1112,6 @@ mod test {
                     drop(stream_pair);
                     async { results.lock().unwrap().remove(0) }
                 },
-                None,
             )
             .await
             .unwrap();
@@ -1255,7 +1244,6 @@ mod test {
                     drop(stream_pair);
                     async { results.lock().unwrap().remove(0) }
                 },
-                None,
             )
             .await
             .unwrap();
