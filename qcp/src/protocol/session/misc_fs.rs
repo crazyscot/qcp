@@ -37,7 +37,7 @@ pub struct SetMetadataArgs {
 /// Arguments for the `ListFiles` command
 ///
 /// This was introduced in qcp 0.8 with compatibility level 4.
-pub struct ListContentsArgs {
+pub struct ListArgs {
     /// This is the path to list. It may be a relative or absolute path.
     /// It may be a file or directory.
     pub path: String,

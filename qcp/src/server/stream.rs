@@ -52,9 +52,9 @@ where
             ),
             session::SetMetadata::boxed(sp, Some(args), compat),
         ),
-        Command::ListContents(args) => (
+        Command::List(args) => (
             trace_span!("SERVER:LS", filename = args.path.clone()),
-            session::ListContents::boxed(sp, Some(args), compat),
+            session::Listing::boxed(sp, Some(args), compat),
         ),
     };
 

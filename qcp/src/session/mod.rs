@@ -9,9 +9,7 @@ mod mkdir;
 mod put;
 mod set_meta;
 
-pub(crate) use {
-    get::Get, ls::ListContents, mkdir::CreateDirectory, put::Put, set_meta::SetMetadata,
-};
+pub(crate) use {get::Get, ls::Listing, mkdir::CreateDirectory, put::Put, set_meta::SetMetadata};
 
 #[cfg(feature = "unstable-test-helpers")]
 #[allow(unused_imports)] // Selectively exported by qcp::test_helpers
@@ -57,7 +55,7 @@ pub struct RequestResult {
     /// Optional response data from the server.
     ///
     /// This is used for commands that return data which the client processes and may cause further commands,
-    /// for example `ListContents` returns directory entries which may cause further `Get` commands.
+    /// for example `List` returns directory entries which may cause further `Get` commands.
     pub response: Option<Response>,
 }
 

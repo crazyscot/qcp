@@ -2,7 +2,7 @@
 // (c) 2025 Ross Younger
 
 use super::get_put::{Get2Args, GetArgs, Put2Args, PutArgs};
-use super::misc_fs::{CreateDirectoryArgs, ListContentsArgs, SetMetadataArgs};
+use super::misc_fs::{CreateDirectoryArgs, ListArgs, SetMetadataArgs};
 use crate::protocol::prelude::*;
 #[allow(unused_imports, reason = "needed for docs")]
 use crate::protocol::session::Response;
@@ -82,11 +82,11 @@ pub enum Command {
     /// This command was introduced in qcp 0.8 with compatibility level 4.
     ///
     /// * Client ➡️ Server: `Get` command
-    /// * S➡️C: [`Response::ListContents`]
+    /// * S➡️C: [`Response::List`]
     /// * Then close the stream.
     ///
     /// * Either side may close the stream early if it has a problem.
-    ListContents(ListContentsArgs),
+    List(ListArgs),
 }
 impl ProtocolMessage for Command {}
 

@@ -12,21 +12,21 @@ use super::SessionCommandImpl;
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::prelude::*;
-use crate::protocol::session::{ListContentsArgs, ListContentsEntry, ListContentsResponse};
+use crate::protocol::session::{ListArgs, ListEntry, ListResponse};
 use crate::session::common::{error_to_status, io_error_to_status};
 
-pub(crate) struct ListContents<S: SendingStream, R: ReceivingStream> {
+pub(crate) struct Listing<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
-    args: Option<ListContentsArgs>,
+    args: Option<ListArgs>,
     compat: Compatibility, // Selected compatibility level for the command
     result: Option<Response>,
 }
 
 /// Boxing constructor
-impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ListContents<S, R> {
+impl<S: SendingStream + 'static, R: ReceivingStream + 'static> Listing<S, R> {
     pub(crate) fn boxed(
         stream: SendReceivePair<S, R>,
-        args: Option<ListContentsArgs>,
+        args: Option<ListArgs>,
         compat: Compatibility,
     ) -> Box<dyn SessionCommandImpl> {
         Box::new(Self {
@@ -38,7 +38,7 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ListContents<S, R
     }
 }
 
-impl<S: SendingStream, R: ReceivingStream> ListContents<S, R> {
+impl<S: SendingStream, R: ReceivingStream> Listing<S, R> {
     /// Accessor
     pub(crate) fn find_option(&self, opt: CommandParam) -> Option<&Variant> {
         use crate::protocol::FindTag as _;
@@ -47,7 +47,7 @@ impl<S: SendingStream, R: ReceivingStream> ListContents<S, R> {
 }
 
 #[async_trait]
-impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S, R> {
+impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> {
     fn response(&mut self) -> Option<Response> {
         self.result.take()
     }
@@ -74,7 +74,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S
         if params.recurse {
             options.push(CommandParam::Recurse.into());
         }
-        let cmd = Command::ListContents(ListContentsArgs {
+        let cmd = Command::List(ListArgs {
             path: path.clone(),
             options,
         });
@@ -90,7 +90,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S
 
     async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {
         let Some(ref args) = self.args else {
-            anyhow::bail!("ListContents handler called without args");
+            anyhow::bail!("List handler called without args");
         };
         let path = &args.path;
         let recurse = self.find_option(CommandParam::Recurse).is_some();
@@ -100,7 +100,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S
             Ok(meta) => meta,
             Err(e) => {
                 let (st, msg) = io_error_to_status(&e);
-                return Response::ListContents(ListContentsResponse {
+                return Response::List(ListResponse {
                     status: st.into(),
                     message: msg,
                     entries: vec![],
@@ -110,7 +110,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S
             }
         };
         if meta.is_file() {
-            return Response::ListContents(ListContentsResponse {
+            return Response::List(ListResponse {
                 status: Status::ItIsAFile.into(),
                 message: None,
                 entries: vec![],
@@ -123,11 +123,11 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S
             .min_depth(1)
             .max_depth(if recurse { usize::MAX } else { 1 })
             .into_iter()
-            .map(|e| e.map(ListContentsEntry::from))
+            .map(|e| e.map(ListEntry::from))
             .collect();
 
         let lcr = match entries {
-            Ok(v) => ListContentsResponse {
+            Ok(v) => ListResponse {
                 status: Status::Ok.into(),
                 message: None,
                 entries: v,
@@ -135,7 +135,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S
             Err(e) => {
                 let io = std::io::Error::from(e);
                 let (st, msg) = error_to_status(&io.into());
-                ListContentsResponse {
+                ListResponse {
                     status: st.into(),
                     message: msg,
                     entries: vec![],
@@ -143,7 +143,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for ListContents<S
             }
         };
 
-        Response::ListContents(lcr)
+        Response::List(lcr)
             .to_writer_async_framed(&mut self.stream.send)
             .await?;
         self.stream.send.flush().await?;
@@ -158,7 +158,7 @@ mod test {
     use std::collections::HashSet;
     use std::path::MAIN_SEPARATOR;
 
-    use crate::protocol::session::{ListContentsResponse, prelude::*};
+    use crate::protocol::session::{ListResponse, prelude::*};
     use crate::util::io::DEFAULT_COPY_BUFFER_SIZE;
     use crate::{
         Configuration, Parameters,
@@ -168,15 +168,15 @@ mod test {
             session::{Command, Response, Status},
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::ListContents,
+        session::Listing,
     };
     use anyhow::{Result, bail};
     use littertray::LitterTray;
     use pretty_assertions::assert_eq;
 
-    async fn test_ls_main(path: &str, recurse: bool) -> Result<ListContentsResponse> {
+    async fn test_ls_main(path: &str, recurse: bool) -> Result<ListResponse> {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let mut sender = ListContents::boxed(pipe1, None, Compatibility::Level(4));
+        let mut sender = Listing::boxed(pipe1, None, Compatibility::Level(4));
         let spec = CopyJobSpec::from_parts("", &format!("desthost:{path}"), false, false).unwrap();
         let params = Parameters {
             recurse,
@@ -196,24 +196,24 @@ mod test {
 
             let result = read_from_stream(&mut pipe2.recv, &mut sender_fut).await;
             let cmd = result.expect_left("sender should not have completed early")?;
-            let Command::ListContents(args) = cmd else {
+            let Command::List(args) = cmd else {
                 bail!("expected CreateDirectory command");
             };
 
-            let mut handler = ListContents::boxed(pipe2, Some(args), Compatibility::Level(4));
+            let mut handler = Listing::boxed(pipe2, Some(args), Compatibility::Level(4));
             let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
             let _ = r1.expect("sender should not have failed");
             r2.expect("handler should not have failed");
         }
         let response = sender.response().unwrap();
-        let Response::ListContents(lcr) = response else {
-            anyhow::bail!("remote sent unexpected ListContents response: {response:?}");
+        let Response::List(lcr) = response else {
+            anyhow::bail!("remote sent unexpected List response: {response:?}");
         };
         Ok(lcr)
     }
 
     // Check for expected results, allowing for walkdir and libc variations.
-    fn expected_result(lcr: ListContentsResponse, dir_prefix: &str, expected: &[&str]) {
+    fn expected_result(lcr: ListResponse, dir_prefix: &str, expected: &[&str]) {
         assert_eq!(lcr.status, Uint::from(Status::Ok));
         assert!(lcr.message.is_none());
 

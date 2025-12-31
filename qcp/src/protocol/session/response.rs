@@ -10,15 +10,15 @@ use std::fmt::Display;
 pub enum Response {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
     V1(ResponseV1),
-    /// ListContents was introduced in qcp 0.8 with compatibility level 4.
-    ListContents(ListContentsResponse),
+    /// List was introduced in qcp 0.8 with compatibility level 4.
+    List(ListResponse),
 }
 
 impl Response {
     pub(crate) fn status(&self) -> Uint {
         match self {
             Response::V1(r) => r.status,
-            Response::ListContents(r) => r.status,
+            Response::List(r) => r.status,
         }
     }
 
@@ -59,11 +59,11 @@ impl Display for ResponseV1 {
     }
 }
 
-/// ListContents was introduced in qcp 0.8 with compatibility level 4.
+/// ListResponse was introduced in qcp 0.8 with compatibility level 4.
 #[derive(
     Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor, thiserror::Error,
 )]
-pub struct ListContentsResponse {
+pub struct ListResponse {
     /// Outcome of the operation.
     /// This is a [`Status`] code.
     pub status: Uint,
@@ -72,13 +72,13 @@ pub struct ListContentsResponse {
     pub message: Option<String>,
 
     /// Response detail
-    pub entries: Vec<ListContentsEntry>,
+    pub entries: Vec<ListEntry>,
 }
-impl Display for ListContentsResponse {
+impl Display for ListResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = self.message.as_ref().map_or("<no message>", |v| v);
         if self.status == Uint::from(Status::Ok) {
-            let _ = writeln!(f, "<ListContents: Ok, {msg}, [");
+            let _ = writeln!(f, "<List: Ok, {msg}, [");
             for it in &self.entries {
                 let _ = writeln!(f, "{it}");
             }
@@ -89,11 +89,11 @@ impl Display for ListContentsResponse {
     }
 }
 
-/// A single file or directory entry returned by a `ListContents` request. See [`Command::ListContents`].
+/// A single file or directory entry returned by a `List` request. See [`Command::List`].
 #[derive(
     Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor, thiserror::Error,
 )]
-pub struct ListContentsEntry {
+pub struct ListEntry {
     /// Filename (UTF-8)
     pub name: String,
     /// Is this a directory?
@@ -102,7 +102,7 @@ pub struct ListContentsEntry {
     pub size: Uint,
 }
 
-impl Display for ListContentsEntry {
+impl Display for ListEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.directory {
             write!(f, "<DIR> {}", self.name)
@@ -112,7 +112,7 @@ impl Display for ListContentsEntry {
     }
 }
 
-impl From<walkdir::DirEntry> for ListContentsEntry {
+impl From<walkdir::DirEntry> for ListEntry {
     fn from(value: walkdir::DirEntry) -> Self {
         Self {
             name: value.path().to_string_lossy().to_string(), // relative to root!
@@ -228,7 +228,7 @@ impl PartialEq<Status> for Uint {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::{Response, ResponseV1, Status};
-    use crate::protocol::session::{ListContentsEntry, ListContentsResponse, prelude::*};
+    use crate::protocol::session::{ListEntry, ListResponse, prelude::*};
     use assertables::assert_contains;
     use pretty_assertions::assert_eq;
 
@@ -293,16 +293,16 @@ mod test {
 
     #[test]
     fn list_contents_display() {
-        let lc = ListContentsResponse {
+        let lc = ListResponse {
             status: Uint(0),
             message: None,
             entries: vec![
-                ListContentsEntry {
+                ListEntry {
                     name: "aaa".to_string(),
                     directory: false,
                     size: Uint(42),
                 },
-                ListContentsEntry {
+                ListEntry {
                     name: "bbb".to_string(),
                     directory: true,
                     size: Uint(0),
@@ -317,7 +317,7 @@ mod test {
 
     #[test]
     fn list_contents_error() {
-        let resp = Response::ListContents(ListContentsResponse {
+        let resp = Response::List(ListResponse {
             status: Uint(Status::DiskFull as u64),
             message: Some("foobar".to_string()),
             entries: vec![],
