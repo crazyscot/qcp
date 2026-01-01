@@ -248,7 +248,7 @@ impl CliArgs {
         let multiple_sources = sources.len() > 1;
         let mut jobs = Vec::with_capacity(sources.len());
 
-        if self.client_params.recurse {
+        if self.client_params.recurse && destination_is_remote {
             for source in sources {
                 dirwalk::recurse_local_source(
                     &source,
@@ -261,12 +261,14 @@ impl CliArgs {
         } else {
             // Convert filenames into job specs
             for source in sources {
-                let dest_filename = if multiple_sources {
-                    let leaf = path::basename_of(&source.filename)?;
-                    join_fn(&destination.filename, &leaf)
-                } else {
-                    destination.filename.clone()
-                };
+                let dest_filename =
+                    // Append the destination leaf if there are multiple sources... unless this is a recursive get, in which case don't.
+                    if multiple_sources && (!self.client_params.recurse || destination_is_remote) {
+                        let leaf = path::basename_of(&source.filename)?;
+                        join_fn(&destination.filename, &leaf)
+                    } else {
+                        destination.filename.clone()
+                    };
                 jobs.push(CopyJobSpec::try_new(
                     source,
                     FileSpec {

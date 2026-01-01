@@ -46,7 +46,7 @@ pub struct CommandStats {
 }
 
 /// Result of a completed request
-#[derive(Default, Debug, derive_more::Constructor)]
+#[derive(Debug, derive_more::Constructor)]
 pub struct RequestResult {
     /// Whether the request was successful
     pub success: bool,
@@ -57,6 +57,17 @@ pub struct RequestResult {
     /// This is used for commands that return data which the client processes and may cause further commands,
     /// for example `List` returns directory entries which may cause further `Get` commands.
     pub response: Option<Response>,
+}
+
+impl Default for RequestResult {
+    /// A default successful request result with no stats or response data
+    fn default() -> Self {
+        Self {
+            success: true,
+            stats: CommandStats::default(),
+            response: None,
+        }
+    }
 }
 
 /// Common structure for session protocol commands

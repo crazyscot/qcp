@@ -96,6 +96,7 @@ littertray = { workspace = true, features = ["async"] }
 mockall = { workspace = true }
 pretty_assertions = { workspace = true }
 roff = { workspace = true }
+rstest = "0.26.1"
 rusty-fork = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

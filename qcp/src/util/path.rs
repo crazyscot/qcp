@@ -1,6 +1,6 @@
 //! Path-related
 
-use std::path::{Path, PathBuf};
+use std::path::{MAIN_SEPARATOR, Path, PathBuf};
 
 pub(crate) fn basename_of(path: &str) -> anyhow::Result<String> {
     let path = Path::new(path);
@@ -34,5 +34,12 @@ pub(crate) fn join_remote(base: &str, leaf: &str) -> String {
         format!("{base}{leaf}")
     } else {
         format!("{base}/{leaf}")
+    }
+}
+
+pub(crate) fn add_pathsep_if_needed(path: &mut String, local: bool) {
+    let sep = if local { MAIN_SEPARATOR } else { '/' };
+    if !path.is_empty() && !path.ends_with(sep) {
+        path.push(sep);
     }
 }

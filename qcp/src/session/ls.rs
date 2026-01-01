@@ -4,7 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
-use tracing::trace;
+use tracing::{debug, trace};
 use walkdir::WalkDir;
 
 use super::SessionCommandImpl;
@@ -13,13 +13,13 @@ use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::prelude::*;
 use crate::protocol::session::{ListArgs, ListEntry, ListResponse};
+use crate::session::CommandStats;
 use crate::session::common::{error_to_status, io_error_to_status};
 
 pub(crate) struct Listing<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
     args: Option<ListArgs>,
     compat: Compatibility, // Selected compatibility level for the command
-    result: Option<Response>,
 }
 
 /// Boxing constructor
@@ -33,7 +33,6 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> Listing<S, R> {
             stream,
             args,
             compat,
-            result: None,
         })
     }
 }
@@ -49,7 +48,7 @@ impl<S: SendingStream, R: ReceivingStream> Listing<S, R> {
 #[async_trait]
 impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> {
     fn response(&mut self) -> Option<Response> {
-        self.result.take()
+        panic!("this doesn't work any more");
     }
 
     async fn send(
@@ -65,7 +64,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
             self.compat.supports(Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
         );
-        let path = &job.destination.filename;
+        let path = &job.source.filename; // yes, source filename
 
         // This is a trivial operation, we do not bother with a progress bar.
         trace!("sending command");
@@ -83,9 +82,12 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
 
         trace!("await response");
         let result = Response::from_reader_async_framed(&mut self.stream.recv).await?;
-        self.result = Some(result);
-        assert!(self.result.is_some());
-        Ok(RequestResult::default())
+        trace!("result: {:?}", result);
+        Ok(RequestResult::new(
+            true,
+            CommandStats::default(),
+            Some(result),
+        ))
     }
 
     async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {
@@ -94,6 +96,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         };
         let path = &args.path;
         let recurse = self.find_option(CommandParam::Recurse).is_some();
+        // debug!("ls: path {path}, recurse={recurse}");
 
         let res = tokio::fs::metadata(path).await;
         let meta = match res {
@@ -111,16 +114,19 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         };
         if meta.is_file() {
             return Response::List(ListResponse {
-                status: Status::ItIsAFile.into(),
+                status: Status::Ok.into(),
                 message: None,
-                entries: vec![],
+                entries: vec![ListEntry {
+                    name: path.clone(),
+                    directory: false,
+                    size: Uint(meta.len()),
+                }],
             })
             .to_writer_async_framed(&mut self.stream.send)
             .await;
         }
         let entries: Result<Vec<_>, walkdir::Error> = WalkDir::new(path)
-            // Omit the root
-            .min_depth(1)
+            // do NOT omit the root here, recursive transfer depends on it to mkdir the top-level dir
             .max_depth(if recurse { usize::MAX } else { 1 })
             .into_iter()
             .map(|e| e.map(ListEntry::from))
@@ -133,6 +139,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
                 entries: v,
             },
             Err(e) => {
+                debug!("ls: walkdir error: {e}");
                 let io = std::io::Error::from(e);
                 let (st, msg) = error_to_status(&io.into());
                 ListResponse {
@@ -142,6 +149,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
                 }
             }
         };
+        // debug!("ls: sending response {}", lcr);
 
         Response::List(lcr)
             .to_writer_async_framed(&mut self.stream.send)
@@ -163,11 +171,7 @@ mod test {
     use crate::{
         Configuration, Parameters,
         client::CopyJobSpec,
-        protocol::{
-            control::Compatibility,
-            session::{Command, Response, Status},
-            test_helpers::{new_test_plumbing, read_from_stream},
-        },
+        protocol::test_helpers::{new_test_plumbing, read_from_stream},
         session::Listing,
     };
     use anyhow::{Result, bail};
@@ -177,12 +181,13 @@ mod test {
     async fn test_ls_main(path: &str, recurse: bool) -> Result<ListResponse> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let mut sender = Listing::boxed(pipe1, None, Compatibility::Level(4));
-        let spec = CopyJobSpec::from_parts("", &format!("desthost:{path}"), false, false).unwrap();
+        let spec =
+            CopyJobSpec::from_parts(path, &format!("desthost:{path}"), false, false).unwrap();
         let params = Parameters {
             recurse,
             ..Default::default()
         };
-        {
+        let result = {
             // this subscope forces sender_fut to unborrow sender.
             let sender_fut = sender.send(
                 &spec,
@@ -202,19 +207,24 @@ mod test {
 
             let mut handler = Listing::boxed(pipe2, Some(args), Compatibility::Level(4));
             let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
-            let _ = r1.expect("sender should not have failed");
+            let result = r1.expect("sender should not have failed");
             r2.expect("handler should not have failed");
-        }
-        let response = sender.response().unwrap();
-        let Response::List(lcr) = response else {
-            anyhow::bail!("remote sent unexpected List response: {response:?}");
+            result
+        };
+        let Some(Response::List(lcr)) = result.response else {
+            anyhow::bail!("remote sent unexpected List response: {result:?}");
         };
         Ok(lcr)
     }
 
     // Check for expected results, allowing for walkdir and libc variations.
     fn expected_result(lcr: ListResponse, dir_prefix: &str, expected: &[&str]) {
-        assert_eq!(lcr.status, Uint::from(Status::Ok));
+        assert_eq!(
+            Status::try_from(lcr.status).unwrap(),
+            Status::Ok,
+            "ls failed with status {:?}",
+            Status::to_string(lcr.status)
+        );
         assert!(lcr.message.is_none());
 
         let output = lcr
@@ -250,7 +260,7 @@ mod test {
                 .strip_prefix(dir_prefix)
                 .expect("output item did not contain expected prefix");
             // Strip the leading slash
-            let it = it.strip_prefix('/').unwrap();
+            let it = it.strip_prefix('/').unwrap_or(it);
             // Compute the parent, if present
             let split = it.split_once('/');
             if let Some((parent, _leaf)) = split {
@@ -281,7 +291,7 @@ mod test {
         })
         .await
         .unwrap();
-        expected_result(result, "d/d2", &["d/d2/hi", "d/d2/e", "d/d2/x"]);
+        expected_result(result, "d/d2", &["d/d2", "d/d2/hi", "d/d2/e", "d/d2/x"]);
     }
 
     #[tokio::test]
@@ -301,10 +311,18 @@ mod test {
         })
         .await
         .unwrap();
+        eprintln!("Result: {result:?}");
         expected_result(
             result,
             "d/d2",
-            &["d/d2/e", "d/d2/e/f", "d/d2/hi", "d/d2/x", "d/d2/x/xyzy"],
+            &[
+                "d/d2",
+                "d/d2/e",
+                "d/d2/e/f",
+                "d/d2/hi",
+                "d/d2/x",
+                "d/d2/x/xyzy",
+            ],
         );
     }
 

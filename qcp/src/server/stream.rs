@@ -10,7 +10,7 @@ use crate::protocol::session::Command;
 
 use tracing::{Instrument as _, trace, trace_span};
 
-pub(super) async fn handle_stream<W, R>(
+pub(crate) async fn handle_stream<W, R>(
     mut sp: SendReceivePair<W, R>,
     compat: Compatibility,
     io_buffer_size: u64,

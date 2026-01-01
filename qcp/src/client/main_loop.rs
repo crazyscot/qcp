@@ -2,6 +2,7 @@
 // (c) 2024 Ross Younger
 
 use crate::{
+    FileSpec,
     cli::{CliArgs, styles::use_colours},
     client::progress::SPINNER_TEMPLATE,
     config::{Configuration, Configuration_Optional, Manager},
@@ -11,11 +12,12 @@ use crate::{
         common::{ReceivingStream, SendReceivePair, SendingStream},
         compat::Feature,
         control::{ClosedownReportV1, Compatibility, CredentialsType, Direction, ServerMessageV2},
-        session::{CommandParam, Get2Args},
+        session::{CommandParam, Get2Args, Response, Status},
     },
     session::{self, CommandStats, RequestResult},
     util::{
         self, Credentials, lookup_host_by_family,
+        path::add_pathsep_if_needed,
         process::ProcessWrapper,
         stats::format_rate,
         time::{Stopwatch, StopwatchChain},
@@ -26,7 +28,10 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
-use std::net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::{
+    net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6},
+    path::MAIN_SEPARATOR,
+};
 use tokio::{
     self,
     process::{ChildStdin, ChildStdout},
@@ -78,6 +83,8 @@ struct PrepResult {
 }
 
 enum Phase {
+    // ListFiles
+    Pre,
     // Get, Put, Mkdir
     Transfer,
     // SetMetadata to fix up directory permissions once we're done
@@ -439,7 +446,7 @@ impl Client {
     async fn run_request<S, R>(
         &self,
         stream_pair: SendReceivePair<S, R>,
-        copy_spec: &CopyJobSpec,
+        copy_spec: CopyJobSpec,
         filename_width: usize,
         pass: Phase,
     ) -> RequestResult
@@ -448,16 +455,62 @@ impl Client {
         R: ReceivingStream + 'static,
     {
         match pass {
+            Phase::Pre => {
+                self.manage_pre_transfer_request(stream_pair, &copy_spec)
+                    .await
+            }
             Phase::Transfer => {
-                self.manage_file_transfer_request(stream_pair, copy_spec, filename_width)
+                self.manage_file_transfer_request(stream_pair, &copy_spec, filename_width)
                     .await
             }
             Phase::Post => {
-                self.manage_post_transfer_request(stream_pair, copy_spec)
+                self.manage_post_transfer_request(stream_pair, &copy_spec)
                     .await
             }
         }
     }
+
+    async fn manage_pre_transfer_request<S, R>(
+        &self,
+        stream_pair: SendReceivePair<S, R>,
+        copy_spec: &CopyJobSpec,
+    ) -> RequestResult
+    where
+        S: SendingStream + 'static,
+        R: ReceivingStream + 'static,
+    {
+        let Some(negotiated) = &self.negotiated else {
+            panic!("logic error: manage_request called before negotiation completed");
+        };
+        assert!(
+            copy_spec.source.user_at_host.is_some(),
+            "logic error: manage_pre_transfer_request called for local source"
+        );
+
+        let mut cmd = session::Listing::boxed(stream_pair, None, negotiated.compat);
+        let result = cmd
+            .send(
+                copy_spec,
+                self.display.clone(),
+                0,
+                self.spinner.clone(),
+                &negotiated.config,
+                self.args.client_params,
+            )
+            .await;
+        match result {
+            Ok(response) => response,
+            Err(e) => {
+                if let Some(src) = e.source() {
+                    error!("{e}: {src}");
+                } else {
+                    error!("{e}");
+                }
+                RequestResult::new(false, CommandStats::default(), None)
+            }
+        }
+    }
+
     async fn manage_file_transfer_request<S, R>(
         &self,
         stream_pair: SendReceivePair<S, R>,
@@ -579,38 +632,97 @@ impl Client {
         RequestResult::new(true, CommandStats::default(), None)
     }
 
-    async fn process_job_requests<'a, S, R, OpenStream, JobRunner>(
+    async fn process_job_requests<S, R, OpenStream, JobRunner>(
         &self,
-        jobs: &'a [CopyJobSpec],
+        jobs_in: &[CopyJobSpec],
         mut open_stream: OpenStream,
         mut run_job: JobRunner,
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-        JobRunner:
-            AsyncFnMut(SendReceivePair<S, R>, &'a CopyJobSpec, usize, Phase) -> RequestResult,
+        JobRunner: AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> RequestResult,
+        S: SendingStream + 'static,
+        R: ReceivingStream + 'static,
+    {
+        let destination_is_remote = jobs_in
+            .first()
+            .is_some_and(|j| j.destination.user_at_host.is_some());
+        let recurse = self.args.client_params.recurse;
+
+        if !destination_is_remote && recurse {
+            self.process_recursive_get(jobs_in, async move || open_stream().await, &mut run_job)
+                .await
+        } else {
+            self.process_file_transfers(jobs_in, async move || open_stream().await, &mut run_job)
+                .await
+        }
+    }
+
+    async fn process_file_transfers<S, R, OpenStream, JobRunner>(
+        &self,
+        jobs: &[CopyJobSpec],
+        mut open_stream: OpenStream,
+        mut run_job: JobRunner,
+    ) -> anyhow::Result<(bool, CommandStats)>
+    where
+        OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
+        JobRunner: AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> RequestResult,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
         let mut aggregate_stats = CommandStats::default();
         let mut overall_success = true;
-        let filename_width = longest_filename(jobs);
-        let n_jobs = jobs.len();
+
         let destination_is_remote = jobs
             .first()
             .is_some_and(|j| j.destination.user_at_host.is_some());
 
-        // Pass 1: Send files and create directories.
+        // FILE TRANSFER PHASE
+        // Send/receive files and create directories.
         // The list of job specs must be in the appropriate order i.e. create a directory before attempting to put any files into it.
-        for (index, job) in jobs.iter().enumerate() {
-            if n_jobs > 1 {
+
+        let filename_width = longest_filename(jobs);
+        let n_jobs = jobs.len();
+        let n_files = jobs.iter().filter(|j| !j.directory).count();
+        let mut files_done = 0;
+        for job in jobs {
+            if n_files > 1 {
                 self.spinner.set_message(format!(
-                    "Transferring data (file {} of {n_jobs})",
-                    index + 1,
+                    "Transferring data (file {} of {n_files})",
+                    files_done + 1,
                 ));
             }
+            if !destination_is_remote && job.directory {
+                // Local directory creation is trivial
+                debug!("Creating local directory {}", job.destination.filename);
+                let meta = tokio::fs::metadata(&job.destination.filename).await;
+                if let Ok(m) = meta {
+                    if m.is_file() {
+                        error!(
+                            "Cannot create local directory {}: a file already exists there",
+                            job.destination.filename
+                        );
+                        overall_success = false;
+                        break;
+                    }
+                    // directory already exists, that's fine
+                    continue;
+                }
+                if let Err(e) = tokio::fs::create_dir_all(&job.destination.filename).await
+                    && e.kind() != std::io::ErrorKind::AlreadyExists
+                {
+                    error!(
+                        "Failed to create local directory {}: {e}",
+                        job.destination.filename
+                    );
+                    overall_success = false;
+                    break;
+                }
+                continue;
+            }
+            debug!("Processing job {:?}", job);
             let stream_pair = open_stream().await?;
-            let result = run_job(stream_pair, job, filename_width, Phase::Transfer).await;
+            let result = run_job(stream_pair, job.clone(), filename_width, Phase::Transfer).await;
 
             aggregate_stats.payload_bytes += result.stats.payload_bytes;
             aggregate_stats.peak_transfer_rate = aggregate_stats
@@ -620,9 +732,11 @@ impl Client {
                 overall_success = false;
                 break;
             }
+            files_done += 1;
         }
 
-        // Pass 2: Apply preserve logic (permission bits) to any created directories.
+        // TODO: Make this phase work for get multi.
+        // POST-TRANSFER: Apply preserve logic (permission bits) to any directories created on the remote.
         // We do this in _reverse order_ in case the changed permissions prevent us from being able to traverse a directory we recently created.
         if destination_is_remote && n_jobs > 1 {
             let mut message_set = false;
@@ -634,13 +748,159 @@ impl Client {
                             .set_message("Finishing up directory permissions");
                         message_set = true;
                     }
-                    let result = run_job(stream_pair, job, 0, Phase::Post).await;
+                    let result = run_job(stream_pair, job.clone(), 0, Phase::Post).await;
                     overall_success &= result.success;
                 }
             }
         }
 
         Ok((overall_success, aggregate_stats))
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn process_recursive_get<S, R, OpenStream, JobRunner>(
+        &self,
+        jobs_in: &[CopyJobSpec],
+        mut open_stream: OpenStream,
+        mut run_job: JobRunner,
+    ) -> anyhow::Result<(bool, CommandStats)>
+    where
+        OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
+        JobRunner: AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> RequestResult,
+        S: SendingStream + 'static,
+        R: ReceivingStream + 'static,
+    {
+        // If this is a recursive GET, check the local destination directory to fail fast.
+        // We try very hard to match scp behaviour here:
+        // - with one source:
+        //   - if the destination does not exist, and the source is a directory, create it; put the *contents* of remote folders into it (!)
+        //   - if the destination does not exist, and the source is a file, create it; put the *contents* of remote folders into it (!)
+        //   - if the destination exists and is a file, error; if it is a directory, copy the remote folders into it
+        // - with multiple sources:
+        //   - if the root (user entered) destination directory does not exist, error
+        //   - if the destination exists and is a file, error; if a directory, copy remote folders into it
+        //
+        // We signify the special single-source mode (marked '!' above) by setting single_source_mkdir_mode to Some(output_dir_name).
+        // We don't actually create the directory until we're sure we need to (i.e. we know from the remote that it is indeed a directory).
+
+        let original_dest_dir = &jobs_in
+            .first()
+            .expect("logic error: empty jobs list in recursive GET")
+            .destination
+            .filename;
+        let dest_meta = tokio::fs::metadata(original_dest_dir).await;
+        let single_source_mkdir_mode = if let Ok(meta) = dest_meta {
+            anyhow::ensure!(
+                !meta.is_file(),
+                "Local destination directory is a file: {original_dest_dir}"
+            );
+            // Directory exists; no special action needed.
+            None
+        } else {
+            // Directory does not exist
+            anyhow::ensure!(
+                jobs_in.len() == 1,
+                "Local destination directory {original_dest_dir} does not exist; with multiple source files/directories, the destination directory must exist",
+            );
+            // This is the special-case mode. The local destination directory doesn't exist; we will create it in a moment.
+            // (Not too soon, in case we bail before getting to the actual file transfer.)
+            Some(original_dest_dir.clone())
+        };
+
+        // PRE-TRANSFER:
+        // If this is a recursive GET, ask the remote to enumerate the files.
+        let mut success = true;
+        self.spinner
+            .set_message("Asking remote for list of files to transfer");
+        let mut new_jobs = Vec::new();
+        for job in jobs_in {
+            let stream_pair = open_stream().await?;
+            let result = run_job(stream_pair, job.clone(), 0, Phase::Pre).await;
+            let Some(Response::List(contents)) = result.response else {
+                anyhow::bail!(
+                    "logic error: pre-transfer request did not return List response data"
+                );
+            };
+            if !result.success || !Status::try_from(contents.status).is_ok_and(|s| s == Status::Ok)
+            {
+                error!(
+                    "Failed to list contents of '{}': server returned status {} with message {}",
+                    job.source,
+                    Status::to_string(contents.status),
+                    contents.message.unwrap_or_else(|| String::from("<none>"))
+                );
+                success = false;
+            }
+            for item in contents.entries {
+                let mut destfile = job.destination.filename.clone();
+                let leaf = item
+                    .name
+                    .strip_prefix(&job.source.filename)
+                    .unwrap_or(&item.name)
+                    .trim_start_matches(MAIN_SEPARATOR);
+                trace!("dest {destfile}");
+                if single_source_mkdir_mode.is_none() {
+                    // In normal mode, we need to add the remote directory name as well.
+                    let remote_dir_name = std::path::Path::new(&job.source.filename)
+                        .file_name()
+                        .and_then(|os_str| os_str.to_str())
+                        .unwrap_or_default();
+                    if !remote_dir_name.is_empty() {
+                        add_pathsep_if_needed(&mut destfile, true);
+                        destfile.push_str(remote_dir_name);
+                        trace! {"1smkdir: {destfile}"};
+                    }
+                }
+                if !leaf.is_empty() {
+                    add_pathsep_if_needed(&mut destfile, true);
+                    destfile.push_str(leaf);
+                }
+                trace!(
+                    "source path {name}; leaf {leaf:?}; final dest {destfile}",
+                    name = item.name
+                );
+                new_jobs.push(CopyJobSpec {
+                    user_at_host: job.user_at_host.clone(),
+                    source: FileSpec {
+                        user_at_host: job.source.user_at_host.clone(),
+                        filename: item.name,
+                    },
+                    destination: FileSpec {
+                        user_at_host: job.destination.user_at_host.clone(),
+                        filename: destfile,
+                    },
+                    directory: item.directory,
+                    preserve: job.preserve,
+                });
+            }
+        }
+
+        anyhow::ensure!(
+            success,
+            "Failed to list contents of one or more source directories. No files were transferred."
+        );
+
+        // Now, if required, handle single-source mkdir mode.
+        if let Some(dir_to_create) = single_source_mkdir_mode
+            && !new_jobs.is_empty()
+        {
+            if new_jobs[0].directory {
+                debug!("single source mode; item is a directory; creating it");
+                tokio::fs::create_dir_all(&dir_to_create)
+                    .await
+                    .context(format!(
+                        "while creating local destination directory {dir_to_create}",
+                    ))?;
+            } else {
+                debug!("single source mode; item is a file");
+            }
+        }
+
+        let new_jobs = new_jobs;
+
+        self.process_file_transfers(&new_jobs, async move || open_stream().await, &mut run_job)
+            .await
+        // ... phase 3 ?
     }
 }
 
@@ -686,18 +946,31 @@ mod test {
         protocol::{common::ProtocolMessage as _, test_helpers::new_test_plumbing},
     };
 
+    mod get_multi;
+
     fn make_uut<F: FnOnce(&mut Manager, &mut Parameters)>(
         f: F,
         src: &str,
         dest: &str,
         compat_level: u16,
     ) -> Client {
+        make_uut_multi(f, &[src], dest, compat_level)
+    }
+
+    fn make_uut_multi<F: FnOnce(&mut Manager, &mut Parameters)>(
+        f: F,
+        src: &[&str],
+        dest: &str,
+        compat_level: u16,
+    ) -> Client {
         let mut mgr = Manager::without_default(None);
+        let mut paths = src
+            .iter()
+            .map(|s| FileSpec::from_str(s).unwrap())
+            .collect::<Vec<_>>();
+        paths.push(FileSpec::from_str(dest).unwrap());
         let mut args = Box::new(CliArgs {
-            paths: vec![
-                FileSpec::from_str(src).unwrap(),
-                FileSpec::from_str(dest).unwrap(),
-            ],
+            paths,
             ..Default::default()
         });
 
@@ -860,8 +1133,12 @@ mod test {
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
         let mut plumbing = new_test_plumbing();
 
-        let manage_fut =
-            uut.run_request(plumbing.0, &prep_result.job_specs[0], 10, Phase::Transfer);
+        let manage_fut = uut.run_request(
+            plumbing.0,
+            prep_result.job_specs[0].clone(),
+            10,
+            Phase::Transfer,
+        );
 
         // We are not really testing the protocol here, that is done in get.rs / put.rs.
         // But we are testing the main loop behaviour, so we need to send a valid response.
@@ -906,8 +1183,12 @@ mod test {
         let mut plumbing = new_test_plumbing();
         plumbing.1.send.shutdown().await.unwrap(); // this causes the handler to error out
 
-        let manage_fut =
-            uut.run_request(plumbing.0, &prep_result.job_specs[0], 10, Phase::Transfer);
+        let manage_fut = uut.run_request(
+            plumbing.0,
+            prep_result.job_specs[0].clone(),
+            10,
+            Phase::Transfer,
+        );
         let r = manage_fut.await;
         println!("Result: {r:?}");
     }
@@ -1256,7 +1537,8 @@ mod test {
             let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
             let mut plumbing = new_test_plumbing();
 
-            let manage_fut = uut.run_request(plumbing.0, &prep_result.job_specs[0], 0, Phase::Post);
+            let manage_fut =
+                uut.run_request(plumbing.0, prep_result.job_specs[0].clone(), 0, Phase::Post);
 
             // We are not really testing the protocol here, only the main loop behaviour.
             let mut send_buf = Vec::new();

@@ -18,7 +18,7 @@ mod connection;
 mod connection_info;
 use connection_info::parse_ssh_env;
 mod stream;
-use stream::handle_stream;
+pub(crate) use stream::handle_stream;
 
 /// Server event loop
 #[allow(clippy::module_name_repetitions)]
