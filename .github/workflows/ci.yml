@@ -132,7 +132,7 @@ jobs:
         run: ./scripts/coverage --ci
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lcov.info
           path: target/coverage/lcov.info
