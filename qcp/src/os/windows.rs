@@ -101,6 +101,23 @@ impl super::AbstractPlatform for WindowsPlatform {
     fn help_buffers_mode(udp: u64) -> String {
         help_buffers_win(udp)
     }
+
+    fn override_path_is_local(path: &str) -> bool {
+        // When running on Windows, C:\users\me\file.txt and c:/users/me/file.txt must be detected as local paths.
+        let b = path.as_bytes();
+        // If the path contains only one colon
+        path.chars().filter(|c| *c == ':').count() == 1
+            // and it is long enough (at least `C:\`)
+            && b.len() > 2
+            // and it starts with what could be a drive letter
+            && b[0].is_ascii_alphabetic()
+            // and only one letter
+            // (Woe betide you if you have single-character hostnames on your network!)
+            && b[1] == b':'
+            // and is followed by either type of slash
+            && (b[2] == b'/' || b[2] == b'\\')
+        // then we assume it's local.
+    }
 }
 
 #[cfg_attr(coverage_nightly, coverage(off))]

@@ -219,6 +219,13 @@ pub trait AbstractPlatform {
     /// It may, if applicable, check the OS configuration to improve the quality of the advice
     /// given.
     fn help_buffers_mode(udp: u64) -> String;
+
+    /// OS-specific additions to the logic that detects a string as a local path.
+    /// (I'm looking at you, Windows. Case in point: `qcp host:file c:/users/me/file` !)
+    #[must_use]
+    fn override_path_is_local(_path: &str) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

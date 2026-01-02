@@ -391,7 +391,7 @@ mod test {
         let contents = "wibble";
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
-            let (r1, r2) = test_put_main("file1", "s:file2", false).await?;
+            let (r1, r2) = test_put_main("file1", "server:file2", false).await?;
             assert_eq!(r1?.stats.payload_bytes, contents.len() as u64);
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("file2")?;
@@ -410,7 +410,7 @@ mod test {
             let _ = tray.make_dir("send_dir")?;
             let _ = tray.create_text("send_dir/file1", contents)?;
             assert!(!std::fs::exists("file1")?); // ensure the test is valid
-            let (r1, r2) = test_put_main("send_dir/file1", "s:", false).await?;
+            let (r1, r2) = test_put_main("send_dir/file1", "server:", false).await?;
             assert_eq!(r1?.stats.payload_bytes, contents.len() as u64);
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("file1")?;
@@ -423,7 +423,7 @@ mod test {
     #[tokio::test]
     async fn source_file_not_found() -> Result<()> {
         LitterTray::try_with_async(async |_tray| {
-            let (r1, r2) = test_put_main("file1", "s:file2", true).await?;
+            let (r1, r2) = test_put_main("file1", "server:file2", true).await?;
             let msg = r1.unwrap_err().to_string();
             if cfg!(unix) {
                 assert_contains!(msg, "No such file or directory");
@@ -442,7 +442,7 @@ mod test {
     #[tokio::test]
     async fn source_is_a_directory() -> Result<()> {
         LitterTray::try_with_async(async |_tray| {
-            let (r1, r2) = test_put_main("/tmp", "s:foo", true).await?;
+            let (r1, r2) = test_put_main("/tmp", "server:foo", true).await?;
             let msg = r1.unwrap_err().to_string();
             if cfg!(unix) {
                 assert_contains!(msg, "Source is a directory");
@@ -464,7 +464,7 @@ mod test {
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
             let _ = tray.make_dir("destdir")?;
-            let (r1, r2) = test_put_main("file1", "s:destdir", false).await?;
+            let (r1, r2) = test_put_main("file1", "server:destdir", false).await?;
             assert_eq!(r1?.stats.payload_bytes, contents.len() as u64);
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("destdir/file1")?;
@@ -479,7 +479,7 @@ mod test {
         let contents = "xyzy";
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
-            let (r1, r2) = test_put_main("file1", "s:destdir/foo", false).await?;
+            let (r1, r2) = test_put_main("file1", "server:destdir/foo", false).await?;
             let r1 = r1.unwrap_err();
             assert_eq!(Status::from(r1), Status::DirectoryDoesNotExist);
             assert!(r2.is_ok());
@@ -493,7 +493,7 @@ mod test {
         let contents = "foo";
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
-            let (r1, r2) = test_put_main("file1", "s:destdir/", false).await?;
+            let (r1, r2) = test_put_main("file1", "server:destdir/", false).await?;
             let r1 = r1.unwrap_err();
             let status = Status::from(r1);
             if cfg!(windows) {
@@ -512,7 +512,7 @@ mod test {
         let contents = "xvcoffee";
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
-            let (r1, r2) = test_put_main("file1", "s:/dev/", false).await?;
+            let (r1, r2) = test_put_main("file1", "server:/dev/", false).await?;
             let r1 = r1.unwrap_err();
             if cfg!(msvc) {
                 assert_eq!(Status::from(r1), Status::DirectoryDoesNotExist);
@@ -550,7 +550,7 @@ mod test {
             let _ = tray.create_text(file2, "22")?;
             set_permissions(file2, Permissions::from_mode(0o644))?;
 
-            let (r1, r2) = test_put_main(file2, "s:created/file_no_x", false).await?;
+            let (r1, r2) = test_put_main(file2, "server:created/file_no_x", false).await?;
             let _ = r1.unwrap();
             r2.unwrap();
             let mode = metadata("created/file_no_x")

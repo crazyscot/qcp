@@ -3,6 +3,7 @@
 
 use std::{ffi::OsStr, path::Path, str::FromStr};
 
+use crate::os::{self, AbstractPlatform as _};
 use crate::protocol::control::Direction;
 
 /// Strips the optional user@ part off a hostname
@@ -60,16 +61,47 @@ impl FromStr for FileSpec {
                 }),
             }
         } else {
-            // Host:File or raw IPv4 address 1.2.3.4:File; or just a filename
-            match s.split_once(':') {
-                Some((host, filename)) => Ok(Self {
-                    user_at_host: Some(host.to_string()),
-                    filename: filename.to_string(),
-                }),
-                None => Ok(Self {
+            // If all we had to worry about was unix paths, life would be easier!
+            // A path could be Host:File, or a raw IPv4 address 1.2.3.4:File; or even just a filename.
+            // However, absolute paths on Windows hosts (remote or local)
+            // may be expressed as 'C:\dir\file' or as the UNC-style '\\?\C:\dir\file'.
+            // If there is more than one : in the path, that's easy: the first one delimits the remote user@host,
+            // so we only need to split once.
+            //
+            // The tricky situation is if there is precisely one colon in the string, which is a common case!
+            //
+            // On a Windows host, using OpenSSH, these all work:
+            //          scp host:file c:\users\me\file
+            //          scp host:file c:/users/me/file
+            //          scp c:\users\me\file host:file
+            //          scp c:/users/me/file host:file
+            //
+            // So we cannot rely on the presence of backslashes to identify a Windows path.
+            // Instead, we will add special treatment on Windows builds to detect local paths.
+            //
+            // Interestingly, UNC paths do not work as local files:
+            //          scp host:file \\?\c:\users\me\file
+            //          scp host:file \\.\c:\users\me\file
+            // Both fail with `ssh: Could not resolve hostname \\\\?\\c: No such host is known`
+            // so we won't worry about them.
+
+            if os::Platform::override_path_is_local(s) {
+                // Special case
+                Ok(Self {
                     user_at_host: None,
                     filename: s.to_owned(),
-                }),
+                })
+            } else {
+                match s.split_once(':') {
+                    Some((host, filename)) => Ok(Self {
+                        user_at_host: Some(host.to_string()),
+                        filename: filename.to_string(),
+                    }),
+                    None => Ok(Self {
+                        user_at_host: None,
+                        filename: s.to_owned(),
+                    }),
+                }
             }
         }
     }
@@ -258,5 +290,35 @@ mod test {
         let js = CopyJobSpec::from_parts("server:somedir/file1", "otherdir/file2", false, false)
             .unwrap();
         assert_eq!(js.display_filename(), "file1");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_local_paths() {
+        // This test requires littertray@1.1.0
+        let remote_cases = &[
+            // Syntax: ("qcp job arg","expected path extracted from it")
+            ("server:C:\\dir\\file", "C:\\dir\\file"),
+            ("server:C:/dir/file", "C:/dir/file"),
+            ("server:\\\\?\\C:\\dir\\file", "\\\\?\\C:\\dir\\file"),
+        ];
+        for (arg, expected_path) in remote_cases {
+            let js = CopyJobSpec::from_parts(arg, "otherdir/file2", false, false)
+                .unwrap_or_else(|_| panic!("failed to create jobspec; input case is {arg}"));
+            assert_eq!(js.source.filename, *expected_path, "remove case is {arg}");
+        }
+
+        let local_cases = &[
+            // Local cases are tougher as the drive letter can be mistaken for a filename
+            ("C:\\dir\\file", "C:\\dir\\file"),
+            // Windows scp supports forward slashes for local paths, so we'd better support them too.
+            ("C:/dir/file", "C:/dir/file"),
+            // but we do not support UNC paths as local files, because the Windows build of scp does not support them.
+        ];
+        for (arg, expected_path) in local_cases {
+            let js = CopyJobSpec::from_parts(arg, "server:otherdir/file2", false, false)
+                .unwrap_or_else(|_| panic!("failed to create jobspec; local case is {arg}"));
+            assert_eq!(js.source.filename, *expected_path, "input case is {arg}");
+        }
     }
 }
