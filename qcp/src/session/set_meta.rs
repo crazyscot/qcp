@@ -102,23 +102,23 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for SetMetadata<S,
             match md.tag() {
                 None | Some(MetadataAttr::Invalid) => (),
                 Some(MetadataAttr::ModeBits) => {
-                    let mut perms = localmeta.permissions();
-                    if let Some(mode) = md.data.as_unsigned_ref() {
-                        let mode = (mode & 0o777) as u32;
-                        static_assertions::assert_cfg!(
-                            any(unix, windows),
-                            "This OS is not currently supported"
-                        );
-                        cfg_if! {
-                            if #[cfg(unix)] {
+                    static_assertions::assert_cfg!(
+                        any(unix, windows),
+                        "This OS is not currently supported"
+                    );
+                    cfg_if! {
+                        if #[cfg(unix)] {
+                            if let Some(mode) = md.data.as_unsigned_ref() {
+                                let mode = (mode & 0o777) as u32;
+                                let mut perms = localmeta.permissions();
                                 perms.set_mode(mode);
                                 if let Err(e)= tokio::fs::set_permissions(&path, perms).await {
                                     error_and_return!(self, e);
                                 }
-                            } else if #[cfg(windows)] {
-                                // The Windows 'read only' attribute is not useful on a directory. Ignore for now.
-                                // TODO: Use NTFS permissions
                             }
+                        } else if #[cfg(windows)] {
+                            // The Windows 'read only' attribute is not useful on a directory. Ignore for now.
+                            // TODO: Use NTFS permissions
                         }
                     }
                 }
@@ -189,7 +189,9 @@ mod test {
             let _ = tray.make_dir("remote")?;
             let _ = tray.make_dir("remote/testdir")?;
 
+            #[allow(unused_variables)]
             let target_mode = 0o500;
+            #[allow(unused_variables)]
             let other_mode = 0o505;
             #[cfg(unix)]
             {
