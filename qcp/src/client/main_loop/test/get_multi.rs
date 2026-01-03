@@ -7,6 +7,7 @@
 //! - destination exists vs does not exist
 //! - source is absolute path vs relative path
 //! - destination is absolute path vs relative path
+//! - --preserve, or not
 //!
 //! It also covers the situation where you have asked to recurse on a source that is really a file.
 
@@ -15,41 +16,66 @@ use crate::{
     client::main_loop::Client,
     config::Configuration_Optional,
     protocol::{control::Compatibility, test_helpers::new_test_plumbing},
+    util::time::SystemTimeExt as _,
 };
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget};
 use littertray::LitterTray;
 use rstest::*;
-use std::{cell::RefCell, path::MAIN_SEPARATOR, time::Duration};
+use std::{
+    cell::RefCell,
+    path::MAIN_SEPARATOR,
+    time::{Duration, SystemTime},
+};
 use walkdir::WalkDir;
 
 /// A file to set read-only
-const FILE_PERMISSIONS_PATH: &str = "src1/subdir/file2.txt";
+const FILE_FOR_METADATA_TEST: &str = "src1/subdir/file2.txt";
 /// Unusual Unix mode bits for our read-only file
 #[allow(dead_code)]
-const TEST_FILE_PERMISSIONS_MODE: u32 = 0o411;
+const TEST_FILE_PERMISSIONS_MODE: u32 = 0o411; // r-- --x --x
+
+/// File timestamps to test --preserve with this file
+fn test_modified_time() -> SystemTime {
+    SystemTime::from_unix(100_000)
+}
 
 fn setup_fs(tray: &mut LitterTray) {
-    let _ = tray.make_dir("s/src1");
-    let _ = tray.make_dir("s/src2");
-    let _ = tray.make_dir("s/src3");
-    let _ = tray.make_dir("s/src1/subdir");
-    let _ = tray.create_text("s/src1/file1.txt", "file1 contents");
-    let _ = tray.create_text("s/src1/subdir/file2.txt", "file2 contents");
-    let _ = tray.create_text("s/src2/file3.txt", "file3 contents");
-    let _ = tray.create_text("s/src2/file4.txt", "file3 contents");
-    let _ = tray.create_text("s/src3/file5.txt", "file4 contents");
+    let _ = tray.make_dir("s/src1").unwrap();
+    let _ = tray.make_dir("s/src2").unwrap();
+    let _ = tray.make_dir("s/src3").unwrap();
+    let _ = tray.make_dir("s/src1/subdir").unwrap();
+    let _ = tray
+        .create_text("s/src1/file1.txt", "file1 contents")
+        .unwrap();
 
-    // Mark the chosen file as readonly
-    let ropath = format!("s/{FILE_PERMISSIONS_PATH}");
-    let meta = std::fs::metadata(&ropath).unwrap();
+    // This file is FILE_FOR_METADATA_TEST, set its times and permissions.
+    let special_file = format!("s/{FILE_FOR_METADATA_TEST}");
+    let f_meta = tray.create_text(&special_file, "file2 contents").unwrap();
+    f_meta.set_modified(test_modified_time()).unwrap();
+    drop(f_meta); // force flush
+
+    // Mark it as (at least) readonly
+    let meta = std::fs::metadata(&special_file).unwrap();
     let mut perms = meta.permissions();
+    #[cfg(windows)]
     perms.set_readonly(true);
     #[cfg(unix)]
     {
+        // On unix, we go further and set an unusual (but still readonly) mode.
         use std::os::unix::fs::PermissionsExt as _;
         perms.set_mode(TEST_FILE_PERMISSIONS_MODE);
     }
-    std::fs::set_permissions(ropath, perms).unwrap();
+    std::fs::set_permissions(special_file, perms).unwrap();
+
+    let _ = tray
+        .create_text("s/src2/file3.txt", "file3 contents")
+        .unwrap();
+    let _ = tray
+        .create_text("s/src2/file4.txt", "file3 contents")
+        .unwrap();
+    let _ = tray
+        .create_text("s/src3/file5.txt", "file4 contents")
+        .unwrap();
 }
 
 const ALL_SOURCES: &[&str] = &["s/src1", "s/src2", "s/src3"];
@@ -140,6 +166,7 @@ async fn get_multi(
     #[values(true, false)] dest_exists: bool,
     #[values(true, false)] src_absolute: bool,
     #[values(true, false)] dest_absolute: bool,
+    #[values(true, false)] preserve_metadata: bool,
 ) {
     let should_succeed = n_sources == 1 || dest_exists;
 
@@ -175,6 +202,7 @@ async fn get_multi(
         // We need the tray path to be able to work with absolute paths.
         let mut uut = super::make_uut_multi(|_, _| (), &sources_strs, &dest, 4);
         uut.args.client_params.remote_debug = true;
+        uut.args.client_params.preserve = preserve_metadata;
         uut.display = MultiProgress::with_draw_target(ProgressDrawTarget::hidden());
         uut.spinner = ProgressBar::hidden();
         uut.args.client_params.recurse = true;
@@ -229,17 +257,17 @@ async fn get_multi(
         }
 
         // Check the expected file permissions
-        if should_succeed {
-            let out_ro_file = if dest_exists {
+        if should_succeed && preserve_metadata {
+            let out_special_file = if dest_exists {
                 "d/outdir/src1/subdir/file2.txt"
             } else {
                 "d/outdir/subdir/file2.txt"
             };
-            let meta = std::fs::metadata(out_ro_file).unwrap();
+            let meta = std::fs::metadata(out_special_file).unwrap();
             let perms = meta.permissions();
             assert!(
                 perms.readonly(),
-                "Expected file with readonly permissions was not"
+                "Expected file with readonly permissions was not ({perms:?})"
             );
             #[cfg(unix)]
             {
@@ -251,6 +279,7 @@ async fn get_multi(
                     perms.mode()
                 );
             }
+            assert_eq!(meta.modified().unwrap(), test_modified_time());
         }
 
         Ok(())
