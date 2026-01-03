@@ -142,6 +142,7 @@ impl FileExt for TokioFile {
         let meta = self.metadata().await?;
         let mut times = FileTimes::default();
         let mut changed = false;
+        let mut new_perms = None;
         for md in metadata {
             let tag = match md.tag() {
                 None | Some(MetadataAttr::Invalid) => continue,
@@ -167,7 +168,9 @@ impl FileExt for TokioFile {
                                 perms.set_readonly(!write);
                             }
                         }
-                        self.set_permissions(perms).await?;
+                        // Caution: Ordering appears to be critical on Windows. Setting the modification time appears to clear the readonly attribute, so we'll make changes in one go.
+                        new_perms = Some(perms);
+                        changed = true;
                     }
                 }
                 MetadataAttr::AccessTime => {
@@ -198,6 +201,10 @@ impl FileExt for TokioFile {
                 Ok::<TokioFile, std::io::Error>(TokioFile::from_std(std_file))
             })
             .await??;
+            // Caution: Ordering appears to be critical on Windows. Setting the modification time appears to clear the readonly attributed.
+            if let Some(p) = new_perms {
+                file.set_permissions(p).await?;
+            }
             return Ok(file);
         }
         Ok(self)
