@@ -22,6 +22,12 @@ use rstest::*;
 use std::{cell::RefCell, path::MAIN_SEPARATOR, time::Duration};
 use walkdir::WalkDir;
 
+/// A file to set read-only
+const FILE_PERMISSIONS_PATH: &str = "src1/subdir/file2.txt";
+/// Unusual Unix mode bits for our read-only file
+#[allow(dead_code)]
+const TEST_FILE_PERMISSIONS_MODE: u32 = 0o411;
+
 fn setup_fs(tray: &mut LitterTray) {
     let _ = tray.make_dir("s/src1");
     let _ = tray.make_dir("s/src2");
@@ -32,6 +38,18 @@ fn setup_fs(tray: &mut LitterTray) {
     let _ = tray.create_text("s/src2/file3.txt", "file3 contents");
     let _ = tray.create_text("s/src2/file4.txt", "file3 contents");
     let _ = tray.create_text("s/src3/file5.txt", "file4 contents");
+
+    // Mark the chosen file as readonly
+    let ropath = format!("s/{FILE_PERMISSIONS_PATH}");
+    let meta = std::fs::metadata(&ropath).unwrap();
+    let mut perms = meta.permissions();
+    perms.set_readonly(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        perms.set_mode(TEST_FILE_PERMISSIONS_MODE);
+    }
+    std::fs::set_permissions(ropath, perms).unwrap();
 }
 
 const ALL_SOURCES: &[&str] = &["s/src1", "s/src2", "s/src3"];
@@ -209,6 +227,32 @@ async fn get_multi(
         } else {
             let _ = result.expect_err("This operation should have failed");
         }
+
+        // Check the expected file permissions
+        if should_succeed {
+            let out_ro_file = if dest_exists {
+                "d/outdir/src1/subdir/file2.txt"
+            } else {
+                "d/outdir/subdir/file2.txt"
+            };
+            let meta = std::fs::metadata(out_ro_file).unwrap();
+            let perms = meta.permissions();
+            assert!(
+                perms.readonly(),
+                "Expected file with readonly permissions was not"
+            );
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt as _;
+                assert_eq!(
+                    perms.mode() & 0o777,
+                    TEST_FILE_PERMISSIONS_MODE,
+                    "Expected permissions {TEST_FILE_PERMISSIONS_MODE:o} were not found on test file (got {:o})",
+                    perms.mode()
+                );
+            }
+        }
+
         Ok(())
     })
     .await
