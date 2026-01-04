@@ -83,11 +83,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         trace!("await response");
         let result = Response::from_reader_async_framed(&mut self.stream.recv).await?;
         trace!("result: {:?}", result);
-        Ok(RequestResult::new(
-            true,
-            CommandStats::default(),
-            Some(result),
-        ))
+        Ok(RequestResult::new(CommandStats::default(), Some(result)))
     }
 
     async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {

@@ -137,7 +137,6 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         trace!("complete");
         progress_bar.finish_and_clear();
         Ok(RequestResult::new(
-            true,
             CommandStats {
                 payload_bytes: header.size.0,
                 peak_transfer_rate: meter.peak(),

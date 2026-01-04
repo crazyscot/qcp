@@ -45,11 +45,9 @@ pub struct CommandStats {
     pub peak_transfer_rate: u64,
 }
 
-/// Result of a completed request
+/// Result of a successfully completed request
 #[derive(Debug, derive_more::Constructor)]
 pub struct RequestResult {
-    /// Whether the request was successful
-    pub success: bool,
     /// Statistics for the command, if applicable (i.e. for file transfer commands)
     pub stats: CommandStats,
     /// Optional response data from the server.
@@ -63,7 +61,6 @@ impl Default for RequestResult {
     /// A default successful request result with no stats or response data
     fn default() -> Self {
         Self {
-            success: true,
             stats: CommandStats::default(),
             response: None,
         }

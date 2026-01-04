@@ -168,7 +168,6 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         trace!("complete");
         progress_bar.finish_and_clear();
         Ok(RequestResult {
-            success: true,
             stats: CommandStats {
                 payload_bytes: payload_len,
                 peak_transfer_rate: meter.peak(),

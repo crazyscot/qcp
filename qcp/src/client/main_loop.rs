@@ -554,16 +554,14 @@ impl Client {
             .await;
         let elapsed = timer.elapsed();
         result.inspect(|rr| {
-            if rr.success {
-                info!(
-                    "{filename}: transferred {}",
-                    format_rate(
-                        rr.stats.payload_bytes,
-                        Some(elapsed),
-                        rr.stats.peak_transfer_rate,
-                    )
-                );
-            }
+            info!(
+                "{filename}: transferred {}",
+                format_rate(
+                    rr.stats.payload_bytes,
+                    Some(elapsed),
+                    rr.stats.peak_transfer_rate,
+                )
+            );
         })
     }
 
@@ -612,7 +610,7 @@ impl Client {
             }?;
         }
         // else do nothing
-        Ok(RequestResult::new(true, CommandStats::default(), None))
+        Ok(RequestResult::new(CommandStats::default(), None))
     }
 
     async fn process_job_requests<S, R, OpenStream, JobRunner>(
@@ -715,10 +713,6 @@ impl Client {
                     aggregate_stats.peak_transfer_rate = aggregate_stats
                         .peak_transfer_rate
                         .max(result.stats.peak_transfer_rate);
-                    if !result.success {
-                        overall_success = false;
-                        break;
-                    }
                 }
                 Err(e) => {
                     if let Some(src) = e.source() {
@@ -840,8 +834,7 @@ impl Client {
                     "logic error: pre-transfer request did not return List response data"
                 );
             };
-            if !result.success || !Status::try_from(contents.status).is_ok_and(|s| s == Status::Ok)
-            {
+            if !Status::try_from(contents.status).is_ok_and(|s| s == Status::Ok) {
                 let with_message = if contents.message.is_some() {
                     " with message "
                 } else {
@@ -1200,7 +1193,6 @@ mod test {
         .unwrap()
         .unwrap();
         println!("Result: {r:?}");
-        assert!(r.success);
         assert_eq!(r.stats.payload_bytes, TEST_DATA.len() as u64);
     }
 
@@ -1323,7 +1315,6 @@ mod test {
         let handle_calls = AtomicUsize::new(0);
         let results = Mutex::new(vec![
             RequestResult::new(
-                true,
                 CommandStats {
                     payload_bytes: 10,
                     peak_transfer_rate: 100,
@@ -1331,7 +1322,6 @@ mod test {
                 None,
             ),
             RequestResult::new(
-                true,
                 CommandStats {
                     payload_bytes: 5,
                     peak_transfer_rate: 200,
@@ -1375,24 +1365,22 @@ mod test {
         let open_calls = AtomicUsize::new(0);
         let handle_calls = AtomicUsize::new(0);
         let results = Mutex::new(vec![
-            RequestResult::new(
-                true,
+            Ok(RequestResult::new(
                 CommandStats {
                     payload_bytes: 10,
                     peak_transfer_rate: 100,
                 },
                 None,
-            ),
-            RequestResult::new(false, CommandStats::default(), None),
+            )),
+            Err(anyhow::anyhow!("this one failed")),
             // This would only be consumed if we failed to stop early.
-            RequestResult::new(
-                true,
+            Ok(RequestResult::new(
                 CommandStats {
                     payload_bytes: 999,
                     peak_transfer_rate: 999,
                 },
                 None,
-            ),
+            )),
         ]);
 
         let client = make_uut(|_, _| (), "src", "dest", 1);
@@ -1406,7 +1394,7 @@ mod test {
                 |stream_pair, _job, _filename_width, _pass| {
                     let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
                     drop(stream_pair);
-                    async { Ok(results.lock().unwrap().remove(0)) }
+                    async { results.lock().unwrap().remove(0) }
                 },
             )
             .await
@@ -1512,9 +1500,8 @@ mod test {
         let results = Mutex::new(vec![
             // Each directory is handled twice, so we expect to see five results.
             // pass 1:
-            RequestResult::new(true, CommandStats::default(), None),
+            RequestResult::new(CommandStats::default(), None),
             RequestResult::new(
-                true,
                 // this is file1
                 CommandStats {
                     payload_bytes: 10,
@@ -1522,10 +1509,10 @@ mod test {
                 },
                 None,
             ),
-            RequestResult::new(true, CommandStats::default(), None),
+            RequestResult::new(CommandStats::default(), None),
             // pass 2:
-            RequestResult::new(true, CommandStats::default(), None),
-            RequestResult::new(true, CommandStats::default(), None),
+            RequestResult::new(CommandStats::default(), None),
+            RequestResult::new(CommandStats::default(), None),
         ]);
 
         let client = make_uut(|_, _| (), "src", "dest", 1);
@@ -1587,7 +1574,6 @@ mod test {
         .unwrap()
         .unwrap();
         println!("Result: {r:?}");
-        assert!(r.success);
         assert_eq!(r.stats.payload_bytes, 0);
     }
 }
