@@ -842,11 +842,16 @@ impl Client {
             };
             if !result.success || !Status::try_from(contents.status).is_ok_and(|s| s == Status::Ok)
             {
+                let with_message = if contents.message.is_some() {
+                    " with message "
+                } else {
+                    ""
+                };
                 error!(
-                    "Failed to list contents of '{}': server returned status {} with message {}",
+                    "Failed to list contents of '{}': server returned status {st}{with_message}{message}",
                     job.source,
-                    Status::to_string(contents.status),
-                    contents.message.unwrap_or_else(|| String::from("<none>"))
+                    st = Status::to_string(contents.status),
+                    message = contents.message.unwrap_or_default(),
                 );
                 success = false;
             }
@@ -899,10 +904,10 @@ impl Client {
             }
         }
 
-        anyhow::ensure!(
-            success,
-            "Failed to list contents of one or more source directories. No files were transferred."
-        );
+        if !success {
+            warn!("No files were transferred");
+            return Ok((false, CommandStats::default()));
+        }
 
         // Now, if required, handle single-source mkdir mode.
         if let Some(dir_to_create) = single_source_mkdir_mode
