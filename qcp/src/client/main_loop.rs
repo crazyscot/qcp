@@ -8,11 +8,11 @@ use crate::{
     config::{Configuration, Configuration_Optional, Manager},
     control::{ControlChannel, create, create_endpoint},
     protocol::{
-        TaggedData,
+        FindTag, TaggedData,
         common::{ReceivingStream, SendReceivePair, SendingStream},
         compat::Feature,
         control::{ClosedownReportV1, Compatibility, CredentialsType, Direction, ServerMessageV2},
-        session::{CommandParam, Get2Args, Response, Status},
+        session::{CommandParam, Get2Args, MetadataAttr, Response, Status},
     },
     session::{self, CommandStats, RequestResult},
     util::{
@@ -28,6 +28,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
+use std::error::Error;
 use std::{
     net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6},
     path::MAIN_SEPARATOR,
@@ -603,30 +604,61 @@ impl Client {
         let Some(negotiated) = &self.negotiated else {
             panic!("logic error: manage_request called before negotiation completed");
         };
-        assert!(
-            copy_spec.destination.user_at_host.is_some(),
-            "logic error: manage_post_transfer_request called for local destination"
-        );
 
-        if copy_spec.preserve && copy_spec.directory {
-            let mut cmd = session::SetMetadata::boxed(stream_pair, None, negotiated.compat);
-            let result = cmd
-                .send(
-                    copy_spec,
-                    self.display.clone(),
-                    0,
-                    self.spinner.clone(),
-                    &negotiated.config,
-                    self.args.client_params,
-                )
-                .await;
-            if let Err(e) = result {
-                if let Some(src) = e.source() {
-                    error!("{e}: {src}");
-                } else {
-                    error!("{e}");
+        if copy_spec.destination.user_at_host.is_some() {
+            // Destination is remote
+            if copy_spec.preserve && copy_spec.directory {
+                let mut cmd = session::SetMetadata::boxed(stream_pair, None, negotiated.compat);
+                let result = cmd
+                    .send(
+                        copy_spec,
+                        self.display.clone(),
+                        0,
+                        self.spinner.clone(),
+                        &negotiated.config,
+                        self.args.client_params,
+                    )
+                    .await;
+                if let Err(e) = result {
+                    if let Some(src) = e.source() {
+                        error!("{e}: {src}");
+                    } else {
+                        error!("{e}");
+                    }
+                    return RequestResult::new(false, CommandStats::default(), None);
                 }
-                return RequestResult::new(false, CommandStats::default(), None);
+            }
+        } else {
+            // Destination is local, apply any mode bits given in the jobspec
+            if let Some(mode) = copy_spec.mode {
+                let perms = tokio::fs::metadata(&copy_spec.destination.filename)
+                    .await
+                    .map(|m| m.permissions())
+                    .map(|mut perms| {
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::PermissionsExt as _;
+                            perms.set_mode(mode);
+                        }
+                        #[cfg(windows)]
+                        // As for files, map _any_ writeable bit into writeability.
+                        perms.set_readonly((mode & 0o222) == 0);
+                        perms
+                    });
+
+                let result = match perms {
+                    Ok(p) => tokio::fs::set_permissions(&copy_spec.destination.filename, p).await,
+                    Err(e) => Err(e),
+                };
+
+                if let Err(e) = result {
+                    if let Some(src) = e.source() {
+                        error!("{e}: {src}");
+                    } else {
+                        error!("{e}");
+                    }
+                    return RequestResult::new(false, CommandStats::default(), None);
+                }
             }
         }
         RequestResult::new(true, CommandStats::default(), None)
@@ -735,10 +767,9 @@ impl Client {
             files_done += 1;
         }
 
-        // TODO: Make this phase work for get multi.
-        // POST-TRANSFER: Apply preserve logic (permission bits) to any directories created on the remote.
+        // POST-TRANSFER: Apply preserve logic (permission bits) to any directories created.
         // We do this in _reverse order_ in case the changed permissions prevent us from being able to traverse a directory we recently created.
-        if destination_is_remote && n_jobs > 1 {
+        if n_jobs > 1 {
             let mut message_set = false;
             for job in jobs.iter().rev() {
                 if job.directory && job.preserve {
@@ -859,6 +890,7 @@ impl Client {
                     "source path {name}; leaf {leaf:?}; final dest {destfile}",
                     name = item.name
                 );
+                #[allow(clippy::cast_possible_truncation)]
                 new_jobs.push(CopyJobSpec {
                     user_at_host: job.user_at_host.clone(),
                     source: FileSpec {
@@ -871,6 +903,10 @@ impl Client {
                     },
                     directory: item.directory,
                     preserve: job.preserve,
+                    mode: item
+                        .attributes
+                        .find_tag(MetadataAttr::ModeBits)
+                        .map(|i| i.coerce_unsigned() as u32),
                 });
             }
         }
@@ -900,7 +936,6 @@ impl Client {
 
         self.process_file_transfers(&new_jobs, async move || open_stream().await, &mut run_job)
             .await
-        // ... phase 3 ?
     }
 }
 

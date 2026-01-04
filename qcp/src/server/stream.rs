@@ -1,6 +1,8 @@
 //! Handler for a single incoming stream on a connection
 // (c) 2024 Ross Younger
 
+use std::io::ErrorKind;
+
 use crate::protocol::common::{
     ProtocolMessage as _, ReceivingStream, SendReceivePair, SendingStream,
 };
@@ -21,7 +23,18 @@ where
 {
     use crate::session;
     trace!("reading command");
-    let packet = Command::from_reader_async_framed(&mut sp.recv).await?;
+    let packet = match Command::from_reader_async_framed(&mut sp.recv).await {
+        Ok(c) => c,
+        Err(e) => {
+            if let Some(ee) = e.downcast_ref::<std::io::Error>()
+                && ee.kind() == ErrorKind::UnexpectedEof
+            {
+                tracing::debug!("handler got EOF while awaiting command; bailing");
+                return Ok(());
+            }
+            return Err(e);
+        }
+    };
 
     let (span, mut handler) = match packet {
         Command::Get(args) => (

@@ -120,6 +120,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
                     name: path.clone(),
                     directory: false,
                     size: Uint(meta.len()),
+                    attributes: vec![],
                 }],
             })
             .to_writer_async_framed(&mut self.stream.send)

@@ -201,7 +201,7 @@ impl FileExt for TokioFile {
                 Ok::<TokioFile, std::io::Error>(TokioFile::from_std(std_file))
             })
             .await??;
-            // Caution: Ordering appears to be critical on Windows. Setting the modification time appears to clear the readonly attributed.
+            // Caution: Ordering appears to be critical on Windows. Setting the modification time appears to clear the readonly attribute.
             if let Some(p) = new_perms {
                 file.set_permissions(p).await?;
             }

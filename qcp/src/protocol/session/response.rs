@@ -1,10 +1,10 @@
 //! Session protocol response structure definitions
 // (c) 2025 Ross Younger
 
-use crate::protocol::session::prelude::*;
+use crate::{protocol::session::prelude::*, util::FsMetadataExt};
 use std::fmt::Display;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, thiserror::Error)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, thiserror::Error)]
 #[error(transparent)]
 /// Response packet
 pub enum Response {
@@ -61,7 +61,7 @@ impl Display for ResponseV1 {
 
 /// ListResponse was introduced in qcp 0.8 with compatibility level 4.
 #[derive(
-    Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor, thiserror::Error,
+    Serialize, Deserialize, PartialEq, Debug, Clone, derive_more::Constructor, thiserror::Error,
 )]
 pub struct ListResponse {
     /// Outcome of the operation.
@@ -91,7 +91,7 @@ impl Display for ListResponse {
 
 /// A single file or directory entry returned by a `List` request. See [`Command::List`].
 #[derive(
-    Serialize, Deserialize, PartialEq, Eq, Debug, Clone, derive_more::Constructor, thiserror::Error,
+    Serialize, Deserialize, PartialEq, Debug, Clone, derive_more::Constructor, thiserror::Error,
 )]
 pub struct ListEntry {
     /// Filename (UTF-8)
@@ -100,12 +100,21 @@ pub struct ListEntry {
     pub directory: bool,
     /// file size in bytes
     pub size: Uint,
+    /// Additional metadata for the entry as required.
+    ///
+    /// Currently supported: [`MetadataAttr::ModeBits`] on directories.
+    pub attributes: Vec<TaggedData<MetadataAttr>>,
 }
 
 impl Display for ListEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.directory {
-            write!(f, "<DIR> {}", self.name)
+            let mode = self.attributes.find_tag(MetadataAttr::ModeBits);
+            if let Some(mode) = mode {
+                write!(f, "<DIR> {} mode={:o}", self.name, mode.coerce_unsigned())
+            } else {
+                write!(f, "<DIR> {}", self.name)
+            }
         } else {
             write!(f, "      {} {}", self.name, self.size.0)
         }
@@ -114,10 +123,16 @@ impl Display for ListEntry {
 
 impl From<walkdir::DirEntry> for ListEntry {
     fn from(value: walkdir::DirEntry) -> Self {
+        let directory = value.file_type().is_dir();
+        let mut attributes = vec![];
+        if directory && let Ok(meta) = value.metadata() {
+            attributes.push(MetadataAttr::new_mode(meta.mode()));
+        }
         Self {
             name: value.path().to_string_lossy().to_string(), // relative to root!
-            directory: value.file_type().is_dir(),
+            directory,
             size: Uint(value.metadata().map_or(0, |m| m.len())),
+            attributes,
         }
     }
 }
@@ -301,11 +316,13 @@ mod test {
                     name: "aaa".to_string(),
                     directory: false,
                     size: Uint(42),
+                    attributes: vec![],
                 },
                 ListEntry {
                     name: "bbb".to_string(),
                     directory: true,
                     size: Uint(0),
+                    attributes: vec![],
                 },
             ],
         };

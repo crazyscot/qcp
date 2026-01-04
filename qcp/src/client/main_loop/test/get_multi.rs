@@ -32,18 +32,24 @@ use walkdir::WalkDir;
 const FILE_FOR_METADATA_TEST: &str = "src1/subdir/file2.txt";
 /// Unusual Unix mode bits for our read-only file
 #[allow(dead_code)]
-const TEST_FILE_PERMISSIONS_MODE: u32 = 0o411; // r-- --x --x
+const TEST_FILE_PERMISSIONS_MODE: u32 = 0o411;
 
 /// File timestamps to test --preserve with this file
 fn test_modified_time() -> SystemTime {
     SystemTime::from_unix(100_000)
 }
 
+/// Unusual Unix mode bits for our metadata test directory
+#[allow(dead_code, reason = "Used on Unix, not on Windows")]
+const TEST_DIR_PERMISSIONS_MODE: u32 = 0o515;
+
 fn setup_fs(tray: &mut LitterTray) {
     let _ = tray.make_dir("s/src1").unwrap();
     let _ = tray.make_dir("s/src2").unwrap();
     let _ = tray.make_dir("s/src3").unwrap();
-    let _ = tray.make_dir("s/src1/subdir").unwrap();
+    #[allow(dead_code, reason = "Used on Unix, not on Windows")]
+    let d_perms = tray.make_dir("s/src1/subdir").unwrap();
+
     let _ = tray
         .create_text("s/src1/file1.txt", "file1 contents")
         .unwrap();
@@ -76,6 +82,15 @@ fn setup_fs(tray: &mut LitterTray) {
     let _ = tray
         .create_text("s/src3/file5.txt", "file4 contents")
         .unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let meta = std::fs::metadata(&d_perms).unwrap();
+        let mut perms = meta.permissions();
+        perms.set_mode(TEST_DIR_PERMISSIONS_MODE);
+        std::fs::set_permissions(d_perms, perms).unwrap();
+    }
 }
 
 const ALL_SOURCES: &[&str] = &["s/src1", "s/src2", "s/src3"];
@@ -277,6 +292,17 @@ async fn get_multi(
                     TEST_FILE_PERMISSIONS_MODE,
                     "Expected permissions {TEST_FILE_PERMISSIONS_MODE:o} were not found on test file (got {:o})",
                     perms.mode()
+                );
+
+                let dir_for_perms_check = if dest_exists {
+                    "d/outdir/src1/subdir"
+                } else {
+                    "d/outdir/subdir"
+                };
+                let dir_perms = std::fs::metadata(dir_for_perms_check).unwrap().permissions();
+                assert_eq!(dir_perms.mode() & 0o777, TEST_DIR_PERMISSIONS_MODE,
+                    "Expected permissions {TEST_DIR_PERMISSIONS_MODE:o} were not found on test file (got {:o})",
+                    dir_perms.mode()
                 );
             }
             assert_eq!(meta.modified().unwrap(), test_modified_time());

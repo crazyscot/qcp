@@ -131,6 +131,9 @@ pub struct CopyJobSpec {
     ///
     /// **This flag does not provide any information regarding recursion.** That is up to the caller to determine from context.
     pub(crate) directory: bool,
+    /// If present, Unix-style mode bits to apply to the target.
+    /// (This currently only applies to directories.)
+    pub(crate) mode: Option<u32>,
 }
 
 impl CopyJobSpec {
@@ -155,6 +158,7 @@ impl CopyJobSpec {
             user_at_host,
             preserve,
             directory,
+            mode: None,
         })
     }
 
