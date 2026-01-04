@@ -91,14 +91,16 @@ pub(crate) fn process_statistics(
 
     let locale = &num_format::Locale::en;
     let payload_bytes = command_stats.payload_bytes;
-    info!(
-        "Transferred {}",
-        format_rate(
-            payload_bytes,
-            transport_time,
-            command_stats.peak_transfer_rate,
-        )
-    );
+    if payload_bytes != 0 {
+        info!(
+            "Transferred {}",
+            format_rate(
+                payload_bytes,
+                transport_time,
+                command_stats.peak_transfer_rate,
+            )
+        );
+    }
     if show_statistics {
         info!(
             "Total packets sent: {} by us; {} by remote",
