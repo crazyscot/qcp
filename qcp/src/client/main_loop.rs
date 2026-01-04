@@ -455,6 +455,10 @@ impl Client {
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
+        assert!(
+            self.negotiated.is_some(),
+            "logic error: run_request called before negotiation completed"
+        );
         match pass {
             Phase::Pre => {
                 self.manage_pre_transfer_request(stream_pair, &copy_spec)
@@ -480,9 +484,7 @@ impl Client {
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
-        let Some(negotiated) = &self.negotiated else {
-            panic!("logic error: manage_request called before negotiation completed");
-        };
+        let negotiated = self.negotiated.as_ref().unwrap(); // checked in run_request
         assert!(
             copy_spec.source.user_at_host.is_some(),
             "logic error: manage_pre_transfer_request called for local source"
@@ -524,9 +526,7 @@ impl Client {
     {
         use crate::session;
 
-        let Some(negotiated) = &self.negotiated else {
-            panic!("logic error: manage_request called before negotiation completed");
-        };
+        let negotiated = self.negotiated.as_ref().unwrap(); // checked in run_request
 
         let (mut cmd, span) = if copy_spec.source.user_at_host.is_some() {
             // We are GETting something
@@ -601,9 +601,7 @@ impl Client {
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
-        let Some(negotiated) = &self.negotiated else {
-            panic!("logic error: manage_request called before negotiation completed");
-        };
+        let negotiated = self.negotiated.as_ref().unwrap(); // checked in run_request
 
         if copy_spec.destination.user_at_host.is_some() {
             // Destination is remote
