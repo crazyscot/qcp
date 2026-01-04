@@ -28,7 +28,6 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
-use std::error::Error;
 use std::{
     net::{IpAddr, SocketAddr, SocketAddrV4, SocketAddrV6},
     path::MAIN_SEPARATOR,
@@ -450,7 +449,7 @@ impl Client {
         copy_spec: CopyJobSpec,
         filename_width: usize,
         pass: Phase,
-    ) -> RequestResult
+    ) -> Result<RequestResult>
     where
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
@@ -479,7 +478,7 @@ impl Client {
         &self,
         stream_pair: SendReceivePair<S, R>,
         copy_spec: &CopyJobSpec,
-    ) -> RequestResult
+    ) -> Result<RequestResult>
     where
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
@@ -491,27 +490,15 @@ impl Client {
         );
 
         let mut cmd = session::Listing::boxed(stream_pair, None, negotiated.compat);
-        let result = cmd
-            .send(
-                copy_spec,
-                self.display.clone(),
-                0,
-                self.spinner.clone(),
-                &negotiated.config,
-                self.args.client_params,
-            )
-            .await;
-        match result {
-            Ok(response) => response,
-            Err(e) => {
-                if let Some(src) = e.source() {
-                    error!("{e}: {src}");
-                } else {
-                    error!("{e}");
-                }
-                RequestResult::new(false, CommandStats::default(), None)
-            }
-        }
+        cmd.send(
+            copy_spec,
+            self.display.clone(),
+            0,
+            self.spinner.clone(),
+            &negotiated.config,
+            self.args.client_params,
+        )
+        .await
     }
 
     async fn manage_file_transfer_request<S, R>(
@@ -519,7 +506,7 @@ impl Client {
         stream_pair: SendReceivePair<S, R>,
         copy_spec: &CopyJobSpec,
         filename_width: usize,
-    ) -> RequestResult
+    ) -> Result<RequestResult>
     where
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
@@ -566,9 +553,8 @@ impl Client {
             .instrument(span)
             .await;
         let elapsed = timer.elapsed();
-
-        match result {
-            Ok(rr) => {
+        result.inspect(|rr| {
+            if rr.success {
                 info!(
                     "{filename}: transferred {}",
                     format_rate(
@@ -577,89 +563,56 @@ impl Client {
                         rr.stats.peak_transfer_rate,
                     )
                 );
-                RequestResult::new(true, rr.stats, None)
             }
-            Err(e) => {
-                if let Some(src) = e.source() {
-                    // Some error conditions come with an anyhow Context.
-                    // We want to output one tidy line, so glue them together.
-                    error!("{e}: {src}");
-                } else {
-                    error!("{e}");
-                }
-                RequestResult::new(false, CommandStats::default(), None)
-            }
-        }
+        })
     }
 
     async fn manage_post_transfer_request<S, R>(
         &self,
         stream_pair: SendReceivePair<S, R>,
         copy_spec: &CopyJobSpec,
-    ) -> RequestResult
+    ) -> Result<RequestResult>
     where
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
         let negotiated = self.negotiated.as_ref().unwrap(); // checked in run_request
+        let destination_is_remote = copy_spec.destination.user_at_host.is_some();
 
-        if copy_spec.destination.user_at_host.is_some() {
-            // Destination is remote
-            if copy_spec.preserve && copy_spec.directory {
-                let mut cmd = session::SetMetadata::boxed(stream_pair, None, negotiated.compat);
-                let result = cmd
-                    .send(
-                        copy_spec,
-                        self.display.clone(),
-                        0,
-                        self.spinner.clone(),
-                        &negotiated.config,
-                        self.args.client_params,
-                    )
-                    .await;
-                if let Err(e) = result {
-                    if let Some(src) = e.source() {
-                        error!("{e}: {src}");
-                    } else {
-                        error!("{e}");
-                    }
-                    return RequestResult::new(false, CommandStats::default(), None);
-                }
-            }
-        } else {
-            // Destination is local, apply any mode bits given in the jobspec
-            if let Some(mode) = copy_spec.mode {
-                let perms = tokio::fs::metadata(&copy_spec.destination.filename)
-                    .await
-                    .map(|m| m.permissions())
-                    .map(|mut perms| {
-                        #[cfg(unix)]
-                        {
-                            use std::os::unix::fs::PermissionsExt as _;
-                            perms.set_mode(mode);
-                        }
-                        #[cfg(windows)]
-                        // As for files, map _any_ writeable bit into writeability.
-                        perms.set_readonly((mode & 0o222) == 0);
-                        perms
-                    });
-
-                let result = match perms {
-                    Ok(p) => tokio::fs::set_permissions(&copy_spec.destination.filename, p).await,
-                    Err(e) => Err(e),
-                };
-
-                if let Err(e) = result {
-                    if let Some(src) = e.source() {
-                        error!("{e}: {src}");
-                    } else {
-                        error!("{e}");
-                    }
-                    return RequestResult::new(false, CommandStats::default(), None);
-                }
-            }
+        if destination_is_remote && copy_spec.preserve && copy_spec.directory {
+            return session::SetMetadata::boxed(stream_pair, None, negotiated.compat)
+                .send(
+                    copy_spec,
+                    self.display.clone(),
+                    0,
+                    self.spinner.clone(),
+                    &negotiated.config,
+                    self.args.client_params,
+                )
+                .await;
         }
-        RequestResult::new(true, CommandStats::default(), None)
+        if !destination_is_remote && let Some(mode) = copy_spec.mode {
+            let perms = tokio::fs::metadata(&copy_spec.destination.filename)
+                .await
+                .map(|m| m.permissions())
+                .map(|mut perms| {
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt as _;
+                        perms.set_mode(mode);
+                    }
+                    #[cfg(windows)]
+                    // As for files, map _any_ writeable bit into writeability.
+                    perms.set_readonly((mode & 0o222) == 0);
+                    perms
+                });
+            match perms {
+                Ok(p) => tokio::fs::set_permissions(&copy_spec.destination.filename, p).await,
+                Err(e) => Err(e),
+            }?;
+        }
+        // else do nothing
+        Ok(RequestResult::new(true, CommandStats::default(), None))
     }
 
     async fn process_job_requests<S, R, OpenStream, JobRunner>(
@@ -670,14 +623,15 @@ impl Client {
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-        JobRunner: AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> RequestResult,
+        JobRunner:
+            AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> Result<RequestResult>,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
         let destination_is_remote = jobs_in
             .first()
             .is_some_and(|j| j.destination.user_at_host.is_some());
-        let recurse = self.args.client_params.recurse;
+        let recurse: bool = self.args.client_params.recurse;
 
         if !destination_is_remote && recurse {
             self.process_recursive_get(jobs_in, async move || open_stream().await, &mut run_job)
@@ -688,6 +642,7 @@ impl Client {
         }
     }
 
+    /// This function should generally log errors and return Ok(status, stats). Err(...) is reserved for fatal errors.
     async fn process_file_transfers<S, R, OpenStream, JobRunner>(
         &self,
         jobs: &[CopyJobSpec],
@@ -696,7 +651,8 @@ impl Client {
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-        JobRunner: AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> RequestResult,
+        JobRunner:
+            AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> Result<RequestResult>,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
@@ -753,14 +709,28 @@ impl Client {
             debug!("Processing job {:?}", job);
             let stream_pair = open_stream().await?;
             let result = run_job(stream_pair, job.clone(), filename_width, Phase::Transfer).await;
-
-            aggregate_stats.payload_bytes += result.stats.payload_bytes;
-            aggregate_stats.peak_transfer_rate = aggregate_stats
-                .peak_transfer_rate
-                .max(result.stats.peak_transfer_rate);
-            if !result.success {
-                overall_success = false;
-                break;
+            match result {
+                Ok(result) => {
+                    aggregate_stats.payload_bytes += result.stats.payload_bytes;
+                    aggregate_stats.peak_transfer_rate = aggregate_stats
+                        .peak_transfer_rate
+                        .max(result.stats.peak_transfer_rate);
+                    if !result.success {
+                        overall_success = false;
+                        break;
+                    }
+                }
+                Err(e) => {
+                    if let Some(src) = e.source() {
+                        // Some error conditions come with an anyhow Context.
+                        // We want to output one tidy line, so glue them together.
+                        error!("{e}: {src}");
+                    } else {
+                        error!("{e}");
+                    }
+                    overall_success = false;
+                    break;
+                }
             }
             files_done += 1;
         }
@@ -778,7 +748,16 @@ impl Client {
                         message_set = true;
                     }
                     let result = run_job(stream_pair, job.clone(), 0, Phase::Post).await;
-                    overall_success &= result.success;
+                    if let Err(e) = result {
+                        if let Some(src) = e.source() {
+                            // Some error conditions come with an anyhow Context.
+                            // We want to output one tidy line, so glue them together.
+                            error!("{e}: {src}");
+                        } else {
+                            error!("{e}");
+                        }
+                        overall_success = false;
+                    }
                 }
             }
         }
@@ -786,6 +765,7 @@ impl Client {
         Ok((overall_success, aggregate_stats))
     }
 
+    /// This function should generally log errors and return Ok(status, stats). Err(...) is reserved for fatal errors.
     #[allow(clippy::too_many_lines)]
     async fn process_recursive_get<S, R, OpenStream, JobRunner>(
         &self,
@@ -795,7 +775,8 @@ impl Client {
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-        JobRunner: AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> RequestResult,
+        JobRunner:
+            AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> Result<RequestResult>,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
@@ -844,7 +825,7 @@ impl Client {
         let mut new_jobs = Vec::new();
         for job in jobs_in {
             let stream_pair = open_stream().await?;
-            let result = run_job(stream_pair, job.clone(), 0, Phase::Pre).await;
+            let result = run_job(stream_pair, job.clone(), 0, Phase::Pre).await?;
             let Some(Response::List(contents)) = result.response else {
                 anyhow::bail!(
                     "logic error: pre-transfer request did not return List response data"
@@ -1202,6 +1183,7 @@ mod test {
             Ok(b)
         })
         .await
+        .unwrap()
         .unwrap();
         println!("Result: {r:?}");
         assert!(r.success);
@@ -1355,7 +1337,7 @@ mod test {
                 |stream_pair, _job, _filename_width, _pass| {
                     let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
                     drop(stream_pair);
-                    async { results.lock().unwrap().remove(0) }
+                    async { Ok(results.lock().unwrap().remove(0)) }
                 },
             )
             .await
@@ -1410,7 +1392,7 @@ mod test {
                 |stream_pair, _job, _filename_width, _pass| {
                     let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
                     drop(stream_pair);
-                    async { results.lock().unwrap().remove(0) }
+                    async { Ok(results.lock().unwrap().remove(0)) }
                 },
             )
             .await
@@ -1543,7 +1525,7 @@ mod test {
                 |stream_pair, _job, _filename_width, _pass| {
                     let _ = handle_calls.fetch_add(1, Ordering::SeqCst);
                     drop(stream_pair);
-                    async { results.lock().unwrap().remove(0) }
+                    async { Ok(results.lock().unwrap().remove(0)) }
                 },
             )
             .await
@@ -1588,6 +1570,7 @@ mod test {
             Ok(b)
         })
         .await
+        .unwrap()
         .unwrap();
         println!("Result: {r:?}");
         assert!(r.success);
