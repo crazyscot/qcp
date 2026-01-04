@@ -780,6 +780,15 @@ impl Client {
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
+        anyhow::ensure!(
+            self.negotiated
+                .as_ref()
+                .map(|n| n.compat)
+                .unwrap_or_default()
+                .supports(Feature::MKDIR_SETMETA_LS),
+            "Operation not supported by remote"
+        );
+
         // If this is a recursive GET, check the local destination directory to fail fast.
         // We try very hard to match scp behaviour here:
         // - with one source:
