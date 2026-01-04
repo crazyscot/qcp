@@ -47,10 +47,6 @@ impl<S: SendingStream, R: ReceivingStream> Listing<S, R> {
 
 #[async_trait]
 impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> {
-    fn response(&mut self) -> Option<Response> {
-        panic!("this doesn't work any more");
-    }
-
     async fn send(
         &mut self,
         job: &crate::client::CopyJobSpec,

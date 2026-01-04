@@ -90,13 +90,4 @@ pub(crate) trait SessionCommandImpl: Send {
     ///
     /// See also the [`crate::session::common::send_ok`] and [`crate::session::common::send_error`] helpers.
     async fn handle(&mut self, io_buffer_size: u64) -> Result<()>;
-
-    /// Accessor for the stored response data, if there is any.
-    /// This takes ownership of the response data; future calls will return None.
-    ///
-    /// **TODO** This is a temporary wart for testing.
-    #[allow(dead_code)]
-    fn response(&mut self) -> Option<Response> {
-        None
-    }
 }

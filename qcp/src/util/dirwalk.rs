@@ -107,7 +107,6 @@ pub(crate) fn recurse_local_source(
 
     // Join a remote path using forward slashes, independent of the client's OS.
     // This avoids emitting `\` on Windows clients when the remote host is Unix-like.
-    // TODO: swap MAIN_SEPARATOR_STR and & if remote source, local dest.
     let dest_separator_char = '/';
     let dest_separator_str = String::from(dest_separator_char);
     let local_separator_char = MAIN_SEPARATOR;
@@ -152,7 +151,6 @@ pub(crate) fn recurse_local_source(
         };
         let dest_fs = FileSpec {
             user_at_host: destination.user_at_host.clone(),
-            // TODO: use join_local instead of join_remote for remote source / local dest
             filename: path::join_remote(&dest_stem, &leaf_str),
         };
         output.push(
