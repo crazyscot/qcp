@@ -121,6 +121,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         let entries: Result<Vec<_>, walkdir::Error> = WalkDir::new(path)
             // do NOT omit the root here, recursive transfer depends on it to mkdir the top-level dir
             .max_depth(if recurse { usize::MAX } else { 1 })
+            .follow_links(true)
             .into_iter()
             .map(|e| e.map(ListEntry::from))
             .collect();

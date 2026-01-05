@@ -157,6 +157,7 @@ fn contents_of(
     for entry in WalkDir::new(path)
         // skip_root true => min_depth 1; false => min_depth 0
         .min_depth(usize::from(skip_root))
+        .follow_links(true)
     {
         match entry {
             Ok(entry) => {
