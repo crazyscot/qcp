@@ -108,8 +108,16 @@ where
     /// # Return
     /// OK(()) iff the passed-in limit satisfies any requirement specified by this type
     fn check_size(size: u32) -> Result<(), Error> {
+        Self::check_size_usize(size as usize)
+    }
+
+    /// Checks the passed-in limit against this type's [`WIRE_ENCODING_LIMIT`](Self::WIRE_ENCODING_LIMIT).
+    ///
+    /// # Return
+    /// OK(()) iff the passed-in limit satisfies any requirement specified by this type
+    fn check_size_usize(size: usize) -> Result<(), Error> {
         anyhow::ensure!(
-            size <= Self::WIRE_ENCODING_LIMIT,
+            size <= Self::WIRE_ENCODING_LIMIT as usize,
             format!(
                 "Wire message size {} was too long for {} (limit: {})",
                 size,
@@ -205,8 +213,10 @@ where
         W: std::io::Write,
     {
         let vec = self.to_vec()?;
+        Self::check_size_usize(vec.len())?;
+        #[allow(clippy::cast_possible_truncation)] // already checked
         let header = MessageHeader {
-            size: vec.len().try_into()?,
+            size: vec.len() as u32,
         }
         .to_vec()?;
         writer.write_all(&header)?;
@@ -223,8 +233,10 @@ where
     {
         async {
             let vec = self.to_vec()?;
+            Self::check_size_usize(vec.len())?;
+            #[allow(clippy::cast_possible_truncation)] // already checked
             let header = MessageHeader {
-                size: vec.len().try_into()?,
+                size: vec.len() as u32,
             }
             .to_vec()?;
             writer.write_all(&header).await?;
@@ -252,7 +264,7 @@ mod tests {
     }
 
     impl ProtocolMessage for TestMessage {
-        const WIRE_ENCODING_LIMIT: u32 = 1024;
+        const WIRE_ENCODING_LIMIT: u32 = 16;
     }
 
     #[test]
@@ -295,26 +307,44 @@ mod tests {
 
     #[test]
     fn deserialize_limit() {
+        let buf = [
+            18, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let _ = TestMessage::from_reader_framed(&mut Cursor::new(buf))
+            .expect_err("an error was expected");
+    }
+
+    #[test]
+    fn serialize_limit() {
         #[allow(clippy::cast_possible_truncation)]
         let msg = TestMessage {
             data: vec![0u8; (TestMessage::WIRE_ENCODING_LIMIT + 1) as usize],
         };
         let mut buf = Vec::new();
-        msg.to_writer_framed(&mut buf).unwrap();
-        let _ = TestMessage::from_reader_framed(&mut Cursor::new(buf))
+        let _ = msg
+            .to_writer_framed(&mut buf)
             .expect_err("an error was expected");
     }
 
     #[tokio::test]
     async fn deserialize_limit_async() {
+        let buf = [
+            18, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let _ = TestMessage::from_reader_async_framed(&mut Cursor::new(buf))
+            .await
+            .expect_err("an error was expected");
+    }
+
+    #[tokio::test]
+    async fn serialize_limit_async() {
         #[allow(clippy::cast_possible_truncation)]
         let msg = TestMessage {
             data: vec![0u8; (TestMessage::WIRE_ENCODING_LIMIT + 1) as usize],
         };
         let mut buf = Vec::new();
-        msg.to_writer_framed(&mut buf).unwrap();
-        let _ = TestMessage::from_reader_async_framed(&mut Cursor::new(buf))
-            .await
+        let _ = msg
+            .to_writer_framed(&mut buf)
             .expect_err("an error was expected");
     }
 
