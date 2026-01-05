@@ -170,6 +170,7 @@ pub enum Status {
     // CAUTION: CompatibilityLevel 1 panics when unmarshalling statuses above 7
     ItIsAFile = 8,
     UnknownError = 9,
+    EncodingFailed = 10,
 }
 
 impl From<Status> for Uint {

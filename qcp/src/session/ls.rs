@@ -4,7 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
-use tracing::{debug, trace};
+use tracing::{debug, error, trace};
 use walkdir::WalkDir;
 
 use super::SessionCommandImpl;
@@ -145,9 +145,20 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         };
         // debug!("ls: sending response {}", lcr);
 
-        Response::List(lcr)
+        // Careful! The response might be too long for a Response packet (64k).
+        if let Err(e) = Response::List(lcr)
             .to_writer_async_framed(&mut self.stream.send)
-            .await?;
+            .await
+        {
+            // if we failed to encode: send an error instead.
+            error!("Failed to send response: {e}");
+            let resp = Response::List(ListResponse {
+                status: Status::EncodingFailed.into(),
+                message: Some(e.to_string()),
+                entries: vec![],
+            });
+            resp.to_writer_async_framed(&mut self.stream.send).await?;
+        }
         self.stream.send.flush().await?;
         trace!("complete");
         Ok(())
