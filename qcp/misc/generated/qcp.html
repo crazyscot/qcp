@@ -74,6 +74,128 @@
 <ul>
   <li>
     <p>
+      <code>--show-config</code> — Outputs the local configuration, then exits.
+    </p>
+
+    <p>
+      If a remote <code>SOURCE</code> or <code>DESTINATION</code> argument is
+      given, outputs the configuration we would use for operations to that host.
+    </p>
+
+    <p>
+      If not, outputs only global settings from configuration, which may be
+      overridden by <code>Host</code> blocks in configuration files.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--config-files</code> — Outputs the paths to configuration file(s),
+      then exits.
+    </p>
+
+    <p>This option cannot be used with any other option.</p>
+  </li>
+  <li>
+    <p>
+      <code>--help-buffers</code> — Outputs additional information about kernel
+      UDP buffer sizes and platform-specific tips.
+    </p>
+
+    <p>
+      Note that the recommendations are based on the <code>udp_buffer</code>
+      field in your configuration, which you can also set on the CLI.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--list-features</code> — Outputs all known protocol features with
+      their compatibility levels, then exits.
+    </p>
+
+    <p>This option cannot be used with any other option.</p>
+  </li>
+  <li>
+    <p><code>--debug</code> — Enable detailed debug output</p>
+
+    <p>
+      This has the same effect as setting <code>RUST_LOG=qcp=debug</code> in the
+      environment. If present, <code>RUST_LOG</code> overrides this option.
+    </p>
+  </li>
+  <li>
+    <p><code>-q</code>, <code>--quiet</code> — Quiet mode</p>
+
+    <p>Switches off progress display and statistics; reports only errors</p>
+  </li>
+  <li>
+    <code>-s</code>, <code>--statistics</code> — Show additional transfer
+    statistics
+  </li>
+  <li>
+    <code>--remote-debug</code> — Enables detailed debug output from the remote
+    endpoint (this may interfere with transfer speeds)
+  </li>
+  <li><code>--profile</code> — Output timing profile data after completion</li>
+  <li>
+    <code>--dry-run</code> — Connects to a remote server but does not actually
+    transfer any files. This is useful to test that the control channel works
+    and when debugging the negotiated bandwidth parameters (see also <code
+    >--remote-config</code>)
+  </li>
+  <li>
+    <p>
+      <code>--remote-config</code> — Outputs the server's configuration for this
+      connection. (Unlike <code>--show-config</code>, this option does not
+      prevent a file transfer. However, you can do so by selecting <code
+      >--dry-run</code> mode.)
+    </p>
+
+    <p>
+      The output shows both the server's <em>static</em> configuration (by
+      reading config files) and its <em>final</em> configuration (taking account
+      of the client's expressed preferences).
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>-p</code>, <code>--preserve</code> — Preserves file/directory
+      permissions and file modification times as far as possible.
+    </p>
+
+    <p>
+      Directory modification times are not preserved. This is because they are
+      OS-specific and not well defined.
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>-r</code>, <code>--recurse</code> — Copies entire directories
+      recursively, following symbolic links.
+    </p>
+
+    <p>Behaviour is intended to match scp.</p>
+  </li>
+  <li>
+    <p><code>--log-file &lt;FILE&gt;</code> — Log to a file</p>
+
+    <p>
+      By default the log receives everything printed to stderr. To override this
+      behaviour, set the environment variable <code>RUST_LOG_FILE_DETAIL</code>
+      (same semantics as <code>RUST_LOG</code>).
+    </p>
+  </li>
+  <li>
+    <p><code>-4</code> — Forces use of IPv4</p>
+
+    <p>This is a convenience alias for <code>--address-family inet</code></p>
+  </li>
+  <li>
+    <p><code>-6</code> — Forces use of IPv6</p>
+
+    <p>This is a convenience alias for <code>--address-family inet6</code></p>
+  </li>
+  <li>
+    <p>
       <code>--rx &lt;bytes&gt;</code>
       — The maximum network bandwidth we expect receiving data FROM the remote
       system. [default: 12.5M]
@@ -120,7 +242,7 @@
   </li>
   <li>
     <p>
-      <code>--congestion &lt;algorithm&gt;</code> — Specifies the congestion
+      <code>--congestion &lt;ALGORITHM&gt;</code> — Specifies the congestion
       control algorithm to use. [default: cubic]
     </p>
 
@@ -177,7 +299,7 @@
   </li>
   <li>
     <p>
-      <code>--timeout &lt;sec&gt;</code> — Connection timeout for the QUIC
+      <code>--timeout &lt;seconds&gt;</code> — Connection timeout for the QUIC
       endpoints [seconds; default 5]
     </p>
 
@@ -202,7 +324,7 @@
   </li>
   <li>
     <p>
-      <code>--packet-threshold &lt;packets&gt;</code> — Packet reordering loss
+      <code>--packet-threshold &lt;N&gt;</code> — Packet reordering loss
       detection threshold
     </p>
 
@@ -213,8 +335,8 @@
   </li>
   <li>
     <p>
-      <code>--time-threshold &lt;multiples of RTT&gt;</code> — Time reordering
-      loss detection threshold
+      <code>--time-threshold &lt;M&gt;</code> — Time reordering loss detection
+      threshold, in multiples of RTT
     </p>
 
     <p>
@@ -296,12 +418,12 @@
     </p>
   </li>
   <li>
-    <code>--address-family &lt;family&gt;</code> — Forces use of a particular IP
+    <code>--address-family &lt;FAMILY&gt;</code> — Forces use of a particular IP
     version when connecting to the remote. [default: any]
   </li>
   <li>
-    <code>--ssh &lt;ssh-client&gt;</code> — Specifies the ssh client program to
-    use [default: <code>ssh</code>]
+    <code>--ssh &lt;PATH&gt;</code> — Specifies the ssh client program to use
+    [default: <code>ssh</code>]
   </li>
   <li>
     <p>
@@ -317,7 +439,7 @@
   </li>
   <li>
     <p>
-      <code>-S &lt;ssh-option&gt;</code>
+      <code>-S &lt;SSH OPTION&gt;</code>
       — Provides an additional option or argument to pass to the ssh client.
       [default: none]
     </p>
@@ -341,8 +463,8 @@
   </li>
   <li>
     <p>
-      <code>-l</code>, <code>--remote-user &lt;login_name&gt;</code> — Specifies
-      the user on the remote machine to connect as.
+      <code>-l</code>, <code>--remote-user &lt;NAME&gt;</code> — Specifies the
+      user on the remote machine to connect as.
     </p>
 
     <p>
@@ -392,7 +514,7 @@
   </li>
   <li>
     <p>
-      <code>--color &lt;mode&gt;</code> — Colour mode for console output
+      <code>--color &lt;MODE&gt;</code> — Colour mode for console output
       (default: auto)
     </p>
 
@@ -435,7 +557,7 @@
   </li>
   <li>
     <p>
-      <code>--tls-auth-type &lt;type&gt;</code> — Forces the use of a particular
+      <code>--tls-auth-type &lt;TYPE&gt;</code> — Forces the use of a particular
       TLS authentication type (default: any)
     </p>
 
@@ -467,7 +589,7 @@
   </li>
   <li>
     <p>
-      <code>--io-buffer-size &lt;bytes&gt;</code> — File transfer buffer size
+      <code>--io-buffer-size &lt;bytes&gt;</code> — Local I/O buffer size
       (bytes).
     </p>
 
@@ -491,113 +613,6 @@
       spool data to and from disk. It does not directly affect what appears on
       the network.
     </p>
-  </li>
-  <li>
-    <p>
-      <code>--show-config</code> — Outputs the local configuration, then exits.
-    </p>
-
-    <p>
-      If a remote <code>SOURCE</code> or <code>DESTINATION</code> argument is
-      given, outputs the configuration we would use for operations to that host.
-    </p>
-
-    <p>
-      If not, outputs only global settings from configuration, which may be
-      overridden by <code>Host</code> blocks in configuration files.
-    </p>
-  </li>
-  <li>
-    <p>
-      <code>--config-files</code> — Outputs the paths to configuration file(s),
-      then exits.
-    </p>
-
-    <p>This option cannot be used with any other option.</p>
-  </li>
-  <li>
-    <p>
-      <code>--help-buffers</code> — Outputs additional information about kernel
-      UDP buffer sizes and platform-specific tips.
-    </p>
-
-    <p>
-      Note that the recommendations are based on the <code>udp_buffer</code>
-      field in your configuration, which you can also set on the CLI.
-    </p>
-  </li>
-  <li>
-    <p>
-      <code>--list-features</code> — Outputs all known protocol features with
-      their compatibility levels.
-    </p>
-
-    <p>This option cannot be used with any other option.</p>
-  </li>
-  <li>
-    <p><code>--debug</code> — Enable detailed debug output</p>
-
-    <p>
-      This has the same effect as setting <code>RUST_LOG=qcp=debug</code> in the
-      environment. If present, <code>RUST_LOG</code> overrides this option.
-    </p>
-  </li>
-  <li>
-    <p><code>--log-file &lt;FILE&gt;</code> — Log to a file</p>
-
-    <p>
-      By default the log receives everything printed to stderr. To override this
-      behaviour, set the environment variable <code>RUST_LOG_FILE_DETAIL</code>
-      (same semantics as <code>RUST_LOG</code>).
-    </p>
-  </li>
-  <li>
-    <p><code>-q</code>, <code>--quiet</code> — Quiet mode</p>
-
-    <p>Switches off progress display and statistics; reports only errors</p>
-  </li>
-  <li>
-    <code>-s</code>, <code>--statistics</code> — Show additional transfer
-    statistics
-  </li>
-  <li>
-    <code>--remote-debug</code> — Enables detailed debug output from the remote
-    endpoint (this may interfere with transfer speeds)
-  </li>
-  <li><code>--profile</code> — Output timing profile data after completion</li>
-  <li>
-    <code>--dry-run</code> — Connects to a remote server but does not actually
-    transfer any files. This is useful to test that the control channel works
-    and when debugging the negotiated bandwidth parameters (see also <code
-    >--remote-config</code>)
-  </li>
-  <li>
-    <p>
-      <code>--remote-config</code> — Outputs the server's configuration for this
-      connection. (Unlike <code>--show-config</code>, this option does not
-      prevent a file transfer. However, you can do so by selecting <code
-      >--dry-run</code> mode.)
-    </p>
-
-    <p>
-      The output shows both the server's <em>static</em> configuration (by
-      reading config files) and its <em>final</em> configuration (taking account
-      of the client's expressed preferences).
-    </p>
-  </li>
-  <li>
-    <code>-p</code>, <code>--preserve</code> — Preserves file modification times
-    and permissions as far as possible
-  </li>
-  <li>
-    <p><code>-4</code> — Forces use of IPv4</p>
-
-    <p>This is a convenience alias for <code>--address-family inet</code></p>
-  </li>
-  <li>
-    <p><code>-6</code> — Forces use of IPv6</p>
-
-    <p>This is a convenience alias for <code>--address-family inet6</code></p>
   </li>
 </ul>
 
