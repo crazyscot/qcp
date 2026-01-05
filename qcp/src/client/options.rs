@@ -56,12 +56,35 @@ pub struct Parameters {
     #[arg(long, help_heading("Debug"), display_order(10))]
     pub remote_config: bool,
 
-    /// Preserves file modification times and permissions as far as possible.
+    /// Preserves file/directory permissions and file modification times as far as possible.
+    ///
+    /// Directory modification times are not preserved. This is because they are OS-specific and not well defined.
     #[arg(short, long, display_order(0))]
     pub preserve: bool,
 
-    /// Copies directories recursively. Symbolic links will be followed.
-    #[arg(short, long, display_order(0))]
+    /// Copies entire directories recursively, following symbolic links.
+    ///
+    /// Behaviour is intended to match that of scp.
+    ///
+    /// ### Get
+    /// * If there are multiple sources, the destination must exist; the sources (including outer directory names) are copied into it.
+    /// * If there is one source:
+    ///   - if the destination exists, the source (file or directory) is copied into it.
+    ///   - if the destination does not exist, it is created; then the *contents* of the source are copied into it.
+    /// * if the destination does not exist, there can be only one source
+    ///
+    /// ### Put
+    /// * If the destination ends in '/', the source directory goes _into_ the destination
+    /// * If not, the *contents* of the source go into the destination.
+    ///
+    #[arg(
+        short,
+        long,
+        display_order(0),
+        long_help(
+            "Copies entire directories recursively, following symbolic links.\n\nBehaviour is intended to match scp."
+        )
+    )]
     pub recurse: bool,
 }
 
