@@ -80,6 +80,7 @@ struct Negotiated {
 struct PrepResult {
     remote_address: IpAddr,
     job_specs: Vec<CopyJobSpec>,
+    full_success: bool,
 }
 
 enum Phase {
@@ -216,7 +217,7 @@ impl Client {
                 "Negotiated network configuration: {}",
                 config.format_transport_config()
             );
-            return Ok(true);
+            return Ok(prep_result.full_success);
         }
 
         // Data channel ------------------
@@ -265,7 +266,7 @@ impl Client {
             info!("Elapsed time by phase:\n{}", self.timers);
         }
         self.display.clear()?;
-        Ok(overall_success)
+        Ok(overall_success & prep_result.full_success)
     }
 
     pub(crate) fn prep(
@@ -280,7 +281,7 @@ impl Client {
         self.spinner.set_message("Preparing");
         self.spinner.enable_steady_tick(Duration::from_millis(150));
 
-        let job_specs: Vec<CopyJobSpec> = self.args.jobspecs()?;
+        let (full_success, job_specs) = self.args.jobspecs()?;
         let remote_ssh_hostname = job_specs
             .first()
             .expect("at least one job spec is required")
@@ -308,6 +309,7 @@ impl Client {
         Ok(PrepResult {
             remote_address,
             job_specs,
+            full_success,
         })
     }
 
@@ -1023,6 +1025,7 @@ mod test {
         assert_eq!(res.job_specs[0].source, remote_file_spec());
         assert_eq!(res.job_specs[0].destination, local_file_spec());
         assert!(!res.preserve());
+        assert!(res.full_success);
         eprintln!("{res:?}");
     }
     #[test]
@@ -1048,6 +1051,7 @@ mod test {
         let server_cert = crate::util::Credentials::generate().unwrap();
         let server_address_port = (Ipv4Addr::LOCALHOST, 0);
         let level = Compatibility::Level(1);
+        assert!(prep_result.full_success);
 
         let endpoint = uut
             .create_quic_endpoint(
@@ -1152,6 +1156,7 @@ mod test {
         let mut uut = make_uut(|_, _| (), "127.0.0.1:file", "outfile", 1);
         let working = Configuration_Optional::default();
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
+        assert!(prep_result.full_success);
         let mut plumbing = new_test_plumbing();
 
         let manage_fut = uut.run_request(
@@ -1201,6 +1206,7 @@ mod test {
         let mut uut = make_uut(|_, _| (), "/tmp/file", "127.0.0.1:file", 1);
         let working = Configuration_Optional::default();
         let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
+        assert!(prep_result.full_success);
         let mut plumbing = new_test_plumbing();
         plumbing.1.send.shutdown().await.unwrap(); // this causes the handler to error out
 
@@ -1551,6 +1557,7 @@ mod test {
             let _ = tray.make_dir("srcdir");
             let _ = tray.make_dir("destdir");
             let prep_result = uut.prep(&working, Configuration::system_default()).unwrap();
+            assert!(prep_result.full_success);
             let mut plumbing = new_test_plumbing();
 
             let manage_fut =

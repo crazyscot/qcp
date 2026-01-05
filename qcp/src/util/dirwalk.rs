@@ -9,7 +9,7 @@ use std::{
 
 use crate::{CopyJobSpec, FileSpec, util::path};
 
-use enumflags2::{BitFlags, bitflags};
+use tracing::error;
 use walkdir::WalkDir;
 
 #[derive(thiserror::Error, Debug)]
@@ -20,20 +20,6 @@ pub(crate) enum Error {
     WalkDir(#[from] walkdir::Error),
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
-}
-
-/// Option flags for a resolve operation.
-#[bitflags]
-#[repr(u32)]
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub(crate) enum Options {
-    // TODO: Move these to protocol
-    /// Do not error out if we are unable to open a directory
-    IgnoreUnreadableDirectories = 1 << 0,
-}
-
-impl Options {
-    pub(crate) const EMPTY: BitFlags<Self> = BitFlags::EMPTY;
 }
 
 trait OsStrJoin {
@@ -81,18 +67,23 @@ where
 }
 
 /// Resolves a single `FileSpec`
+///
+/// Returns:
+/// - Ok(true) on success
+/// - Ok(false) on partial success
+/// - Err(...) on fatal error
 pub(crate) fn recurse_local_source(
     source: &FileSpec,
     destination: &FileSpec,
-    options: BitFlags<Options>,
     preserve: bool,
     output: &mut Vec<CopyJobSpec>,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     if destination.user_at_host.is_none() {
         return Err(anyhow::anyhow!("destination must be remote").into());
     }
 
     let bare_host = destination.filename.is_empty();
+    let mut success = true;
 
     // Join a remote path using forward slashes, independent of the client's OS.
     // This avoids emitting `\` on Windows clients when the remote host is Unix-like.
@@ -122,16 +113,18 @@ pub(crate) fn recurse_local_source(
         destination.filename.clone()
     };
 
-    let listing = contents_of(&source.filename, options, bare_host, &dest_separator_str)?;
+    let (success1, listing) = contents_of(&source.filename, bare_host, &dest_separator_str)?;
+    success &= success1;
     for (entry, leaf_str) in listing {
         let file_type = entry.file_type();
         let path = entry.path();
         let Some(src_str) = path.to_str() else {
-            return Err(anyhow::anyhow!(
+            error!(
                 "Path name {} could not be converted into Unicode string",
                 path.display()
-            )
-            .into());
+            );
+            success = false;
+            continue;
         };
 
         let src_fs = FileSpec {
@@ -147,16 +140,20 @@ pub(crate) fn recurse_local_source(
                 .map_err(Error::from)?,
         );
     }
-    Ok(())
+    Ok(success)
 }
 
+/// Returns:
+/// Ok(true, vec) on full success
+/// Ok(false, vec) on partial success
+/// Err(...) on fatal error
 fn contents_of(
     path: &str,
-    options: BitFlags<Options>,
     skip_root: bool,
     separator: &str,
-) -> Result<Vec<(walkdir::DirEntry, String)>, Error> {
+) -> Result<(bool, Vec<(walkdir::DirEntry, String)>), Error> {
     let mut output = vec![];
+    let mut success = true;
     for entry in WalkDir::new(path)
         // skip_root true => min_depth 1; false => min_depth 0
         .min_depth(usize::from(skip_root))
@@ -175,22 +172,28 @@ fn contents_of(
                     .map(std::path::Component::as_os_str)
                     .collect::<Vec<_>>()
                     .join_os_str(OsStr::new(separator));
-                let leaf_str = leaf.to_string_checked()?;
-                output.push((entry, leaf_str));
+                match leaf.to_string_checked() {
+                    Ok(leaf_str) => output.push((entry, leaf_str)),
+                    Err(e) => {
+                        error!("{e}");
+                        success = false;
+                    }
+                }
             }
 
             Err(wderr) => {
                 if let Some(ioe) = wderr.io_error()
                     && ioe.kind() == ErrorKind::PermissionDenied
-                    && options.contains(Options::IgnoreUnreadableDirectories)
                 {
+                    error!("{ioe}");
+                    success = false;
                     continue;
                 }
                 return Err(wderr.into());
             }
         }
     }
-    Ok(output)
+    Ok((success, output))
 }
 
 #[cfg(test)]
@@ -201,9 +204,7 @@ mod test {
 
     use crate::{CopyJobSpec, FileSpec, util::dirwalk::LocalToString as _};
 
-    use super::Options;
     use anyhow::Result;
-    use enumflags2::{BitFlags, make_bitflags};
     use littertray::LitterTray;
 
     fn filespec_local<S: AsRef<str>>(f: S) -> FileSpec {
@@ -265,10 +266,10 @@ mod test {
 
     fn test_case(
         setup: impl FnOnce(&mut LitterTray) -> Result<()>,
-        options: BitFlags<Options>,
         source: &str,
         dest: Option<&str>,
         expected_sources: &[&str],
+        expected_success: bool,
     ) {
         let source_fs = filespec_local(source);
         // note that the default destination does NOT have a trailing slash
@@ -293,7 +294,8 @@ mod test {
         let res = LitterTray::try_with(|tray| {
             setup(tray)?;
             let mut out = Vec::new();
-            super::recurse_local_source(&source_fs, &destination, options, false, &mut out)?;
+            let ok = super::recurse_local_source(&source_fs, &destination, false, &mut out)?;
+            assert_eq!(expected_success, ok);
             Ok(out)
         })
         .unwrap();
@@ -328,7 +330,6 @@ mod test {
     fn recurse() {
         test_case(
             setup_fs,
-            Options::EMPTY,
             "dir1",
             None,
             &[
@@ -343,13 +344,13 @@ mod test {
                 "dir1/b/afile",
                 "dir1/midlevelfile",
             ],
+            true,
         );
     }
     #[test]
     fn recurse_to_bare_host() {
         test_case(
             setup_fs,
-            Options::EMPTY,
             "dir1",
             Some("host:"),
             &[
@@ -364,13 +365,13 @@ mod test {
                 "dir1/b/afile",
                 "dir1/midlevelfile",
             ],
+            true,
         );
     }
     #[test]
     fn recurse_to_abs_path() {
         test_case(
             setup_fs,
-            Options::EMPTY,
             "dir1",
             Some("host:/outdir"),
             &[
@@ -385,13 +386,13 @@ mod test {
                 "dir1/b/afile",
                 "dir1/midlevelfile",
             ],
+            true,
         );
     }
     #[test]
     fn recurse_files_only() {
         test_case(
             setup_fs,
-            Options::EMPTY,
             "dir1",
             None,
             &[
@@ -406,6 +407,7 @@ mod test {
                 "dir1/b/afile",
                 "dir1/midlevelfile",
             ],
+            true,
         );
     }
 
@@ -413,7 +415,6 @@ mod test {
     fn recurse_trailing_slash() {
         test_case(
             setup_fs,
-            Options::EMPTY,
             "dir1",
             Some("dest:dir2/"),
             &[
@@ -428,6 +429,7 @@ mod test {
                 "dir1/b/afile",
                 "dir1/midlevelfile",
             ],
+            true,
         );
     }
 
@@ -451,7 +453,6 @@ mod test {
     fn recurse_inaccessible_dir() {
         test_case(
             setup_fs_with_inaccessibles,
-            make_bitflags!(Options::IgnoreUnreadableDirectories),
             ".",
             None,
             &[
@@ -461,6 +462,7 @@ mod test {
                 "./unreadable_dir",
                 "./unreadable_file",
             ],
+            false,
         );
     }
 }

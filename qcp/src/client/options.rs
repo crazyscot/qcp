@@ -69,8 +69,8 @@ pub struct Parameters {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use super::*;
+    use crate::cli::CliArgs;
     use crate::util::path;
-    use crate::{CopyJobSpec, cli::CliArgs};
     use clap::Parser;
     use figment::{Profile, Provider as _};
     use pretty_assertions::assert_eq;
@@ -139,7 +139,8 @@ mod tests {
     #[test]
     fn test_copy_job_spec_conversion() {
         let args = CliArgs::parse_from(["test", "user@host:source.txt", "destination.txt"]);
-        let specs = args.jobspecs().unwrap();
+        let (ok, specs) = args.jobspecs().unwrap();
+        assert!(ok);
         assert_eq!(specs.len(), 1);
         let copy_job_spec = specs.first().unwrap();
         assert_eq!(copy_job_spec.source.to_string(), "user@host:source.txt");
@@ -160,7 +161,8 @@ mod tests {
     #[test]
     fn multiple_local_sources_to_remote_destination() {
         let args = CliArgs::parse_from(["test", "file1", "file2", "user@host:remote_dir"]);
-        let specs: Vec<CopyJobSpec> = args.jobspecs().unwrap();
+        let (ok, specs) = args.jobspecs().unwrap();
+        assert!(ok);
         assert_eq!(specs.len(), 2);
         assert_eq!(specs[0].source.to_string(), "file1");
         assert_eq!(
@@ -177,7 +179,8 @@ mod tests {
     fn multiple_remote_sources_to_local_destination() {
         let args =
             CliArgs::parse_from(["test", "user@host:/tmp/a", "user@host:/tmp/b", "downloads"]);
-        let specs: Vec<CopyJobSpec> = args.jobspecs().unwrap();
+        let (ok, specs) = args.jobspecs().unwrap();
+        assert!(ok);
         assert_eq!(specs.len(), 2);
         assert_eq!(
             specs[0].destination.to_string(),
@@ -224,7 +227,8 @@ mod tests {
     #[test]
     fn remote_destination_with_trailing_slash_is_joined_cleanly() {
         let args = CliArgs::parse_from(["test", "file1", "file2", "user@host:remote_dir/"]);
-        let specs = args.jobspecs().unwrap();
+        let (ok, specs) = args.jobspecs().unwrap();
+        assert!(ok);
         assert_eq!(specs.len(), 2);
         assert_eq!(
             specs[0].destination.to_string(),
@@ -239,7 +243,8 @@ mod tests {
     #[test]
     fn remote_destination_home_dir_is_supported() {
         let args = CliArgs::parse_from(["test", "file1", "file2", "user@host:"]);
-        let specs = args.jobspecs().unwrap();
+        let (ok, specs) = args.jobspecs().unwrap();
+        assert!(ok);
         assert_eq!(specs.len(), 2);
         assert_eq!(specs[0].destination.to_string(), "user@host:file1");
         assert_eq!(specs[1].destination.to_string(), "user@host:file2");
@@ -306,7 +311,8 @@ mod tests {
     #[test]
     fn single_local_source_to_remote_destination_is_supported() {
         let args = CliArgs::parse_from(["test", "file1", "user@host:remote_file"]);
-        let specs = args.jobspecs().unwrap();
+        let (ok, specs) = args.jobspecs().unwrap();
+        assert!(ok);
         assert_eq!(specs.len(), 1);
         assert_eq!(specs[0].destination.to_string(), "user@host:remote_file");
     }

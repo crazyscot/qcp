@@ -199,12 +199,17 @@ impl CliArgs {
         Ok((paths, destination))
     }
 
-    pub(crate) fn jobspecs(&self) -> Result<Vec<CopyJobSpec>, anyhow::Error> {
+    /// Returns:
+    /// - Ok(true) on success
+    /// - Ok(false) on partial success
+    /// - Err(...) on fatal error
+    pub(crate) fn jobspecs(&self) -> Result<(bool, Vec<CopyJobSpec>), anyhow::Error> {
         let (sources, destination) = self.sources_and_destination()?;
         let destination_is_remote = destination.user_at_host.is_some();
 
         let mut remote_hosts = HashSet::new();
         let mut remote_user: Option<&str> = None;
+        let mut success = true;
 
         // Remote username must not vary
         for spec in sources.iter().chain(std::iter::once(&destination)) {
@@ -250,10 +255,9 @@ impl CliArgs {
 
         if self.client_params.recurse && destination_is_remote {
             for source in sources {
-                dirwalk::recurse_local_source(
+                success &= dirwalk::recurse_local_source(
                     &source,
                     &destination,
-                    dirwalk::Options::EMPTY,
                     self.client_params.preserve,
                     &mut jobs,
                 )?;
@@ -280,7 +284,7 @@ impl CliArgs {
                 )?);
             }
         }
-        Ok(jobs)
+        Ok((success, jobs))
     }
 
     /// A best-effort attempt to extract a single remote host string from the parameters.
