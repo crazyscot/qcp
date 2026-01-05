@@ -4,7 +4,7 @@
 use std::{
     ffi::{OsStr, OsString},
     io::ErrorKind,
-    path::{MAIN_SEPARATOR, Path},
+    path::MAIN_SEPARATOR,
 };
 
 use crate::{CopyJobSpec, FileSpec, util::path};
@@ -30,21 +30,10 @@ pub(crate) enum Options {
     // TODO: Move these to protocol
     /// Do not error out if we are unable to open a directory
     IgnoreUnreadableDirectories = 1 << 0,
-    /// Include file/directory names beginning with `.` (except for `.` and `..`) in the output
-    IncludeHiddenItems = 1 << 1,
 }
 
 impl Options {
     pub(crate) const EMPTY: BitFlags<Self> = BitFlags::EMPTY;
-}
-
-fn is_suppressed<P: AsRef<Path>>(path: P, options: BitFlags<Options>) -> bool {
-    if let Some(name) = path.as_ref().file_name() {
-        !options.contains(Options::IncludeHiddenItems)
-            && name.to_str().is_some_and(|s| s.starts_with('.'))
-    } else {
-        false
-    }
 }
 
 trait OsStrJoin {
@@ -171,8 +160,6 @@ fn contents_of(
     for entry in WalkDir::new(path)
         // skip_root true => min_depth 1; false => min_depth 0
         .min_depth(usize::from(skip_root))
-        .into_iter()
-        .filter_entry(|f| !is_suppressed(f.path(), options))
     {
         match entry {
             Ok(entry) => {
@@ -352,6 +339,7 @@ mod test {
                 "dir1/a/z/q1",
                 "dir1/a/z/q2",
                 "dir1/b",
+                "dir1/b/.dotfile",
                 "dir1/b/afile",
                 "dir1/midlevelfile",
             ],
@@ -372,6 +360,7 @@ mod test {
                 "dir1/a/z/q1",
                 "dir1/a/z/q2",
                 "dir1/b",
+                "dir1/b/.dotfile",
                 "dir1/b/afile",
                 "dir1/midlevelfile",
             ],
@@ -392,6 +381,7 @@ mod test {
                 "dir1/a/z/q1",
                 "dir1/a/z/q2",
                 "dir1/b",
+                "dir1/b/.dotfile",
                 "dir1/b/afile",
                 "dir1/midlevelfile",
             ],
@@ -402,26 +392,6 @@ mod test {
         test_case(
             setup_fs,
             Options::EMPTY,
-            "dir1",
-            None,
-            &[
-                "dir1",
-                "dir1/a",
-                "dir1/a/f",
-                "dir1/a/z",
-                "dir1/a/z/q1",
-                "dir1/a/z/q2",
-                "dir1/b",
-                "dir1/b/afile",
-                "dir1/midlevelfile",
-            ],
-        );
-    }
-    #[test]
-    fn recurse_files_inc_dotfiles() {
-        test_case(
-            setup_fs,
-            make_bitflags!(Options::IncludeHiddenItems),
             "dir1",
             None,
             &[
@@ -454,6 +424,7 @@ mod test {
                 "dir1/a/z/q1",
                 "dir1/a/z/q2",
                 "dir1/b",
+                "dir1/b/.dotfile",
                 "dir1/b/afile",
                 "dir1/midlevelfile",
             ],
