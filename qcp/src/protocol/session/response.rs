@@ -10,15 +10,12 @@ use std::fmt::Display;
 pub enum Response {
     /// This version was introduced in qcp 0.3 with `VersionCompatibility=V1`.
     V1(ResponseV1),
-    /// List was introduced in qcp 0.8 with compatibility level 4.
-    List(ListResponse),
 }
 
 impl Response {
     pub(crate) fn status(&self) -> Uint {
         match self {
             Response::V1(r) => r.status,
-            Response::List(r) => r.status,
         }
     }
 
@@ -63,29 +60,21 @@ impl Display for ResponseV1 {
 #[derive(
     Serialize, Deserialize, PartialEq, Debug, Clone, derive_more::Constructor, thiserror::Error,
 )]
-pub struct ListResponse {
-    /// Outcome of the operation.
-    /// This is a [`Status`] code.
-    pub status: Uint,
-
-    /// A human-readable message giving more information, if any is pertinent (used in case of error)
-    pub message: Option<String>,
-
+pub struct ListData {
     /// Response detail
     pub entries: Vec<ListEntry>,
 }
-impl Display for ListResponse {
+impl ProtocolMessage for ListData {
+    // Default encoding limit (1M) applies
+}
+
+impl Display for ListData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = self.message.as_ref().map_or("<no message>", |v| v);
-        if self.status == Uint::from(Status::Ok) {
-            let _ = writeln!(f, "<List: Ok, {msg}, [");
-            for it in &self.entries {
-                let _ = writeln!(f, "{it}");
-            }
-            writeln!(f, "]>")
-        } else {
-            write!(f, "<Error: {}: {msg}>", Status::to_string(self.status),)
+        let _ = writeln!(f, "<ListData: [");
+        for it in &self.entries {
+            let _ = writeln!(f, "{it}");
         }
+        writeln!(f, "]>")
     }
 }
 
@@ -244,7 +233,7 @@ impl PartialEq<Status> for Uint {
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
     use super::{Response, ResponseV1, Status};
-    use crate::protocol::session::{ListEntry, ListResponse, prelude::*};
+    use crate::protocol::session::{ListData, ListEntry, prelude::*};
     use assertables::assert_contains;
     use pretty_assertions::assert_eq;
 
@@ -309,9 +298,7 @@ mod test {
 
     #[test]
     fn list_contents_display() {
-        let lc = ListResponse {
-            status: Uint(0),
-            message: None,
+        let lc = ListData {
             entries: vec![
                 ListEntry {
                     name: "aaa".to_string(),
@@ -331,19 +318,5 @@ mod test {
         eprintln!("{str}");
         assert_contains!(str, "aaa");
         assert_contains!(str, "bbb");
-    }
-
-    #[test]
-    fn list_contents_error() {
-        let resp = Response::List(ListResponse {
-            status: Uint(Status::DiskFull as u64),
-            message: Some("foobar".to_string()),
-            entries: vec![],
-        });
-        assert_eq!(resp.status(), Status::DiskFull);
-        let str = resp.to_string();
-        eprintln!("{str}");
-        assert_contains!(str, "DiskFull");
-        assert_contains!(str, "foobar");
     }
 }

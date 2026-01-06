@@ -82,7 +82,8 @@ pub enum Command {
     /// This command was introduced in qcp 0.8 with compatibility level 4.
     ///
     /// * Client ➡️ Server: `Get` command
-    /// * S➡️C: [`Response::List`]
+    /// * S➡️C: [`Response`]
+    /// * S➡️C: [`ListData`](crate::protocol::session::ListData) (if Response was OK)
     /// * Then close the stream.
     ///
     /// * Either side may close the stream early if it has a problem.

@@ -243,6 +243,12 @@ where
             Ok(writer.write_all(&vec).await?)
         }
     }
+
+    /// Returns the encoded size of this struct in bytes.
+    /// This is not terribly efficient, as it serializes the struct to find out.
+    fn encoded_size(&self) -> Result<usize, Error> {
+        Ok(self.to_vec()?.len())
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////

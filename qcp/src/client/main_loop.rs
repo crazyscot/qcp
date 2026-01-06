@@ -12,7 +12,7 @@ use crate::{
         common::{ReceivingStream, SendReceivePair, SendingStream},
         compat::Feature,
         control::{ClosedownReportV1, Compatibility, CredentialsType, Direction, ServerMessageV2},
-        session::{CommandParam, Get2Args, MetadataAttr, Response, Status},
+        session::{CommandParam, Get2Args, MetadataAttr},
     },
     session::{self, CommandStats, RequestResult},
     util::{
@@ -824,32 +824,19 @@ impl Client {
 
         // PRE-TRANSFER:
         // If this is a recursive GET, ask the remote to enumerate the files.
-        let mut success = true;
         self.spinner
             .set_message("Asking remote for list of files to transfer");
         let mut new_jobs = Vec::new();
         for job in jobs_in {
             let stream_pair = open_stream().await?;
-            let result = run_job(stream_pair, job.clone(), 0, Phase::Pre).await?;
-            let Some(Response::List(contents)) = result.response else {
+            let result = run_job(stream_pair, job.clone(), 0, Phase::Pre)
+                .await
+                .inspect_err(|_| warn!("No files were transferred"))?;
+            let Some(contents) = result.list else {
                 anyhow::bail!(
                     "logic error: pre-transfer request did not return List response data"
                 );
             };
-            if !Status::try_from(contents.status).is_ok_and(|s| s == Status::Ok) {
-                let with_message = if contents.message.is_some() {
-                    " with message "
-                } else {
-                    ""
-                };
-                error!(
-                    "Failed to list contents of '{}': server returned status {st}{with_message}{message}",
-                    job.source,
-                    st = Status::to_string(contents.status),
-                    message = contents.message.unwrap_or_default(),
-                );
-                success = false;
-            }
             for item in contents.entries {
                 let mut destfile = job.destination.filename.clone();
                 let leaf = item
@@ -897,11 +884,6 @@ impl Client {
                         .map(|i| i.coerce_unsigned() as u32),
                 });
             }
-        }
-
-        if !success {
-            warn!("No files were transferred");
-            return Ok((false, CommandStats::default()));
         }
 
         // Now, if required, handle single-source mkdir mode.

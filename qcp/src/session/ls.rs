@@ -11,10 +11,10 @@ use super::SessionCommandImpl;
 
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
-use crate::protocol::session::prelude::*;
-use crate::protocol::session::{ListArgs, ListEntry, ListResponse};
-use crate::session::CommandStats;
-use crate::session::common::{error_to_status, io_error_to_status};
+use crate::protocol::session::{ListArgs, ListData, ListEntry};
+use crate::protocol::session::{ResponseV1, prelude::*};
+use crate::session::common::send_ok;
+use crate::session::{CommandStats, error_and_return};
 
 pub(crate) struct Listing<S: SendingStream, R: ReceivingStream> {
     stream: SendReceivePair<S, R>,
@@ -78,8 +78,14 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
 
         trace!("await response");
         let result = Response::from_reader_async_framed(&mut self.stream.recv).await?;
-        trace!("result: {:?}", result);
-        Ok(RequestResult::new(CommandStats::default(), Some(result)))
+        if result.status() != Status::Ok {
+            error!("List failed: {:?}", result);
+            return Err(anyhow::Error::new(result));
+        }
+        let data = ListData::from_reader_async_framed(&mut self.stream.recv)
+            .await
+            .map_err(|r| anyhow::anyhow!("failed to parse List response: {r}"))?;
+        Ok(RequestResult::new(CommandStats::default(), Some(data)))
     }
 
     async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {
@@ -94,29 +100,26 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         let meta = match res {
             Ok(meta) => meta,
             Err(e) => {
-                let (st, msg) = io_error_to_status(&e);
-                return Response::List(ListResponse {
-                    status: st.into(),
-                    message: msg,
-                    entries: vec![],
-                })
-                .to_writer_async_framed(&mut self.stream.send)
-                .await;
+                error_and_return!(self, e);
             }
         };
         if meta.is_file() {
-            return Response::List(ListResponse {
-                status: Status::Ok.into(),
-                message: None,
+            let data = ListData {
                 entries: vec![ListEntry {
                     name: path.clone(),
                     directory: false,
                     size: Uint(meta.len()),
                     attributes: vec![],
                 }],
+            };
+
+            Response::V1(ResponseV1 {
+                status: Status::Ok.into(),
+                message: None,
             })
             .to_writer_async_framed(&mut self.stream.send)
-            .await;
+            .await?;
+            return data.to_writer_async_framed(&mut self.stream.send).await;
         }
         let entries: Result<Vec<_>, walkdir::Error> = WalkDir::new(path)
             // do NOT omit the root here, recursive transfer depends on it to mkdir the top-level dir
@@ -126,39 +129,29 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
             .map(|e| e.map(ListEntry::from))
             .collect();
 
-        let lcr = match entries {
-            Ok(v) => ListResponse {
-                status: Status::Ok.into(),
-                message: None,
-                entries: v,
-            },
+        let list = match entries {
+            Ok(v) => ListData { entries: v },
             Err(e) => {
                 debug!("ls: walkdir error: {e}");
-                let io = std::io::Error::from(e);
-                let (st, msg) = error_to_status(&io.into());
-                ListResponse {
-                    status: st.into(),
-                    message: msg,
-                    entries: vec![],
-                }
+                error_and_return!(self, e);
             }
         };
-        // debug!("ls: sending response {}", lcr);
+        // debug!("ls: sending response {}", list);
 
         // Careful! The response might be too long for a Response packet (64k).
-        if let Err(e) = Response::List(lcr)
-            .to_writer_async_framed(&mut self.stream.send)
-            .await
-        {
-            // if we failed to encode: send an error instead.
-            error!("Failed to send response: {e}");
-            let resp = Response::List(ListResponse {
-                status: Status::EncodingFailed.into(),
-                message: Some(e.to_string()),
-                entries: vec![],
-            });
-            resp.to_writer_async_framed(&mut self.stream.send).await?;
+        let checked = match list.encoded_size() {
+            Ok(sz) if sz > ListData::WIRE_ENCODING_LIMIT as usize => {
+                error!("List response too large to send ({sz} bytes)");
+                Err(Status::EncodingFailed.into())
+            }
+            Ok(sz) => Ok(sz),
+            Err(e) => Err(e),
+        };
+        if let Err(e) = checked {
+            error_and_return!(self, e);
         }
+        send_ok(&mut self.stream.send).await?;
+        list.to_writer_async_framed(&mut self.stream.send).await?;
         self.stream.send.flush().await?;
         trace!("complete");
         Ok(())
@@ -171,7 +164,7 @@ mod test {
     use std::collections::HashSet;
     use std::path::MAIN_SEPARATOR;
 
-    use crate::protocol::session::{ListResponse, prelude::*};
+    use crate::protocol::session::{ListData, prelude::*};
     use crate::util::io::DEFAULT_COPY_BUFFER_SIZE;
     use crate::{
         Configuration, Parameters,
@@ -179,11 +172,11 @@ mod test {
         protocol::test_helpers::{new_test_plumbing, read_from_stream},
         session::Listing,
     };
-    use anyhow::{Result, bail};
+    use anyhow::{Result, bail, ensure};
     use littertray::LitterTray;
     use pretty_assertions::assert_eq;
 
-    async fn test_ls_main(path: &str, recurse: bool) -> Result<ListResponse> {
+    async fn test_ls_main(path: &str, recurse: bool, expect_success: bool) -> Result<ListData> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let mut sender = Listing::boxed(pipe1, None, Compatibility::Level(4));
         let spec =
@@ -212,26 +205,23 @@ mod test {
 
             let mut handler = Listing::boxed(pipe2, Some(args), Compatibility::Level(4));
             let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
-            let result = r1.expect("sender should not have failed");
             r2.expect("handler should not have failed");
-            result
+            match r1 {
+                Ok(it) => {
+                    ensure!(expect_success, "sender should have failed");
+                    it
+                }
+                Err(e) => {
+                    ensure!(!expect_success, "sender should not have failed");
+                    return Err(e);
+                }
+            }
         };
-        let Some(Response::List(lcr)) = result.response else {
-            anyhow::bail!("remote sent unexpected List response: {result:?}");
-        };
-        Ok(lcr)
+        Ok(result.list.expect("expected ListData in result"))
     }
 
     // Check for expected results, allowing for walkdir and libc variations.
-    fn expected_result(lcr: ListResponse, dir_prefix: &str, expected: &[&str]) {
-        assert_eq!(
-            Status::try_from(lcr.status).unwrap(),
-            Status::Ok,
-            "ls failed with status {:?}",
-            Status::to_string(lcr.status)
-        );
-        assert!(lcr.message.is_none());
-
+    fn expected_result(lcr: ListData, dir_prefix: &str, expected: &[&str]) {
         let output = lcr
             .entries
             .into_iter()
@@ -292,7 +282,7 @@ mod test {
             let _ = tray.create_text("f", "no");
             let _ = tray.make_dir("no");
 
-            test_ls_main("d/d2", false).await
+            test_ls_main("d/d2", false, true).await
         })
         .await
         .unwrap();
@@ -312,7 +302,7 @@ mod test {
             let _ = tray.create_text("f", "no");
             let _ = tray.make_dir("no");
 
-            test_ls_main("d/d2", true).await
+            test_ls_main("d/d2", true, true).await
         })
         .await
         .unwrap();
@@ -335,13 +325,10 @@ mod test {
     async fn not_found() {
         let result = LitterTray::try_with_async(async |tray| {
             let _ = tray.make_dir("d");
-            test_ls_main("xyzy", true).await
+            test_ls_main("xyzy", true, false).await
         })
         .await
-        .unwrap();
-        assert_eq!(
-            Status::try_from(result.status).unwrap(),
-            Status::FileNotFound
-        );
+        .unwrap_err();
+        assert!(result.to_string().contains("FileNotFound"));
     }
 }

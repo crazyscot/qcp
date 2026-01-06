@@ -130,9 +130,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
                     else {
                         anyhow::bail!("connection closed unexpectedly");
                     };
-                    let Response::V1(response) = response else {
-                        anyhow::bail!("remote sent unexpected response: {response:?}");
-                    };
+                    let Response::V1(response) = response;
                     anyhow::bail!(
                         "remote closed connection: {:?}: {}",
                         response.status,
@@ -172,7 +170,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
                 payload_bytes: payload_len,
                 peak_transfer_rate: meter.peak(),
             },
-            response: None,
+            ..Default::default()
         })
     }
 

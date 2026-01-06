@@ -19,7 +19,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar};
 
-use crate::{Parameters, client::CopyJobSpec, config::Configuration, protocol::session::Response};
+use crate::{Parameters, client::CopyJobSpec, config::Configuration, protocol::session::ListData};
 
 /// Helper macro for making error returns
 ///
@@ -54,7 +54,7 @@ pub struct RequestResult {
     ///
     /// This is used for commands that return data which the client processes and may cause further commands,
     /// for example `List` returns directory entries which may cause further `Get` commands.
-    pub response: Option<Response>,
+    pub list: Option<ListData>,
 }
 
 impl Default for RequestResult {
@@ -62,7 +62,7 @@ impl Default for RequestResult {
     fn default() -> Self {
         Self {
             stats: CommandStats::default(),
-            response: None,
+            list: None,
         }
     }
 }

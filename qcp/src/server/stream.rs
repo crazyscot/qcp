@@ -114,9 +114,7 @@ mod tests {
         let resp = Response::from_reader_async_framed(&mut out_read)
             .await
             .unwrap();
-        let Response::V1(r) = resp else {
-            panic!("unexpected response: {resp:?}");
-        };
+        let Response::V1(r) = resp;
         r
     }
 
