@@ -58,14 +58,23 @@ impl Display for ResponseV1 {
 
 /// ListResponse was introduced in qcp 0.8 with compatibility level 4.
 #[derive(
-    Serialize, Deserialize, PartialEq, Debug, Clone, derive_more::Constructor, thiserror::Error,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Debug,
+    Clone,
+    derive_more::Constructor,
+    thiserror::Error,
+    Default,
 )]
 pub struct ListData {
     /// Response detail
     pub entries: Vec<ListEntry>,
+    /// On the wire, this flag indicates that another [`ListData`] packet follows.
+    pub more_to_come: bool,
 }
 impl ProtocolMessage for ListData {
-    // Default encoding limit (1M) applies
+    // The default encoding limit (1MiB) applies. The `more_to_come` flag allows large listings to be split.
 }
 
 impl Display for ListData {
@@ -78,7 +87,65 @@ impl Display for ListData {
     }
 }
 
+impl ListData {
+    /// Split this `ListData` into multiple parts, each of which encodes to no more than `max_size` bytes.
+    pub(crate) fn split_by_size(self, max_size: u32) -> anyhow::Result<Vec<Self>> {
+        use std::collections::VecDeque;
+
+        let max_size = usize::try_from(max_size)?;
+
+        let mut result = vec![];
+
+        // Check for the easy case first
+        if self.encoded_size()? <= max_size {
+            return Ok(vec![self]);
+        }
+
+        // OK, we know we need to split.
+        let mut input = VecDeque::from(self.entries);
+
+        while !input.is_empty() {
+            let mut working = ListData::default();
+            working.entries.reserve(input.len());
+
+            // Add 7 bytes to allow for the encoded size of the array length to grow to 2^63, which is obviously more than we will ever need
+            let mut current_size = working.encoded_size()? + 7;
+
+            loop {
+                let Some(front) = input.pop_front() else {
+                    break;
+                };
+                let entry_size = front.encoded_size()?;
+                if current_size + entry_size > max_size {
+                    // Oops! It's too big. Put it back and finish this output packet.
+                    input.push_front(front);
+                    break;
+                }
+                current_size += entry_size;
+                working.entries.push(front);
+            }
+            working.more_to_come = !input.is_empty();
+            result.push(working);
+        }
+        Ok(result)
+    }
+
+    /// Join multiple `ListData` parts from the wire into a single `ListData`.
+    pub(crate) fn join(parts: Vec<Self>) -> Self {
+        let mut all_entries = vec![];
+        for part in parts {
+            all_entries.extend(part.entries);
+        }
+        Self {
+            entries: all_entries,
+            more_to_come: false,
+        }
+    }
+}
+
 /// A single file or directory entry returned by a `List` request. See [`Command::List`].
+///
+/// This struct was introduced in qcp 0.8 with compatibility level 4.
 #[derive(
     Serialize, Deserialize, PartialEq, Debug, Clone, derive_more::Constructor, thiserror::Error,
 )]
@@ -94,6 +161,10 @@ pub struct ListEntry {
     /// Currently supported: [`MetadataAttr::ModeBits`] on directories.
     pub attributes: Vec<TaggedData<MetadataAttr>>,
 }
+
+/// This struct is not currently encoded on the wire directly, but it implements [`ProtocolMessage`]
+/// so its encoded size can be calculated conveniently.
+impl ProtocolMessage for ListEntry {}
 
 impl Display for ListEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -313,10 +384,35 @@ mod test {
                     attributes: vec![],
                 },
             ],
+            more_to_come: false,
         };
         let str = lc.to_string();
         eprintln!("{str}");
         assert_contains!(str, "aaa");
         assert_contains!(str, "bbb");
+    }
+
+    #[test]
+    fn list_split_join() {
+        let mut entries = vec![];
+        for i in 0..200 {
+            entries.push(ListEntry {
+                name: format!("file_{i:03}"),
+                directory: false,
+                size: Uint(1024),
+                attributes: vec![],
+            });
+        }
+        let list = ListData {
+            entries,
+            more_to_come: false,
+        };
+        let parts = list.clone().split_by_size(256).unwrap();
+        assert!(parts.len() > 2);
+        for part in &parts {
+            assert!(part.encoded_size().unwrap() <= 512);
+        }
+        let joined = ListData::join(parts);
+        assert_eq!(list, joined);
     }
 }

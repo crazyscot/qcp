@@ -82,9 +82,18 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
             error!("List failed: {:?}", result);
             return Err(anyhow::Error::new(result));
         }
-        let data = ListData::from_reader_async_framed(&mut self.stream.recv)
-            .await
-            .map_err(|r| anyhow::anyhow!("failed to parse List response: {r}"))?;
+        let mut data = vec![];
+        loop {
+            let packet = ListData::from_reader_async_framed(&mut self.stream.recv)
+                .await
+                .map_err(|r| anyhow::anyhow!("failed to parse List response: {r}"))?;
+            let another = packet.more_to_come;
+            data.push(packet);
+            if !another {
+                break;
+            }
+        }
+        let data = ListData::join(data);
         Ok(RequestResult::new(CommandStats::default(), Some(data)))
     }
 
@@ -111,6 +120,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
                     size: Uint(meta.len()),
                     attributes: vec![],
                 }],
+                more_to_come: false,
             };
 
             Response::V1(ResponseV1 {
@@ -130,7 +140,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
             .collect();
 
         let list = match entries {
-            Ok(v) => ListData { entries: v },
+            Ok(v) => ListData {
+                entries: v,
+                more_to_come: false,
+            },
             Err(e) => {
                 debug!("ls: walkdir error: {e}");
                 error_and_return!(self, e);
@@ -139,19 +152,11 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         // debug!("ls: sending response {}", list);
 
         // Careful! The response might be too long for a Response packet (64k).
-        let checked = match list.encoded_size() {
-            Ok(sz) if sz > ListData::WIRE_ENCODING_LIMIT as usize => {
-                error!("List response too large to send ({sz} bytes)");
-                Err(Status::EncodingFailed.into())
-            }
-            Ok(sz) => Ok(sz),
-            Err(e) => Err(e),
-        };
-        if let Err(e) = checked {
-            error_and_return!(self, e);
-        }
+        let packets = list.split_by_size(ListData::WIRE_ENCODING_LIMIT)?;
         send_ok(&mut self.stream.send).await?;
-        list.to_writer_async_framed(&mut self.stream.send).await?;
+        for p in packets {
+            p.to_writer_async_framed(&mut self.stream.send).await?;
+        }
         self.stream.send.flush().await?;
         trace!("complete");
         Ok(())
