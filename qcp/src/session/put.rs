@@ -1,14 +1,14 @@
 //! PUT command
 // (c) 2024-5 Ross Younger
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, anyhow};
 use std::path::PathBuf;
 use tokio::fs::File as TokioFile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, error, trace};
 
 use crate::Parameters;
-use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
+use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::session::{
     Command, CommandParam, FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Put2Args, PutArgs,
@@ -27,15 +27,10 @@ pub(crate) struct PutHandler;
 impl CommandHandler for PutHandler {
     type Args = Put2Args;
 
-    async fn send_impl<S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        stream: &mut SendReceivePair<S, R>,
-        compat: crate::protocol::control::Compatibility,
+        inner: &mut SessionCommandInner<'a, S, R>,
         job: &crate::client::CopyJobSpec,
-        display: indicatif::MultiProgress,
-        filename_width: usize,
-        spinner: indicatif::ProgressBar,
-        config: &crate::config::Configuration,
         params: Parameters,
     ) -> Result<RequestResult> {
         let src_filename = &job.source.filename;
@@ -53,15 +48,24 @@ impl CommandHandler for PutHandler {
         // Marshalled commands are currently 48 bytes + filename length
         // File headers are currently 36 + filename length; Trailers are 16 bytes.
         let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
-        let progress_bar = progress_bar_for(&display, job, filename_width, steps, params.quiet)?;
-        let mut outbound = progress_bar.wrap_async_write(&mut stream.send);
-        let mut meter =
-            crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, config.tx());
+        let progress_bar = progress_bar_for(
+            inner.display(),
+            job,
+            inner.filename_width(),
+            steps,
+            params.quiet,
+        )?;
+        let mut meter = crate::client::meter::InstaMeterRunner::new(
+            &progress_bar,
+            Some(inner.spinner().clone()),
+            inner.config.tx(),
+        );
+        let mut outbound = progress_bar.wrap_async_write(&mut inner.stream.send);
         meter.start().await;
 
         trace!("sending command");
 
-        let cmd = if compat.supports(Feature::GET2_PUT2) {
+        let cmd = if inner.compat.supports(Feature::GET2_PUT2) {
             let mut options = vec![];
             if job.preserve {
                 options.push(CommandParam::PreserveMetadata.into());
@@ -81,12 +85,12 @@ impl CommandHandler for PutHandler {
         // The filename in the protocol is the file part only of src_filename
         trace!("send header");
         let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
-        let hdr = FileHeader::for_file(compat, &src_meta, protocol_filename);
+        let hdr = FileHeader::for_file(inner.compat, &src_meta, protocol_filename);
         trace!("{hdr:?}");
         hdr.to_writer_async_framed(&mut outbound).await?;
 
         trace!("await response");
-        let _ = Response::from_reader_async_framed(&mut stream.recv)
+        let _ = Response::from_reader_async_framed(&mut inner.stream.recv)
             .await?
             .into_result()
             .with_context(|| format!("PUTx {src_filename} failed"))?;
@@ -94,7 +98,8 @@ impl CommandHandler for PutHandler {
         // A server-side abort might happen part-way through a large transfer.
         trace!("send payload");
         let result =
-            crate::util::io::copy_large(&mut file, &mut outbound, config.io_buffer_size).await;
+            crate::util::io::copy_large(&mut file, &mut outbound, inner.config.io_buffer_size)
+                .await;
 
         match result {
             Ok(sent) if sent == src_meta.len() => (),
@@ -107,7 +112,8 @@ impl CommandHandler for PutHandler {
             Err(e) => {
                 if e.kind() == tokio::io::ErrorKind::ConnectionReset {
                     // Maybe the connection was cut, maybe the server sent something to help us inform the user.
-                    let Ok(response) = Response::from_reader_async_framed(&mut stream.recv).await
+                    let Ok(response) =
+                        Response::from_reader_async_framed(&mut inner.stream.recv).await
                     else {
                         anyhow::bail!("connection closed unexpectedly");
                     };
@@ -118,21 +124,17 @@ impl CommandHandler for PutHandler {
                         response.message.unwrap_or("(no message)".into())
                     );
                 }
-                anyhow::bail!(
-                    "Unknown I/O error during PUT: {e}/{:?}/{:?}",
-                    e.kind(),
-                    e.raw_os_error()
-                );
+                return Err(anyhow!(e).context("I/O error during PUT"));
             }
         }
 
-        let trl = FileTrailer::for_file(compat, &src_meta, job.preserve);
+        let trl = FileTrailer::for_file(inner.compat, &src_meta, job.preserve);
         trace!("send trailer {trl:?}");
         trl.to_writer_async_framed(&mut outbound).await?;
         outbound.flush().await?;
         meter.stop().await;
 
-        let response = Response::from_reader_async_framed(&mut stream.recv).await?;
+        let response = Response::from_reader_async_framed(&mut inner.stream.recv).await?;
         #[allow(irrefutable_let_patterns)]
         let Response::V1(response) = response else {
             todo!()
@@ -155,9 +157,9 @@ impl CommandHandler for PutHandler {
         })
     }
 
-    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<S, R>,
+        inner: &mut SessionCommandInner<'a, S, R>,
         args: &Put2Args,
     ) -> Result<()> {
         let destination = &args.filename;
@@ -232,7 +234,7 @@ impl CommandHandler for PutHandler {
             &mut stream.recv,
             header.size.0,
             &mut file,
-            inner.io_buffer_size,
+            inner.config.io_buffer_size,
         )
         .await;
         if let Err(e) = result {
@@ -291,7 +293,7 @@ mod test {
             RequestResult, SessionCommandImpl as _,
             handler::{PutHandler, SessionCommand},
         },
-        util::{io::DEFAULT_COPY_BUFFER_SIZE, time::SystemTimeExt as _},
+        util::time::SystemTimeExt as _,
     };
     use littertray::LitterTray;
 
@@ -330,20 +332,14 @@ mod test {
             PutHandler,
             None,
             Compatibility::Level(client_level),
-            DEFAULT_COPY_BUFFER_SIZE,
+            Configuration::system_default(),
+            None,
         );
         let params = Parameters {
             quiet: true,
             ..Default::default()
         };
-        let sender_fut = sender.send(
-            &spec,
-            indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
-            10,
-            indicatif::ProgressBar::hidden(),
-            Configuration::system_default(),
-            params,
-        );
+        let sender_fut = sender.send(&spec, params);
         tokio::pin!(sender_fut);
 
         // The first difference between Get and Put is that in the error cases for Put, the sending future
@@ -378,7 +374,8 @@ mod test {
             PutHandler,
             Some(args),
             Compatibility::Level(server_level),
-            DEFAULT_COPY_BUFFER_SIZE,
+            Configuration::system_default(),
+            None,
         );
         let (r1, r2) = tokio::join!(sender_fut, handler.handle());
         Ok((r1, r2))
@@ -534,7 +531,8 @@ mod test {
                 PutHandler,
                 None,
                 Compatibility::Level(2),
-                DEFAULT_COPY_BUFFER_SIZE
+                Configuration::system_default(),
+                None,
             )
             .handle()
             .await

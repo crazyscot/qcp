@@ -488,16 +488,10 @@ impl Client {
             TransferPhase::Pre,
             negotiated.compat,
             &self.args.client_params,
-        );
-        cmd.send(
-            copy_spec,
-            self.display.clone(),
-            0,
-            self.spinner.clone(),
+            self.ui(0),
             &negotiated.config,
-            self.args.client_params,
-        )
-        .await
+        );
+        cmd.send(copy_spec, self.args.client_params).await
     }
 
     async fn manage_file_transfer_request<S, R>(
@@ -520,6 +514,8 @@ impl Client {
             TransferPhase::Transfer,
             negotiated.compat,
             &self.args.client_params,
+            self.ui(filename_width),
+            &negotiated.config,
         );
         let span = trace_span!(
             "transfer",
@@ -529,14 +525,7 @@ impl Client {
         let filename = copy_spec.display_filename().to_string_lossy();
         let timer = std::time::Instant::now();
         let result = cmd
-            .send(
-                copy_spec,
-                self.display.clone(),
-                filename_width,
-                self.spinner.clone(),
-                &negotiated.config,
-                self.args.client_params,
-            )
+            .send(copy_spec, self.args.client_params)
             .instrument(span)
             .await;
         let elapsed = timer.elapsed();
@@ -552,6 +541,17 @@ impl Client {
         })
     }
 
+    fn ui(&self, filename_width: usize) -> Option<session::handler::UI> {
+        if self.args.client_params.quiet {
+            None
+        } else {
+            Some(session::handler::UI::new(
+                self.display.clone(),
+                filename_width,
+                self.spinner.clone(),
+            ))
+        }
+    }
     async fn manage_post_transfer_request<S, R>(
         &self,
         stream_pair: SendReceivePair<S, R>,
@@ -571,17 +571,10 @@ impl Client {
                 TransferPhase::Post,
                 negotiated.compat,
                 &self.args.client_params,
+                self.ui(0),
+                &negotiated.config,
             );
-            return cmd
-                .send(
-                    copy_spec,
-                    self.display.clone(),
-                    0,
-                    self.spinner.clone(),
-                    &negotiated.config,
-                    self.args.client_params,
-                )
-                .await;
+            return cmd.send(copy_spec, self.args.client_params).await;
         }
         if !destination_is_remote && let Some(mode) = copy_spec.mode {
             let perms = tokio::fs::metadata(&copy_spec.destination.filename)

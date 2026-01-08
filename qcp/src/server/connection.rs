@@ -2,9 +2,12 @@
 // (c) 2024 Ross Younger
 
 use super::handle_stream;
-use crate::protocol::{
-    common::{ReceivingStream as QcpRS, SendReceivePair, SendingStream as QcpSS},
-    control::Compatibility,
+use crate::{
+    Configuration,
+    protocol::{
+        common::{ReceivingStream as QcpRS, SendReceivePair, SendingStream as QcpSS},
+        control::Compatibility,
+    },
 };
 
 use async_trait::async_trait;
@@ -40,15 +43,15 @@ impl Connection<quinn::SendStream, quinn::RecvStream> for quinn::Connection {
 pub(super) async fn handle_incoming(
     i: quinn::Incoming,
     compat: Compatibility,
-    io_buffer_size: u64,
+    config: &Configuration,
 ) -> anyhow::Result<ConnectionStats> {
-    handle_inner(i.await?, compat, io_buffer_size).await
+    handle_inner(i.await?, compat, config).await
 }
 
 async fn handle_inner<SS: QcpSS + 'static, RS: QcpRS + 'static, C: Connection<SS, RS>>(
     connection: C,
     compat: Compatibility,
-    io_buffer_size: u64,
+    config: &Configuration,
 ) -> anyhow::Result<ConnectionStats> {
     debug!(
         "accepted QUIC connection from {}",
@@ -75,8 +78,9 @@ async fn handle_inner<SS: QcpSS + 'static, RS: QcpRS + 'static, C: Connection<SS
                 Ok(s) => SendReceivePair::from(s),
             };
             trace!("opened stream");
+            let cfg = config.clone();
             let _j = tokio::spawn(async move {
-                if let Err(e) = handle_stream(sp, compat, io_buffer_size).await {
+                if let Err(e) = handle_stream(sp, compat, &cfg).await {
                     error!("stream handler failed: {e}");
                 }
             });
@@ -91,7 +95,7 @@ async fn handle_inner<SS: QcpSS + 'static, RS: QcpRS + 'static, C: Connection<SS
 mod tests {
     use std::net::{Ipv4Addr, SocketAddrV4};
 
-    use crate::util::io::DEFAULT_COPY_BUFFER_SIZE;
+    use crate::Configuration;
     use crate::{protocol::control::Compatibility, server::connection::handle_inner};
 
     use super::Connection;
@@ -150,7 +154,7 @@ mod tests {
     #[tokio::test]
     async fn timeout() {
         let mc = MockConnection::err(quinn::ConnectionError::TimedOut);
-        let e = handle_inner(mc, Compatibility::Level(1), DEFAULT_COPY_BUFFER_SIZE)
+        let e = handle_inner(mc, Compatibility::Level(1), Configuration::system_default())
             .await
             .unwrap_err();
         assert_contains!(e.to_string(), "timed out");
@@ -162,7 +166,7 @@ mod tests {
             frame_type: None,
             reason: "no".into(),
         }));
-        let s = handle_inner(mc, Compatibility::Level(1), DEFAULT_COPY_BUFFER_SIZE)
+        let s = handle_inner(mc, Compatibility::Level(1), Configuration::system_default())
             .await
             .unwrap();
         assert_eq!(s.path.sent_packets, 0);
@@ -174,7 +178,7 @@ mod tests {
             ok_count: 1.into(),
             ..Default::default()
         };
-        let s = handle_inner(mc, Compatibility::Level(1), DEFAULT_COPY_BUFFER_SIZE)
+        let s = handle_inner(mc, Compatibility::Level(1), Configuration::system_default())
             .await
             .unwrap();
         assert_eq!(s.path.sent_packets, 0);

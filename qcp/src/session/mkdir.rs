@@ -7,7 +7,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::{debug, trace};
 
 use crate::Parameters;
-use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
+use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendingStream};
 use crate::protocol::session::{Command, CreateDirectoryArgs, Response, Status};
 use crate::session::common::send_ok;
 use crate::session::handler::SessionCommandInner;
@@ -19,19 +19,16 @@ pub(crate) struct CreateDirectoryHandler;
 impl CommandHandler for CreateDirectoryHandler {
     type Args = CreateDirectoryArgs;
 
-    async fn send_impl<S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        stream: &mut SendReceivePair<S, R>,
-        compat: crate::protocol::control::Compatibility,
+        inner: &mut SessionCommandInner<'a, S, R>,
         job: &crate::client::CopyJobSpec,
-        _display: indicatif::MultiProgress,
-        _filename_width: usize,
-        _spinner: indicatif::ProgressBar,
-        _config: &crate::config::Configuration,
         _params: Parameters,
     ) -> Result<RequestResult> {
         anyhow::ensure!(
-            compat.supports(crate::protocol::compat::Feature::MKDIR_SETMETA_LS),
+            inner
+                .compat
+                .supports(crate::protocol::compat::Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
         );
         anyhow::ensure!(
@@ -40,7 +37,7 @@ impl CommandHandler for CreateDirectoryHandler {
         );
 
         trace!("sending command");
-        let mut outbound = &mut stream.send;
+        let mut outbound = &mut inner.stream.send;
         let cmd = Command::CreateDirectory(CreateDirectoryArgs {
             dir_name: job.destination.filename.clone(),
             options: vec![],
@@ -49,15 +46,15 @@ impl CommandHandler for CreateDirectoryHandler {
         outbound.flush().await?;
 
         trace!("await response");
-        let _ = Response::from_reader_async_framed(&mut stream.recv)
+        let _ = Response::from_reader_async_framed(&mut inner.stream.recv)
             .await?
             .into_result()?;
         Ok(RequestResult::default())
     }
 
-    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<S, R>,
+        inner: &mut SessionCommandInner<'a, S, R>,
         args: &CreateDirectoryArgs,
     ) -> Result<()> {
         let path = &args.dir_name;
@@ -98,7 +95,6 @@ mod test {
             test_helpers::{new_test_plumbing, read_from_stream},
         },
         session::{RequestResult, SessionCommandImpl as _, handler::SessionCommand},
-        util::io::DEFAULT_COPY_BUFFER_SIZE,
     };
     use anyhow::{Result, bail};
     use littertray::LitterTray;
@@ -113,17 +109,11 @@ mod test {
             CreateDirectoryHandler,
             None,
             Compatibility::Level(4),
-            DEFAULT_COPY_BUFFER_SIZE,
+            Configuration::system_default(),
+            None,
         );
         let params = Parameters::default();
-        let sender_fut = sender.send(
-            &spec,
-            indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
-            10,
-            indicatif::ProgressBar::hidden(),
-            Configuration::system_default(),
-            params,
-        );
+        let sender_fut = sender.send(&spec, params);
         tokio::pin!(sender_fut);
 
         let result = read_from_stream(&mut pipe2.recv, &mut sender_fut).await;
@@ -137,7 +127,8 @@ mod test {
             CreateDirectoryHandler,
             Some(args),
             Compatibility::Level(4),
-            DEFAULT_COPY_BUFFER_SIZE,
+            Configuration::system_default(),
+            None,
         );
         let (r1, r2) = tokio::join!(sender_fut, handler.handle());
         Ok((r1, r2))

@@ -17,9 +17,8 @@ pub(crate) use get::test_shared;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use indicatif::{MultiProgress, ProgressBar};
 
-use crate::{Parameters, client::CopyJobSpec, config::Configuration, protocol::session::ListData};
+use crate::{Parameters, client::CopyJobSpec, protocol::session::ListData};
 
 /// Helper macro for making error returns
 ///
@@ -71,15 +70,7 @@ pub(crate) trait SessionCommandImpl: Send {
     /// Client side implementation, takes care of sending the command and all its
     /// traffic. Does not return until completion (or error).
     /// Returns the number of payload bytes received.
-    async fn send(
-        &mut self,
-        job: &CopyJobSpec,
-        display: MultiProgress,
-        filename_width: usize,
-        spinner: ProgressBar,
-        config: &Configuration,
-        params: Parameters,
-    ) -> Result<RequestResult>;
+    async fn send(&mut self, job: &CopyJobSpec, params: Parameters) -> Result<RequestResult>;
 
     /// Server side implementation, takes care of handling the command and all its
     /// traffic. Does not return until completion (or error).

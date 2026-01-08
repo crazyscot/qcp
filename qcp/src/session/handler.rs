@@ -18,43 +18,103 @@ pub(crate) trait CommandHandler: Send + Sized {
     type Args: Send;
 
     /// Client-side implementation (has access to stream and compat)
-    #[allow(clippy::too_many_arguments)] // TODO: refactor later
-    async fn send_impl<S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        stream: &mut SendReceivePair<S, R>,
-        compat: Compatibility,
+        inner: &mut SessionCommandInner<'a, S, R>,
         job: &CopyJobSpec,
-        display: MultiProgress,
-        filename_width: usize,
-        spinner: ProgressBar,
-        config: &Configuration,
         params: Parameters,
     ) -> Result<RequestResult>;
 
     /// Server-side implementation (has access to stream and compat)
-    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<S, R>,
+        inner: &mut SessionCommandInner<'a, S, R>,
         args: &Self::Args,
     ) -> Result<()>;
 }
 
+/// Client-side UI elements for commands that need them
+pub(crate) struct UI {
+    display: MultiProgress,
+    filename_width: usize,
+    spinner: ProgressBar,
+}
+
+impl UI {
+    pub(crate) fn new(display: MultiProgress, filename_width: usize, spinner: ProgressBar) -> Self {
+        Self {
+            display,
+            filename_width,
+            spinner,
+        }
+    }
+}
+
 /// Generic command implementation - the only concrete command type
-pub(crate) struct SessionCommand<S: SendingStream, R: ReceivingStream, H: CommandHandler> {
+pub(crate) struct SessionCommand<'a, S: SendingStream, R: ReceivingStream, H: CommandHandler> {
     handler: H,
     args: Option<H::Args>,
-    inner: SessionCommandInner<S, R>,
+    inner: SessionCommandInner<'a, S, R>,
 }
 
 /// Inner data for [`SessionCommand`] so it can be borrowed separately from the handler
-pub(crate) struct SessionCommandInner<S: SendingStream, R: ReceivingStream> {
+pub(crate) struct SessionCommandInner<'a, S: SendingStream, R: ReceivingStream> {
     pub stream: SendReceivePair<S, R>,
+    /// Negotiated compatibility level
     pub compat: Compatibility,
-    pub io_buffer_size: u64, // TODO: we can get this from 'config', after we've passed that in
+    /// UI elements for command senders, if desired by the caller.
+    ///
+    /// Not used by server-side handlers.
+    ui: UI,
+    /// Negotiated configuration
+    pub config: &'a Configuration,
 }
 
-impl<S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHandler + 'static>
-    SessionCommand<S, R, H>
+impl<'a, S: SendingStream, R: ReceivingStream> SessionCommandInner<'a, S, R> {
+    fn new_with_ui(
+        stream: SendReceivePair<S, R>,
+        compat: Compatibility,
+        config: &'a Configuration,
+        ui: UI,
+    ) -> Self {
+        Self {
+            stream,
+            compat,
+            ui,
+            config,
+        }
+    }
+
+    fn new_without_ui(
+        stream: SendReceivePair<S, R>,
+        compat: Compatibility,
+        config: &'a Configuration,
+    ) -> Self {
+        Self {
+            stream,
+            compat,
+            ui: UI {
+                display: MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
+                filename_width: 0,
+                spinner: ProgressBar::hidden(),
+            },
+            config,
+        }
+    }
+
+    pub(crate) fn spinner(&self) -> &ProgressBar {
+        &self.ui.spinner
+    }
+    pub(crate) fn display(&self) -> &MultiProgress {
+        &self.ui.display
+    }
+    pub(crate) fn filename_width(&self) -> usize {
+        self.ui.filename_width
+    }
+}
+
+impl<'a, S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHandler + 'static>
+    SessionCommand<'a, S, R, H>
 {
     /// Create a boxed command for the trait object interface
     pub(crate) fn boxed(
@@ -62,45 +122,30 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHandler
         handler: H,
         args: Option<H::Args>,
         compat: Compatibility,
-        io_buffer_size: u64,
-    ) -> Box<SessionCommand<S, R, H>> {
+        config: &'a Configuration,
+        ui: Option<UI>,
+    ) -> Box<SessionCommand<'a, S, R, H>> {
+        if let Some(ui) = ui {
+            return Box::new(Self {
+                handler,
+                args,
+                inner: SessionCommandInner::new_with_ui(stream, compat, config, ui),
+            });
+        }
         Box::new(Self {
             handler,
             args,
-            inner: SessionCommandInner {
-                stream,
-                compat,
-                io_buffer_size,
-            },
+            inner: SessionCommandInner::new_without_ui(stream, compat, config),
         })
     }
 }
 
 #[async_trait]
 impl<S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHandler + 'static>
-    SessionCommandImpl for SessionCommand<S, R, H>
+    SessionCommandImpl for SessionCommand<'_, S, R, H>
 {
-    async fn send(
-        &mut self,
-        job: &CopyJobSpec,
-        display: MultiProgress,
-        filename_width: usize,
-        spinner: ProgressBar,
-        config: &Configuration,
-        params: Parameters,
-    ) -> Result<RequestResult> {
-        self.handler
-            .send_impl(
-                &mut self.inner.stream,
-                self.inner.compat,
-                job,
-                display,
-                filename_width,
-                spinner,
-                config,
-                params,
-            )
-            .await
+    async fn send(&mut self, job: &CopyJobSpec, params: Parameters) -> Result<RequestResult> {
+        self.handler.send_impl(&mut self.inner, job, params).await
     }
 
     async fn handle(&mut self) -> Result<()> {

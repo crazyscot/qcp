@@ -8,7 +8,7 @@ use tracing::{debug, error, trace};
 use walkdir::WalkDir;
 
 use crate::Parameters;
-use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
+use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendingStream};
 use crate::protocol::session::{ListArgs, ListData, ListEntry};
 use crate::protocol::session::{ResponseV1, prelude::*};
 use crate::session::common::{FindOption as _, send_ok};
@@ -21,26 +21,21 @@ pub(crate) struct ListingHandler;
 impl CommandHandler for ListingHandler {
     type Args = ListArgs;
 
-    async fn send_impl<S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        stream: &mut SendReceivePair<S, R>,
-        compat: crate::protocol::control::Compatibility,
+        inner: &mut SessionCommandInner<'a, S, R>,
         job: &crate::client::CopyJobSpec,
-        _display: indicatif::MultiProgress,
-        _filename_width: usize,
-        _spinner: indicatif::ProgressBar,
-        _config: &crate::config::Configuration,
         params: Parameters,
     ) -> Result<RequestResult> {
         anyhow::ensure!(
-            compat.supports(Feature::MKDIR_SETMETA_LS),
+            inner.compat.supports(Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
         );
         let path = &job.source.filename; // yes, source filename
 
         // This is a trivial operation, we do not bother with a progress bar.
         trace!("sending command");
-        let mut outbound = &mut stream.send;
+        let mut outbound = &mut inner.stream.send;
         let mut options = vec![];
         if params.recurse {
             options.push(CommandParam::Recurse.into());
@@ -53,14 +48,14 @@ impl CommandHandler for ListingHandler {
         outbound.flush().await?;
 
         trace!("await response");
-        let result = Response::from_reader_async_framed(&mut stream.recv).await?;
+        let result = Response::from_reader_async_framed(&mut inner.stream.recv).await?;
         if result.status() != Status::Ok {
             error!("List failed: {:?}", result);
             return Err(anyhow::Error::new(result));
         }
         let mut data = vec![];
         loop {
-            let packet = ListData::from_reader_async_framed(&mut stream.recv)
+            let packet = ListData::from_reader_async_framed(&mut inner.stream.recv)
                 .await
                 .map_err(|r| anyhow::anyhow!("failed to parse List response: {r}"))?;
             let another = packet.more_to_come;
@@ -73,9 +68,9 @@ impl CommandHandler for ListingHandler {
         Ok(RequestResult::new(CommandStats::default(), Some(data)))
     }
 
-    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<S, R>,
+        inner: &mut SessionCommandInner<'a, S, R>,
         args: &ListArgs,
     ) -> Result<()> {
         let path = &args.path;
@@ -149,7 +144,6 @@ mod test {
 
     use crate::protocol::session::{ListData, prelude::*};
     use crate::session::SessionCommandImpl as _;
-    use crate::util::io::DEFAULT_COPY_BUFFER_SIZE;
     use crate::{
         Configuration, Parameters,
         client::CopyJobSpec,
@@ -167,7 +161,8 @@ mod test {
             ListingHandler,
             None,
             Compatibility::Level(4),
-            DEFAULT_COPY_BUFFER_SIZE,
+            Configuration::system_default(),
+            None,
         );
         let spec =
             CopyJobSpec::from_parts(path, &format!("desthost:{path}"), false, false).unwrap();
@@ -177,14 +172,7 @@ mod test {
         };
         let result = {
             // this subscope forces sender_fut to unborrow sender.
-            let sender_fut = sender.send(
-                &spec,
-                indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
-                10,
-                indicatif::ProgressBar::hidden(),
-                Configuration::system_default(),
-                params,
-            );
+            let sender_fut = sender.send(&spec, params);
             tokio::pin!(sender_fut);
 
             let result = read_from_stream(&mut pipe2.recv, &mut sender_fut).await;
@@ -198,7 +186,8 @@ mod test {
                 ListingHandler,
                 Some(args),
                 Compatibility::Level(4),
-                DEFAULT_COPY_BUFFER_SIZE,
+                Configuration::system_default(),
+                None,
             );
             let (r1, r2) = tokio::join!(sender_fut, handler.handle());
             r2.expect("handler should not have failed");

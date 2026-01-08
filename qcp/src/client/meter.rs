@@ -26,11 +26,15 @@ pub(crate) struct InstaMeterRunner {
 }
 
 impl InstaMeterRunner {
-    pub(crate) fn new(source: &ProgressBar, destination: ProgressBar, max_throughput: u64) -> Self {
+    pub(crate) fn new(
+        source: &ProgressBar,
+        destination: Option<ProgressBar>,
+        max_throughput: u64,
+    ) -> Self {
         Self {
             inner: Arc::new(Mutex::new(InstaMeterInner::new(
                 source,
-                destination,
+                destination.unwrap_or_else(ProgressBar::hidden),
                 max_throughput,
             ))),
             task: None,

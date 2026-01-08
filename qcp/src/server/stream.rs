@@ -14,7 +14,7 @@ use tracing::{Instrument as _, trace, trace_span};
 pub(crate) async fn handle_stream<W, R>(
     mut sp: SendReceivePair<W, R>,
     compat: Compatibility,
-    io_buffer_size: u64,
+    config: &crate::config::Configuration,
 ) -> anyhow::Result<()>
 where
     R: ReceivingStream + 'static, // AsyncRead + Unpin + Send,
@@ -35,8 +35,7 @@ where
         }
     };
 
-    let (mut handler, span_info) =
-        session::factory::command_handler(sp, packet, compat, io_buffer_size);
+    let (mut handler, span_info) = session::factory::command_handler(sp, packet, compat, config);
     let span = trace_span!(
         "handler",
         cmd = span_info.name,
@@ -48,15 +47,17 @@ where
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
-    use crate::protocol::{
-        common::{ProtocolMessage, SendReceivePair},
-        control::Compatibility,
-        session::{
-            Command, CreateDirectoryArgs, Get2Args, GetArgs, Put2Args, PutArgs, Response,
-            ResponseV1, SetMetadataArgs, Status,
+    use crate::{
+        Configuration,
+        protocol::{
+            common::{ProtocolMessage, SendReceivePair},
+            control::Compatibility,
+            session::{
+                Command, CreateDirectoryArgs, Get2Args, GetArgs, Put2Args, PutArgs, Response,
+                ResponseV1, SetMetadataArgs, Status,
+            },
         },
     };
-    use crate::util::io::DEFAULT_COPY_BUFFER_SIZE;
 
     use super::handle_stream;
     use littertray::LitterTray;
@@ -77,7 +78,7 @@ mod tests {
         handle_stream(
             SendReceivePair::from((out_write, mock_recv)),
             Compatibility::Level(compat),
-            DEFAULT_COPY_BUFFER_SIZE,
+            Configuration::system_default(),
         )
         .await
         .unwrap();

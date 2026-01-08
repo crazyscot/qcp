@@ -141,7 +141,7 @@ async fn run_plumbing(uut: &mut Client) -> anyhow::Result<(bool, crate::session:
                 if let Err(e) = crate::server::handle_stream(
                     p2,
                     Compatibility::Level(4),
-                    crate::util::io::DEFAULT_COPY_BUFFER_SIZE,
+                    Configuration::system_default(),
                 )
                 .await
                 {

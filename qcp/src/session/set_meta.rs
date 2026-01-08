@@ -8,7 +8,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::trace;
 
 use crate::Parameters;
-use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
+use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::session::{Command, MetadataAttr, Response, SetMetadataArgs, Status};
 use crate::session::handler::SessionCommandInner;
@@ -25,19 +25,14 @@ pub(crate) struct SetMetadataHandler;
 impl CommandHandler for SetMetadataHandler {
     type Args = SetMetadataArgs;
 
-    async fn send_impl<S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        stream: &mut SendReceivePair<S, R>,
-        compat: crate::protocol::control::Compatibility,
+        inner: &mut SessionCommandInner<'a, S, R>,
         job: &crate::CopyJobSpec,
-        _display: indicatif::MultiProgress,
-        _filename_width: usize,
-        _spinner: indicatif::ProgressBar,
-        _config: &crate::Configuration,
         _params: Parameters,
     ) -> Result<RequestResult> {
         anyhow::ensure!(
-            compat.supports(Feature::MKDIR_SETMETA_LS),
+            inner.compat.supports(Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
         );
 
@@ -50,25 +45,25 @@ impl CommandHandler for SetMetadataHandler {
         // This is a trivial operation, we do not bother with a progress bar.
 
         trace!("sending command");
-        let mut outbound = &mut stream.send;
+        let mut outbound = &mut inner.stream.send;
         let cmd = Command::SetMetadata(SetMetadataArgs {
             path: job.destination.filename.clone(),
-            metadata: localmeta.tagged_data_for_dir(compat),
+            metadata: localmeta.tagged_data_for_dir(inner.compat),
             options: vec![],
         });
         cmd.to_writer_async_framed(&mut outbound).await?;
         outbound.flush().await?;
 
         trace!("await response");
-        let _ = Response::from_reader_async_framed(&mut stream.recv)
+        let _ = Response::from_reader_async_framed(&mut inner.stream.recv)
             .await?
             .into_result()?;
         Ok(RequestResult::default())
     }
 
-    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<S, R>,
+        inner: &mut SessionCommandInner<'a, S, R>,
         args: &SetMetadataArgs,
     ) -> Result<()> {
         let path = &args.path;
@@ -131,7 +126,6 @@ mod test {
             RequestResult, SessionCommandImpl as _,
             handler::{SessionCommand, SetMetadataHandler},
         },
-        util::io::DEFAULT_COPY_BUFFER_SIZE,
     };
     use littertray::LitterTray;
 
@@ -148,17 +142,11 @@ mod test {
             SetMetadataHandler,
             None,
             Compatibility::Level(4),
-            DEFAULT_COPY_BUFFER_SIZE,
+            Configuration::system_default(),
+            None,
         );
         let params = Parameters::default();
-        let sender_fut = sender.send(
-            &spec,
-            indicatif::MultiProgress::with_draw_target(indicatif::ProgressDrawTarget::hidden()),
-            10,
-            indicatif::ProgressBar::hidden(),
-            Configuration::system_default(),
-            params,
-        );
+        let sender_fut = sender.send(&spec, params);
         tokio::pin!(sender_fut);
 
         let result = read_from_stream(&mut pipe2.recv, &mut sender_fut).await;
@@ -172,7 +160,8 @@ mod test {
             SetMetadataHandler,
             Some(args),
             Compatibility::Level(4),
-            DEFAULT_COPY_BUFFER_SIZE,
+            Configuration::system_default(),
+            None,
         );
         let (r1, r2) = tokio::join!(sender_fut, handler.handle());
         Ok((r1, r2))
