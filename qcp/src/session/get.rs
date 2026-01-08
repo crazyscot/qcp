@@ -17,7 +17,7 @@ use crate::protocol::session::prelude::*;
 use crate::protocol::session::{
     FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Get2Args, GetArgs,
 };
-use crate::session::common::progress_bar_for;
+use crate::session::common::{FindOption as _, progress_bar_for};
 
 // Extension trait!
 use crate::util::FileExt as _;
@@ -40,14 +40,6 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> Get<S, R> {
             args,
             compat,
         })
-    }
-}
-
-impl<S: SendingStream, R: ReceivingStream> Get<S, R> {
-    /// Accessor
-    pub(crate) fn find_option(&self, opt: CommandParam) -> Option<&Variant> {
-        use crate::protocol::FindTag as _;
-        self.args.as_ref().and_then(|a| a.options.find_tag(opt))
     }
 }
 
@@ -180,11 +172,13 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
             "logic error: file sent size doesn't match metadata"
         );
 
-        let trl = FileTrailer::for_file(
-            self.compat,
-            &file_original_meta,
-            self.find_option(CommandParam::PreserveMetadata).is_some(),
-        );
+        let preserve = self.args.as_ref().is_some_and(|a| {
+            a.options
+                .find_option(CommandParam::PreserveMetadata)
+                .is_some()
+        });
+
+        let trl = FileTrailer::for_file(self.compat, &file_original_meta, preserve);
         trace!("send trailer {trl:?}");
         trl.to_writer_async_framed(&mut self.stream.send).await?;
 

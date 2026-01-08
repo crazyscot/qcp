@@ -13,7 +13,7 @@ use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::{ListArgs, ListData, ListEntry};
 use crate::protocol::session::{ResponseV1, prelude::*};
-use crate::session::common::send_ok;
+use crate::session::common::{FindOption as _, send_ok};
 use crate::session::{CommandStats, error_and_return};
 
 pub(crate) struct Listing<S: SendingStream, R: ReceivingStream> {
@@ -34,14 +34,6 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> Listing<S, R> {
             args,
             compat,
         })
-    }
-}
-
-impl<S: SendingStream, R: ReceivingStream> Listing<S, R> {
-    /// Accessor
-    pub(crate) fn find_option(&self, opt: CommandParam) -> Option<&Variant> {
-        use crate::protocol::FindTag as _;
-        self.args.as_ref().and_then(|a| a.options.find_tag(opt))
     }
 }
 
@@ -102,7 +94,10 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
             anyhow::bail!("List handler called without args");
         };
         let path = &args.path;
-        let recurse = self.find_option(CommandParam::Recurse).is_some();
+        let recurse = self
+            .args
+            .as_ref()
+            .is_some_and(|a| a.options.find_option(CommandParam::Recurse).is_some());
         // debug!("ls: path {path}, recurse={recurse}");
 
         let res = tokio::fs::metadata(path).await;

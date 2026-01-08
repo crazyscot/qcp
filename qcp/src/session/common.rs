@@ -11,6 +11,7 @@ use crate::{
     protocol::{
         common::ProtocolMessage as _,
         session::{Response, ResponseV1, Status},
+        {TaggedData, Variant},
     },
 };
 
@@ -90,6 +91,19 @@ pub(super) fn progress_bar_for(
             .with_message(name)
             .with_finish(ProgressFinish::Abandon),
     ))
+}
+
+/// Extension trait for finding options in a tagged data list
+pub(crate) trait FindOption {
+    /// Find an option by tag, returning the associated variant data if found
+    fn find_option(&self, tag: crate::protocol::session::CommandParam) -> Option<&Variant>;
+}
+
+impl FindOption for Vec<TaggedData<crate::protocol::session::CommandParam>> {
+    fn find_option(&self, tag: crate::protocol::session::CommandParam) -> Option<&Variant> {
+        use crate::protocol::FindTag as _;
+        self.find_tag(tag)
+    }
 }
 
 #[cfg(test)]
