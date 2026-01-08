@@ -16,7 +16,7 @@ use crate::protocol::session::{
     FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Get2Args, GetArgs,
 };
 use crate::session::common::{FindOption as _, progress_bar_for};
-use crate::session::handler::CommandHandler;
+use crate::session::handler::{CommandHandler, SessionCommandInner};
 use crate::session::{CommandStats, RequestResult, error_and_return};
 
 // Extension trait!
@@ -124,12 +124,12 @@ impl CommandHandler for GetHandler {
 
     async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        compat: crate::protocol::control::Compatibility,
+        inner: &mut SessionCommandInner<S, R>,
         args: &Get2Args,
-        io_buffer_size: u64,
-        stream: &mut SendReceivePair<S, R>,
     ) -> Result<()> {
         trace!("begin");
+        let stream = &mut inner.stream;
+        let compat = inner.compat;
 
         let path = PathBuf::from(&args.filename);
 
@@ -152,7 +152,8 @@ impl CommandHandler for GetHandler {
         hdr.to_writer_async_framed(&mut stream.send).await?;
 
         trace!("sending file payload");
-        let result = crate::util::io::copy_large(&mut file, &mut stream.send, io_buffer_size).await;
+        let result =
+            crate::util::io::copy_large(&mut file, &mut stream.send, inner.io_buffer_size).await;
         anyhow::ensure!(result.is_ok(), "copy ended prematurely");
         anyhow::ensure!(
             result.is_ok_and(|r| r == file_original_meta.len()),
@@ -190,7 +191,7 @@ pub(crate) mod test_shared {
             test_helpers::{new_test_plumbing, read_from_stream},
         },
         session::{
-            RequestResult,
+            RequestResult, SessionCommandImpl as _,
             handler::{GetHandler, SessionCommand},
         },
         util::io::DEFAULT_COPY_BUFFER_SIZE,
@@ -218,9 +219,10 @@ pub(crate) mod test_shared {
         };
         let mut sender = SessionCommand::boxed(
             pipe1,
+            GetHandler,
             Some(args),
             Compatibility::Level(client_level),
-            GetHandler,
+            DEFAULT_COPY_BUFFER_SIZE,
         );
         let params = Parameters {
             quiet: true,
@@ -253,11 +255,12 @@ pub(crate) mod test_shared {
 
         let mut handler = SessionCommand::boxed(
             pipe2,
+            GetHandler,
             Some(args),
             Compatibility::Level(server_level),
-            GetHandler,
+            DEFAULT_COPY_BUFFER_SIZE,
         );
-        let (r1, r2) = tokio::join!(fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
+        let (r1, r2) = tokio::join!(fut, handler.handle());
         Ok((r1, r2))
     }
 }
@@ -275,7 +278,7 @@ mod test {
     use crate::{
         protocol::{control::Compatibility, session::Status, test_helpers::new_test_plumbing},
         session::{
-            RequestResult,
+            RequestResult, SessionCommandImpl as _,
             handler::{GetHandler, SessionCommand},
         },
         util::{io::DEFAULT_COPY_BUFFER_SIZE, time::SystemTimeExt as _},
@@ -354,12 +357,15 @@ mod test {
     #[tokio::test]
     async fn logic_error_trap() {
         let (_pipe1, pipe2) = new_test_plumbing();
-        assert!(
-            SessionCommand::boxed(pipe2, None, Compatibility::Level(1), GetHandler)
-                .handle(DEFAULT_COPY_BUFFER_SIZE)
-                .await
-                .is_err()
+        let mut cmd = SessionCommand::boxed(
+            pipe2,
+            GetHandler,
+            None,
+            Compatibility::Level(1),
+            DEFAULT_COPY_BUFFER_SIZE,
         );
+
+        assert!(cmd.handle().await.is_err());
     }
 
     #[cfg(unix)]

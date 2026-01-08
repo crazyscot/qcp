@@ -15,6 +15,7 @@ use crate::protocol::session::{
     Response, Status,
 };
 use crate::session::common::progress_bar_for;
+use crate::session::handler::SessionCommandInner;
 use crate::session::{RequestResult, error_and_return, handler::CommandHandler};
 
 // Extension trait for TokioFile!
@@ -156,12 +157,12 @@ impl CommandHandler for PutHandler {
 
     async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        _compat: crate::protocol::control::Compatibility,
+        inner: &mut SessionCommandInner<S, R>,
         args: &Put2Args,
-        io_buffer_size: u64,
-        stream: &mut SendReceivePair<S, R>,
     ) -> Result<()> {
         let destination = &args.filename;
+        let stream = &mut inner.stream;
+
         trace!("begin");
 
         // Initial checks. Is the destination valid, do we need to append the filename (from the `FileHeader`) to the destination path?
@@ -227,7 +228,13 @@ impl CommandHandler for PutHandler {
         stream.send.flush().await?;
 
         trace!("receiving file payload");
-        let result = limited_copy(&mut stream.recv, header.size.0, &mut file, io_buffer_size).await;
+        let result = limited_copy(
+            &mut stream.recv,
+            header.size.0,
+            &mut file,
+            inner.io_buffer_size,
+        )
+        .await;
         if let Err(e) = result {
             error!("Failed to write to destination: {e}");
             error_and_return!(stream, e);
@@ -280,8 +287,10 @@ mod test {
             session::{Command, Status},
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::RequestResult,
-        session::handler::{PutHandler, SessionCommand},
+        session::{
+            RequestResult, SessionCommandImpl as _,
+            handler::{PutHandler, SessionCommand},
+        },
         util::{io::DEFAULT_COPY_BUFFER_SIZE, time::SystemTimeExt as _},
     };
     use littertray::LitterTray;
@@ -316,8 +325,13 @@ mod test {
     ) -> Result<(Result<RequestResult>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2, preserve, false).unwrap();
-        let mut sender =
-            SessionCommand::boxed(pipe1, None, Compatibility::Level(client_level), PutHandler);
+        let mut sender = SessionCommand::boxed(
+            pipe1,
+            PutHandler,
+            None,
+            Compatibility::Level(client_level),
+            DEFAULT_COPY_BUFFER_SIZE,
+        );
         let params = Parameters {
             quiet: true,
             ..Default::default()
@@ -361,11 +375,12 @@ mod test {
         // This isn't well simulated by our test pipe.
         let mut handler = SessionCommand::boxed(
             pipe2,
+            PutHandler,
             Some(args),
             Compatibility::Level(server_level),
-            PutHandler,
+            DEFAULT_COPY_BUFFER_SIZE,
         );
-        let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
+        let (r1, r2) = tokio::join!(sender_fut, handler.handle());
         Ok((r1, r2))
     }
 
@@ -514,10 +529,16 @@ mod test {
     async fn logic_error_trap() {
         let (_pipe1, pipe2) = new_test_plumbing();
         assert!(
-            SessionCommand::boxed(pipe2, None, Compatibility::Level(2), PutHandler)
-                .handle(DEFAULT_COPY_BUFFER_SIZE)
-                .await
-                .is_err()
+            SessionCommand::boxed(
+                pipe2,
+                PutHandler,
+                None,
+                Compatibility::Level(2),
+                DEFAULT_COPY_BUFFER_SIZE
+            )
+            .handle()
+            .await
+            .is_err()
         );
     }
 

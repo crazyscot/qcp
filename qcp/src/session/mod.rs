@@ -87,5 +87,5 @@ pub(crate) trait SessionCommandImpl: Send {
     /// If the command has arguments, the object constructor is expected to set them up.
     ///
     /// See also the [`crate::session::common::send_ok`] and [`crate::session::common::send_error`] helpers.
-    async fn handle(&mut self, io_buffer_size: u64) -> Result<()>;
+    async fn handle(&mut self) -> Result<()>;
 }

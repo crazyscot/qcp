@@ -34,19 +34,23 @@ pub(crate) trait CommandHandler: Send + Sized {
     /// Server-side implementation (has access to stream and compat)
     async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        compat: Compatibility,
+        inner: &mut SessionCommandInner<S, R>,
         args: &Self::Args,
-        io_buffer_size: u64,
-        stream: &mut SendReceivePair<S, R>,
     ) -> Result<()>;
 }
 
 /// Generic command implementation - the only concrete command type
 pub(crate) struct SessionCommand<S: SendingStream, R: ReceivingStream, H: CommandHandler> {
-    stream: SendReceivePair<S, R>,
-    args: Option<H::Args>,
-    compat: crate::protocol::control::Compatibility,
     handler: H,
+    args: Option<H::Args>,
+    inner: SessionCommandInner<S, R>,
+}
+
+/// Inner data for [`SessionCommand`] so it can be borrowed separately from the handler
+pub(crate) struct SessionCommandInner<S: SendingStream, R: ReceivingStream> {
+    pub stream: SendReceivePair<S, R>,
+    pub compat: Compatibility,
+    pub io_buffer_size: u64, // TODO: we can get this from 'config', after we've passed that in
 }
 
 impl<S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHandler + 'static>
@@ -55,15 +59,19 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHandler
     /// Create a boxed command for the trait object interface
     pub(crate) fn boxed(
         stream: SendReceivePair<S, R>,
-        args: Option<H::Args>,
-        compat: crate::protocol::control::Compatibility,
         handler: H,
-    ) -> Box<dyn SessionCommandImpl> {
+        args: Option<H::Args>,
+        compat: Compatibility,
+        io_buffer_size: u64,
+    ) -> Box<SessionCommand<S, R, H>> {
         Box::new(Self {
-            stream,
-            args,
-            compat,
             handler,
+            args,
+            inner: SessionCommandInner {
+                stream,
+                compat,
+                io_buffer_size,
+            },
         })
     }
 }
@@ -83,8 +91,8 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHandler
     ) -> Result<RequestResult> {
         self.handler
             .send_impl(
-                &mut self.stream,
-                self.compat,
+                &mut self.inner.stream,
+                self.inner.compat,
                 job,
                 display,
                 filename_width,
@@ -95,14 +103,12 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHandler
             .await
     }
 
-    async fn handle(&mut self, io_buffer_size: u64) -> Result<()> {
+    async fn handle(&mut self) -> Result<()> {
         let args = self
             .args
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("command handler missing args"))?;
-        self.handler
-            .handle_impl(self.compat, args, io_buffer_size, &mut self.stream)
-            .await
+        self.handler.handle_impl(&mut self.inner, args).await
     }
 }
 

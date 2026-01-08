@@ -35,13 +35,14 @@ where
         }
     };
 
-    let (mut handler, span_info) = session::factory::command_handler(sp, packet, compat);
+    let (mut handler, span_info) =
+        session::factory::command_handler(sp, packet, compat, io_buffer_size);
     let span = trace_span!(
         "handler",
         cmd = span_info.name,
         filename = span_info.primary_arg
     );
-    handler.handle(io_buffer_size).instrument(span).await
+    handler.handle().instrument(span).await
 }
 
 #[cfg(test)]

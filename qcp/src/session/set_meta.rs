@@ -11,6 +11,7 @@ use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::compat::Feature;
 use crate::protocol::session::{Command, MetadataAttr, Response, SetMetadataArgs, Status};
+use crate::session::handler::SessionCommandInner;
 use crate::session::{RequestResult, error_and_return, handler::CommandHandler};
 // Extension trait for std::fs::Metadata
 use crate::util::FsMetadataExt as _;
@@ -67,12 +68,11 @@ impl CommandHandler for SetMetadataHandler {
 
     async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        _compat: crate::protocol::control::Compatibility,
+        inner: &mut SessionCommandInner<S, R>,
         args: &SetMetadataArgs,
-        _io_buffer_size: u64,
-        stream: &mut SendReceivePair<S, R>,
     ) -> Result<()> {
         let path = &args.path;
+        let stream = &mut inner.stream;
 
         let localmeta = match tokio::fs::metadata(&path).await {
             Ok(m) => m,
@@ -127,8 +127,10 @@ mod test {
             session::Command,
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::RequestResult,
-        session::handler::{SessionCommand, SetMetadataHandler},
+        session::{
+            RequestResult, SessionCommandImpl as _,
+            handler::{SessionCommand, SetMetadataHandler},
+        },
         util::io::DEFAULT_COPY_BUFFER_SIZE,
     };
     use littertray::LitterTray;
@@ -141,8 +143,13 @@ mod test {
         let spec =
             CopyJobSpec::from_parts(local_path, &format!("somehost:{remote_path}"), false, false)
                 .unwrap();
-        let mut sender =
-            SessionCommand::boxed(pipe1, None, Compatibility::Level(4), SetMetadataHandler);
+        let mut sender = SessionCommand::boxed(
+            pipe1,
+            SetMetadataHandler,
+            None,
+            Compatibility::Level(4),
+            DEFAULT_COPY_BUFFER_SIZE,
+        );
         let params = Parameters::default();
         let sender_fut = sender.send(
             &spec,
@@ -162,11 +169,12 @@ mod test {
 
         let mut handler = SessionCommand::boxed(
             pipe2,
+            SetMetadataHandler,
             Some(args),
             Compatibility::Level(4),
-            SetMetadataHandler,
+            DEFAULT_COPY_BUFFER_SIZE,
         );
-        let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
+        let (r1, r2) = tokio::join!(sender_fut, handler.handle());
         Ok((r1, r2))
     }
 

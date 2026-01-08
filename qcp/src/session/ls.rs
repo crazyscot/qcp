@@ -12,7 +12,7 @@ use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair,
 use crate::protocol::session::{ListArgs, ListData, ListEntry};
 use crate::protocol::session::{ResponseV1, prelude::*};
 use crate::session::common::{FindOption as _, send_ok};
-use crate::session::handler::CommandHandler;
+use crate::session::handler::{CommandHandler, SessionCommandInner};
 use crate::session::{CommandStats, RequestResult, error_and_return};
 
 pub(crate) struct ListingHandler;
@@ -75,13 +75,12 @@ impl CommandHandler for ListingHandler {
 
     async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        _compat: crate::protocol::control::Compatibility,
+        inner: &mut SessionCommandInner<S, R>,
         args: &ListArgs,
-        _io_buffer_size: u64,
-        stream: &mut SendReceivePair<S, R>,
     ) -> Result<()> {
         let path = &args.path;
         let recurse = args.options.find_option(CommandParam::Recurse).is_some();
+        let stream = &mut inner.stream;
         // debug!("ls: path {path}, recurse={recurse}");
 
         let res = tokio::fs::metadata(path).await;
@@ -149,6 +148,7 @@ mod test {
     use std::path::MAIN_SEPARATOR;
 
     use crate::protocol::session::{ListData, prelude::*};
+    use crate::session::SessionCommandImpl as _;
     use crate::util::io::DEFAULT_COPY_BUFFER_SIZE;
     use crate::{
         Configuration, Parameters,
@@ -162,8 +162,13 @@ mod test {
 
     async fn test_ls_main(path: &str, recurse: bool, expect_success: bool) -> Result<ListData> {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let mut sender =
-            SessionCommand::boxed(pipe1, None, Compatibility::Level(4), ListingHandler);
+        let mut sender = SessionCommand::boxed(
+            pipe1,
+            ListingHandler,
+            None,
+            Compatibility::Level(4),
+            DEFAULT_COPY_BUFFER_SIZE,
+        );
         let spec =
             CopyJobSpec::from_parts(path, &format!("desthost:{path}"), false, false).unwrap();
         let params = Parameters {
@@ -188,9 +193,14 @@ mod test {
                 bail!("expected CreateDirectory command");
             };
 
-            let mut handler =
-                SessionCommand::boxed(pipe2, Some(args), Compatibility::Level(4), ListingHandler);
-            let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
+            let mut handler = SessionCommand::boxed(
+                pipe2,
+                ListingHandler,
+                Some(args),
+                Compatibility::Level(4),
+                DEFAULT_COPY_BUFFER_SIZE,
+            );
+            let (r1, r2) = tokio::join!(sender_fut, handler.handle());
             r2.expect("handler should not have failed");
             match r1 {
                 Ok(it) => {
