@@ -9,8 +9,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::Instant;
 use tracing::trace;
 
-use super::{CommandStats, SessionCommandImpl, error_and_return};
-
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::prelude::*;
@@ -18,35 +16,22 @@ use crate::protocol::session::{
     FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Get2Args, GetArgs,
 };
 use crate::session::common::{FindOption as _, progress_bar_for};
+use crate::session::handler::CommandHandler;
+use crate::session::{CommandStats, RequestResult, error_and_return};
 
 // Extension trait!
 use crate::util::FileExt as _;
 
-pub(crate) struct Get<S: SendingStream, R: ReceivingStream> {
-    stream: SendReceivePair<S, R>,
-    args: Option<Get2Args>,
-    compat: Compatibility, // Selected compatibility level for the command
-}
-
-impl<S: SendingStream + 'static, R: ReceivingStream + 'static> Get<S, R> {
-    /// Boxing constructor
-    pub(crate) fn boxed(
-        stream: SendReceivePair<S, R>,
-        args: Option<Get2Args>,
-        compat: Compatibility,
-    ) -> Box<dyn SessionCommandImpl> {
-        Box::new(Self {
-            stream,
-            args,
-            compat,
-        })
-    }
-}
+pub(crate) struct GetHandler;
 
 #[async_trait]
-impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
-    async fn send(
+impl CommandHandler for GetHandler {
+    type Args = Get2Args;
+
+    async fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
+        stream: &mut SendReceivePair<S, R>,
+        compat: crate::protocol::control::Compatibility,
         job: &crate::client::CopyJobSpec,
         display: indicatif::MultiProgress,
         filename_width: usize,
@@ -58,7 +43,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         let dest = &job.destination.filename;
 
         let real_start = Instant::now();
-        let cmd = if self.compat.supports(Feature::GET2_PUT2) {
+        let cmd = if compat.supports(Feature::GET2_PUT2) {
             let mut options = vec![];
             if job.preserve {
                 options.push(CommandParam::PreserveMetadata.into());
@@ -73,16 +58,16 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
             })
         };
         trace!("send command: {cmd}");
-        cmd.to_writer_async_framed(&mut self.stream.send).await?;
-        self.stream.send.flush().await?;
+        cmd.to_writer_async_framed(&mut stream.send).await?;
+        stream.send.flush().await?;
 
         trace!("await response");
-        let _ = Response::from_reader_async_framed(&mut self.stream.recv)
+        let _ = Response::from_reader_async_framed(&mut stream.recv)
             .await?
             .into_result()
             .with_context(|| format!("GET {filename} failed"))?;
 
-        let header = FileHeader::from_reader_async_framed(&mut self.stream.recv).await?;
+        let header = FileHeader::from_reader_async_framed(&mut stream.recv).await?;
         trace!("{header:?}");
         let header = FileHeaderV2::from(header);
         let mut file = TokioFile::create_or_truncate(dest, &header).await?;
@@ -106,7 +91,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
             crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, config.rx());
         meter.start().await;
 
-        let inbound = progress_bar.wrap_async_read(&mut self.stream.recv);
+        let inbound = progress_bar.wrap_async_read(&mut stream.recv);
 
         let mut inbound = inbound.take(header.size.0);
         trace!("payload");
@@ -137,52 +122,53 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Get<S, R> {
         ))
     }
 
-    async fn handle(&mut self, io_buffer_size: u64) -> Result<()> {
-        let Some(ref args) = self.args else {
-            anyhow::bail!("GET handler called without args");
-        };
+    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
+        &mut self,
+        compat: crate::protocol::control::Compatibility,
+        args: &Get2Args,
+        io_buffer_size: u64,
+        stream: &mut SendReceivePair<S, R>,
+    ) -> Result<()> {
         trace!("begin");
 
         let path = PathBuf::from(&args.filename);
 
         let (mut file, file_original_meta) = match TokioFile::open_with_meta(&args.filename).await {
             Ok(res) => res,
-            Err(e) => error_and_return!(self, e),
+            Err(e) => error_and_return!(stream, e),
         };
         if file_original_meta.is_dir() {
-            error_and_return!(self, Status::ItIsADirectory);
+            error_and_return!(stream, Status::ItIsADirectory);
         }
 
         // We believe we can fulfil this request.
         trace!("responding OK");
-        crate::session::common::send_ok(&mut self.stream.send).await?;
+        crate::session::common::send_ok(&mut stream.send).await?;
 
         let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
 
-        let hdr = FileHeader::for_file(self.compat, &file_original_meta, protocol_filename);
+        let hdr = FileHeader::for_file(compat, &file_original_meta, protocol_filename);
         trace!("{hdr:?}");
-        hdr.to_writer_async_framed(&mut self.stream.send).await?;
+        hdr.to_writer_async_framed(&mut stream.send).await?;
 
         trace!("sending file payload");
-        let result =
-            crate::util::io::copy_large(&mut file, &mut self.stream.send, io_buffer_size).await;
+        let result = crate::util::io::copy_large(&mut file, &mut stream.send, io_buffer_size).await;
         anyhow::ensure!(result.is_ok(), "copy ended prematurely");
         anyhow::ensure!(
             result.is_ok_and(|r| r == file_original_meta.len()),
             "logic error: file sent size doesn't match metadata"
         );
 
-        let preserve = self.args.as_ref().is_some_and(|a| {
-            a.options
-                .find_option(CommandParam::PreserveMetadata)
-                .is_some()
-        });
+        let preserve = args
+            .options
+            .find_option(CommandParam::PreserveMetadata)
+            .is_some();
 
-        let trl = FileTrailer::for_file(self.compat, &file_original_meta, preserve);
+        let trl = FileTrailer::for_file(compat, &file_original_meta, preserve);
         trace!("send trailer {trl:?}");
-        trl.to_writer_async_framed(&mut self.stream.send).await?;
+        trl.to_writer_async_framed(&mut stream.send).await?;
 
-        self.stream.send.flush().await?;
+        stream.send.flush().await?;
         trace!("complete");
         Ok(())
     }
@@ -203,7 +189,10 @@ pub(crate) mod test_shared {
             session::{Command, CommandParam, Get2Args},
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::{Get, RequestResult},
+        session::{
+            RequestResult,
+            handler::{GetHandler, SessionCommand},
+        },
         util::io::DEFAULT_COPY_BUFFER_SIZE,
     };
 
@@ -227,7 +216,12 @@ pub(crate) mod test_shared {
             filename: file1.to_string(),
             options,
         };
-        let mut sender = Get::boxed(pipe1, Some(args), Compatibility::Level(client_level));
+        let mut sender = SessionCommand::boxed(
+            pipe1,
+            Some(args),
+            Compatibility::Level(client_level),
+            GetHandler,
+        );
         let params = Parameters {
             quiet: true,
             ..Default::default()
@@ -257,7 +251,12 @@ pub(crate) mod test_shared {
             _ => bail!("expected Get or Get2 command"),
         };
 
-        let mut handler = Get::boxed(pipe2, Some(args), Compatibility::Level(server_level));
+        let mut handler = SessionCommand::boxed(
+            pipe2,
+            Some(args),
+            Compatibility::Level(server_level),
+            GetHandler,
+        );
         let (r1, r2) = tokio::join!(fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
         Ok((r1, r2))
     }
@@ -275,7 +274,10 @@ mod test {
     use super::test_shared::test_getx_main;
     use crate::{
         protocol::{control::Compatibility, session::Status, test_helpers::new_test_plumbing},
-        session::{Get, RequestResult},
+        session::{
+            RequestResult,
+            handler::{GetHandler, SessionCommand},
+        },
         util::{io::DEFAULT_COPY_BUFFER_SIZE, time::SystemTimeExt as _},
     };
     use std::{fs::FileTimes, time::SystemTime};
@@ -353,7 +355,7 @@ mod test {
     async fn logic_error_trap() {
         let (_pipe1, pipe2) = new_test_plumbing();
         assert!(
-            Get::boxed(pipe2, None, Compatibility::Level(1))
+            SessionCommand::boxed(pipe2, None, Compatibility::Level(1), GetHandler)
                 .handle(DEFAULT_COPY_BUFFER_SIZE)
                 .await
                 .is_err()

@@ -6,41 +6,22 @@ use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, trace};
 
-use super::{SessionCommandImpl, error_and_return};
-
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
-use crate::protocol::compat::Feature;
-use crate::protocol::control::Compatibility;
 use crate::protocol::session::{Command, CreateDirectoryArgs, Response, Status};
-use crate::session::RequestResult;
 use crate::session::common::send_ok;
+use crate::session::{RequestResult, error_and_return, handler::CommandHandler};
 
-pub(crate) struct CreateDirectory<S: SendingStream, R: ReceivingStream> {
-    stream: SendReceivePair<S, R>,
-    args: Option<CreateDirectoryArgs>,
-    compat: Compatibility, // Selected compatibility level for the command
-}
-
-/// Boxing constructor
-impl<S: SendingStream + 'static, R: ReceivingStream + 'static> CreateDirectory<S, R> {
-    pub(crate) fn boxed(
-        stream: SendReceivePair<S, R>,
-        args: Option<CreateDirectoryArgs>,
-        compat: Compatibility,
-    ) -> Box<dyn SessionCommandImpl> {
-        Box::new(Self {
-            stream,
-            args,
-            compat,
-        })
-    }
-}
+pub(crate) struct CreateDirectoryHandler;
 
 #[async_trait]
-impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for CreateDirectory<S, R> {
-    async fn send(
+impl CommandHandler for CreateDirectoryHandler {
+    type Args = CreateDirectoryArgs;
+
+    async fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
+        stream: &mut SendReceivePair<S, R>,
+        compat: crate::protocol::control::Compatibility,
         job: &crate::client::CopyJobSpec,
         _display: indicatif::MultiProgress,
         _filename_width: usize,
@@ -49,14 +30,16 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for CreateDirector
         _params: Parameters,
     ) -> Result<RequestResult> {
         anyhow::ensure!(
-            self.compat.supports(Feature::MKDIR_SETMETA_LS),
+            compat.supports(crate::protocol::compat::Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
         );
-
-        // This is a trivial operation, we do not bother with a progress bar.
+        anyhow::ensure!(
+            job.destination.user_at_host.is_some(),
+            "logic error: mkdir called for local destination"
+        );
 
         trace!("sending command");
-        let mut outbound = &mut self.stream.send;
+        let mut outbound = &mut stream.send;
         let cmd = Command::CreateDirectory(CreateDirectoryArgs {
             dir_name: job.destination.filename.clone(),
             options: vec![],
@@ -65,50 +48,47 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for CreateDirector
         outbound.flush().await?;
 
         trace!("await response");
-        let _ = Response::from_reader_async_framed(&mut self.stream.recv)
+        let _ = Response::from_reader_async_framed(&mut stream.recv)
             .await?
             .into_result()?;
         Ok(RequestResult::default())
     }
 
-    async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {
-        let Some(ref args) = self.args else {
-            anyhow::bail!("MKDIR handler called without args");
-        };
+    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
+        &mut self,
+        _compat: crate::protocol::control::Compatibility,
+        args: &CreateDirectoryArgs,
+        _io_buffer_size: u64,
+        stream: &mut SendReceivePair<S, R>,
+    ) -> Result<()> {
         let path = &args.dir_name;
 
         let meta = tokio::fs::metadata(&path).await;
         if let Ok(meta) = meta {
             if meta.is_file() {
-                error_and_return!(self, Status::ItIsAFile);
+                error_and_return!(stream, Status::ItIsAFile);
             }
             if meta.is_dir() {
                 // it already exists: this is not an error.
-                // Do nothing here, send OK.
             } else {
-                anyhow::bail!(
-                    "mkdir: existing entity {path:?} has unknown type (not a file, nor a directory?!)"
-                );
+                anyhow::bail!("mkdir: existing entity {path:?} is neither file nor directory");
             }
         } else {
             let result = tokio::fs::create_dir(path).await;
             if let Err(e) = result {
                 let str = e.to_string();
                 debug!("Could not mkdir: {str}");
-                error_and_return!(self, e);
+                error_and_return!(stream, e);
             }
         }
-        send_ok(&mut self.stream.send).await
+        send_ok(&mut stream.send).await
     }
 }
 
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use std::io::ErrorKind;
-
-    use anyhow::{Result, bail};
-
+    use super::CreateDirectoryHandler;
     use crate::{
         Configuration, Parameters,
         client::CopyJobSpec,
@@ -117,16 +97,19 @@ mod test {
             session::{Command, Status},
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::{CreateDirectory, RequestResult},
+        session::{RequestResult, handler::SessionCommand},
         util::io::DEFAULT_COPY_BUFFER_SIZE,
     };
+    use anyhow::{Result, bail};
     use littertray::LitterTray;
+    use std::io::ErrorKind;
 
     async fn test_mkdir_main(path: &str) -> Result<(Result<RequestResult>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec =
             CopyJobSpec::from_parts(path, &format!("somehost:{path}"), false, false).unwrap();
-        let mut sender = CreateDirectory::boxed(pipe1, None, Compatibility::Level(4));
+        let mut sender =
+            SessionCommand::boxed(pipe1, None, Compatibility::Level(4), CreateDirectoryHandler);
         let params = Parameters::default();
         let sender_fut = sender.send(
             &spec,
@@ -144,7 +127,12 @@ mod test {
             bail!("expected CreateDirectory command");
         };
 
-        let mut handler = CreateDirectory::boxed(pipe2, Some(args), Compatibility::Level(4));
+        let mut handler = SessionCommand::boxed(
+            pipe2,
+            Some(args),
+            Compatibility::Level(4),
+            CreateDirectoryHandler,
+        );
         let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
         Ok((r1, r2))
     }
@@ -194,6 +182,7 @@ mod test {
         })
         .await
     }
+
     #[tokio::test]
     async fn mkdir_file_exists() -> Result<()> {
         LitterTray::try_with_async(async |tray| {

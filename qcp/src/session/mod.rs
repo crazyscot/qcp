@@ -3,14 +3,13 @@
 
 mod common;
 pub(crate) mod factory;
+pub(crate) mod handler;
 
 mod get;
 mod ls;
 mod mkdir;
 mod put;
 mod set_meta;
-
-pub(crate) use {get::Get, ls::Listing, mkdir::CreateDirectory, put::Put, set_meta::SetMetadata};
 
 #[cfg(feature = "unstable-test-helpers")]
 #[allow(unused_imports)] // Selectively exported by qcp::test_helpers
@@ -24,14 +23,12 @@ use crate::{Parameters, client::CopyJobSpec, config::Configuration, protocol::se
 
 /// Helper macro for making error returns
 ///
-/// Typically called within a command handler as `error_and_return!(self, SomeError)`.
+/// Can be called with either:
+/// - `error_and_return!(stream, SomeError)` - for CommandHandler implementations where stream is &mut SendReceivePair
 macro_rules! error_and_return {
-    ($obj:expr, $inner:expr) => {
-        return crate::session::common::send_error(
-            &mut $obj.stream.send,
-            &anyhow::Error::from($inner),
-        )
-        .await
+    ($stream:expr, $inner:expr) => {
+        return crate::session::common::send_error(&mut $stream.send, &anyhow::Error::from($inner))
+            .await
     };
 }
 use error_and_return; // export within this crate

@@ -7,40 +7,24 @@ use tokio::io::AsyncWriteExt;
 use tracing::{debug, error, trace};
 use walkdir::WalkDir;
 
-use super::SessionCommandImpl;
-
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::session::{ListArgs, ListData, ListEntry};
 use crate::protocol::session::{ResponseV1, prelude::*};
 use crate::session::common::{FindOption as _, send_ok};
-use crate::session::{CommandStats, error_and_return};
+use crate::session::handler::CommandHandler;
+use crate::session::{CommandStats, RequestResult, error_and_return};
 
-pub(crate) struct Listing<S: SendingStream, R: ReceivingStream> {
-    stream: SendReceivePair<S, R>,
-    args: Option<ListArgs>,
-    compat: Compatibility, // Selected compatibility level for the command
-}
-
-/// Boxing constructor
-impl<S: SendingStream + 'static, R: ReceivingStream + 'static> Listing<S, R> {
-    pub(crate) fn boxed(
-        stream: SendReceivePair<S, R>,
-        args: Option<ListArgs>,
-        compat: Compatibility,
-    ) -> Box<dyn SessionCommandImpl> {
-        Box::new(Self {
-            stream,
-            args,
-            compat,
-        })
-    }
-}
+pub(crate) struct ListingHandler;
 
 #[async_trait]
-impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> {
-    async fn send(
+impl CommandHandler for ListingHandler {
+    type Args = ListArgs;
+
+    async fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
+        stream: &mut SendReceivePair<S, R>,
+        compat: crate::protocol::control::Compatibility,
         job: &crate::client::CopyJobSpec,
         _display: indicatif::MultiProgress,
         _filename_width: usize,
@@ -49,14 +33,14 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         params: Parameters,
     ) -> Result<RequestResult> {
         anyhow::ensure!(
-            self.compat.supports(Feature::MKDIR_SETMETA_LS),
+            compat.supports(Feature::MKDIR_SETMETA_LS),
             "Operation not supported by remote"
         );
         let path = &job.source.filename; // yes, source filename
 
         // This is a trivial operation, we do not bother with a progress bar.
         trace!("sending command");
-        let mut outbound = &mut self.stream.send;
+        let mut outbound = &mut stream.send;
         let mut options = vec![];
         if params.recurse {
             options.push(CommandParam::Recurse.into());
@@ -69,14 +53,14 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         outbound.flush().await?;
 
         trace!("await response");
-        let result = Response::from_reader_async_framed(&mut self.stream.recv).await?;
+        let result = Response::from_reader_async_framed(&mut stream.recv).await?;
         if result.status() != Status::Ok {
             error!("List failed: {:?}", result);
             return Err(anyhow::Error::new(result));
         }
         let mut data = vec![];
         loop {
-            let packet = ListData::from_reader_async_framed(&mut self.stream.recv)
+            let packet = ListData::from_reader_async_framed(&mut stream.recv)
                 .await
                 .map_err(|r| anyhow::anyhow!("failed to parse List response: {r}"))?;
             let another = packet.more_to_come;
@@ -89,22 +73,22 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
         Ok(RequestResult::new(CommandStats::default(), Some(data)))
     }
 
-    async fn handle(&mut self, _io_buffer_size: u64) -> Result<()> {
-        let Some(ref args) = self.args else {
-            anyhow::bail!("List handler called without args");
-        };
+    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
+        &mut self,
+        _compat: crate::protocol::control::Compatibility,
+        args: &ListArgs,
+        _io_buffer_size: u64,
+        stream: &mut SendReceivePair<S, R>,
+    ) -> Result<()> {
         let path = &args.path;
-        let recurse = self
-            .args
-            .as_ref()
-            .is_some_and(|a| a.options.find_option(CommandParam::Recurse).is_some());
+        let recurse = args.options.find_option(CommandParam::Recurse).is_some();
         // debug!("ls: path {path}, recurse={recurse}");
 
         let res = tokio::fs::metadata(path).await;
         let meta = match res {
             Ok(meta) => meta,
             Err(e) => {
-                error_and_return!(self, e);
+                error_and_return!(stream, e);
             }
         };
         if meta.is_file() {
@@ -122,9 +106,9 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
                 status: Status::Ok.into(),
                 message: None,
             })
-            .to_writer_async_framed(&mut self.stream.send)
+            .to_writer_async_framed(&mut stream.send)
             .await?;
-            return data.to_writer_async_framed(&mut self.stream.send).await;
+            return data.to_writer_async_framed(&mut stream.send).await;
         }
         let entries: Result<Vec<_>, walkdir::Error> = WalkDir::new(path)
             // do NOT omit the root here, recursive transfer depends on it to mkdir the top-level dir
@@ -141,18 +125,18 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Listing<S, R> 
             },
             Err(e) => {
                 debug!("ls: walkdir error: {e}");
-                error_and_return!(self, e);
+                error_and_return!(stream, e);
             }
         };
         // debug!("ls: sending response {}", list);
 
         // Careful! The response might be too long for a Response packet (64k).
         let packets = list.split_by_size(ListData::WIRE_ENCODING_LIMIT)?;
-        send_ok(&mut self.stream.send).await?;
+        send_ok(&mut stream.send).await?;
         for p in packets {
-            p.to_writer_async_framed(&mut self.stream.send).await?;
+            p.to_writer_async_framed(&mut stream.send).await?;
         }
-        self.stream.send.flush().await?;
+        stream.send.flush().await?;
         trace!("complete");
         Ok(())
     }
@@ -170,7 +154,7 @@ mod test {
         Configuration, Parameters,
         client::CopyJobSpec,
         protocol::test_helpers::{new_test_plumbing, read_from_stream},
-        session::Listing,
+        session::handler::{ListingHandler, SessionCommand},
     };
     use anyhow::{Result, bail, ensure};
     use littertray::LitterTray;
@@ -178,7 +162,8 @@ mod test {
 
     async fn test_ls_main(path: &str, recurse: bool, expect_success: bool) -> Result<ListData> {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let mut sender = Listing::boxed(pipe1, None, Compatibility::Level(4));
+        let mut sender =
+            SessionCommand::boxed(pipe1, None, Compatibility::Level(4), ListingHandler);
         let spec =
             CopyJobSpec::from_parts(path, &format!("desthost:{path}"), false, false).unwrap();
         let params = Parameters {
@@ -203,7 +188,8 @@ mod test {
                 bail!("expected CreateDirectory command");
             };
 
-            let mut handler = Listing::boxed(pipe2, Some(args), Compatibility::Level(4));
+            let mut handler =
+                SessionCommand::boxed(pipe2, Some(args), Compatibility::Level(4), ListingHandler);
             let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
             r2.expect("handler should not have failed");
             match r1 {

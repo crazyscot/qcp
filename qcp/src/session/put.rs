@@ -2,53 +2,34 @@
 // (c) 2024-5 Ross Younger
 
 use anyhow::{Context as _, Result};
-use async_trait::async_trait;
 use std::path::PathBuf;
 use tokio::fs::File as TokioFile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, error, trace};
 
-use super::{CommandStats, SessionCommandImpl, error_and_return};
-
 use crate::Parameters;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendReceivePair, SendingStream};
 use crate::protocol::compat::Feature;
-use crate::protocol::control::Compatibility;
 use crate::protocol::session::{
     Command, CommandParam, FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Put2Args, PutArgs,
     Response, Status,
 };
-use crate::session::RequestResult;
 use crate::session::common::progress_bar_for;
+use crate::session::{RequestResult, error_and_return, handler::CommandHandler};
 
 // Extension trait for TokioFile!
 use crate::util::FileExt as _;
 
-pub(crate) struct Put<S: SendingStream, R: ReceivingStream> {
-    stream: SendReceivePair<S, R>,
-    args: Option<Put2Args>,
-    compat: Compatibility, // Selected compatibility level for the command
-}
+pub(crate) struct PutHandler;
 
-/// Boxing constructor
-impl<S: SendingStream + 'static, R: ReceivingStream + 'static> Put<S, R> {
-    pub(crate) fn boxed(
-        stream: SendReceivePair<S, R>,
-        args: Option<Put2Args>,
-        compat: Compatibility,
-    ) -> Box<dyn SessionCommandImpl> {
-        Box::new(Self {
-            stream,
-            args,
-            compat,
-        })
-    }
-}
+#[async_trait::async_trait]
+impl CommandHandler for PutHandler {
+    type Args = Put2Args;
 
-#[async_trait]
-impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
-    async fn send(
+    async fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
+        stream: &mut SendReceivePair<S, R>,
+        compat: crate::protocol::control::Compatibility,
         job: &crate::client::CopyJobSpec,
         display: indicatif::MultiProgress,
         filename_width: usize,
@@ -72,14 +53,14 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         // File headers are currently 36 + filename length; Trailers are 16 bytes.
         let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
         let progress_bar = progress_bar_for(&display, job, filename_width, steps, params.quiet)?;
-        let mut outbound = progress_bar.wrap_async_write(&mut self.stream.send);
+        let mut outbound = progress_bar.wrap_async_write(&mut stream.send);
         let mut meter =
             crate::client::meter::InstaMeterRunner::new(&progress_bar, spinner, config.tx());
         meter.start().await;
 
         trace!("sending command");
 
-        let cmd = if self.compat.supports(Feature::GET2_PUT2) {
+        let cmd = if compat.supports(Feature::GET2_PUT2) {
             let mut options = vec![];
             if job.preserve {
                 options.push(CommandParam::PreserveMetadata.into());
@@ -99,12 +80,12 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         // The filename in the protocol is the file part only of src_filename
         trace!("send header");
         let protocol_filename = path.file_name().unwrap().to_str().unwrap(); // can't fail with the preceding checks
-        let hdr = FileHeader::for_file(self.compat, &src_meta, protocol_filename);
+        let hdr = FileHeader::for_file(compat, &src_meta, protocol_filename);
         trace!("{hdr:?}");
         hdr.to_writer_async_framed(&mut outbound).await?;
 
         trace!("await response");
-        let _ = Response::from_reader_async_framed(&mut self.stream.recv)
+        let _ = Response::from_reader_async_framed(&mut stream.recv)
             .await?
             .into_result()
             .with_context(|| format!("PUTx {src_filename} failed"))?;
@@ -125,8 +106,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             Err(e) => {
                 if e.kind() == tokio::io::ErrorKind::ConnectionReset {
                     // Maybe the connection was cut, maybe the server sent something to help us inform the user.
-                    let Ok(response) =
-                        Response::from_reader_async_framed(&mut self.stream.recv).await
+                    let Ok(response) = Response::from_reader_async_framed(&mut stream.recv).await
                     else {
                         anyhow::bail!("connection closed unexpectedly");
                     };
@@ -145,13 +125,13 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             }
         }
 
-        let trl = FileTrailer::for_file(self.compat, &src_meta, job.preserve);
+        let trl = FileTrailer::for_file(compat, &src_meta, job.preserve);
         trace!("send trailer {trl:?}");
         trl.to_writer_async_framed(&mut outbound).await?;
         outbound.flush().await?;
         meter.stop().await;
 
-        let response = Response::from_reader_async_framed(&mut self.stream.recv).await?;
+        let response = Response::from_reader_async_framed(&mut stream.recv).await?;
         #[allow(irrefutable_let_patterns)]
         let Response::V1(response) = response else {
             todo!()
@@ -166,7 +146,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         trace!("complete");
         progress_bar.finish_and_clear();
         Ok(RequestResult {
-            stats: CommandStats {
+            stats: crate::session::CommandStats {
                 payload_bytes: payload_len,
                 peak_transfer_rate: meter.peak(),
             },
@@ -174,10 +154,13 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         })
     }
 
-    async fn handle(&mut self, io_buffer_size: u64) -> Result<()> {
-        let Some(ref args) = self.args else {
-            anyhow::bail!("PUT handler called without args");
-        };
+    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
+        &mut self,
+        _compat: crate::protocol::control::Compatibility,
+        args: &Put2Args,
+        io_buffer_size: u64,
+        stream: &mut SendReceivePair<S, R>,
+    ) -> Result<()> {
         let destination = &args.filename;
         trace!("begin");
 
@@ -197,7 +180,7 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             if destination.ends_with(std::path::MAIN_SEPARATOR) {
                 // N.B. Path.has_trailing_sep() is currently only available in nightly
                 debug!("Nonexistent destination directory {destination}");
-                error_and_return!(self, Status::DirectoryDoesNotExist);
+                error_and_return!(stream, Status::DirectoryDoesNotExist);
             }
 
             // - The destination's parent directory exists => do not append the path
@@ -216,11 +199,11 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             if parent_dir.is_dir() {
                 false // destination path is fully specified, do not append filename
             } else {
-                error_and_return!(self, Status::DirectoryDoesNotExist);
+                error_and_return!(stream, Status::DirectoryDoesNotExist);
             }
         };
 
-        let header = FileHeader::from_reader_async_framed(&mut self.stream.recv).await?;
+        let header = FileHeader::from_reader_async_framed(&mut stream.recv).await?;
         trace!("{header:?}");
         let header = FileHeaderV2::from(header);
 
@@ -233,33 +216,26 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
             Err(e) => {
                 let str = e.to_string();
                 debug!("Could not write to destination: {str}");
-                error_and_return!(self, e);
+                error_and_return!(stream, e);
             }
         };
 
         // So far as we can tell, we believe we will be able to fulfil this request.
         // We might still fail with an I/O error.
         trace!("responding OK");
-        crate::session::common::send_ok(&mut self.stream.send).await?;
-        self.stream.send.flush().await?;
+        crate::session::common::send_ok(&mut stream.send).await?;
+        stream.send.flush().await?;
 
         trace!("receiving file payload");
-        let result = limited_copy(
-            &mut self.stream.recv,
-            header.size.0,
-            &mut file,
-            io_buffer_size,
-        )
-        .await;
+        let result = limited_copy(&mut stream.recv, header.size.0, &mut file, io_buffer_size).await;
         if let Err(e) = result {
             error!("Failed to write to destination: {e}");
-            error_and_return!(self, e);
+            error_and_return!(stream, e);
         }
 
         trace!("receiving trailer");
-        let trailer = FileTrailerV2::from(
-            FileTrailer::from_reader_async_framed(&mut self.stream.recv).await?,
-        );
+        let trailer =
+            FileTrailerV2::from(FileTrailer::from_reader_async_framed(&mut stream.recv).await?);
         // Even if we only get the older V1 trailer, the server believes the file was sent correctly.
         trace!("{trailer:?}");
 
@@ -267,8 +243,8 @@ impl<S: SendingStream, R: ReceivingStream> SessionCommandImpl for Put<S, R> {
         file = file.update_metadata(&trailer.metadata).await?;
         drop(file);
 
-        crate::session::common::send_ok(&mut self.stream.send).await?;
-        self.stream.send.flush().await?;
+        crate::session::common::send_ok(&mut stream.send).await?;
+        stream.send.flush().await?;
         trace!("complete");
         Ok(())
     }
@@ -304,7 +280,8 @@ mod test {
             session::{Command, Status},
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::{Put, RequestResult},
+        session::RequestResult,
+        session::handler::{PutHandler, SessionCommand},
         util::{io::DEFAULT_COPY_BUFFER_SIZE, time::SystemTimeExt as _},
     };
     use littertray::LitterTray;
@@ -339,7 +316,8 @@ mod test {
     ) -> Result<(Result<RequestResult>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2, preserve, false).unwrap();
-        let mut sender = Put::boxed(pipe1, None, Compatibility::Level(client_level));
+        let mut sender =
+            SessionCommand::boxed(pipe1, None, Compatibility::Level(client_level), PutHandler);
         let params = Parameters {
             quiet: true,
             ..Default::default()
@@ -367,7 +345,10 @@ mod test {
         let args = match cmd {
             Command::Put(aa) => {
                 anyhow::ensure!(client_level == 1);
-                aa.into()
+                Put2Args {
+                    filename: aa.filename,
+                    options: vec![],
+                }
             }
             Command::Put2(aa) => {
                 anyhow::ensure!(client_level > 1);
@@ -378,10 +359,17 @@ mod test {
 
         // The second difference is that the receiver might send a failure response and shut down the stream.
         // This isn't well simulated by our test pipe.
-        let mut handler = Put::boxed(pipe2, Some(args), Compatibility::Level(server_level));
+        let mut handler = SessionCommand::boxed(
+            pipe2,
+            Some(args),
+            Compatibility::Level(server_level),
+            PutHandler,
+        );
         let (r1, r2) = tokio::join!(sender_fut, handler.handle(DEFAULT_COPY_BUFFER_SIZE));
         Ok((r1, r2))
     }
+
+    use crate::protocol::session::Put2Args;
 
     #[tokio::test]
     async fn put_success() -> Result<()> {
@@ -526,7 +514,7 @@ mod test {
     async fn logic_error_trap() {
         let (_pipe1, pipe2) = new_test_plumbing();
         assert!(
-            Put::boxed(pipe2, None, Compatibility::Level(2))
+            SessionCommand::boxed(pipe2, None, Compatibility::Level(2), PutHandler)
                 .handle(DEFAULT_COPY_BUFFER_SIZE)
                 .await
                 .is_err()

@@ -11,7 +11,10 @@ use crate::Parameters;
 use crate::client::CopyJobSpec;
 
 use super::SessionCommandImpl;
-use super::{CreateDirectory, Get, Listing, Put, SetMetadata};
+use super::handler::{
+    CreateDirectoryHandler, GetHandler, ListingHandler, PutHandler, SessionCommand,
+    SetMetadataHandler,
+};
 
 /// Span information for a command (used for tracing)
 pub(crate) struct SpanInfo {
@@ -50,13 +53,14 @@ pub(crate) fn client_sender<S: SendingStream + 'static, R: ReceivingStream + 'st
                 options.push(CommandParam::Recurse.into());
             }
             (
-                Listing::boxed(
+                SessionCommand::boxed(
                     stream,
                     Some(ListArgs {
                         path: path.clone(),
                         options,
                     }),
                     compat,
+                    ListingHandler,
                 ),
                 SpanInfo {
                     name: "LIST",
@@ -73,7 +77,7 @@ pub(crate) fn client_sender<S: SendingStream + 'static, R: ReceivingStream + 'st
                     args.options.push(CommandParam::PreserveMetadata.into());
                 }
                 (
-                    Get::boxed(stream, Some(args), compat),
+                    SessionCommand::boxed(stream, Some(args), compat, GetHandler),
                     SpanInfo {
                         name: "GETx",
                         primary_arg: copy_spec.source.filename.clone(),
@@ -82,7 +86,7 @@ pub(crate) fn client_sender<S: SendingStream + 'static, R: ReceivingStream + 'st
             } else if copy_spec.directory {
                 // Local source, directory: MKDIR
                 (
-                    CreateDirectory::boxed(stream, None, compat),
+                    SessionCommand::boxed(stream, None, compat, CreateDirectoryHandler),
                     SpanInfo {
                         name: "MKDIR",
                         primary_arg: copy_spec.destination.filename.clone(),
@@ -91,7 +95,7 @@ pub(crate) fn client_sender<S: SendingStream + 'static, R: ReceivingStream + 'st
             } else {
                 // Local source, file: PUT
                 (
-                    Put::boxed(stream, None, compat),
+                    SessionCommand::boxed(stream, None, compat, PutHandler),
                     SpanInfo {
                         name: "PUTx",
                         primary_arg: copy_spec.source.filename.clone(),
@@ -103,7 +107,7 @@ pub(crate) fn client_sender<S: SendingStream + 'static, R: ReceivingStream + 'st
             // Post-transfer: set metadata on remote directory
             let destination_filename = copy_spec.destination.filename.clone();
             (
-                SetMetadata::boxed(stream, None, compat),
+                SessionCommand::boxed(stream, None, compat, SetMetadataHandler),
                 SpanInfo {
                     name: "SETMETA",
                     primary_arg: destination_filename,
@@ -121,13 +125,14 @@ pub(crate) fn command_handler<S: SendingStream + 'static, R: ReceivingStream + '
 ) -> (Box<dyn SessionCommandImpl>, SpanInfo) {
     let (handler, span_info): (Box<dyn SessionCommandImpl>, SpanInfo) = match command {
         Command::Get(GetArgs { filename }) => (
-            Get::boxed(
+            SessionCommand::boxed(
                 stream,
                 Some(Get2Args {
                     filename: filename.clone(),
                     options: vec![],
                 }),
                 compat,
+                GetHandler,
             ),
             SpanInfo {
                 name: "GET",
@@ -137,7 +142,7 @@ pub(crate) fn command_handler<S: SendingStream + 'static, R: ReceivingStream + '
         Command::Get2(args) => {
             let filename = args.filename.clone();
             (
-                Get::boxed(stream, Some(args), compat),
+                SessionCommand::boxed(stream, Some(args), compat, GetHandler),
                 SpanInfo {
                     name: "GET2",
                     primary_arg: filename,
@@ -145,13 +150,14 @@ pub(crate) fn command_handler<S: SendingStream + 'static, R: ReceivingStream + '
             )
         }
         Command::Put(PutArgs { filename }) => (
-            Put::boxed(
+            SessionCommand::boxed(
                 stream,
                 Some(Put2Args {
                     filename: filename.clone(),
                     options: vec![],
                 }),
                 compat,
+                PutHandler,
             ),
             SpanInfo {
                 name: "PUT",
@@ -161,7 +167,7 @@ pub(crate) fn command_handler<S: SendingStream + 'static, R: ReceivingStream + '
         Command::Put2(args) => {
             let filename = args.filename.clone();
             (
-                Put::boxed(stream, Some(args), compat),
+                SessionCommand::boxed(stream, Some(args), compat, PutHandler),
                 SpanInfo {
                     name: "PUT2",
                     primary_arg: filename,
@@ -171,7 +177,7 @@ pub(crate) fn command_handler<S: SendingStream + 'static, R: ReceivingStream + '
         Command::CreateDirectory(args) => {
             let dir_name = args.dir_name.clone();
             (
-                CreateDirectory::boxed(stream, Some(args), compat),
+                SessionCommand::boxed(stream, Some(args), compat, CreateDirectoryHandler),
                 SpanInfo {
                     name: "MKDIR",
                     primary_arg: dir_name,
@@ -181,7 +187,7 @@ pub(crate) fn command_handler<S: SendingStream + 'static, R: ReceivingStream + '
         Command::SetMetadata(args) => {
             let path = args.path.clone();
             (
-                SetMetadata::boxed(stream, Some(args), compat),
+                SessionCommand::boxed(stream, Some(args), compat, SetMetadataHandler),
                 SpanInfo {
                     name: "SETMETA",
                     primary_arg: path,
@@ -191,7 +197,7 @@ pub(crate) fn command_handler<S: SendingStream + 'static, R: ReceivingStream + '
         Command::List(args) => {
             let path = args.path.clone();
             (
-                Listing::boxed(stream, Some(args), compat),
+                SessionCommand::boxed(stream, Some(args), compat, ListingHandler),
                 SpanInfo {
                     name: "LS",
                     primary_arg: path,
