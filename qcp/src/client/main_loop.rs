@@ -12,9 +12,9 @@ use crate::{
         common::{ReceivingStream, SendReceivePair, SendingStream},
         compat::Feature,
         control::{ClosedownReportV1, Compatibility, CredentialsType, Direction, ServerMessageV2},
-        session::{CommandParam, Get2Args, MetadataAttr},
+        session::MetadataAttr,
     },
-    session::{self, CommandStats, RequestResult},
+    session::{self, CommandStats, RequestResult, factory::TransferPhase},
     util::{
         self, Credentials, lookup_host_by_family,
         path::add_pathsep_if_needed,
@@ -81,15 +81,6 @@ struct PrepResult {
     remote_address: IpAddr,
     job_specs: Vec<CopyJobSpec>,
     full_success: bool,
-}
-
-enum Phase {
-    // ListFiles
-    Pre,
-    // Get, Put, Mkdir
-    Transfer,
-    // SetMetadata to fix up directory permissions once we're done
-    Post,
 }
 
 impl PrepResult {
@@ -450,7 +441,7 @@ impl Client {
         stream_pair: SendReceivePair<S, R>,
         copy_spec: CopyJobSpec,
         filename_width: usize,
-        pass: Phase,
+        pass: TransferPhase,
     ) -> Result<RequestResult>
     where
         S: SendingStream + 'static,
@@ -461,15 +452,15 @@ impl Client {
             "logic error: run_request called before negotiation completed"
         );
         match pass {
-            Phase::Pre => {
+            TransferPhase::Pre => {
                 self.manage_pre_transfer_request(stream_pair, &copy_spec)
                     .await
             }
-            Phase::Transfer => {
+            TransferPhase::Transfer => {
                 self.manage_file_transfer_request(stream_pair, &copy_spec, filename_width)
                     .await
             }
-            Phase::Post => {
+            TransferPhase::Post => {
                 self.manage_post_transfer_request(stream_pair, &copy_spec)
                     .await
             }
@@ -491,7 +482,13 @@ impl Client {
             "logic error: manage_pre_transfer_request called for local source"
         );
 
-        let mut cmd = session::Listing::boxed(stream_pair, None, negotiated.compat);
+        let (mut cmd, _span_info) = session::factory::client_sender(
+            stream_pair,
+            copy_spec,
+            TransferPhase::Pre,
+            negotiated.compat,
+            &self.args.client_params,
+        );
         cmd.send(
             copy_spec,
             self.display.clone(),
@@ -517,30 +514,18 @@ impl Client {
 
         let negotiated = self.negotiated.as_ref().unwrap(); // checked in run_request
 
-        let (mut cmd, span) = if copy_spec.source.user_at_host.is_some() {
-            // We are GETting something
-            let mut args = Get2Args::default();
-            if copy_spec.preserve {
-                args.options.push(CommandParam::PreserveMetadata.into());
-            }
-            (
-                session::Get::boxed(stream_pair, Some(args), negotiated.compat),
-                trace_span!("GETx", filename = copy_spec.source.filename.clone()),
-            )
-        } else {
-            // We are PUTting something
-            if copy_spec.directory {
-                (
-                    session::CreateDirectory::boxed(stream_pair, None, negotiated.compat),
-                    trace_span!("MKDIR", filename = copy_spec.destination.filename.clone()),
-                )
-            } else {
-                (
-                    session::Put::boxed(stream_pair, None, negotiated.compat),
-                    trace_span!("PUTx", filename = copy_spec.source.filename.clone()),
-                )
-            }
-        };
+        let (mut cmd, span_info) = session::factory::client_sender(
+            stream_pair,
+            copy_spec,
+            TransferPhase::Transfer,
+            negotiated.compat,
+            &self.args.client_params,
+        );
+        let span = trace_span!(
+            "transfer",
+            name = span_info.name,
+            filename = span_info.primary_arg
+        );
         let filename = copy_spec.display_filename().to_string_lossy();
         let timer = std::time::Instant::now();
         let result = cmd
@@ -580,7 +565,14 @@ impl Client {
         let destination_is_remote = copy_spec.destination.user_at_host.is_some();
 
         if destination_is_remote && copy_spec.preserve && copy_spec.directory {
-            return session::SetMetadata::boxed(stream_pair, None, negotiated.compat)
+            let (mut cmd, _span_info) = session::factory::client_sender(
+                stream_pair,
+                copy_spec,
+                TransferPhase::Post,
+                negotiated.compat,
+                &self.args.client_params,
+            );
+            return cmd
                 .send(
                     copy_spec,
                     self.display.clone(),
@@ -623,8 +615,12 @@ impl Client {
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-        JobRunner:
-            AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> Result<RequestResult>,
+        JobRunner: AsyncFnMut(
+            SendReceivePair<S, R>,
+            CopyJobSpec,
+            usize,
+            TransferPhase,
+        ) -> Result<RequestResult>,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
@@ -651,8 +647,12 @@ impl Client {
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-        JobRunner:
-            AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> Result<RequestResult>,
+        JobRunner: AsyncFnMut(
+            SendReceivePair<S, R>,
+            CopyJobSpec,
+            usize,
+            TransferPhase,
+        ) -> Result<RequestResult>,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
@@ -708,7 +708,13 @@ impl Client {
             }
             debug!("Processing job {:?}", job);
             let stream_pair = open_stream().await?;
-            let result = run_job(stream_pair, job.clone(), filename_width, Phase::Transfer).await;
+            let result = run_job(
+                stream_pair,
+                job.clone(),
+                filename_width,
+                TransferPhase::Transfer,
+            )
+            .await;
             match result {
                 Ok(result) => {
                     aggregate_stats.payload_bytes += result.stats.payload_bytes;
@@ -743,7 +749,7 @@ impl Client {
                             .set_message("Finishing up directory permissions");
                         message_set = true;
                     }
-                    let result = run_job(stream_pair, job.clone(), 0, Phase::Post).await;
+                    let result = run_job(stream_pair, job.clone(), 0, TransferPhase::Post).await;
                     if let Err(e) = result {
                         if let Some(src) = e.source() {
                             // Some error conditions come with an anyhow Context.
@@ -771,8 +777,12 @@ impl Client {
     ) -> anyhow::Result<(bool, CommandStats)>
     where
         OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-        JobRunner:
-            AsyncFnMut(SendReceivePair<S, R>, CopyJobSpec, usize, Phase) -> Result<RequestResult>,
+        JobRunner: AsyncFnMut(
+            SendReceivePair<S, R>,
+            CopyJobSpec,
+            usize,
+            TransferPhase,
+        ) -> Result<RequestResult>,
         S: SendingStream + 'static,
         R: ReceivingStream + 'static,
     {
@@ -829,7 +839,7 @@ impl Client {
         let mut new_jobs = Vec::new();
         for job in jobs_in {
             let stream_pair = open_stream().await?;
-            let result = run_job(stream_pair, job.clone(), 0, Phase::Pre)
+            let result = run_job(stream_pair, job.clone(), 0, TransferPhase::Pre)
                 .await
                 .inspect_err(|_| warn!("No files were transferred"))?;
             let Some(contents) = result.list else {
@@ -939,9 +949,10 @@ mod test {
     use super::{BiStreamOpener, RequestResult};
 
     use crate::cli::CliArgs;
-    use crate::client::main_loop::{Negotiated, Phase};
+    use crate::client::main_loop::Negotiated;
     #[cfg(unix)]
     use crate::control::create_fake;
+    use crate::session::factory::TransferPhase;
 
     use crate::session::CommandStats;
     use crate::{
@@ -1145,7 +1156,7 @@ mod test {
             plumbing.0,
             prep_result.job_specs[0].clone(),
             10,
-            Phase::Transfer,
+            TransferPhase::Transfer,
         );
 
         // We are not really testing the protocol here, that is done in get.rs / put.rs.
@@ -1196,7 +1207,7 @@ mod test {
             plumbing.0,
             prep_result.job_specs[0].clone(),
             10,
-            Phase::Transfer,
+            TransferPhase::Transfer,
         );
         let r = manage_fut.await;
         println!("Result: {r:?}");
@@ -1542,8 +1553,12 @@ mod test {
             assert!(prep_result.full_success);
             let mut plumbing = new_test_plumbing();
 
-            let manage_fut =
-                uut.run_request(plumbing.0, prep_result.job_specs[0].clone(), 0, Phase::Post);
+            let manage_fut = uut.run_request(
+                plumbing.0,
+                prep_result.job_specs[0].clone(),
+                0,
+                TransferPhase::Post,
+            );
 
             // We are not really testing the protocol here, only the main loop behaviour.
             let mut send_buf = Vec::new();
