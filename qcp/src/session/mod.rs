@@ -2,6 +2,7 @@
 // (c) 2024-5 Ross Younger
 
 mod common;
+pub(crate) mod factory;
 
 mod get;
 mod ls;

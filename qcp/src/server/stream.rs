@@ -7,7 +7,6 @@ use crate::protocol::common::{
     ProtocolMessage as _, ReceivingStream, SendReceivePair, SendingStream,
 };
 use crate::protocol::control::Compatibility;
-use crate::protocol::prelude::display_vec_td;
 use crate::protocol::session::Command;
 
 use tracing::{Instrument as _, trace, trace_span};
@@ -36,41 +35,12 @@ where
         }
     };
 
-    let (span, mut handler) = match packet {
-        Command::Get(args) => (
-            trace_span!("SERVER:GET", filename = args.filename.clone()),
-            session::Get::boxed(sp, Some(args.into()), compat),
-        ),
-        Command::Put(args) => (
-            trace_span!("SERVER:PUT", filename = args.filename.clone()),
-            session::Put::boxed(sp, Some(args.into()), compat),
-        ),
-        Command::Get2(args) => (
-            trace_span!("SERVER:GET2", filename = args.filename.clone()),
-            session::Get::boxed(sp, Some(args), compat),
-        ),
-        Command::Put2(args) => (
-            trace_span!("SERVER:PUT2", filename = args.filename.clone()),
-            session::Put::boxed(sp, Some(args), compat),
-        ),
-        Command::CreateDirectory(args) => (
-            trace_span!("SERVER:MKDIR", filename = args.dir_name.clone()),
-            session::CreateDirectory::boxed(sp, Some(args), compat),
-        ),
-        Command::SetMetadata(args) => (
-            trace_span!(
-                "SERVER:SETMETA",
-                filename = args.path.clone(),
-                metadata = display_vec_td(&args.metadata),
-            ),
-            session::SetMetadata::boxed(sp, Some(args), compat),
-        ),
-        Command::List(args) => (
-            trace_span!("SERVER:LS", filename = args.path.clone()),
-            session::Listing::boxed(sp, Some(args), compat),
-        ),
-    };
-
+    let (mut handler, span_info) = session::factory::command_handler(sp, packet, compat);
+    let span = trace_span!(
+        "handler",
+        cmd = span_info.name,
+        filename = span_info.primary_arg
+    );
     handler.handle(io_buffer_size).instrument(span).await
 }
 
