@@ -55,6 +55,7 @@ pub(crate) fn trace_level(args: &crate::client::Parameters) -> &str {
     strum_macros::EnumString,
     enumscribe::EnumSerialize,
     enumscribe::EnumDeserialize,
+    clap::ValueEnum,
 )]
 #[strum(ascii_case_insensitive)]
 #[enumscribe(case_insensitive)]

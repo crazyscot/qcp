@@ -521,7 +521,7 @@ mod test {
         let args = &[
             "qcp",
             "--time-format",
-            "uTcmIcro",
+            "uTc-mIcro",
             "--address-family",
             "iNEt6",
             "--color",

@@ -14,6 +14,7 @@
     enumscribe::TryUnscribe,
     serde::Serialize,
     enumscribe::EnumDeserialize,
+    clap::ValueEnum,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(ascii_case_insensitive)]

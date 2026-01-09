@@ -350,6 +350,7 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
         group("ip address"),
         value_name("FAMILY"),
         display_order(0),
+        value_enum,
         ignore_case(true)
     )]
     pub address_family: AddressFamily,
@@ -425,7 +426,13 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
 
     /// Specifies the time format to use when printing messages to the console or to file
     /// [default: local]
-    #[arg(long, value_name("FORMAT"), display_order(0))]
+    #[arg(
+        long,
+        value_name("FORMAT"),
+        display_order(0),
+        value_enum,
+        ignore_case(true)
+    )]
     pub time_format: TimeFormat,
 
     /// Alternative ssh config file(s)
