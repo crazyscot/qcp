@@ -94,7 +94,7 @@
 //!
 //! 4. Install qcp in a known location, then reconfigure sshd with
 //!
-//!    `Subsystem qcp /full/path/toqcp --server`
+//!    `Subsystem qcp /full/path/to/qcp --server`
 //!
 //!    This is known as [subsystem mode](crate::Configuration#structfield.ssh_subsystem). You will then need to
 //!    use `--ssh-subsystem` when connecting to this server, or set it in your local configuration file

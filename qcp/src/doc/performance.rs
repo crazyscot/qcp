@@ -75,6 +75,9 @@
 //! * If you build qcp yourself, make sure to build in release mode (`cargo build --release --locked`).
 //!   I found unoptimised builds tend to max out around 320MB/s on my desktop PC, but release builds can sustain 1Gbit
 //!   if the network supports it.
+//! * As of v0.8, the new multi-file and recursive transfer modes don't always perform brilliantly with lots of small files.
+//!   (With longer RTTs they do out-perform scp, but not by much.) In some cases it will be more efficient to aggregate smaller files into an archive.
+//!
 //!
 //! ### Reporting
 //!
@@ -83,14 +86,11 @@
 //! You might find it useful to run in `--stats` mode for additional insights; here's the output from a typical run:
 //!
 //! ```log
-//! 2024-10-14T09:20:52.543540Z  INFO Transferred 104.9MB in 12.75s; average 8.2MB/s
-//! 2024-10-14T09:20:52.543782Z  INFO Total packets sent: 3,279 by us; 75,861 by remote
-//! 2024-10-14T09:20:52.543955Z  WARN Congestion events detected: 2
-//! 2024-10-14T09:20:52.544138Z  WARN Remote lost packets: 112/75.9k (0.15%, for 157kB)
-//! 2024-10-14T09:20:52.544320Z  INFO Path MTU 1452, round-trip time 303.1ms, final congestion window 15,537,114
-//! 2024-10-14T09:20:52.544530Z  INFO 3.3k datagrams sent, 75.7k received, 0 black holes detected
-//! 2024-10-14T09:20:52.544715Z  INFO 107,526,015 total bytes sent for 104,857,600 bytes payload  (2.54% overhead/loss)
-//! 2024-10-14T09:20:52.544903Z  WARN Measured path RTT 303.128843ms was greater than configuration 300; for better performance, next time try --rtt 304
+//! 2026-01-09 21:29:54L  INFO Transferred 1.07GB in 15.27s; average 70.3MB/s; peak 100.2MB/s
+//! 2026-01-09 21:29:54L  INFO Total packets sent: 24,569 by us; 778,416 by remote
+//! 2026-01-09 21:29:54L  WARN Congestion events detected: 24
+//! 2026-01-09 21:29:54L  WARN Remote lost packets: 7.6k/778.4k (0.97%, for 10.8MB)
+//! 2026-01-09 21:29:54L  INFO Path MTU 1426 (remote: 1426), round-trip time 268.3ms (remote: 269.9ms), final congestion window 28,322,844
+//! 2026-01-09 21:29:54L  INFO 24.6k datagrams sent, 770.9k received, 0 black holes detected
+//! 2026-01-09 21:29:54L  INFO 1,109,983,211 total bytes sent for 1,073,741,824 bytes payload  (3.38% overhead/loss)
 //! ```
-//!
-//! (This was with a 100MB test file, which isn't always enough for the protocol to get fully up to speed.)
