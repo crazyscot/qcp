@@ -27,8 +27,10 @@ qcp offers similar security to scp using existing, well\-known mechanisms, and b
 .TP
 .BI "qcp " "[OPTIONS] " "SOURCE\&... " DESTINATION
 e.g.   qcp some/file my\-server:some\-directory/
+       qcp \-r dir1 dir2 my\-server:
 .PP
 Exactly one side (source(s) or destination) must be remote.
+When copying multiple sources, the destination is a directory, which will be created if necessary.
 .PP
 Long options may be abbreviated where unambiguous.
 .PP
@@ -100,7 +102,21 @@ Behaviour is intended to match scp.
 Show additional transfer statistics
 .TP
 \fB\-\-time\-format\fR \fI<FORMAT>\fR
-Specifies the time format to use when printing messages to the console or to file [default: local]
+The time format to use when printing messages to the console or to file [default: local]
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+local: Local time (as best as we can figure it out), as "year\-month\-day HH:MM:SS"
+.IP \(bu 2
+utc: UTC time, as "year\-month\-day HH:MM:SS"
+.IP \(bu 2
+utc\-micro: UTC time with microsecond resolution, as "year\-month\-day HH:MM:SS.uuuuuu"
+.IP \(bu 2
+rfc3339: UTC time, in the format described in [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
+.RE
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help (see a summary with \*(Aq\-h\*(Aq)
@@ -119,10 +135,14 @@ Enable detailed debug output
 This has the same effect as setting `RUST_LOG=qcp=debug` in the environment. If present, `RUST_LOG` overrides this option.
 .TP
 \fB\-\-dry\-run\fR
-Connects to a remote server but does not actually transfer any files. This is useful to test that the control channel works and when debugging the negotiated bandwidth parameters (see also `\-\-remote\-config`)
+Connects to a remote server but does not actually transfer any files.
+
+This is useful to test that the control channel works and when debugging the negotiated bandwidth parameters (see also `\-\-remote\-config`).
 .TP
 \fB\-\-remote\-config\fR
-Outputs the server\*(Aqs configuration for this connection. (Unlike `\-\-show\-config`, this option does not prevent a file transfer. However, you can do so by selecting `\-\-dry\-run` mode.)
+Outputs the server\*(Aqs configuration for this connection.
+
+Unlike `\-\-show\-config`, this option does not prevent a file transfer. However, you can do so by selecting `\-\-dry\-run` mode.
 
 The output shows both the server\*(Aqs _static_ configuration (by reading config files) and its _final_ configuration (taking account of the client\*(Aqs expressed preferences).
 .TP
@@ -152,27 +172,20 @@ If not, outputs only global settings from configuration, which may be overridden
 The maximum network bandwidth we expect receiving data FROM the remote system.
 [default: 12.5M]
 
-This is the single most important configuration necessary for good performance!
-If you configure nothing else, at least set this to suit your network.
+This is the single most important configuration necessary for good performance! If you configure nothing else, at least set this to suit your network.
 
 This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode.
 
-This may be specified directly as a number, or as an SI quantity
-like `10M` or `256k`. Note that this is described in BYTES, not bits;
-if (for example) you expect to fill a 1Gbit ethernet connection,
-125M would be a suitable setting.
+This may be specified directly as a number, or as an SI quantity like `10M` or `256k`. Note that this is described in BYTES, not bits; if (for example) you expect to fill a 1Gbit ethernet connection, 125M would be a suitable setting.
         
 .TP
 \fB\-\-tx\fR \fI<bytes>\fR
 
-The maximum network bandwidth we expect sending data TO the remote system,
-if it is different from the bandwidth FROM the system.
-(For example, when you are connected via an asymmetric last\-mile DSL or fibre profile.)
+The maximum network bandwidth we expect sending data TO the remote system, if it is different from the bandwidth FROM the system. (For example, when you are connected via an asymmetric last\-mile DSL or fibre profile.)
 
 Specify as a number, or as an SI quantity (e.g. `10M`).
 
-This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode.
-If not specified or 0, uses the value of `rx`.
+This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode. If not specified or 0, uses the value of `rx`.
 
 .TP
 \fB\-\-rtt\fR \fI<ms>\fR
@@ -196,6 +209,18 @@ This is a convenience alias for `\-\-address\-family inet6`
 .TP
 \fB\-\-address\-family\fR \fI<FAMILY>\fR
 Forces use of a particular IP version when connecting to the remote. [default: any]
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+inet: IPv4
+.IP \(bu 2
+inet6: IPv6
+.IP \(bu 2
+any: Unspecified. qcp will use whatever seems suitable given the target address or the result of DNS lookup
+.RE
 .TP
 \fB\-\-aes256\fR
 Use only AES256 cipher suites as far as possible
@@ -203,7 +228,7 @@ Use only AES256 cipher suites as far as possible
 This option is included for those who have a preference to use only AES256\-based algorithms (aka CNSA 2.0). Note this option does not fully disable AES128, which is required for the QUIC 1.0 Initial Packet.
 .TP
 \fB\-l\fR, \fB\-\-remote\-user\fR \fI<NAME>\fR
-Specifies the user on the remote machine to connect as.
+The user on the remote machine to connect as.
 
 This is functionally the same as specifying a remote filename `user@host:file`. If unspecified, we leave it up to ssh to determine.
 .TP
@@ -222,7 +247,7 @@ For example: `12345`, `20000\-20100`
 If unspecified, uses any available UDP port.
 .TP
 \fB\-\-remote\-qcp\-binary\fR \fI<PATH>\fR
-Specifies the path to the qcp binary on the remote machine. [default: `qcp`]
+Path to the qcp binary on the remote machine. [default: `qcp`]
 
 This is useful where the remote system has a locked\-down `PATH` and the qcp binary is installed in a non\-standard location. qcp will run `<path> \-\-server` after logging in.
 .TP
@@ -234,7 +259,7 @@ On the command line, you must repeat `\-S` for each argument.
 For example, to pass `\-i /dev/null` to ssh, specify: `\-S \-i \-S /dev/null`
 .TP
 \fB\-\-ssh\fR \fI<PATH>\fR
-Specifies the ssh client program to use [default: `ssh`]
+The ssh client program to use [default: `ssh`]
 .TP
 \fB\-\-ssh\-config\fR \fI<FILE>\fR
 Alternative ssh config file(s)
@@ -274,7 +299,7 @@ rawpublickey: Raw (RFC7250) public key
 .SH "ADVANCED NETWORK TUNING"
 .TP
 \fB\-\-congestion\fR \fI<ALGORITHM>\fR
-Specifies the congestion control algorithm to use. [default: cubic]
+The congestion control algorithm to use. [default: cubic]
 .br
 
 .br

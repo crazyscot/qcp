@@ -100,15 +100,11 @@ pub struct Configuration {
 The maximum network bandwidth we expect receiving data FROM the remote system.
 [default: 12.5M]
 
-This is the single most important configuration necessary for good performance!
-If you configure nothing else, at least set this to suit your network.
+This is the single most important configuration necessary for good performance! If you configure nothing else, at least set this to suit your network.
 
 This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode.
 
-This may be specified directly as a number, or as an SI quantity
-like `10M` or `256k`. Note that this is described in BYTES, not bits;
-if (for example) you expect to fill a 1Gbit ethernet connection,
-125M would be a suitable setting.
+This may be specified directly as a number, or as an SI quantity like `10M` or `256k`. Note that this is described in BYTES, not bits; if (for example) you expect to fill a 1Gbit ethernet connection, 125M would be a suitable setting.
         "),
     )]
     #[serde(with = "EQHelper")]
@@ -136,14 +132,11 @@ if (for example) you expect to fill a 1Gbit ethernet connection,
         help_heading("Tuning"),
         display_order(0),
         long_help(r"
-The maximum network bandwidth we expect sending data TO the remote system,
-if it is different from the bandwidth FROM the system.
-(For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
+The maximum network bandwidth we expect sending data TO the remote system, if it is different from the bandwidth FROM the system. (For example, when you are connected via an asymmetric last-mile DSL or fibre profile.)
 
 Specify as a number, or as an SI quantity (e.g. `10M`).
 
-This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode.
-If not specified or 0, uses the value of `rx`.
+This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode. If not specified or 0, uses the value of `rx`.
 "),
     )]
     #[serde(with = "EQHelper")]
@@ -158,7 +151,7 @@ If not specified or 0, uses the value of `rx`.
     #[arg(long, help_heading("Tuning"), value_name("ms"), display_order(1))]
     pub rtt: u16,
 
-    /// Specifies the congestion control algorithm to use.
+    /// The congestion control algorithm to use.
     /// [default: cubic]
     #[arg(
         long,
@@ -355,11 +348,11 @@ This may be specified directly as a number, or as an SI quantity like `10k`."
     )]
     pub address_family: AddressFamily,
 
-    /// Specifies the ssh client program to use [default: `ssh`]
+    /// The ssh client program to use [default: `ssh`]
     #[arg(long, help_heading("Connection"), display_order(0), value_name("PATH"))]
     pub ssh: String,
 
-    /// Specifies the path to the qcp binary on the remote machine. [default: `qcp`]
+    /// Path to the qcp binary on the remote machine. [default: `qcp`]
     ///
     /// This is useful where the remote system has a locked-down `PATH` and the qcp binary
     /// is installed in a non-standard location. qcp will run `<path> --server` after logging in.
@@ -411,7 +404,7 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
     )]
     pub remote_port: PortRange,
 
-    /// Specifies the user on the remote machine to connect as.
+    /// The user on the remote machine to connect as.
     ///
     /// This is functionally the same as specifying a remote filename `user@host:file`.
     /// If unspecified, we leave it up to ssh to determine.
@@ -424,7 +417,7 @@ For example, to pass `-i /dev/null` to ssh, specify: `-S -i -S /dev/null`"
     )]
     pub remote_user: String,
 
-    /// Specifies the time format to use when printing messages to the console or to file
+    /// The time format to use when printing messages to the console or to file
     /// [default: local]
     #[arg(
         long,

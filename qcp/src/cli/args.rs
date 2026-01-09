@@ -42,8 +42,10 @@ pub(crate) enum MainMode {
     long_about,
     override_usage = "qcp [OPTIONS] <SOURCE>... <DESTINATION>",
     before_help = r"e.g.   qcp some/file my-server:some-directory/
+       qcp -r dir1 dir2 my-server:
 
 Exactly one side (source(s) or destination) must be remote.
+When copying multiple sources, the destination is a directory, which will be created if necessary.
 
 Long options may be abbreviated where unambiguous.
 

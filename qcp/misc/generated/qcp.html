@@ -26,9 +26,15 @@
   better throughput on congested networks.
 </p>
 
-<p>e.g. qcp some/file my-server:some-directory/</p>
+<p>
+  e.g. qcp some/file my-server:some-directory/ qcp -r dir1 dir2 my-server:
+</p>
 
-<p>Exactly one side (source(s) or destination) must be remote.</p>
+<p>
+  Exactly one side (source(s) or destination) must be remote. When copying
+  multiple sources, the destination is a directory, which will be created if
+  necessary.
+</p>
 
 <p>Long options may be abbreviated where unambiguous.</p>
 
@@ -137,17 +143,26 @@
   </li>
   <li><code>--profile</code> — Output timing profile data after completion</li>
   <li>
-    <code>--dry-run</code> — Connects to a remote server but does not actually
-    transfer any files. This is useful to test that the control channel works
-    and when debugging the negotiated bandwidth parameters (see also <code
-    >--remote-config</code>)
+    <p>
+      <code>--dry-run</code> — Connects to a remote server but does not actually
+      transfer any files.
+    </p>
+
+    <p>
+      This is useful to test that the control channel works and when debugging
+      the negotiated bandwidth parameters (see also <code
+      >--remote-config</code>).
+    </p>
   </li>
   <li>
     <p>
       <code>--remote-config</code> — Outputs the server's configuration for this
-      connection. (Unlike <code>--show-config</code>, this option does not
-      prevent a file transfer. However, you can do so by selecting <code
-      >--dry-run</code> mode.)
+      connection.
+    </p>
+
+    <p>
+      Unlike <code>--show-config</code>, this option does not prevent a file
+      transfer. However, you can do so by selecting <code>--dry-run</code> mode.
     </p>
 
     <p>
@@ -242,8 +257,8 @@
   </li>
   <li>
     <p>
-      <code>--congestion &lt;ALGORITHM&gt;</code> — Specifies the congestion
-      control algorithm to use. [default: cubic]
+      <code>--congestion &lt;ALGORITHM&gt;</code> — The congestion control
+      algorithm to use. [default: cubic]
     </p>
 
     <p>Possible values:</p>
@@ -418,17 +433,36 @@
     </p>
   </li>
   <li>
-    <code>--address-family &lt;FAMILY&gt;</code> — Forces use of a particular IP
-    version when connecting to the remote. [default: any]
-  </li>
-  <li>
-    <code>--ssh &lt;PATH&gt;</code> — Specifies the ssh client program to use
-    [default: <code>ssh</code>]
+    <p>
+      <code>--address-family &lt;FAMILY&gt;</code> — Forces use of a particular
+      IP version when connecting to the remote. [default: any]
+    </p>
+
+    <p>Possible values:</p>
+
+    <ul>
+      <li>
+        <code>inet</code>: IPv4
+      </li>
+      <li>
+        <code>inet6</code>: IPv6
+      </li>
+      <li>
+        <code>any</code>: Unspecified. qcp will use whatever seems suitable
+        given the target address or the result of DNS lookup
+      </li>
+    </ul>
   </li>
   <li>
     <p>
-      <code>--remote-qcp-binary &lt;PATH&gt;</code> — Specifies the path to the
-      qcp binary on the remote machine. [default: <code>qcp</code>]
+      <code>--ssh &lt;PATH&gt;</code> — The ssh client program to use [default:
+      <code>ssh</code>]
+    </p>
+  </li>
+  <li>
+    <p>
+      <code>--remote-qcp-binary &lt;PATH&gt;</code> — Path to the qcp binary on
+      the remote machine. [default: <code>qcp</code>]
     </p>
 
     <p>
@@ -463,8 +497,8 @@
   </li>
   <li>
     <p>
-      <code>-l</code>, <code>--remote-user &lt;NAME&gt;</code> — Specifies the
-      user on the remote machine to connect as.
+      <code>-l</code>, <code>--remote-user &lt;NAME&gt;</code> — The user on the
+      remote machine to connect as.
     </p>
 
     <p>
@@ -474,8 +508,31 @@
     </p>
   </li>
   <li>
-    <code>--time-format &lt;FORMAT&gt;</code> — Specifies the time format to use
-    when printing messages to the console or to file [default: local]
+    <p>
+      <code>--time-format &lt;FORMAT&gt;</code> — The time format to use when
+      printing messages to the console or to file [default: local]
+    </p>
+
+    <p>Possible values:</p>
+
+    <ul>
+      <li>
+        <code>local</code>: Local time (as best as we can figure it out), as
+        "year-month-day HH:MM:SS"
+      </li>
+      <li>
+        <code>utc</code>: UTC time, as "year-month-day HH:MM:SS"
+      </li>
+      <li>
+        <code>utc-micro</code>: UTC time with microsecond resolution, as
+        "year-month-day HH:MM:SS.uuuuuu"
+      </li>
+      <li>
+        <code>rfc3339</code>: UTC time, in the format described in <a
+          href="https://datatracker.ietf.org/doc/html/rfc3339"
+        >RFC 3339</a>
+      </li>
+    </ul>
   </li>
   <li>
     <p>
