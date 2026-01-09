@@ -5,7 +5,109 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0](https://github.com/crazyscot/qcp/compare/v0.7.0...v0.8.0)
+
+### ⛰️ Features
+
+- *(proto)* ListContents command - ([4372c89](https://github.com/crazyscot/qcp/commit/4372c891ca53c2f70ceba1e9b13cd97ca109042e))
+- *(proto)* Add CreateDirectory and SetMetadata commands - ([fa8ee8e](https://github.com/crazyscot/qcp/commit/fa8ee8e74b3b7a358d1ad0c6a59ec3d2adb5f24c))
+- *(stats)* Add post-transfer hints for --rtt/--rx/--tx - ([19a3881](https://github.com/crazyscot/qcp/commit/19a38818d84192a1794d241b2f3cef4af6937a1d))
+- -p preserves mode bits on directories in get-multi mode - ([60fda05](https://github.com/crazyscot/qcp/commit/60fda0529ff1078b72c71bfc1a8e39195e67fbc4))
+- Implement recursive get ([#21](https://github.com/crazyscot/qcp/pull/21)) - ([63d74a7](https://github.com/crazyscot/qcp/commit/63d74a7d01b66fe210bc481d522d3d1d9d4d683c))
+- Implement --preserve on multi-file PUT - ([0f2452c](https://github.com/crazyscot/qcp/commit/0f2452cc604aec032460864bb5d42261172e4062))
+- Support --recurse on PUT commands ([#21](https://github.com/crazyscot/qcp/pull/21)) - ([66c388c](https://github.com/crazyscot/qcp/commit/66c388c497353349617196d18473a238d1afc243))
+- Add multi-source support and single-session transfers ([#181](https://github.com/crazyscot/qcp/pull/181)) - ([fc8e258](https://github.com/crazyscot/qcp/commit/fc8e258e8296047b65a8925d9b49d8a2c9301d48))
+- Add configuration option for IO buffer size - ([414520a](https://github.com/crazyscot/qcp/commit/414520af7c9137f8fe4669d2d0f5ab5bb4106587))
+
+### 🐛 Bug Fixes
+
+- *(cli)* Add missing ValueEnum declarations to TimeFormat and AddressFamily - ([9628ba3](https://github.com/crazyscot/qcp/commit/9628ba3f51c378f51ca69035b32cf4000fc176de))
+- *(stats)* Satisfy clippy in bandwidth hint - ([3ced4d3](https://github.com/crazyscot/qcp/commit/3ced4d3e731897a13248c80f4045a47f8373f313))
+- Better handle encoding failures from List command - ([9f85e97](https://github.com/crazyscot/qcp/commit/9f85e97932f82e13e63a08de5f9de06915f8d6d5))
+- Apply wire encoding limit at serialisation time (Postel's Law) - ([aec1186](https://github.com/crazyscot/qcp/commit/aec118641262405018bbfe84f2a3cae37a4d06a2))
+- Recursion follows symlinks - ([1ca3e00](https://github.com/crazyscot/qcp/commit/1ca3e0089890f57b3dd2e31b283347f67318c397))
+- Set readonly on Windows more reliably - ([814c611](https://github.com/crazyscot/qcp/commit/814c61141d24ca9333935fa06a651246aa0306e8))
+- Detect Windows absolute paths with a drive letter as local - ([57d994b](https://github.com/crazyscot/qcp/commit/57d994bc7b38c6dd27cd1d69f88eb4622b7659b3))
+- PUT behaviour when destination is a directory name - ([b85b1d0](https://github.com/crazyscot/qcp/commit/b85b1d078509e68352541beb2b4e9475cb10392c))
+
+### 📚 Documentation
+
+- Update CLI docs - ([7678310](https://github.com/crazyscot/qcp/commit/7678310db2bffa560994fc9f27efe0c40275a794))
+
+### ⚡ Performance
+
+- *(io)* Speed up payload copy - ([cb04ce9](https://github.com/crazyscot/qcp/commit/cb04ce967c07e8b3d846117ceb4ffea8f74fe079))
+
+### 🎨 Styling
+
+- Tidy up error handling - ([5ffdd0c](https://github.com/crazyscot/qcp/commit/5ffdd0c1f2b24d079da37b3fdb049c244c689a2f))
+- Do not report a 0 byte transfer - ([6dd22d6](https://github.com/crazyscot/qcp/commit/6dd22d65fa565a0fe502a87c9cc95c60540edd90))
+- Include comments in --list-features output; tidy up those comments - ([5af4b29](https://github.com/crazyscot/qcp/commit/5af4b2935a33bfa2764d52c3c747614c244146ea))
+- Add "file N of M" to the progress spinner - ([7b7f151](https://github.com/crazyscot/qcp/commit/7b7f1519c5dbc16fe19ef717d645c539f2f626bd))
+- Report individual file transfer speeds as they complete - ([bfbc4ed](https://github.com/crazyscot/qcp/commit/bfbc4ed1caa4bdc49332d4283567517fbce4a122))
+- Add a filename_width parameter to progress bars, so they align - ([11d91e3](https://github.com/crazyscot/qcp/commit/11d91e3d56926fcc1754074a8a10aa9c7a986d73))
+
+### 🧪 Testing
+
+- *(get_multi)* Test file times with --preserve - ([a80c4d6](https://github.com/crazyscot/qcp/commit/a80c4d6246b3cd7d8d2bce821dd03dd02fb76b3e))
+- *(get_multi)* Include a readonly file - ([bb7a417](https://github.com/crazyscot/qcp/commit/bb7a4171c86c00e26cdc82a51f33ef458bf849cd))
+- *(socket)* Skip bind_ipv6 when unsupported - ([fbf384c](https://github.com/crazyscot/qcp/commit/fbf384c398fdb60d20e963193a6d35bbf60a93af))
+- Update session command tests to use SessionCommand factory - ([23ba8b7](https://github.com/crazyscot/qcp/commit/23ba8b783605ac6a228d4638243c68c23fa152d6))
+- Refactor server/stream tests, add missing commands - ([46488d3](https://github.com/crazyscot/qcp/commit/46488d308d61e5de8c09d35619900b8b4de4c8fd))
+- Skip cosmetic stats functions in coverage analysis - ([2d01de2](https://github.com/crazyscot/qcp/commit/2d01de2a3efbe5c073b1bdc62f6e908d3a846237))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(doc)* Rework CLI doc autogeneration - ([44e18de](https://github.com/crazyscot/qcp/commit/44e18de624e1d639a67465f72c06770d5d0582cf))
+- *(doc)* Move autogenerated docs into qcp/misc/generated/ - ([5685f35](https://github.com/crazyscot/qcp/commit/5685f3527c3dc583d5689d72d6be79d9541c6e53))
+- Improve legibility of factory.rs - ([3428140](https://github.com/crazyscot/qcp/commit/3428140242ba3b58ba4af55f1931f961fbc37dc4))
+- Match scp behaviour over dotfiles; remove IncludeHiddenItems internal flag - ([18b8fce](https://github.com/crazyscot/qcp/commit/18b8fce200580793bc8014079579ba81d2eb80c9))
+- Process_recursive_get checks for compatibility sooner - ([ee81459](https://github.com/crazyscot/qcp/commit/ee814592df61cf9d7a2b9c594f676481b1bb450d))
+- Reduce duplicated code - ([b235272](https://github.com/crazyscot/qcp/commit/b23527256ad790b7e27bb36db159a42aa3ec9629))
+- Simplify Client.process_job_requests generics - ([c028228](https://github.com/crazyscot/qcp/commit/c028228ec315bd067f985f38c7578f5241da8236))
+- Create protocol preludes, split up session/command.rs - ([60ff04f](https://github.com/crazyscot/qcp/commit/60ff04fd8b9238491b539fb7ff454de73b394d58))
+- Introduce a recursion helper function for FileSpec - ([0cab891](https://github.com/crazyscot/qcp/commit/0cab891e88b049b4ab7bbcb8252bafd4aca26c3d))
+- Tidy up CLI --help output - ([8232f30](https://github.com/crazyscot/qcp/commit/8232f30ba99227d2d75c2d53ff3aae9bfcd3098d))
+- Add helper functions for job filenames - ([5f03c1d](https://github.com/crazyscot/qcp/commit/5f03c1d8fda4100cdcbfaaa5c933da037c67276c))
+
+### 🚜 Refactor
+
+- Progress_bar_for becomes a function of UI - ([abbf218](https://github.com/crazyscot/qcp/commit/abbf218ab0558b3f6ab986142d7b3233524b4f3d))
+- Use SessionCommandInner in send_impl; introduce UI struct - ([414683d](https://github.com/crazyscot/qcp/commit/414683d3873c633692e92b76e6d08142397a3fdf))
+- SessionCommand: move handler arguments into a SessionCommandInner struct - ([4bc2af3](https://github.com/crazyscot/qcp/commit/4bc2af3b0bcb93bad6de61660263c83fafeeea0c))
+- Consolidate command implementations, reduce boilerplate - ([6529b05](https://github.com/crazyscot/qcp/commit/6529b05342d309cc9c7323f09ff0623ca8c85d94))
+- Create client sender factory function - ([b49b95b](https://github.com/crazyscot/qcp/commit/b49b95bcf0cecb90b9f326b87dd17e15356d759c))
+- Create factory function for command handlers - ([542497a](https://github.com/crazyscot/qcp/commit/542497a04a5bce64e40694d3e78ecf7be3d5c291))
+- Deduplicate find_option() - ([9cf9b37](https://github.com/crazyscot/qcp/commit/9cf9b377457b5e6f26da784d3617a5109cc275d5))
+- Allow ListData to be split and rejoined; implement in Listing command - ([56fb709](https://github.com/crazyscot/qcp/commit/56fb70980d5241b52774870b62aa999a27a68a86))
+- Remove ListResponse from Response; replace with ListData - ([313a141](https://github.com/crazyscot/qcp/commit/313a1417d904477b3f6f0bbb680b15440ba9f8c2))
+- Introduce a partial-success return, for closer equivalence to scp - ([f0f9574](https://github.com/crazyscot/qcp/commit/f0f9574000c9c0d23222c0c9ffa9b71786a3d780))
+- Drop success field of RequestResult - ([2e5096e](https://github.com/crazyscot/qcp/commit/2e5096ed76943966773840dd7cf18bc044185d0a))
+- Client request running functions return Result<...> - ([7031abd](https://github.com/crazyscot/qcp/commit/7031abd5067806f2f24d9fc118aa55ff58b39f8f))
+- Rename ListContents to List in protocol / Listing in command handler - ([f1b51e0](https://github.com/crazyscot/qcp/commit/f1b51e0467c107a1d2ac6219fa8dc970910a551c))
+- SessionCommandImpl.send returns a RequestResult - ([d488117](https://github.com/crazyscot/qcp/commit/d48811732d8c06f075b30d86ca19e76971aa5aca))
+- Rename SessionPass to Phase, rename members - ([33aa8b4](https://github.com/crazyscot/qcp/commit/33aa8b4e44caebd2c9e833315af1bd8998ad1b9e))
+- Add optional Response to main_loop::RequestResult - ([d14bbf2](https://github.com/crazyscot/qcp/commit/d14bbf26808ae1accc7c9eb3e230919b827b6139))
+- Client.run_request takes a &CopyJobSpec - ([a485d1c](https://github.com/crazyscot/qcp/commit/a485d1cd647fc6ee3b80e41d14ab6ac85a54807a))
+- Client moves the negotiated items into a Negotiated struct - ([91d4c66](https://github.com/crazyscot/qcp/commit/91d4c66367ef0771a6a1b2bb0ec91979714279d6))
+- Process_job_requests no longer needs its spinner argument - ([45d285f](https://github.com/crazyscot/qcp/commit/45d285f4a1473940a929d896010cfb9989a1211a))
+- Refactor away Client.transfer_jobs - ([76fd11f](https://github.com/crazyscot/qcp/commit/76fd11f4dc7c0013270bbc0382295a2260f3cf73))
+- Make client.process_job_requests a member function - ([afe37c4](https://github.com/crazyscot/qcp/commit/afe37c43679dc556608582694e7708df530eb4ca))
+- Add directory flag to CopyJobSpec - ([a3ca515](https://github.com/crazyscot/qcp/commit/a3ca5154c81292789bb62f2e0a753b06f317cbc6))
+- Coalesce branching in CliArgs::jobspecs - ([88f0dce](https://github.com/crazyscot/qcp/commit/88f0dce2d169f0df78447f5cc468064baa3ce56f))
+- Add command handler helper functions, unify error/status conversions - ([9a082f4](https://github.com/crazyscot/qcp/commit/9a082f4f03b39b29554a9c8cdb09e134b988ceea))
+- SessionCommandImpl.send() takes a Parameters - ([31a90b7](https://github.com/crazyscot/qcp/commit/31a90b77bfeec4a404dca932d3df8097e428bb92))
+- Manage_request no longer needs a separate 'quiet' argument - ([f980a69](https://github.com/crazyscot/qcp/commit/f980a69b9f9d5a12e9b1a442bb562b5c43413ebb))
+- Move log_file up from Parameters to CliArgs, mark Parameters as Copy - ([d4a97f5](https://github.com/crazyscot/qcp/commit/d4a97f5b3771a77204cf1f9466f09050ae39b10f))
+- Move paths up from Parameters into CliArgs - ([29d94a6](https://github.com/crazyscot/qcp/commit/29d94a6fec25f5836812b49967b52455a810abe8))
+- Move path helper functions into util - ([948fda0](https://github.com/crazyscot/qcp/commit/948fda05fda8dae37ef64d7641023b313a66ddb4))
+- Remove unnecessary 'quiet' argument of Client::transfer_jobs - ([8e397f5](https://github.com/crazyscot/qcp/commit/8e397f52b5c7f2cb10f82b842946377bb2556636))
+- Deduplicate rate reporting - ([7c22444](https://github.com/crazyscot/qcp/commit/7c224447143466db6887b28448496335fdc54e86))
+
+### ◀️ Revert
+
+- Work around for warnings from cargo shear 1.9.0 - ([31f4cde](https://github.com/crazyscot/qcp/commit/31f4cde4820e2e0a7adc8559a495b921aa1a4f4c))
+
 
 ## [0.7.0](https://github.com/crazyscot/qcp/compare/v0.6.0...v0.7.0)
 
