@@ -16,20 +16,15 @@ high-performance remote file copy utility for long-distance internet connections
 
 ### News
 
-- **(New in 0.6)**
-  - Improved TLS performance in some use cases (auto-selected cipher suite, RawPublicKey authentication)
-- **(New in 0.5)**
+- **0.8** Added support for multi-source transfers and directory recursion
+- **0.6** Improved TLS performance in some use cases (auto-selected cipher suite, RawPublicKey authentication)
+- **0.5**
   - The default UDP buffer size is now 4MB. _This may cause warnings until you have updated your sysctl.conf._
   - New features: `--preserve`; `NewReno` congestion controller; `--list-features` meta feature
   - New tuning options: UDP buffer size, MTU, packet loss detection thresholds
-  - Removed some infrequently-used CLI short options
-- **(New in 0.4)**
-  - Added builds for [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html), [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html) and BSD
+- **0.4** Added builds for [OSX](https://docs.rs/qcp/latest/qcp/doc/osx/index.html), [Windows](https://docs.rs/qcp/latest/qcp/doc/windows/index.html) and BSD
   - New features: Explicit username with `-l <login-name>`; ssh subsystem mode
-- **(New in 0.3)**
-  - Negotiate transport setting by combining configuration from both sides
-  - Protocol encoding changed to [BARE], removing the dependency on capnp.
-  - **0.3 was a total compatibility break** with earlier versions.
+- **0.3 was a total compatibility break** with earlier versions.
 
 For a full list of changes, see the [changelog].
 

@@ -6,9 +6,9 @@ This project is currently in an experimental phase, signified by major version n
 
 | Versions | Supported                              |
 | :------: | -------------------------------------- |
-|  0.7.x   | :white_check_mark: Active              |
-|  0.6.x   | :sunset: Sunset (important fixes only) |
-|  < 0.6   | :x: No longer maintained               |
+|  0.8.x   | :white_check_mark: Active              |
+|  0.7.x   | :sunset: Sunset (important fixes only) |
+|  < 0.7   | :x: No longer maintained               |
 
 ## Reporting a Vulnerability
 
