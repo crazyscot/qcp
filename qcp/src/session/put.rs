@@ -320,18 +320,20 @@ mod test {
     ) -> Result<(Result<RequestResult>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2, preserve, false).unwrap();
-        let mut sender = SessionCommand::boxed(
-            pipe1,
-            PutHandler,
-            None,
-            Compatibility::Level(client_level),
-            Configuration::system_default(),
-            None,
-        );
         let params = Parameters {
             quiet: true,
             ..Default::default()
         };
+
+        let (mut sender, _) = crate::session::factory::client_sender(
+            pipe1,
+            &spec,
+            crate::session::factory::TransferPhase::Transfer,
+            Compatibility::Level(client_level),
+            &params,
+            None,
+            Configuration::system_default(),
+        );
         let sender_fut = sender.send(&spec, params);
         tokio::pin!(sender_fut);
 
@@ -345,36 +347,24 @@ mod test {
             return Ok((e, Ok(())));
         }
         let cmd = result.expect_left("sender should not have completed early")?;
-        let args = match cmd {
-            Command::Put(aa) => {
-                anyhow::ensure!(client_level == 1);
-                Put2Args {
-                    filename: aa.filename,
-                    options: vec![],
-                }
-            }
-            Command::Put2(aa) => {
-                anyhow::ensure!(client_level > 1);
-                aa
-            }
+
+        match cmd {
+            Command::Put(_) => anyhow::ensure!(client_level == 1),
+            Command::Put2(_) => anyhow::ensure!(client_level > 1),
             _ => bail!("expected Put or Put2 command"),
-        };
+        }
 
         // The second difference is that the receiver might send a failure response and shut down the stream.
         // This isn't well simulated by our test pipe.
-        let mut handler = SessionCommand::boxed(
+        let (mut handler, _) = crate::session::factory::command_handler(
             pipe2,
-            PutHandler,
-            Some(args),
+            cmd,
             Compatibility::Level(server_level),
             Configuration::system_default(),
-            None,
         );
         let (r1, r2) = tokio::join!(sender_fut, handler.handle());
         Ok((r1, r2))
     }
-
-    use crate::protocol::session::Put2Args;
 
     #[tokio::test]
     async fn put_success() -> Result<()> {

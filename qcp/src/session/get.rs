@@ -175,21 +175,17 @@ impl CommandHandler for GetHandler {
 #[cfg_attr(coverage_nightly, coverage(off))]
 /// Test helper functions exposed for qcp-unsafe-tests
 pub(crate) mod test_shared {
-    use anyhow::{Result, bail};
-    use either::Left;
+    use anyhow::Result;
 
     use crate::{
         Configuration, Parameters,
         client::CopyJobSpec,
         protocol::{
             control::Compatibility,
-            session::{Command, CommandParam, Get2Args},
+            session::Command,
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::{
-            RequestResult, SessionCommandImpl as _,
-            handler::{GetHandler, SessionCommand},
-        },
+        session::RequestResult,
     };
 
     /// Run a GET to completion, return the results from sender & receiver.
@@ -204,52 +200,36 @@ pub(crate) mod test_shared {
     ) -> Result<(Result<RequestResult>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
         let spec = CopyJobSpec::from_parts(file1, file2, preserve, false).unwrap();
-        let mut options = Vec::new();
-        if preserve {
-            options.push(CommandParam::PreserveMetadata.into());
-        }
-        let args = Get2Args {
-            filename: file1.to_string(),
-            options,
-        };
-        let mut sender = SessionCommand::boxed(
-            pipe1,
-            GetHandler,
-            Some(args),
-            Compatibility::Level(client_level),
-            Configuration::system_default(),
-            None,
-        );
         let params = Parameters {
             quiet: true,
             ..Default::default()
         };
+        let (mut sender, _) = crate::session::factory::client_sender(
+            pipe1,
+            &spec,
+            crate::session::factory::TransferPhase::Transfer,
+            Compatibility::Level(client_level),
+            &params,
+            None,
+            Configuration::system_default(),
+        );
         let fut = sender.send(&spec, params);
         tokio::pin!(fut);
 
-        let Left(result) = read_from_stream(&mut pipe2.recv, &mut fut).await else {
-            bail!("Get sender should not have bailed")
-        };
-        let args = match result? {
-            Command::Get(aa) => {
-                anyhow::ensure!(client_level == 1);
-                aa.into()
-            }
-            Command::Get2(aa) => {
-                anyhow::ensure!(client_level > 1);
-                aa
-            }
-            _ => bail!("expected Get or Get2 command"),
-        };
-
-        let mut handler = SessionCommand::boxed(
+        let result = read_from_stream(&mut pipe2.recv, &mut fut).await;
+        let cmd = result.expect_left("Get sender should not have bailed")?;
+        match cmd {
+            Command::Get(_) => anyhow::ensure!(client_level == 1),
+            Command::Get2(_) => anyhow::ensure!(client_level > 1),
+            _ => anyhow::bail!("expected Get or Get2 command, got {cmd:?}"),
+        }
+        let (mut handler, _) = crate::session::factory::command_handler(
             pipe2,
-            GetHandler,
-            Some(args),
+            cmd,
             Compatibility::Level(server_level),
             Configuration::system_default(),
-            None,
         );
+
         let (r1, r2) = tokio::join!(fut, handler.handle());
         Ok((r1, r2))
     }
@@ -416,7 +396,7 @@ mod test {
             file.set_times(times)?;
             drop(file);
 
-            let (r1, r2) = test_getx_main("hi", "remote:hi2", 2, 2, true).await?;
+            let (r1, r2) = test_getx_main("remote:hi", "hi2", 2, 2, true).await?;
             assert!(r1.is_ok());
             assert!(r2.is_ok());
 

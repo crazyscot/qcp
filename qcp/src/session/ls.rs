@@ -143,12 +143,10 @@ mod test {
     use std::path::MAIN_SEPARATOR;
 
     use crate::protocol::session::{ListData, prelude::*};
-    use crate::session::SessionCommandImpl as _;
     use crate::{
         Configuration, Parameters,
         client::CopyJobSpec,
         protocol::test_helpers::{new_test_plumbing, read_from_stream},
-        session::handler::{ListingHandler, SessionCommand},
     };
     use anyhow::{Result, bail, ensure};
     use littertray::LitterTray;
@@ -156,20 +154,23 @@ mod test {
 
     async fn test_ls_main(path: &str, recurse: bool, expect_success: bool) -> Result<ListData> {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let mut sender = SessionCommand::boxed(
-            pipe1,
-            ListingHandler,
-            None,
-            Compatibility::Level(4),
-            Configuration::system_default(),
-            None,
-        );
+
         let spec =
             CopyJobSpec::from_parts(path, &format!("desthost:{path}"), false, false).unwrap();
         let params = Parameters {
             recurse,
             ..Default::default()
         };
+        let (mut sender, _) = crate::session::factory::client_sender(
+            pipe1,
+            &spec,
+            crate::session::factory::TransferPhase::Pre,
+            Compatibility::Level(4),
+            &params,
+            None,
+            Configuration::system_default(),
+        );
+
         let result = {
             // this subscope forces sender_fut to unborrow sender.
             let sender_fut = sender.send(&spec, params);
@@ -177,17 +178,15 @@ mod test {
 
             let result = read_from_stream(&mut pipe2.recv, &mut sender_fut).await;
             let cmd = result.expect_left("sender should not have completed early")?;
-            let Command::List(args) = cmd else {
+            let Command::List(_) = cmd else {
                 bail!("expected CreateDirectory command");
             };
 
-            let mut handler = SessionCommand::boxed(
+            let (mut handler, _) = crate::session::factory::command_handler(
                 pipe2,
-                ListingHandler,
-                Some(args),
+                cmd,
                 Compatibility::Level(4),
                 Configuration::system_default(),
-                None,
             );
             let (r1, r2) = tokio::join!(sender_fut, handler.handle());
             r2.expect("handler should not have failed");

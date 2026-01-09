@@ -11,8 +11,8 @@ async fn test_umask(initial: u16, set_umask: u16) {
     let expected = initial & !set_umask;
 
     let src = "src";
+    let rsrc = "remote:src";
     let dest = "dest";
-    let rdest = "remote:dest";
     unsafe {
         // umask takes a u32 on Linux but a u16 on macos
         libc::umask(set_umask.into());
@@ -22,7 +22,7 @@ async fn test_umask(initial: u16, set_umask: u16) {
         let _ = tray.create_text(src, "hi")?;
         set_permissions(src, Permissions::from_mode(initial.into()))?;
 
-        let (r1, r2) = qcp::test_helpers::test_getx_main(src, rdest, 2, 2, false).await?;
+        let (r1, r2) = qcp::test_helpers::test_getx_main(rsrc, dest, 2, 2, false).await?;
         assert!(r1.is_ok());
         assert!(r2.is_ok());
 

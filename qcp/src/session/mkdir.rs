@@ -85,7 +85,6 @@ impl CommandHandler for CreateDirectoryHandler {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod test {
-    use super::CreateDirectoryHandler;
     use crate::{
         Configuration, Parameters,
         client::CopyJobSpec,
@@ -94,7 +93,7 @@ mod test {
             session::{Command, Status},
             test_helpers::{new_test_plumbing, read_from_stream},
         },
-        session::{RequestResult, SessionCommandImpl as _, handler::SessionCommand},
+        session::RequestResult,
     };
     use anyhow::{Result, bail};
     use littertray::LitterTray;
@@ -102,34 +101,35 @@ mod test {
 
     async fn test_mkdir_main(path: &str) -> Result<(Result<RequestResult>, Result<()>)> {
         let (pipe1, mut pipe2) = new_test_plumbing();
-        let spec =
-            CopyJobSpec::from_parts(path, &format!("somehost:{path}"), false, false).unwrap();
-        let mut sender = SessionCommand::boxed(
-            pipe1,
-            CreateDirectoryHandler,
-            None,
-            Compatibility::Level(4),
-            Configuration::system_default(),
-            None,
-        );
+        let spec = CopyJobSpec::from_parts(path, &format!("somehost:{path}"), false, true).unwrap();
+
         let params = Parameters::default();
+        let (mut sender, _) = crate::session::factory::client_sender(
+            pipe1,
+            &spec,
+            crate::session::factory::TransferPhase::Transfer,
+            Compatibility::Level(4),
+            &params,
+            None,
+            Configuration::system_default(),
+        );
+
         let sender_fut = sender.send(&spec, params);
         tokio::pin!(sender_fut);
 
         let result = read_from_stream(&mut pipe2.recv, &mut sender_fut).await;
         let cmd = result.expect_left("sender should not have completed early")?;
-        let Command::CreateDirectory(args) = cmd else {
+        let Command::CreateDirectory(ref _args) = cmd else {
             bail!("expected CreateDirectory command");
         };
 
-        let mut handler = SessionCommand::boxed(
+        let (mut handler, _) = crate::session::factory::command_handler(
             pipe2,
-            CreateDirectoryHandler,
-            Some(args),
+            cmd,
             Compatibility::Level(4),
             Configuration::system_default(),
-            None,
         );
+
         let (r1, r2) = tokio::join!(sender_fut, handler.handle());
         Ok((r1, r2))
     }
