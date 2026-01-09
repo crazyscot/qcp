@@ -15,7 +15,7 @@ use crate::protocol::session::prelude::*;
 use crate::protocol::session::{
     FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Get2Args, GetArgs,
 };
-use crate::session::common::{FindOption as _, progress_bar_for};
+use crate::session::common::FindOption as _;
 use crate::session::handler::{CommandHandler, SessionCommandInner};
 use crate::session::{CommandStats, RequestResult, error_and_return};
 
@@ -73,14 +73,10 @@ impl CommandHandler for GetHandler {
         // Unfortunately, the file data is already well in flight at this point, leading to a flood of packets
         // that causes the estimated rate to spike unhelpfully at the beginning of the transfer.
         // Therefore we incorporate time in flight so far to get the estimate closer to reality.
-        let progress_bar = progress_bar_for(
-            inner.display(),
-            job,
-            inner.filename_width(),
-            header.size.0 + 17,
-            params.quiet,
-        )?
-        .with_elapsed(Instant::now().duration_since(real_start));
+        let progress_bar = inner
+            .ui
+            .progress_bar_for(job, header.size.0 + 17, params.quiet)?
+            .with_elapsed(Instant::now().duration_since(real_start));
 
         let mut meter = crate::client::meter::InstaMeterRunner::new(
             &progress_bar,

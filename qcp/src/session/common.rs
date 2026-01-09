@@ -1,18 +1,13 @@
 //! Common functions within the session protocol
 // (c) 2024-5 Ross Younger
 
-use anyhow::Result;
-use indicatif::{MultiProgress, ProgressBar, ProgressFinish};
 use std::io::ErrorKind;
 use tokio::io::AsyncWriteExt;
 
-use crate::{
-    client::{CopyJobSpec, progress::style_for},
-    protocol::{
-        common::ProtocolMessage as _,
-        session::{Response, ResponseV1, Status},
-        {TaggedData, Variant},
-    },
+use crate::protocol::{
+    common::ProtocolMessage as _,
+    session::{Response, ResponseV1, Status},
+    {TaggedData, Variant},
 };
 
 /// Sends a response message
@@ -67,32 +62,6 @@ where
     send_response(send, st, msg.as_deref()).await
 }
 
-/// Adds a progress bar to the stack (in `MultiProgress`) for the current job
-pub(super) fn progress_bar_for(
-    display: &MultiProgress,
-    job: &CopyJobSpec,
-    filename_width: usize,
-    steps: u64,
-    quiet: bool,
-) -> Result<ProgressBar> {
-    if quiet {
-        return Ok(ProgressBar::hidden());
-    }
-    let name = format!(
-        "{:width$}",
-        job.display_filename().to_string_lossy(),
-        width = filename_width
-    );
-    Ok(display.add(
-        ProgressBar::new(steps)
-            .with_style(indicatif::ProgressStyle::with_template(style_for(
-                filename_width,
-            ))?)
-            .with_message(name)
-            .with_finish(ProgressFinish::Abandon),
-    ))
-}
-
 /// Extension trait for finding options in a tagged data list
 pub(crate) trait FindOption {
     /// Find an option by tag, returning the associated variant data if found
@@ -109,18 +78,13 @@ impl FindOption for Vec<TaggedData<crate::protocol::session::CommandParam>> {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
+    use crate::protocol::common::ProtocolMessage as _;
+    use crate::protocol::session::{Response, ResponseV1, Status};
+    use pretty_assertions::assert_eq;
     use std::io::{self, Cursor};
     use std::pin::Pin;
     use std::task::{Context, Poll};
-
-    use indicatif::MultiProgress;
-    use pretty_assertions::assert_eq;
     use tokio::io::AsyncWrite;
-
-    use super::progress_bar_for;
-    use crate::client::{CopyJobSpec, FileSpec};
-    use crate::protocol::common::ProtocolMessage as _;
-    use crate::protocol::session::{Response, ResponseV1, Status};
 
     struct TestWriter {
         written: Vec<u8>,
@@ -169,36 +133,6 @@ mod tests {
                 Some("hello".to_string())
             ))
         );
-    }
-
-    #[test]
-    fn test_progress_bar_for() {
-        let display = MultiProgress::new();
-        let job = CopyJobSpec {
-            source: FileSpec {
-                filename: "test_file.txt".to_string(),
-                ..Default::default()
-            },
-            destination: FileSpec {
-                filename: "dest.txt".to_string(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        // Test quiet mode
-        let pb = progress_bar_for(&display, &job, 12, 100, true).unwrap();
-        assert!(pb.is_hidden());
-        assert_eq!(pb.length(), None);
-        assert_eq!(pb.message(), "");
-
-        // Test visible mode
-        let pb = progress_bar_for(&display, &job, 12, 100, false).unwrap();
-        // Checking is_hidden() isn't sound in a CI environment; if stderr isn't to a terminal, is_hidden() always returns true.
-        // This can be provoked by rusty_fork_test.
-        // But we can still assert about the length and message, which do work as expected (cf. the hidden progress bar above)
-        assert_eq!(pb.length(), Some(100));
-        assert_eq!(pb.message(), "test_file.txt");
     }
 
     #[test]

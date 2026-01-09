@@ -14,7 +14,6 @@ use crate::protocol::session::{
     Command, CommandParam, FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Put2Args, PutArgs,
     Response, Status,
 };
-use crate::session::common::progress_bar_for;
 use crate::session::handler::SessionCommandInner;
 use crate::session::{RequestResult, error_and_return, handler::CommandHandler};
 
@@ -48,13 +47,7 @@ impl CommandHandler for PutHandler {
         // Marshalled commands are currently 48 bytes + filename length
         // File headers are currently 36 + filename length; Trailers are 16 bytes.
         let steps = payload_len + 48 + 36 + 16 + 2 * dest_filename.len() as u64;
-        let progress_bar = progress_bar_for(
-            inner.display(),
-            job,
-            inner.filename_width(),
-            steps,
-            params.quiet,
-        )?;
+        let progress_bar = inner.ui.progress_bar_for(job, steps, params.quiet)?;
         let mut meter = crate::client::meter::InstaMeterRunner::new(
             &progress_bar,
             Some(inner.spinner().clone()),
