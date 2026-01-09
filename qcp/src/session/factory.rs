@@ -47,6 +47,20 @@ pub(crate) fn client_sender<'a, S: SendingStream + 'static, R: ReceivingStream +
     ui: Option<UI>,
     config: &'a crate::config::Configuration,
 ) -> (Box<dyn SessionCommandImpl + 'a>, SpanInfo) {
+    macro_rules! xreturn {
+        ($cmd:expr, $name:expr, $args:expr, $primary_arg:expr) => {
+            (
+                SessionCommand::boxed(stream, $cmd, $args, compat, config, ui),
+                SpanInfo {
+                    name: $name,
+                    primary_arg: $primary_arg,
+                },
+            )
+        };
+    }
+
+    let src = &copy_spec.source.filename;
+    let dest = &copy_spec.destination.filename;
     match phase {
         TransferPhase::Pre => {
             // Pre-transfer: list remote directory
@@ -55,23 +69,11 @@ pub(crate) fn client_sender<'a, S: SendingStream + 'static, R: ReceivingStream +
             if params.recurse {
                 options.push(CommandParam::Recurse.into());
             }
-            (
-                SessionCommand::boxed(
-                    stream,
-                    ListingHandler,
-                    Some(ListArgs {
-                        path: path.clone(),
-                        options,
-                    }),
-                    compat,
-                    config,
-                    ui,
-                ),
-                SpanInfo {
-                    name: "LIST",
-                    primary_arg: path,
-                },
-            )
+            let args = Some(ListArgs {
+                path: path.clone(),
+                options,
+            });
+            xreturn!(ListingHandler, "LIST", args, path)
         }
         TransferPhase::Transfer => {
             if copy_spec.source.user_at_host.is_some() {
@@ -81,43 +83,18 @@ pub(crate) fn client_sender<'a, S: SendingStream + 'static, R: ReceivingStream +
                 if copy_spec.preserve {
                     args.options.push(CommandParam::PreserveMetadata.into());
                 }
-                (
-                    SessionCommand::boxed(stream, GetHandler, Some(args), compat, config, ui),
-                    SpanInfo {
-                        name: "GETx",
-                        primary_arg: copy_spec.source.filename.clone(),
-                    },
-                )
+                xreturn!(GetHandler, "GETx", Some(args), src.clone())
             } else if copy_spec.directory {
                 // Local source, directory: MKDIR
-                (
-                    SessionCommand::boxed(stream, CreateDirectoryHandler, None, compat, config, ui),
-                    SpanInfo {
-                        name: "MKDIR",
-                        primary_arg: copy_spec.destination.filename.clone(),
-                    },
-                )
+                xreturn!(CreateDirectoryHandler, "MKDIR", None, dest.clone())
             } else {
                 // Local source, file: PUT
-                (
-                    SessionCommand::boxed(stream, PutHandler, None, compat, config, ui),
-                    SpanInfo {
-                        name: "PUTx",
-                        primary_arg: copy_spec.source.filename.clone(),
-                    },
-                )
+                xreturn!(PutHandler, "PUT", None, src.clone())
             }
         }
         TransferPhase::Post => {
             // Post-transfer: set metadata on remote directory
-            let destination_filename = copy_spec.destination.filename.clone();
-            (
-                SessionCommand::boxed(stream, SetMetadataHandler, None, compat, config, ui),
-                SpanInfo {
-                    name: "SETMETA",
-                    primary_arg: destination_filename,
-                },
-            )
+            xreturn!(SetMetadataHandler, "SETMETA", None, dest.clone())
         }
     }
 }
@@ -129,97 +106,56 @@ pub(crate) fn command_handler<'a, S: SendingStream + 'static, R: ReceivingStream
     compat: Compatibility,
     config: &'a crate::config::Configuration,
 ) -> (Box<dyn SessionCommandImpl + 'a>, SpanInfo) {
+    macro_rules! xreturn {
+        ($cmd:expr, $name:expr, $args:expr, $primary_arg:expr) => {
+            (
+                SessionCommand::boxed(stream, $cmd, $args, compat, config, None),
+                SpanInfo {
+                    name: $name,
+                    primary_arg: $primary_arg,
+                },
+            )
+        };
+    }
+
     let (handler, span_info): (Box<dyn SessionCommandImpl>, SpanInfo) = match command {
-        Command::Get(GetArgs { filename }) => (
-            SessionCommand::boxed(
-                stream,
-                GetHandler,
-                Some(Get2Args {
-                    filename: filename.clone(),
-                    options: vec![],
-                }),
-                compat,
-                config,
-                None,
-            ),
-            SpanInfo {
-                name: "GET",
-                primary_arg: filename,
-            },
+        Command::Get(GetArgs { filename }) => xreturn!(
+            GetHandler,
+            "GET",
+            Some(Get2Args {
+                filename: filename.clone(),
+                options: vec![],
+            }),
+            filename.clone()
         ),
         Command::Get2(args) => {
             let filename = args.filename.clone();
-            (
-                SessionCommand::boxed(stream, GetHandler, Some(args), compat, config, None),
-                SpanInfo {
-                    name: "GET2",
-                    primary_arg: filename,
-                },
-            )
+            xreturn!(GetHandler, "GET2", Some(args), filename)
         }
-        Command::Put(PutArgs { filename }) => (
-            SessionCommand::boxed(
-                stream,
-                PutHandler,
-                Some(Put2Args {
-                    filename: filename.clone(),
-                    options: vec![],
-                }),
-                compat,
-                config,
-                None,
-            ),
-            SpanInfo {
-                name: "PUT",
-                primary_arg: filename,
-            },
+        Command::Put(PutArgs { filename }) => xreturn!(
+            PutHandler,
+            "PUT",
+            Some(Put2Args {
+                filename: filename.clone(),
+                options: vec![],
+            }),
+            filename.clone()
         ),
         Command::Put2(args) => {
             let filename = args.filename.clone();
-            (
-                SessionCommand::boxed(stream, PutHandler, Some(args), compat, config, None),
-                SpanInfo {
-                    name: "PUT2",
-                    primary_arg: filename,
-                },
-            )
+            xreturn!(PutHandler, "PUT2", Some(args), filename)
         }
         Command::CreateDirectory(args) => {
             let dir_name = args.dir_name.clone();
-            (
-                SessionCommand::boxed(
-                    stream,
-                    CreateDirectoryHandler,
-                    Some(args),
-                    compat,
-                    config,
-                    None,
-                ),
-                SpanInfo {
-                    name: "MKDIR",
-                    primary_arg: dir_name,
-                },
-            )
+            xreturn!(CreateDirectoryHandler, "MKDIR", Some(args), dir_name)
         }
         Command::SetMetadata(args) => {
             let path = args.path.clone();
-            (
-                SessionCommand::boxed(stream, SetMetadataHandler, Some(args), compat, config, None),
-                SpanInfo {
-                    name: "SETMETA",
-                    primary_arg: path,
-                },
-            )
+            xreturn!(SetMetadataHandler, "SETMETA", Some(args), path)
         }
         Command::List(args) => {
             let path = args.path.clone();
-            (
-                SessionCommand::boxed(stream, ListingHandler, Some(args), compat, config, None),
-                SpanInfo {
-                    name: "LS",
-                    primary_arg: path,
-                },
-            )
+            xreturn!(ListingHandler, "LS", Some(args), path)
         }
     };
     (handler, span_info)
