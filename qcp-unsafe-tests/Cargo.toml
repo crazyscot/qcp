@@ -20,7 +20,7 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 
 [target.'cfg(unix)'.dev-dependencies]
-libc = "0.2.178"
+libc = { workspace = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(coverage_nightly)'] }
