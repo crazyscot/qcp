@@ -68,13 +68,18 @@
 //!   * Play with the initial congestion window if you like. Sometimes it helps, but it is very situation specific.
 //!     I have generally found it helps when the end-to-end network is quiet and there is little congestion,
 //!     but it hinders when the network is busy.
-//! * Watch out for either end becoming CPU bound. One of my test machines on my local LAN was unable to move more than 7MB/s. It turned out that its CPU was so old it didn't have on-silicon AES. If that applies to you, unfortunately you're not going to be able to move data any faster without a hardware upgrade.
-//!   (But [#14](https://github.com/crazyscot/qcp/issues/14) might help a bit.)
-//! * If you want to copy multiple files to/from the same remote machine, ssh connection multiplexing will save you a few seconds for each. (You can visualise the difference with the `--profile` option.)
+//! * Watch out for either end becoming CPU bound. One of my test machines on my local LAN was unable to move more than 7MB/s. It turned out that its CPU was so old it didn't have on-silicon AES.
+//!   If that applies to you, [#14](https://github.com/crazyscot/qcp/issues/14) might help a bit,
+//!   but unfortunately you're not going to be able to move data any faster without a hardware upgrade.
+//! * If you want to make multiple QCP connections to the same remote machine, ssh connection multiplexing will save you a few seconds for each.
+//!   (You can visualise the difference with the `--profile` option.)
+//!   Since 0.8, prefer multi-file transfer mode where possible.
 //! * The `--debug` option will report additional information that might help you diagnose configuration issues.
 //! * If you build qcp yourself, make sure to build in release mode (`cargo build --release --locked`).
-//!   I found unoptimised builds tend to max out around 320MB/s on my desktop PC, but release builds can sustain 1Gbit
-//!   if the network supports it.
+//!   On my current desktop PC, debug mode takes about 70% of one core on a 1Gbit LAN transfer, but release mode takes only 15%.
+//!   My previous desktop PC could only sustain around 40MB/s in debug mode on the same network.
+//! * Make sure the drives at either end are up to the speed you want.  Mechanical HDDs are going to have a
+//!   hard time keeping up with modern networks, though OS write cacheing will help (assuming you have enough RAM).
 //! * As of v0.8, the new multi-file and recursive transfer modes don't always perform brilliantly with lots of small files.
 //!   (With longer RTTs they do out-perform scp, but not by much.) In some cases it will be more efficient to aggregate smaller files into an archive.
 //!
