@@ -197,7 +197,8 @@ mod test {
     #[cfg(target_os = "macos")]
     const HOME_COMMON: &str = "/Users/";
     #[cfg(not(target_os = "macos"))]
-    const HOME_COMMON: &str = "/home/";
+    const HOME_COMMON: &str = "/home";
+    // The lack of trailing slash is deliberate; nix builders run with a HOME of /homeless-shelter/
 
     #[test]
     fn config_paths() {
@@ -208,7 +209,7 @@ mod test {
                 .contains("/etc/ssh/ssh_config")
         );
         let s = Platform::user_ssh_config().unwrap();
-        assert!(s.to_string_lossy().contains(HOME_COMMON));
+        assert!(s.to_string_lossy().starts_with(HOME_COMMON));
         let q = Platform::system_config_path().unwrap();
         assert!(q.to_string_lossy().starts_with("/etc/"));
 
