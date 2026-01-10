@@ -353,6 +353,7 @@ mod test {
     #[test]
     fn test_create_layers_with_invalid_level() {
         // N.B. This test expects RUST_LOG to be unset!
+        // In a Nix build, it is set to the empty string.
         let result = setup_inner(
             "invalid_level",
             ConsoleTraceType::None,

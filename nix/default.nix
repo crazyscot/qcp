@@ -32,22 +32,20 @@ rustPlatform.buildRustPackage (finalAttrs: {
     installManPage $src/qcp/misc/generated/qcp.1 $src/qcp/misc/generated/qcp_config.5
     install -Dm644 $src/qcp/misc/20-qcp.conf $out/etc/sysctl.d/20-qcp.conf
     install -Dm644 $src/qcp/misc/qcp.conf $out/etc/qcp.conf
+    rm $out/bin/xtask
   '';
 
   checkFlags =
     [
       # SSH home directory tests will not work in nix sandbox
-      "--skip=config::ssh::includes::test::home_dir"
-      "--skip=control::process::test::ssh_no_such_host"
-      # Attempts to reach outside of the nix sandbox
-      "--skip=os::unix::test::config_paths"
+      "--skip=config::ssh::includes::test::home_dir_other_user"
       # Permission checks in the sandbox appear to always fail
       "--skip=session::get::test::permission_denied"
       # Multiple network tests will fail in sandbox
       "--skip=client::main_loop::test::endpoint_create_close"
       "--skip=util::dns::tests::ipv4"
       "--skip=util::dns::tests::ipv6"
-      # Tracing attempts to access stdout and angers the sandbox
+      # Nix builds with RUST_LOG set, which is not compatible with this test
       "--skip=util::tracing::test::test_create_layers_with_invalid_level"
     ]
     ++ lib.optionals stdenv.buildPlatform.isDarwin [

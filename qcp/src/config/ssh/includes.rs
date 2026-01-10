@@ -120,6 +120,7 @@ mod test {
     #[test]
     fn home_dir_other_user() {
         // tricky case. a username.
+        // This doesn't work on Nix build tests, as they don't set USER.
         let user = std::env::var("USER").expect("this test requires a USER");
         assert!(!user.is_empty());
         let home = dirs::home_dir().expect("this test requires a home directory");
