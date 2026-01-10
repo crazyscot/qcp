@@ -150,7 +150,7 @@ fn list_features_data() -> String {
     // | <longest feature name> | Level | <AVAILABLE SPACE> |
     // => space for notes column = terminal_width - 15 - (length of longest feature name)
 
-    let last_column_avail = terminal_width - 15 - longest_name;
+    let last_column_avail = terminal_width.saturating_sub(15 + longest_name);
 
     let _ = tbl
         .with(crate::cli::styles::TABLE_STYLE.clone())
