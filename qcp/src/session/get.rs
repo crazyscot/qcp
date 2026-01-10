@@ -313,7 +313,7 @@ mod test {
         .await
     }
 
-    #[cfg(linux)] // TODO: Make more cross-platform
+    #[cfg(unix)]
     #[tokio::test]
     async fn permission_denied() -> Result<()> {
         LitterTray::try_with_async(async |tray| {
