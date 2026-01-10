@@ -177,15 +177,16 @@ pub(crate) fn setup(
     time_format: TimeFormat,
     ansi_colours: bool,
 ) -> anyhow::Result<()> {
-    if is_initialized() {
+    if TRACING_INITIALIZED
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
         tracing::warn!("tracing::setup called a second time (ignoring)");
         return Ok(());
     }
-    TRACING_INITIALIZED.store(true, Ordering::Relaxed);
 
     let layers = setup_inner(trace_level, display, log_file, time_format, ansi_colours)?;
-    tracing_subscriber::registry().with(layers).init();
-
+    tracing_subscriber::registry().with(layers).try_init()?;
     Ok(())
 }
 

@@ -112,14 +112,14 @@ struct LocalTracing {}
 #[fixture]
 fn shared_setup_tracing() -> LocalTracing {
     use crate::util::{ConsoleTraceType, TimeFormat, setup_tracing};
-    setup_tracing(
+    // Tracing is not under test here, so we don't care if setup fails.
+    let _ = setup_tracing(
         "debug",
         ConsoleTraceType::Standard,
         None,
         TimeFormat::default(),
         true,
-    )
-    .unwrap();
+    );
     LocalTracing {}
 }
 
