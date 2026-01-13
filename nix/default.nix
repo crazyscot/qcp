@@ -10,7 +10,7 @@
 
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "qcp";
-  version = "0.6.0";
+  version = "0.8.1";
 
   # Tags required to fix the binary version
   GITHUB_REF_TYPE = "tag";
@@ -20,11 +20,10 @@ rustPlatform.buildRustPackage (finalAttrs: {
     owner = "crazyscot";
     repo = "qcp";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-E5pQoO0uUK+G/ghEv50ELJDHv/QNP81WMPGtGdKN5qU=";
+    hash = "sha256-PdbzBegBTwgI4L0aP9Bf4yQO6zJkNCh7pWcaB+SZHXE=";
   };
 
-  useFetchCargoVendor = true;
-  cargoHash = "sha256-4kMYYFJS0TxuvHMxiB/L58LUjnxSbUoF9DhLTYv/RUc=";
+  cargoHash = "sha256-wHsxOFq1RIuvS5sSxIbNiyRQdXdkXMTnumUz4ii9b/g=";
 
   nativeBuildInputs = [ installShellFiles ];
 
@@ -34,6 +33,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     install -Dm644 $src/qcp/misc/qcp.conf $out/etc/qcp.conf
     rm $out/bin/xtask
   '';
+
 
   checkFlags =
     [
