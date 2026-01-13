@@ -313,11 +313,14 @@ mod test {
         .await
     }
 
-    #[cfg(linux)] // TODO: Make more cross-platform
+    #[cfg(unix)]
     #[tokio::test]
     async fn permission_denied() -> Result<()> {
-        LitterTray::try_with_async(async |_tray| {
-            let (r1, r2) = test_get_main("s:/etc/shadow", "file2").await?;
+        LitterTray::try_with_async(async |tray| {
+            use std::fs::{Permissions, set_permissions};
+            let _ = tray.create_text("nope", "nope");
+            set_permissions("nope", Permissions::from_mode(0o0))?;
+            let (r1, r2) = test_get_main("s:nope", "file2").await?;
             assert_eq!(Status::from(r1), Status::IncorrectPermissions);
             assert!(r2.is_ok());
             Ok(())

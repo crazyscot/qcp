@@ -141,7 +141,7 @@ where
     }
     eprintln!("Fake client will echo -e {encoded}");
 
-    let mut process = tokio::process::Command::new("/bin/echo");
+    let mut process = tokio::process::Command::new("echo");
     let _ = process.args(["-en", &encoded]);
     ProcessWrapper::spawn(process).expect("failed to start fake ssh client")
 }

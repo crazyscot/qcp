@@ -272,7 +272,7 @@ See also the [issues list].
 [config]: https://docs.rs/qcp/latest/qcp/config/index.html
 [protocol]: https://docs.rs/qcp/latest/qcp/protocol/index.html
 [performance]: https://docs.rs/qcp/latest/qcp/doc/performance/index.html
-[building a configuration]: https://docs.rs/qcp/latest/qcp/doc/performance/index.html#building-a-configuration
+[building a configuration]: https://docs.rs/qcp/latest/qcp/config/index.html#building-a-configuration
 [Github sponsorship]: https://github.com/sponsors/crazyscot?frequency=recurring&sponsor=crazyscot
 [BARE]: https://www.ietf.org/archive/id/draft-devault-bare-11.html
 [changelog]: https://github.com/crazyscot/qcp/blob/HEAD/CHANGELOG.md

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1](https://github.com/crazyscot/qcp/compare/v0.8.0...v0.8.1)
+
+### 🐛 Bug Fixes
+
+- *(cli)* Don't crash if terminal width detection gives an implausibly small number - ([fe92b49](https://github.com/crazyscot/qcp/commit/fe92b49147681d7979595422ce37c94822518c10))
+- *(test)* Setup_tracing concurrency protection - ([41c7fa2](https://github.com/crazyscot/qcp/commit/41c7fa29ce1b78d7f8bf43252ca0d50be65a8272))
+- *(test)* Rework permission-denied test to not rely on /etc/shadow being there - ([5e8e457](https://github.com/crazyscot/qcp/commit/5e8e45766f5f359a81c28ae593c6a8fff18b567b))
+- *(test)* Non-portable assumption about $HOME - ([64bf709](https://github.com/crazyscot/qcp/commit/64bf70971d3139bcdc31243a5017613d37cc8780))
+- *(test)* Use echo binary from path - ([8b81af1](https://github.com/crazyscot/qcp/commit/8b81af136fa633ead10dfc6ff7d31939e5ae5afd))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(nix)* Update package config - ([1c1aff3](https://github.com/crazyscot/qcp/commit/1c1aff397e5c2c20987399d3181ede5f9e3b878e))
+- Fix broken link in README - ([d51dc54](https://github.com/crazyscot/qcp/commit/d51dc54016398a466f43926082a2aee66c82b21f))
+
+
 ## [0.8.0](https://github.com/crazyscot/qcp/compare/v0.7.0...v0.8.0)
 
 ### ⛰️ Features
