@@ -79,7 +79,7 @@
 //!   On my current desktop PC, debug mode takes about 70% of one core on a 1Gbit LAN transfer, but release mode takes only 15%.
 //!   My previous desktop PC could only sustain around 40MB/s in debug mode on the same network.
 //! * Make sure the drives at either end are up to the speed you want.  Mechanical HDDs are going to have a
-//!   hard time keeping up with modern networks, though OS write cacheing will help (assuming you have enough RAM).
+//!   hard time keeping up with modern networks, though OS write caching will help (assuming you have enough RAM).
 //! * As of v0.8, the new multi-file and recursive transfer modes don't always perform brilliantly with lots of small files.
 //!   (With longer RTTs they do out-perform scp, but not by much.) In some cases it will be more efficient to aggregate smaller files into an archive.
 //!
