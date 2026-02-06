@@ -357,7 +357,7 @@ mod tests {
     #[test]
     fn deserialize_junk_over_long() {
         // Edge cases above 2^32, to trap any signedness issues
-        // (but without allocing a 4GB vec, i.e. more like a fuzz test)
+        // (but without allocating a 4GB vec, i.e. more like a fuzz test)
         for testcase in &[1u32 << 31, 4_294_967_295 /* 2^32 - 1 */] {
             let buf = MessageHeader { size: *testcase }.to_vec().unwrap();
             let _ = TestMessage::from_reader_framed(&mut Cursor::new(buf))
