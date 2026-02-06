@@ -234,4 +234,3 @@ ignored-paths = [
   "src/doc/troubleshooting.rs",
   "src/os/osx.rs",
 ]
-#
