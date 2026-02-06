@@ -10,7 +10,7 @@ anstyle = { version = "1.0.13", default-features = false }
 anyhow = "1.0.100"
 assertables = "9.8.3"
 async-trait = "0.1.89"
-bytes = "1.11.0"
+bytes = "1.11.1"
 cargo_toml = "0.22.3"
 cfg-if = "1.0.4"
 cfg_aliases = "0.2.1"
