@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2](https://github.com/crazyscot/qcp/compare/v0.8.1...v0.8.2)
+
+### 🛡️ Security
+
+- *(deps)* Bump time from 0.3.44 to 0.3.47 ([#200](https://github.com/crazyscot/qcp/pull/200)) - ([67250a7](https://github.com/crazyscot/qcp/commit/67250a7d9d2a19215beceb97342a7a35f472dd34))
+- *(deps)* Bump bytes from 1.11.0 to 1.11.1 ([#199](https://github.com/crazyscot/qcp/pull/199)) - ([5b89da2](https://github.com/crazyscot/qcp/commit/5b89da2bf4b8b5be08571084773ce963367fb8e7))
+
+### 📚 Documentation
+
+- Update performance tuning notes - ([9b9806d](https://github.com/crazyscot/qcp/commit/9b9806da4e9431aa5a030fc63682edbd31be662d))
+
+### 🧪 Testing
+
+- Get::permission_denied now runs on any unix build - ([1a64cba](https://github.com/crazyscot/qcp/commit/1a64cba8954627797ca6c6ac494dac13a57c8d00))
+
+
 ## [0.8.1](https://github.com/crazyscot/qcp/compare/v0.8.0...v0.8.1)
 
 ### 🐛 Bug Fixes
