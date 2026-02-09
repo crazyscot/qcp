@@ -51,6 +51,7 @@ The recommended fix for this is:
   - `release-plz release-pr --git-token $GITHUB_QCP_TOKEN`
   - _if this token has expired, you'll need to generate a fresh one; walk back through the release-plz setup steps_
 - Review changelog, edit if necessary.
+  - Curveball: Commits that only touch workspace files are not included. If they need to be, either add them manually or edit the commit to touch something within `qcp/`.
 - _(Optional)_ `release-plz set-version qcp@<version>` to override the automatic version rules
 - Merge the PR (rebase strategy preferred)
 - Delete the PR branch
