@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3](https://github.com/crazyscot/qcp/compare/v0.8.2...v0.8.3)
+
+### ⚙️ Miscellaneous Tasks
+
+- Update Cargo.toml dependencies - ([0000000](https://github.com/crazyscot/qcp/commit/0000000))
+
+
 ## [0.8.2](https://github.com/crazyscot/qcp/compare/v0.8.1...v0.8.2)
 
 ### 🛡️ Security
