@@ -37,6 +37,8 @@ The recommended fix for this is:
 ### Creating a release
 
 - Check and update dependencies as required.
+  - Check whether the version of `derive_deftly` has changed. If so, update the call to `derive_deftly::template_export_semver_check` in qcp/src/lib.rs
+  - N.B. Dependency updates that only touch the workspace `Cargo.toml` and `Cargo.lock` are not reported by release-plz. If it's important to report (say a security update), recut so the commit touches something in the `qcp` package.
 - `cargo semver-checks` will tell you whether there are any breaking API changes that prompt a version bump.
 - Confirm top-level docs have been updated for any changes since the last release.
 - Update SECURITY.md if this is a new major or minor release.
