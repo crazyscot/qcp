@@ -6,7 +6,7 @@ resolver = "2"
 edition = "2024"
 
 [workspace.dependencies]
-anstyle = { version = "1.0.13", default-features = false }
+anstyle = { version = "1.0.14", default-features = false }
 anyhow = "1.0.102"
 assertables = "9.8.5"
 async-trait = "0.1.89"
@@ -15,12 +15,12 @@ cargo_toml = "0.22.3"
 cfg-if = "1.0.4"
 cfg_aliases = "0.2.1"
 chrono = { version = "0.4.44", default-features = false }
-clap = { version = "4.5.60", features = ["wrap_help", "derive", "cargo", "string", "deprecated"] }
+clap = { version = "4.6.0", features = ["wrap_help", "derive", "cargo", "string", "deprecated"] }
 clap-markdown = "0.1.5"
-clap_mangen = "0.2.31"
-colorchoice = "1.0.4"
-console = { version = "0.16.2" }
-derive-deftly = "1.6.0"
+clap_mangen = "0.3.0"
+colorchoice = "1.0.5"
+console = { version = "0.16.3" }
+derive-deftly = "1.10.0"
 derive_more = "2.1.1"
 dirs = "6.0.0"
 document-features = "0.2.12"
@@ -43,7 +43,7 @@ indicatif = "0.18.4"
 int-enum = "1.2.0"
 jzon = "0.12.5"
 lessify = "0.5.0"
-libc = "0.2.182"
+libc = "0.2.183"
 littertray = "1.1.0"
 mimalloc = "0.1.48"
 mockall = "0.14.0"
@@ -55,7 +55,7 @@ pretty_assertions = "1.4.1"
 qcp = { path = "qcp" }
 quinn = { version = "0.11.9", default-features = false }
 rcgen = "0.14.7"
-roff = "1.0.0"
+roff = "1.1.1"
 rstest = "0.26.1"
 rustix = "1.1.4"
 rustls = { version = "0.23.37", default-features = false }
@@ -71,13 +71,13 @@ struct-field-names-as-array = "0.3.0"
 strum = "0.28.0"
 strum_macros = "0.28.0"
 tabled = "0.20.0"
-tempfile = { version = "3.26.0", default-features = false }
+tempfile = { version = "3.27.0", default-features = false }
 termsize = "0.1.9"
 thiserror = "2.0.18"
-tokio = { version = "1.49.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
+tokio = { version = "1.50.0", default-features = true, features = ["fs", "io-std", "macros", "process", "rt", "time", "sync"] }
 tokio-test = "0.4.5"
 tracing = "0.1.44"
-tracing-subscriber = "0.3.22"
+tracing-subscriber = "0.3.23"
 walkdir = "2.5.0"
 wildmatch = "2.6.1"
 x509-certificate = "0.25.0"
