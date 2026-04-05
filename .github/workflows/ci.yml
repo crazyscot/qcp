@@ -46,7 +46,7 @@ jobs:
           checksum: true
 
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         # this action is used in multiple places
         with:
           key: ${{ matrix.rust-version }}
@@ -91,7 +91,7 @@ jobs:
         with:
           crate: cargo-docs-rs
       ####### Ensure all tools are loaded before rust-cache, or they will be cached themselves ######
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         # this action is used in multiple places
         with:
           cache-on-failure: true
@@ -120,7 +120,7 @@ jobs:
         with:
           tool: cargo-llvm-cov,cargo-nextest
           checksum: true
-      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         # this action is used in multiple places
         with:
           cache-on-failure: true
@@ -140,7 +140,7 @@ jobs:
       #  uses: coverallsapp/github-action@648a8eb78e6d50909eff900e4ec85cab4524a45b # v2.3.6
       #  continue-on-error: true
       - name: Send result to codecov
-        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         with:
           #files: lcov.info # not needed, it autodetects
           #verbose: true # not needed
