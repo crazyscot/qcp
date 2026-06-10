@@ -139,13 +139,8 @@ impl CommandHandler for PutHandler {
 
         // Initial checks. Is the destination valid, do we need to append the filename (from the `FileHeader`) to the destination path?
         // This is moderately tricky. It might validly be empty, a directory, a file, it might be a nonexistent file in an extant directory.
-        let mut path = PathBuf::from(destination.clone());
-        let append_filename = match check_dest_path(&path, destination) {
-            Ok(append) => append,
-            Err(status) => {
-                error_and_return!(stream, status);
-            }
-        };
+        let mut path = PathBuf::from(destination);
+        let append_filename = check_dest_path(&path, destination);
 
         let header = FileHeader::from_reader_async_framed(&mut stream.recv).await?;
         trace!("{header:?}");
@@ -289,25 +284,19 @@ async fn check_send_result(
 
 /// Determines whether to append the source filename to the destination path.
 ///
-/// Returns `Ok(true)` to append the source filename, `Ok(false)` if the full path is specified,
-/// or `Err(Status::DirectoryDoesNotExist)` if the destination is explicitly a directory but doesn't exist.
-fn check_dest_path(path: &Path, destination: &str) -> Result<bool, Status> {
+/// Returns `true` to append the source filename, or `false` if the full path is specified.
+fn check_dest_path(path: &Path, destination: &str) -> bool {
     if destination.is_empty() || destination == "." {
         // Easy case: copying to current working directory
-        Ok(true)
+        true
     } else if path.is_dir() || path.is_file() {
         // The destination exists; append filename only if it is a directory.
-        Ok(path.is_dir())
+        path.is_dir()
+    } else if destination.ends_with(std::path::MAIN_SEPARATOR) {
+        trace!("Nonexistent destination {destination} treated as directory");
+        true
     } else {
-        // The given destination does not exist.
-        // - If clearly intended as a directory (ends with / or \): error (use CreateDirectory instead).
-        // - Otherwise: we allow it, and the caller will create missing parent directories automatically.
-        if destination.ends_with(std::path::MAIN_SEPARATOR) {
-            debug!("Nonexistent destination directory {destination}");
-            return Err(Status::DirectoryDoesNotExist);
-        }
-        // Parent directory will be created automatically by the caller if needed.
-        Ok(false)
+        false
     }
 }
 
@@ -519,19 +508,18 @@ mod test {
     }
 
     #[tokio::test]
-    async fn write_fail_dest_dir_missing() -> Result<()> {
+    async fn write_creates_missing_destination_directory() -> Result<()> {
         let contents = "foo";
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "server:destdir/", false).await?;
-            let r1 = r1.unwrap_err();
-            let status = Status::from(r1);
-            if cfg!(windows) {
-                assert_eq!(status, Status::IoError);
-            } else {
-                assert_eq!(status, Status::DirectoryDoesNotExist);
-            }
+            assert!(
+                r1.is_ok(),
+                "PUT should succeed and create the missing destination directory"
+            );
             assert!(r2.is_ok());
+            let readback = std::fs::read_to_string("destdir/file1")?;
+            assert_eq!(readback, contents);
             Ok(())
         })
         .await

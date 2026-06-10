@@ -53,8 +53,8 @@ mod tests {
             common::{ProtocolMessage, SendReceivePair},
             control::Compatibility,
             session::{
-                Command, CreateDirectoryArgs, Get2Args, GetArgs, Put2Args, PutArgs, Response,
-                ResponseV1, SetMetadataArgs, Status,
+                Command, CreateDirectoryArgs, Get2Args, GetArgs, Response, ResponseV1,
+                SetMetadataArgs, Status,
             },
         },
     };
@@ -101,16 +101,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_handle_put() {
-        // Trailing slash indicates an explicit directory, which must exist.
-        let cmd = Command::Put(PutArgs {
-            filename: "/fjds/no-such-file.txt/".to_string(),
-        });
-        let resp = test_handler(cmd, 1).await;
-        assert_eq!(resp.status, Status::DirectoryDoesNotExist);
-    }
-
-    #[tokio::test]
     async fn handle_get2() {
         let cmd = Command::Get2(Get2Args {
             filename: String::from("/no-such-file"),
@@ -118,16 +108,6 @@ mod tests {
         });
         let resp = test_handler(cmd, 3).await;
         assert_eq!(resp.status, Status::FileNotFound);
-    }
-    #[tokio::test]
-    async fn handle_put2() {
-        // Trailing slash indicates an explicit directory, which must exist.
-        let cmd = Command::Put2(Put2Args {
-            filename: String::from("/blah/no-such-file/"),
-            ..Default::default()
-        });
-        let resp = test_handler(cmd, 3).await;
-        assert_eq!(resp.status, Status::DirectoryDoesNotExist);
     }
     #[tokio::test]
     async fn handle_mkdir() {
