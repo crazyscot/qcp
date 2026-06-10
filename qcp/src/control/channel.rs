@@ -445,7 +445,7 @@ impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelSer
             );
         }
 
-        let config = match combine_bandwidth_configurations(manager, &message2) {
+        let config = match combine_bandwidth_configurations(manager, &message2, self.selected_compat) {
             Ok(cfg) => cfg,
             Err(e) => {
                 self.send_error(ServerFailure::NegotiationFailed(format!("{e}")))

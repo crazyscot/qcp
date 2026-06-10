@@ -272,6 +272,7 @@ use crate::protocol::control::ClientMessageV1;
 pub fn combine_bandwidth_configurations(
     manager: &mut Manager,
     client: &ClientMessageV2,
+    compat: Compatibility,
 ) -> Result<Configuration> {
     use num_traits::AsPrimitive as _;
 
@@ -364,6 +365,7 @@ pub fn combine_bandwidth_configurations(
     )?;
     negotiate!(
         ca.find_tag(ClientMessage2Attributes::ParallelDegree)
+            .filter(|_| compat.supports(Feature::PARALLEL_DEGREE))
             .map(|v| (v.coerce_unsigned() & 0xffff) as u16),
         server.parallel,
         |a: u16, b: u16| CombinationResponse::Combined(a.min(b).max(1)),
@@ -497,7 +499,7 @@ mod tests {
             ..Default::default()
         };
 
-        let e = combine_bandwidth_configurations(&mut mgr, &mp).unwrap_err();
+        let e = combine_bandwidth_configurations(&mut mgr, &mp, Compatibility::Level(5)).unwrap_err();
         assert_contains!(
             e.to_string(),
             "server and client have incompatible congestion algorithm requirements"
@@ -531,7 +533,7 @@ mod tests {
             ..Default::default()
         };
 
-        let c = combine_bandwidth_configurations(&mut mgr, &mp).unwrap();
+        let c = combine_bandwidth_configurations(&mut mgr, &mp, Compatibility::Level(5)).unwrap();
         assert_matches!(
             c,
             Configuration {
@@ -713,7 +715,7 @@ mod tests {
             ..Default::default()
         };
 
-        let c = combine_bandwidth_configurations(&mut mgr, &cmsg).unwrap();
+        let c = combine_bandwidth_configurations(&mut mgr, &cmsg, Compatibility::Level(5)).unwrap();
         // this is a server-oriented configuration
         assert_eq!(c.tx, 333_444);
         assert_eq!(c.rx, 123_456);

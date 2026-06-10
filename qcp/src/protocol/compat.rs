@@ -61,7 +61,8 @@ def_enum!(
         GET2_PUT2 => Compatibility::Level(2) => "Get2 and Put2 commands with extensible options.\n`FileHeaderV2` and `FileTrailerV2` structures with extensible metadata.",
         CMSG_SMSG_2 => Compatibility::Level(3) => "Version 2 of `ClientMessage` and `ServerMessage` with extensible attributes.\n`CredentialsType` enum.",
         MKDIR_SETMETA_LS => Compatibility::Level(4) => "CreateDirectory, SetMetadata, ListFiles commands",
-        MKDIR_ALL => Compatibility::Level(5) => "CreateDirectory uses create_dir_all; client may submit all mkdir requests in parallel regardless of depth",
+        PARALLEL_DEGREE => Compatibility::Level(5) => "Parallel Degree attribute",
+        SKIP_IF_SAME_SIZE => Compatibility::Level(5) => "SkipIfSameSize attribute",
     }
     // Note: When adding a new compatibility level, don't forget to update OUR_COMPATIBILITY_LEVEL.
 );
@@ -167,5 +168,17 @@ mod test {
 
         assert!(!Compatibility::Level(2).supports(Feature::CMSG_SMSG_2));
         assert!(Compatibility::Level(3).supports(Feature::CMSG_SMSG_2));
+
+        // PARALLEL is a Level(5) feature
+        assert!(!Compatibility::Level(4).supports(Feature::PARALLEL_DEGREE));
+        assert!(Compatibility::Level(5).supports(Feature::PARALLEL_DEGREE));
+        assert!(Compatibility::Newer.supports(Feature::PARALLEL_DEGREE));
+        assert!(!Compatibility::Unknown.supports(Feature::PARALLEL_DEGREE));
+
+        // SKIP_IF_SAME_SIZE is a Level(5) feature
+        assert!(!Compatibility::Level(4).supports(Feature::SKIP_IF_SAME_SIZE));
+        assert!(Compatibility::Level(5).supports(Feature::SKIP_IF_SAME_SIZE));
+        assert!(Compatibility::Newer.supports(Feature::SKIP_IF_SAME_SIZE));
+        assert!(!Compatibility::Unknown.supports(Feature::SKIP_IF_SAME_SIZE));
     }
 }

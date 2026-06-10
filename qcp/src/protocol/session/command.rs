@@ -141,7 +141,7 @@ pub enum CommandParam {
     /// after receiving it; if they match it responds with [`Status::Skipped`] instead of
     /// accepting the payload.
     ///
-    /// Introduced in qcp 0.10 with `VersionCompatibility=V2`.
+    /// Introduced in qcp 0.9 with compatibility level 5.
     SkipIfSameSize,
 }
 impl DataTag for CommandParam {}

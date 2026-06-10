@@ -2,7 +2,8 @@
 // (c) 2024-25 Ross Younger
 
 use crate::Configuration;
-use crate::protocol::control::{CongestionController, CredentialsType};
+use crate::protocol::compat::Feature;
+use crate::protocol::control::{Compatibility, CongestionController, CredentialsType};
 use crate::protocol::prelude::*;
 use engineering_repr::EngineeringRepr as _;
 use figment::{
@@ -63,7 +64,7 @@ impl ServerMessage {
                 rtt: config.rtt,
                 ..Default::default()
             };
-            msg.apply_config_attributes(config);
+            msg.apply_config_attributes(config, compat);
             msg.into()
         } else {
             let cert_bytes = credentials.data.into_bytes().unwrap_or_default();
@@ -287,7 +288,11 @@ pub enum ServerMessage2Attributes {
 impl DataTag for ServerMessage2Attributes {}
 
 impl ServerMessageV2 {
-    pub(crate) fn apply_config_attributes(&mut self, config: &Configuration) {
+    pub(crate) fn apply_config_attributes(
+        &mut self,
+        config: &Configuration,
+        compat: Compatibility,
+    ) {
         if config.congestion != CongestionController::default() {
             self.attributes.push(
                 ServerMessage2Attributes::CongestionController
@@ -303,7 +308,7 @@ impl ServerMessageV2 {
             self.attributes
                 .push(ServerMessage2Attributes::QuicTimeout.with_unsigned(config.timeout));
         }
-        if config.parallel > 1 {
+        if config.parallel > 1 && compat.supports(Feature::PARALLEL_DEGREE) {
             self.attributes
                 .push(ServerMessage2Attributes::ParallelDegree.with_unsigned(config.parallel));
         }
@@ -526,7 +531,7 @@ mod test {
         mgr.merge_provider(&cfg);
         let final_cfg = mgr.get::<Configuration>().unwrap();
         let mut msg = ServerMessageV2::default();
-        msg.apply_config_attributes(&final_cfg);
+        msg.apply_config_attributes(&final_cfg, Compatibility::Level(5));
 
         let attrs = &msg.attributes;
 

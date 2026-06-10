@@ -2,6 +2,7 @@
 // (c) 2024-25 Ross Younger
 
 use super::{CongestionController, ConnectionType, display_opt, display_opt_uint};
+use crate::protocol::compat::Feature;
 use crate::protocol::prelude::*;
 use crate::{
     config::Configuration_Optional,
@@ -168,6 +169,7 @@ impl ClientMessageV2 {
         &mut self,
         remote_config: bool,
         our_config: &Configuration_Optional,
+        compat: Compatibility,
     ) {
         if remote_config {
             self.attributes
@@ -207,7 +209,9 @@ impl ClientMessageV2 {
             self.attributes
                 .push(ClientMessage2Attributes::QuicTimeout.with_unsigned(t));
         }
-        if let Some(p) = our_config.parallel {
+        if let Some(p) = our_config.parallel
+            && compat.supports(Feature::PARALLEL_DEGREE)
+        {
             self.attributes
                 .push(ClientMessage2Attributes::ParallelDegree.with_unsigned(p));
         }
@@ -442,7 +446,7 @@ impl ClientMessage {
         assert!(cert.data.is_bytes());
         if compat.supports(Feature::CMSG_SMSG_2) {
             let mut msg = ClientMessageV2::new(cert, connection_type);
-            msg.apply_config_attributes(remote_config, my_config);
+            msg.apply_config_attributes(remote_config, my_config, compat);
             msg.into()
         } else {
             let cert_bytes = cert.data.into_bytes().unwrap_or_default();

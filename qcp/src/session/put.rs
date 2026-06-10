@@ -161,6 +161,7 @@ impl CommandHandler for PutHandler {
             .options
             .find_option(CommandParam::SkipIfSameSize)
             .is_some()
+            && inner.compat.supports(Feature::SKIP_IF_SAME_SIZE)
             && let Ok(dest_meta) = tokio::fs::metadata(&path).await
             && dest_meta.len() == header.size.0
         {
@@ -242,7 +243,7 @@ fn build_put_command(compat: Compatibility, job: &CopyJobSpec, dest: &str) -> Co
         if job.preserve {
             options.push(CommandParam::PreserveMetadata.into());
         }
-        if job.skip_existing {
+        if job.skip_existing && compat.supports(Feature::SKIP_IF_SAME_SIZE) {
             options.push(CommandParam::SkipIfSameSize.into());
         }
         Command::Put2(Put2Args {

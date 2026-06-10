@@ -41,7 +41,7 @@ impl CommandHandler for GetHandler {
             if job.preserve {
                 options.push(CommandParam::PreserveMetadata.into());
             }
-            if job.skip_existing {
+            if job.skip_existing && inner.compat.supports(Feature::SKIP_IF_SAME_SIZE) {
                 // If the local destination exists as a regular file, send its size so the server
                 // can decide to skip before streaming. We only do this for plain files; if dest
                 // is a directory we'd need to know the server-side filename first (not yet available).
@@ -166,6 +166,7 @@ impl CommandHandler for GetHandler {
         // Check skip-existing: if client reported a destination size that matches our source, skip.
         if let Some(Variant::Unsigned(Uint(dest_size))) =
             args.options.find_option(CommandParam::SkipIfSameSize)
+            && compat.supports(Feature::SKIP_IF_SAME_SIZE)
             && *dest_size == file_original_meta.len()
         {
             trace!(
