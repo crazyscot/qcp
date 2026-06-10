@@ -2,7 +2,6 @@
 // (c) 2025 Ross Younger
 
 use anyhow::Result;
-use async_trait::async_trait;
 use cfg_if::cfg_if;
 use tokio::io::AsyncWriteExt;
 use tracing::trace;
@@ -21,13 +20,12 @@ use std::os::unix::fs::PermissionsExt as _;
 
 pub(crate) struct SetMetadataHandler;
 
-#[async_trait]
 impl CommandHandler for SetMetadataHandler {
     type Args = SetMetadataArgs;
 
-    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         job: &crate::CopyJobSpec,
         _params: Parameters,
     ) -> Result<RequestResult> {
@@ -61,9 +59,9 @@ impl CommandHandler for SetMetadataHandler {
         Ok(RequestResult::default())
     }
 
-    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         args: &SetMetadataArgs,
     ) -> Result<()> {
         let path = &args.path;

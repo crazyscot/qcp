@@ -11,7 +11,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use async_trait::async_trait;
 use cfg_if::cfg_if;
 use tokio::fs::File as TokioFile;
 
@@ -59,7 +58,6 @@ impl OpenOptionsExt for tokio::fs::OpenOptions {
     }
 }
 
-#[async_trait]
 /// Extension trait for `tokio::fs::File`
 pub(crate) trait FileExt {
     /// Opens a local file for reading, returning a filehandle and metadata.
@@ -83,7 +81,6 @@ pub(crate) trait FileExt {
     ) -> anyhow::Result<TokioFile>;
 }
 
-#[async_trait]
 impl FileExt for TokioFile {
     #[allow(
         renamed_and_removed_lints, // for elided_named_lifetimes

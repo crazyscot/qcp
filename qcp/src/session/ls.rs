@@ -2,7 +2,6 @@
 // (c) 2025 Ross Younger
 
 use anyhow::Result;
-use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, error, trace};
 use walkdir::WalkDir;
@@ -17,13 +16,12 @@ use crate::session::{CommandStats, RequestResult, error_and_return};
 
 pub(crate) struct ListingHandler;
 
-#[async_trait]
 impl CommandHandler for ListingHandler {
     type Args = ListArgs;
 
-    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         job: &crate::client::CopyJobSpec,
         params: Parameters,
     ) -> Result<RequestResult> {
@@ -68,9 +66,9 @@ impl CommandHandler for ListingHandler {
         Ok(RequestResult::new(CommandStats::default(), Some(data)))
     }
 
-    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         args: &ListArgs,
     ) -> Result<()> {
         let path = &args.path;

@@ -33,7 +33,6 @@ unstable-test-helpers = []
 [dependencies]
 anstyle = { workspace = true }
 anyhow = { workspace = true }
-async-trait = { workspace = true }
 bytes = { workspace = true }
 cfg-if = { workspace = true }
 clap = { workspace = true }

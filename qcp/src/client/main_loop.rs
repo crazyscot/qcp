@@ -25,7 +25,6 @@ use crate::{
 };
 
 use anyhow::{Context, Result};
-use async_trait::async_trait;
 use futures_util::stream::{FuturesUnordered, StreamExt as _};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use quinn::{Connection as QuinnConnection, Endpoint};
@@ -108,7 +107,6 @@ impl PrepResult {
 
 type ControlChannelType = ControlChannel<ChildStdin, ChildStdout>;
 
-#[async_trait]
 trait BiStreamOpener {
     type Send: SendingStream + 'static;
     type Recv: ReceivingStream + 'static;
@@ -117,7 +115,6 @@ trait BiStreamOpener {
 }
 
 #[cfg_attr(coverage_nightly, coverage(off))] // thin adapter around quinn
-#[async_trait]
 impl BiStreamOpener for QuinnConnection {
     type Send = quinn::SendStream;
     type Recv = quinn::RecvStream;
@@ -1226,7 +1223,6 @@ mod test {
     use tokio::io::AsyncWriteExt;
     use tokio::time::{Duration, timeout};
 
-    use async_trait::async_trait;
     use littertray::LitterTray;
 
     use super::{BiStreamOpener, RequestResult};
@@ -1736,7 +1732,6 @@ mod test {
         }
     }
 
-    #[async_trait]
     impl BiStreamOpener for FakeBiConnection {
         type Send = tokio::io::WriteHalf<tokio::io::SimplexStream>;
         type Recv = tokio::io::ReadHalf<tokio::io::SimplexStream>;

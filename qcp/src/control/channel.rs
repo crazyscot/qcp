@@ -7,7 +7,6 @@
 use std::time::Duration;
 
 use anyhow::{Context as _, Result};
-use async_trait::async_trait;
 use quinn::{ConnectionStats, Endpoint};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, Stdin, Stdout};
 use tokio::time::timeout;
@@ -33,7 +32,6 @@ use mockall::{automock, predicate::*};
 
 /// Control channel abstraction
 #[cfg_attr(test, automock)]
-#[async_trait]
 pub(crate) trait ControlChannelServerInterface<
     S: SendingStream + 'static,
     R: ReceivingStream + 'static,
@@ -385,7 +383,6 @@ impl<S: SendingStream, R: ReceivingStream> ControlChannel<S, R> {
     }
 }
 
-#[async_trait]
 impl<S: SendingStream + 'static, R: ReceivingStream + 'static> ControlChannelServerInterface<S, R>
     for ControlChannel<S, R>
 {

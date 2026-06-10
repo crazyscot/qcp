@@ -2,7 +2,6 @@
 // (c) 2025 Ross Younger
 
 use anyhow::Result;
-use async_trait::async_trait;
 use indicatif::{MultiProgress, ProgressBar};
 
 use crate::client::progress::style_for;
@@ -13,25 +12,24 @@ use crate::{Parameters, client::CopyJobSpec, config::Configuration};
 use super::{RequestResult, SessionCommandImpl};
 
 /// Trait for command-specific behavior - the extension point for new commands
-#[async_trait]
 pub(crate) trait CommandHandler: Send + Sized {
     /// Associated type for command arguments
     type Args: Send;
 
     /// Client-side implementation (has access to stream and compat)
-    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
+    fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         job: &CopyJobSpec,
         params: Parameters,
-    ) -> Result<RequestResult>;
+    ) -> impl std::future::Future<Output = Result<RequestResult>> + Send;
 
     /// Server-side implementation (has access to stream and compat)
-    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
+    fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         args: &Self::Args,
-    ) -> Result<()>;
+    ) -> impl std::future::Future<Output = Result<()>> + Send;
 }
 
 /// Client-side UI elements for commands that need them
@@ -160,20 +158,28 @@ impl<'a, S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHan
     }
 }
 
-#[async_trait]
 impl<S: SendingStream + 'static, R: ReceivingStream + 'static, H: CommandHandler + 'static>
     SessionCommandImpl for SessionCommand<'_, S, R, H>
 {
-    async fn send(&mut self, job: &CopyJobSpec, params: Parameters) -> Result<RequestResult> {
-        self.handler.send_impl(&mut self.inner, job, params).await
+    fn send<'a>(
+        &'a mut self,
+        job: &'a CopyJobSpec,
+        params: Parameters,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<RequestResult>> + Send + 'a>>
+    {
+        Box::pin(async move { self.handler.send_impl(&mut self.inner, job, params).await })
     }
 
-    async fn handle(&mut self) -> Result<()> {
-        let args = self
-            .args
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("command handler missing args"))?;
-        self.handler.handle_impl(&mut self.inner, args).await
+    fn handle<'a>(
+        &'a mut self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            let args = self
+                .args
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("command handler missing args"))?;
+            self.handler.handle_impl(&mut self.inner, args).await
+        })
     }
 }
 

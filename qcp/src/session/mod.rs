@@ -16,7 +16,6 @@ mod set_meta;
 pub(crate) use get::test_shared;
 
 use anyhow::Result;
-use async_trait::async_trait;
 
 use crate::{Parameters, client::CopyJobSpec, protocol::session::ListData};
 
@@ -67,12 +66,15 @@ impl Default for RequestResult {
 }
 
 /// Common structure for session protocol commands
-#[async_trait]
 pub(crate) trait SessionCommandImpl: Send {
     /// Client side implementation, takes care of sending the command and all its
     /// traffic. Does not return until completion (or error).
     /// Returns the number of payload bytes received.
-    async fn send(&mut self, job: &CopyJobSpec, params: Parameters) -> Result<RequestResult>;
+    fn send<'a>(
+        &'a mut self,
+        job: &'a CopyJobSpec,
+        params: Parameters,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<RequestResult>> + Send + 'a>>;
 
     /// Server side implementation, takes care of handling the command and all its
     /// traffic. Does not return until completion (or error).
@@ -80,5 +82,7 @@ pub(crate) trait SessionCommandImpl: Send {
     /// If the command has arguments, the object constructor is expected to set them up.
     ///
     /// See also the [`crate::session::common::send_ok`] and [`crate::session::common::send_error`] helpers.
-    async fn handle(&mut self) -> Result<()>;
+    fn handle<'a>(
+        &'a mut self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>>;
 }

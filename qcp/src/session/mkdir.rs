@@ -2,7 +2,6 @@
 // (c) 2025 Ross Younger
 
 use anyhow::Result;
-use async_trait::async_trait;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, trace};
 
@@ -15,13 +14,12 @@ use crate::session::{RequestResult, error_and_return, handler::CommandHandler};
 
 pub(crate) struct CreateDirectoryHandler;
 
-#[async_trait]
 impl CommandHandler for CreateDirectoryHandler {
     type Args = CreateDirectoryArgs;
 
-    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         job: &crate::client::CopyJobSpec,
         _params: Parameters,
     ) -> Result<RequestResult> {
@@ -52,9 +50,9 @@ impl CommandHandler for CreateDirectoryHandler {
         Ok(RequestResult::default())
     }
 
-    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         args: &CreateDirectoryArgs,
     ) -> Result<()> {
         let path = &args.dir_name;

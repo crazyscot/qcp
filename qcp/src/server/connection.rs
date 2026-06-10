@@ -10,11 +10,9 @@ use crate::{
     },
 };
 
-use async_trait::async_trait;
 use quinn::ConnectionStats;
 use tracing::{debug, error, trace};
 
-#[async_trait]
 trait Connection<SS: QcpSS, RS: QcpRS> {
     async fn accept_bi(&self) -> Result<(SS, RS), quinn::ConnectionError>;
     fn stats(&self) -> ConnectionStats;
@@ -22,7 +20,6 @@ trait Connection<SS: QcpSS, RS: QcpRS> {
 }
 
 #[cfg_attr(coverage_nightly, coverage(off))] // This is a thin adaptor, not worth testing
-#[async_trait]
 impl Connection<quinn::SendStream, quinn::RecvStream> for quinn::Connection {
     async fn accept_bi(
         &self,
@@ -101,7 +98,6 @@ mod tests {
     use super::Connection;
 
     use assertables::assert_contains;
-    use async_trait::async_trait;
     use quinn::{ApplicationClose, ConnectionClose, ConnectionStats, TransportErrorCode};
     use tokio_test::io::{Builder, Mock};
 
@@ -120,7 +116,6 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl Connection<Mock, Mock> for MockConnection {
         async fn accept_bi(&self) -> Result<(Mock, Mock), quinn::ConnectionError> {
             if let Some(e) = &self.err {

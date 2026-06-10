@@ -562,7 +562,7 @@ CLI options take precedence over the configuration file, which takes precedence 
         long,
         value_name = "N",
         help_heading("Tuning"),
-        display_order(1),
+        display_order(1)
     )]
     pub parallel: u16,
 }

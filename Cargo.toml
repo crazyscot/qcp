@@ -9,7 +9,6 @@ edition = "2024"
 anstyle = { version = "1.0.14", default-features = false }
 anyhow = "1.0.102"
 assertables = "9.9.0"
-async-trait = "0.1.89"
 bytes = "1.11.1"
 cargo_toml = "0.22.3"
 cfg-if = "1.0.4"

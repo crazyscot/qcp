@@ -2,14 +2,16 @@
 // (c) 2024-5 Ross Younger
 
 use anyhow::{Context as _, Result, anyhow};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::fs::File as TokioFile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, error, trace};
 
 use crate::Parameters;
+use crate::client::CopyJobSpec;
 use crate::protocol::common::{ProtocolMessage, ReceivingStream, SendingStream};
 use crate::protocol::compat::Feature;
+use crate::protocol::control::Compatibility;
 use crate::protocol::session::{
     Command, CommandParam, FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Put2Args, PutArgs,
     Response, Status,
@@ -23,13 +25,12 @@ use crate::util::FileExt as _;
 
 pub(crate) struct PutHandler;
 
-#[async_trait::async_trait]
 impl CommandHandler for PutHandler {
     type Args = Put2Args;
 
-    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         job: &crate::client::CopyJobSpec,
         params: Parameters,
     ) -> Result<RequestResult> {
@@ -59,23 +60,7 @@ impl CommandHandler for PutHandler {
 
         trace!("sending command");
 
-        let cmd = if inner.compat.supports(Feature::GET2_PUT2) {
-            let mut options = vec![];
-            if job.preserve {
-                options.push(CommandParam::PreserveMetadata.into());
-            }
-            if job.skip_existing {
-                options.push(CommandParam::SkipIfSameSize.into());
-            }
-            Command::Put2(Put2Args {
-                filename: dest_filename.clone(),
-                options,
-            })
-        } else {
-            Command::Put(PutArgs {
-                filename: dest_filename.clone(),
-            })
-        };
+        let cmd = build_put_command(inner.compat, job, dest_filename);
         cmd.to_writer_async_framed(&mut outbound).await?;
         outbound.flush().await?;
 
@@ -110,32 +95,7 @@ impl CommandHandler for PutHandler {
             crate::util::io::copy_large(&mut file, &mut outbound, inner.config.io_buffer_size)
                 .await;
 
-        match result {
-            Ok(sent) if sent == src_meta.len() => (),
-            Ok(sent) => {
-                anyhow::bail!(
-                    "File sent size {sent} doesn't match its metadata {}",
-                    src_meta.len()
-                );
-            }
-            Err(e) => {
-                if e.kind() == tokio::io::ErrorKind::ConnectionReset {
-                    // Maybe the connection was cut, maybe the server sent something to help us inform the user.
-                    let Ok(response) =
-                        Response::from_reader_async_framed(&mut inner.stream.recv).await
-                    else {
-                        anyhow::bail!("connection closed unexpectedly");
-                    };
-                    let Response::V1(response) = response;
-                    anyhow::bail!(
-                        "remote closed connection: {:?}: {}",
-                        response.status,
-                        response.message.unwrap_or("(no message)".into())
-                    );
-                }
-                return Err(anyhow!(e).context("I/O error during PUT"));
-            }
-        }
+        check_send_result(result, src_meta.len(), &mut inner.stream.recv).await?;
 
         let trl = FileTrailer::for_file(inner.compat, &src_meta, job.preserve);
         trace!("send trailer {trl:?}");
@@ -167,9 +127,9 @@ impl CommandHandler for PutHandler {
         })
     }
 
-    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         args: &Put2Args,
     ) -> Result<()> {
         let destination = &args.filename;
@@ -180,39 +140,10 @@ impl CommandHandler for PutHandler {
         // Initial checks. Is the destination valid, do we need to append the filename (from the `FileHeader`) to the destination path?
         // This is moderately tricky. It might validly be empty, a directory, a file, it might be a nonexistent file in an extant directory.
         let mut path = PathBuf::from(destination.clone());
-        let append_filename = if destination.is_empty() || destination == "." {
-            // Easy case: copying to current working directory
-            true
-        } else if path.is_dir() || path.is_file() {
-            // The destination exists. This is another easy case; append filename only if it is a directory.
-            path.is_dir()
-        } else {
-            // The given destination does not exist. The possible cases here are:
-            // - The destination is clearly intended as a directory (ends with / or \).
-            //   This is an error (there's a separate CreateDirectory command for that).
-            if destination.ends_with(std::path::MAIN_SEPARATOR) {
-                // N.B. Path.has_trailing_sep() is currently only available in nightly
-                debug!("Nonexistent destination directory {destination}");
-                error_and_return!(stream, Status::DirectoryDoesNotExist);
-            }
-
-            // - The destination's parent directory exists => do not append the path
-            // - The destination's parent directory does not exist => error
-
-            let mut parent_dir = {
-                let mut tmp = path.clone();
-                let _ = tmp.pop();
-                tmp
-            };
-
-            if parent_dir.as_os_str().is_empty() {
-                // We're writing a file to the current working directory, so apply the is_dir check
-                parent_dir.push(".");
-            }
-            if parent_dir.is_dir() {
-                false // destination path is fully specified, do not append filename
-            } else {
-                error_and_return!(stream, Status::DirectoryDoesNotExist);
+        let append_filename = match check_dest_path(&path, destination) {
+            Ok(append) => append,
+            Err(status) => {
+                error_and_return!(stream, status);
             }
         };
 
@@ -295,6 +226,96 @@ async fn limited_copy(
 ) -> Result<u64, std::io::Error> {
     let mut limited = recv.take(n);
     crate::util::io::copy_large(&mut limited, f, buffer_size).await
+}
+
+/// Builds the PUT command based on negotiated compatibility and job options.
+fn build_put_command(compat: Compatibility, job: &CopyJobSpec, dest: &str) -> Command {
+    if compat.supports(Feature::GET2_PUT2) {
+        let mut options = vec![];
+        if job.preserve {
+            options.push(CommandParam::PreserveMetadata.into());
+        }
+        if job.skip_existing {
+            options.push(CommandParam::SkipIfSameSize.into());
+        }
+        Command::Put2(Put2Args {
+            filename: dest.to_string(),
+            options,
+        })
+    } else {
+        Command::Put(PutArgs {
+            filename: dest.to_string(),
+        })
+    }
+}
+
+/// Verifies the result of a payload send.
+/// On connection reset, attempts to read an error response from the stream for a better error message.
+async fn check_send_result(
+    result: Result<u64, std::io::Error>,
+    expected_len: u64,
+    recv: &mut impl ReceivingStream,
+) -> Result<()> {
+    match result {
+        Ok(sent) if sent == expected_len => Ok(()),
+        Ok(sent) => {
+            anyhow::bail!("File sent size {sent} doesn't match its metadata {expected_len}")
+        }
+        Err(e) => {
+            if e.kind() == tokio::io::ErrorKind::ConnectionReset {
+                // Maybe the connection was cut, maybe the server sent something to help us inform the user.
+                let Ok(response) = Response::from_reader_async_framed(recv).await else {
+                    anyhow::bail!("connection closed unexpectedly");
+                };
+                let Response::V1(response) = response;
+                anyhow::bail!(
+                    "remote closed connection: {:?}: {}",
+                    response.status,
+                    response.message.unwrap_or("(no message)".into())
+                );
+            }
+            Err(anyhow!(e).context("I/O error during PUT"))
+        }
+    }
+}
+
+/// Determines whether to append the source filename to the destination path.
+///
+/// Returns `Ok(true)` to append the source filename, `Ok(false)` if the full path is specified,
+/// or `Err(Status::DirectoryDoesNotExist)` if the destination directory doesn't exist.
+fn check_dest_path(path: &Path, destination: &str) -> Result<bool, Status> {
+    if destination.is_empty() || destination == "." {
+        // Easy case: copying to current working directory
+        Ok(true)
+    } else if path.is_dir() || path.is_file() {
+        // The destination exists; append filename only if it is a directory.
+        Ok(path.is_dir())
+    } else {
+        // The given destination does not exist.
+        // - If clearly intended as a directory (ends with / or \): error (use CreateDirectory instead).
+        // - If parent directory exists: the full path is specified, do not append.
+        // - Otherwise: error.
+        if destination.ends_with(std::path::MAIN_SEPARATOR) {
+            // N.B. Path.has_trailing_sep() is currently only available in nightly
+            debug!("Nonexistent destination directory {destination}");
+            return Err(Status::DirectoryDoesNotExist);
+        }
+        let mut parent_dir = {
+            let mut tmp = path.to_path_buf();
+            let _ = tmp.pop();
+            tmp
+        };
+        if parent_dir.as_os_str().is_empty() {
+            // We're writing a file to the current working directory
+            parent_dir.push(".");
+        }
+        if parent_dir.is_dir() {
+            Ok(false)
+        } else {
+            debug!("Nonexistent destination directory {destination}");
+            Err(Status::DirectoryDoesNotExist)
+        }
+    }
 }
 
 #[cfg(test)]

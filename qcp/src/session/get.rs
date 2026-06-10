@@ -2,7 +2,6 @@
 // (c) 2024-5 Ross Younger
 
 use anyhow::{Context as _, Result};
-use async_trait::async_trait;
 use std::path::PathBuf;
 use tokio::fs::File as TokioFile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -24,13 +23,12 @@ use crate::util::FileExt as _;
 
 pub(crate) struct GetHandler;
 
-#[async_trait]
 impl CommandHandler for GetHandler {
     type Args = Get2Args;
 
-    async fn send_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn send_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         job: &crate::client::CopyJobSpec,
         params: Parameters,
     ) -> Result<RequestResult> {
@@ -138,9 +136,9 @@ impl CommandHandler for GetHandler {
         ))
     }
 
-    async fn handle_impl<'a, S: SendingStream, R: ReceivingStream>(
+    async fn handle_impl<S: SendingStream, R: ReceivingStream>(
         &mut self,
-        inner: &mut SessionCommandInner<'a, S, R>,
+        inner: &mut SessionCommandInner<'_, S, R>,
         args: &Get2Args,
     ) -> Result<()> {
         trace!("begin");
