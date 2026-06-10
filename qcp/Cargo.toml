@@ -1,6 +1,6 @@
 [package]
 name = "qcp"
-version = "0.8.3"
+version = "0.9.0"
 authors = ["Ross Younger <qcp@crazyscot.com>"]
 categories = ["command-line-utilities"]
 edition.workspace = true

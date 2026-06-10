@@ -671,6 +671,29 @@
       the network.
     </p>
   </li>
+  <li>
+    <p>
+      <code>-j</code>, <code>--parallel &lt;N&gt;</code> — Number of files to
+      transfer concurrently. [default: 1]
+    </p>
+
+    <p>
+      Increasing this helps saturate the channel when transferring many small
+      files, because each file's transfer can overlap with others rather than
+      waiting for each to complete serially.
+    </p>
+
+    <p>
+      A value of 1 (the default) gives the same sequential behaviour as previous
+      versions.
+    </p>
+
+    <p>
+      <strong>Note:</strong> With <code>parallel &gt; 1</code>, the QUIC receive
+      buffer grows proportionally; very large values on memory-constrained
+      systems may need <code>udp-buffer</code> tuning.
+    </p>
+  </li>
 </ul>
 
 <hr />

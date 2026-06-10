@@ -107,6 +107,9 @@ fn display_opt<T: std::fmt::Display>(label: &str, value: Option<&T>) -> String {
 /// The following compatibility levels are defined:
 /// * 1: Introduced in qcp 0.3.
 /// * 2: Introduced in qcp 0.5.
+/// * 3: Introduced in qcp 0.6.
+/// * 4: Introduced in qcp 0.8.
+/// * 5: Introduced in qcp 0.9.
 ///
 /// See [`crate::protocol::compat::Feature`] for a mapping from compatibility levels to specific features.
 ///

@@ -14,7 +14,7 @@ qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH SYNOPSIS
-\fBqcp\fR [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-\-address\-family\fR] [\fB\-\-aes256\fR] [\fB\-\-color\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-\-initial\-mtu\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-log\-file\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-port\fR] [\fB\-\-profile\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-r\fR|\fB\-\-recurse\fR] [\fB\-\-remote\-qcp\-binary\fR] [\fB\-\-rx\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-S \fR] [\fB\-\-ssh\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-time\-format\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-timeout\fR] [\fB\-\-tls\-auth\-type\fR] [\fB\-\-tx\fR] [\fB\-\-udp\-buffer\fR] [\fB\-\-rtt\fR] [\fB\-\-debug\fR] [\fB\-\-dry\-run\fR] [\fB\-\-io\-buffer\-size\fR] [\fB\-\-remote\-config\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-\-list\-features\fR] [\fB\-\-show\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE|DESTINATION\fR] 
+\fBqcp\fR [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-\-address\-family\fR] [\fB\-\-aes256\fR] [\fB\-\-color\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-\-initial\-mtu\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-log\-file\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-port\fR] [\fB\-\-profile\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-r\fR|\fB\-\-recurse\fR] [\fB\-\-remote\-qcp\-binary\fR] [\fB\-\-rx\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-S \fR] [\fB\-\-ssh\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-time\-format\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-timeout\fR] [\fB\-\-tls\-auth\-type\fR] [\fB\-\-tx\fR] [\fB\-\-udp\-buffer\fR] [\fB\-j\fR|\fB\-\-parallel\fR] [\fB\-\-rtt\fR] [\fB\-\-debug\fR] [\fB\-\-dry\-run\fR] [\fB\-\-io\-buffer\-size\fR] [\fB\-\-remote\-config\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-\-list\-features\fR] [\fB\-\-show\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE|DESTINATION\fR] 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH DESCRIPTION
@@ -187,6 +187,15 @@ Specify as a number, or as an SI quantity (e.g. `10M`).
 
 This parameter is always interpreted as the _local_ bandwidth, whether operating in client or server mode. If not specified or 0, uses the value of `rx`.
 
+.TP
+\fB\-j\fR, \fB\-\-parallel\fR \fI<N>\fR
+Number of files to transfer concurrently. [default: 1]
+
+Increasing this helps saturate the channel when transferring many small files, because each file\*(Aqs transfer can overlap with others rather than waiting for each to complete serially.
+
+A value of 1 (the default) gives the same sequential behaviour as previous versions.
+
+**Note:** With `parallel > 1`, the QUIC receive buffer grows proportionally; very large values on memory\-constrained systems may need `udp\-buffer` tuning.
 .TP
 \fB\-\-rtt\fR \fI<ms>\fR
 The expected network Round Trip time to the target system, in milliseconds. [default: 300]
