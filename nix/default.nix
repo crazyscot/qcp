@@ -10,7 +10,7 @@
 
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "qcp";
-  version = "0.9.0";
+  version = "0.8.3";
 
   # Tags required to fix the binary version
   GITHUB_REF_TYPE = "tag";
