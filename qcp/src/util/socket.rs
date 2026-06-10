@@ -160,8 +160,14 @@ mod test {
         let _s = bind_range_for_address(UNSPECIFIED, range).unwrap();
     }
 
-    #[cfg_attr(target_os = "macos", ignore)] // GitHub OSX runners allow binding to ports <1024...
-    #[cfg_attr(msvc, ignore)] // MSVC doesn't implement the unix privilege check, obviously
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "GitHub OSX runners allow binding to ports <1024..."
+    )]
+    #[cfg_attr(
+        msvc,
+        ignore = "MSVC doesn't implement the unix privilege check, obviously"
+    )]
     #[test]
     fn bind_range_fails_non_root() {
         let range = PortRange { begin: 1, end: 2 };

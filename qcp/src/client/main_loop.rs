@@ -1310,7 +1310,10 @@ mod test {
     }
 
     #[cfg(unix)] // this test depends on create_fake, which is not implemented on Windows
-    #[cfg_attr(target_os = "macos", ignore)]
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "this test depends on create_fake, which is not implemented on macOS"
+    )]
     #[tokio::test]
     async fn endpoint_create_close() {
         use crate::client::main_loop::QcpConnection;
@@ -1350,7 +1353,7 @@ mod test {
         eprintln!("Closedown report: {report:?}");
     }
 
-    #[cfg_attr(target_os = "macos", ignore)]
+    #[cfg_attr(target_os = "macos", ignore = "fails under CI on macOS")]
     #[cfg_attr(target_os = "windows", ignore = "fails under Wine in CI")]
     #[tokio::test]
     async fn quinn_connection_open_bi_stream_adapter_works() {
