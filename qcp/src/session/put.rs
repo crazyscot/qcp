@@ -14,6 +14,7 @@ use crate::protocol::session::{
     Command, CommandParam, FileHeader, FileHeaderV2, FileTrailer, FileTrailerV2, Put2Args, PutArgs,
     Response, Status,
 };
+use crate::session::common::FindOption as _;
 use crate::session::handler::SessionCommandInner;
 use crate::session::{RequestResult, error_and_return, handler::CommandHandler};
 
@@ -63,6 +64,9 @@ impl CommandHandler for PutHandler {
             if job.preserve {
                 options.push(CommandParam::PreserveMetadata.into());
             }
+            if job.skip_existing {
+                options.push(CommandParam::SkipIfSameSize.into());
+            }
             Command::Put2(Put2Args {
                 filename: dest_filename.clone(),
                 options,
@@ -83,8 +87,20 @@ impl CommandHandler for PutHandler {
         hdr.to_writer_async_framed(&mut outbound).await?;
 
         trace!("await response");
-        let _ = Response::from_reader_async_framed(&mut inner.stream.recv)
-            .await?
+        let response = Response::from_reader_async_framed(&mut inner.stream.recv).await?;
+        if response.status() == Status::Skipped {
+            trace!("skipped (destination has same size)");
+            meter.stop().await;
+            progress_bar.finish_and_clear();
+            return Ok(RequestResult {
+                stats: crate::session::CommandStats {
+                    skipped_files: 1,
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        }
+        let _ = response
             .into_result()
             .with_context(|| format!("PUTx {src_filename} failed"))?;
 
@@ -145,6 +161,7 @@ impl CommandHandler for PutHandler {
             stats: crate::session::CommandStats {
                 payload_bytes: payload_len,
                 peak_transfer_rate: meter.peak(),
+                skipped_files: 0,
             },
             ..Default::default()
         })
@@ -207,6 +224,21 @@ impl CommandHandler for PutHandler {
         if append_filename {
             path.push(&header.filename);
         }
+
+        // Check skip-existing: if destination has same size as source, skip the transfer.
+        if args
+            .options
+            .find_option(CommandParam::SkipIfSameSize)
+            .is_some()
+            && let Ok(dest_meta) = tokio::fs::metadata(&path).await
+            && dest_meta.len() == header.size.0
+        {
+            trace!("skipping: destination has same size ({})", header.size.0);
+            crate::session::common::send_skipped(&mut stream.send).await?;
+            stream.send.flush().await?;
+            return Ok(());
+        }
+
         let mut file = match TokioFile::create_or_truncate(path, &header).await {
             Ok(f) => f,
             Err(e) => {

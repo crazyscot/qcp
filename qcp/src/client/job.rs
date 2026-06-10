@@ -134,6 +134,8 @@ pub struct CopyJobSpec {
     /// If present, Unix-style mode bits to apply to the target.
     /// (This currently only applies to directories.)
     pub(crate) mode: Option<u32>,
+    /// If set, skip files on the destination that already have the same size as the source.
+    pub(crate) skip_existing: bool,
 }
 
 impl CopyJobSpec {
@@ -159,6 +161,7 @@ impl CopyJobSpec {
             preserve,
             directory,
             mode: None,
+            skip_existing: false,
         })
     }
 

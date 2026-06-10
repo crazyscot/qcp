@@ -254,6 +254,12 @@ impl Client {
                 self.args.client_params.statistics,
                 direction,
             );
+            if aggregate_stats.skipped_files > 0 {
+                info!(
+                    "{} file(s) skipped (destination already has same size)",
+                    aggregate_stats.skipped_files
+                );
+            }
         }
 
         if self.args.client_params.profile {
@@ -935,6 +941,7 @@ fn collect_transfer_result(
             aggregate_stats.peak_transfer_rate = aggregate_stats
                 .peak_transfer_rate
                 .max(r.stats.peak_transfer_rate);
+            aggregate_stats.skipped_files += r.stats.skipped_files;
         }
         Err(ref e) => {
             log_transfer_error(e, &finished_job);
@@ -1177,6 +1184,7 @@ fn new_recursive_copy_job(
         },
         directory: item.directory,
         preserve: job.preserve,
+        skip_existing: job.skip_existing,
         mode: item
             .attributes
             .find_tag(MetadataAttr::ModeBits)
@@ -1592,6 +1600,7 @@ mod test {
                 CommandStats {
                     payload_bytes: 10,
                     peak_transfer_rate: 100,
+                    ..Default::default()
                 },
                 None,
             ),
@@ -1599,6 +1608,7 @@ mod test {
                 CommandStats {
                     payload_bytes: 5,
                     peak_transfer_rate: 200,
+                    ..Default::default()
                 },
                 None,
             ),
@@ -1643,6 +1653,7 @@ mod test {
                 CommandStats {
                     payload_bytes: 10,
                     peak_transfer_rate: 100,
+                    ..Default::default()
                 },
                 None,
             )),
@@ -1652,6 +1663,7 @@ mod test {
                 CommandStats {
                     payload_bytes: 999,
                     peak_transfer_rate: 999,
+                    ..Default::default()
                 },
                 None,
             )),
@@ -1780,6 +1792,7 @@ mod test {
                 CommandStats {
                     payload_bytes: 10,
                     peak_transfer_rate: 100,
+                    ..Default::default()
                 },
                 None,
             ),

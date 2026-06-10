@@ -33,6 +33,16 @@ where
         .await
 }
 
+/// Helper function for sending a Skipped response (destination exists with the same size)
+pub(super) async fn send_skipped<W>(send: &mut W) -> anyhow::Result<()>
+where
+    W: AsyncWriteExt + std::marker::Unpin + Send,
+{
+    Response::V1(ResponseV1::new(Status::Skipped.into(), None))
+        .to_writer_async_framed(send)
+        .await
+}
+
 pub(crate) fn io_error_to_status(io: &std::io::Error) -> (Status, Option<String>) {
     match io.kind() {
         ErrorKind::NotFound => (Status::FileNotFound, None),

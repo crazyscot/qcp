@@ -43,6 +43,16 @@ impl CommandHandler for GetHandler {
             if job.preserve {
                 options.push(CommandParam::PreserveMetadata.into());
             }
+            if job.skip_existing {
+                // If the local destination exists as a regular file, send its size so the server
+                // can decide to skip before streaming. We only do this for plain files; if dest
+                // is a directory we'd need to know the server-side filename first (not yet available).
+                if let Ok(dest_meta) = tokio::fs::metadata(dest).await
+                    && !dest_meta.is_dir()
+                {
+                    options.push(CommandParam::SkipIfSameSize.with_unsigned(dest_meta.len()));
+                }
+            }
             Command::Get2(Get2Args {
                 filename: filename.clone(),
                 options,
@@ -57,8 +67,18 @@ impl CommandHandler for GetHandler {
         inner.stream.send.flush().await?;
 
         trace!("await response");
-        let _ = Response::from_reader_async_framed(&mut inner.stream.recv)
-            .await?
+        let response = Response::from_reader_async_framed(&mut inner.stream.recv).await?;
+        if response.status() == Status::Skipped {
+            trace!("skipped (source and destination have same size)");
+            return Ok(RequestResult {
+                stats: CommandStats {
+                    skipped_files: 1,
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        }
+        let _ = response
             .into_result()
             .with_context(|| format!("GET {filename} failed"))?;
 
@@ -112,6 +132,7 @@ impl CommandHandler for GetHandler {
             CommandStats {
                 payload_bytes: header.size.0,
                 peak_transfer_rate: meter.peak(),
+                skipped_files: 0,
             },
             None,
         ))
@@ -134,6 +155,20 @@ impl CommandHandler for GetHandler {
         };
         if file_original_meta.is_dir() {
             error_and_return!(stream, Status::ItIsADirectory);
+        }
+
+        // Check skip-existing: if client reported a destination size that matches our source, skip.
+        if let Some(Variant::Unsigned(Uint(dest_size))) =
+            args.options.find_option(CommandParam::SkipIfSameSize)
+            && *dest_size == file_original_meta.len()
+        {
+            trace!(
+                "skipping: source and destination have same size ({})",
+                dest_size
+            );
+            crate::session::common::send_skipped(&mut stream.send).await?;
+            stream.send.flush().await?;
+            return Ok(());
         }
 
         // We believe we can fulfil this request.

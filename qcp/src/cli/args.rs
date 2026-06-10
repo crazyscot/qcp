@@ -286,6 +286,11 @@ impl CliArgs {
                 )?);
             }
         }
+        if self.client_params.skip_existing {
+            for job in &mut jobs {
+                job.skip_existing = true;
+            }
+        }
         Ok((success, jobs))
     }
 

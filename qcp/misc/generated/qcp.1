@@ -14,7 +14,7 @@ qcp \- Secure remote file copy utility which uses the QUIC protocol over UDP
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH SYNOPSIS
-\fBqcp\fR [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-\-address\-family\fR] [\fB\-\-aes256\fR] [\fB\-\-color\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-\-initial\-mtu\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-log\-file\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-port\fR] [\fB\-\-profile\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-r\fR|\fB\-\-recurse\fR] [\fB\-\-remote\-qcp\-binary\fR] [\fB\-\-rx\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-S \fR] [\fB\-\-ssh\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-time\-format\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-timeout\fR] [\fB\-\-tls\-auth\-type\fR] [\fB\-\-tx\fR] [\fB\-\-udp\-buffer\fR] [\fB\-j\fR|\fB\-\-parallel\fR] [\fB\-\-rtt\fR] [\fB\-\-debug\fR] [\fB\-\-dry\-run\fR] [\fB\-\-io\-buffer\-size\fR] [\fB\-\-remote\-config\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-\-list\-features\fR] [\fB\-\-show\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE|DESTINATION\fR] 
+\fBqcp\fR [\fB\-4 \fR] [\fB\-6 \fR] [\fB\-\-address\-family\fR] [\fB\-\-aes256\fR] [\fB\-\-color\fR] [\fB\-\-congestion\fR] [\fB\-\-initial\-congestion\-window\fR] [\fB\-\-initial\-mtu\fR] [\fB\-l\fR|\fB\-\-remote\-user\fR] [\fB\-\-log\-file\fR] [\fB\-\-max\-mtu\fR] [\fB\-\-min\-mtu\fR] [\fB\-p\fR|\fB\-\-preserve\fR] [\fB\-P\fR|\fB\-\-remote\-port\fR] [\fB\-\-packet\-threshold\fR] [\fB\-\-port\fR] [\fB\-\-profile\fR] [\fB\-q\fR|\fB\-\-quiet\fR] [\fB\-r\fR|\fB\-\-recurse\fR] [\fB\-\-remote\-qcp\-binary\fR] [\fB\-\-rx\fR] [\fB\-s\fR|\fB\-\-statistics\fR] [\fB\-S \fR] [\fB\-\-skip\-existing\fR] [\fB\-\-ssh\fR] [\fB\-\-ssh\-config\fR] [\fB\-\-ssh\-subsystem\fR] [\fB\-\-time\-format\fR] [\fB\-\-time\-threshold\fR] [\fB\-\-timeout\fR] [\fB\-\-tls\-auth\-type\fR] [\fB\-\-tx\fR] [\fB\-\-udp\-buffer\fR] [\fB\-j\fR|\fB\-\-parallel\fR] [\fB\-\-rtt\fR] [\fB\-\-debug\fR] [\fB\-\-dry\-run\fR] [\fB\-\-io\-buffer\-size\fR] [\fB\-\-remote\-config\fR] [\fB\-\-remote\-debug\fR] [\fB\-\-config\-files\fR] [\fB\-\-help\-buffers\fR] [\fB\-\-list\-features\fR] [\fB\-\-show\-config\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISOURCE|DESTINATION\fR] 
 .ie \n(.g .ds Aq \(aq
 .el .ds Aq '
 .SH DESCRIPTION
@@ -100,6 +100,11 @@ Behaviour is intended to match scp.
 .TP
 \fB\-s\fR, \fB\-\-statistics\fR
 Show additional transfer statistics
+.TP
+\fB\-\-skip\-existing\fR
+Skips files where the destination already exists with the same size.
+
+When this option is set, if the destination file already exists and has the same size as the source file, the transfer of that file is skipped.
 .TP
 \fB\-\-time\-format\fR \fI<FORMAT>\fR
 The time format to use when printing messages to the console or to file [default: local]

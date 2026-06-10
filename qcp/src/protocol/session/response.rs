@@ -228,6 +228,11 @@ pub enum Status {
     ItIsAFile = 8,
     UnknownError = 9,
     EncodingFailed = 10,
+    /// Destination file was skipped because it already exists with the same size as the source.
+    ///
+    /// This status is only sent in response to a command that included the
+    /// [`CommandParam::SkipIfSameSize`](crate::protocol::session::CommandParam::SkipIfSameSize) option.
+    Skipped = 11,
 }
 
 impl From<Status> for Uint {

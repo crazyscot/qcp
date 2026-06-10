@@ -90,7 +90,7 @@ mod test {
         client::CopyJobSpec,
         protocol::{
             control::Compatibility,
-            session::{Command, Status},
+            session::Command,
             test_helpers::{new_test_plumbing, read_from_stream},
         },
         session::RequestResult,

@@ -128,6 +128,21 @@ pub enum CommandParam {
     ///
     /// Introduced in qcp 0.8 with compatibility level 4
     Recurse,
+
+    /// Skip the transfer if the destination file exists and has the same size as the source.
+    ///
+    /// For [`Command::Get2`] commands: the associated [`Variant`] data is the local destination
+    /// file size as [`Variant::Unsigned`]. The server compares this with the source file size
+    /// before streaming; if they match it responds with [`Status::Skipped`](crate::protocol::session::Status::Skipped)
+    /// instead of sending the file.
+    ///
+    /// For [`Command::Put2`] commands: the associated [`Variant`] data is empty.
+    /// The server compares the destination file size with the source size from the [`FileHeader`]
+    /// after receiving it; if they match it responds with [`Status::Skipped`] instead of
+    /// accepting the payload.
+    ///
+    /// Introduced in qcp 0.10 with `VersionCompatibility=V2`.
+    SkipIfSameSize,
 }
 impl DataTag for CommandParam {}
 

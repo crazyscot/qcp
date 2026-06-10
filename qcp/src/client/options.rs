@@ -88,6 +88,13 @@ pub struct Parameters {
         )
     )]
     pub recurse: bool,
+
+    /// Skips files where the destination already exists with the same size.
+    ///
+    /// When this option is set, if the destination file already exists and has the
+    /// same size as the source file, the transfer of that file is skipped.
+    #[arg(long, display_order(0))]
+    pub skip_existing: bool,
 }
 
 #[cfg(test)]

@@ -40,6 +40,8 @@ pub struct CommandStats {
     pub payload_bytes: u64,
     /// Peak transfer rate observed (in bytes per second); this is not terribly accurate at the moment, particularly on PUT commands
     pub peak_transfer_rate: u64,
+    /// Number of files skipped because the destination already had the same size as the source
+    pub skipped_files: u64,
 }
 
 /// Result of a successfully completed request
