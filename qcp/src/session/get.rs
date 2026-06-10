@@ -83,6 +83,14 @@ impl CommandHandler for GetHandler {
         let header = FileHeader::from_reader_async_framed(&mut inner.stream.recv).await?;
         trace!("{header:?}");
         let header = FileHeaderV2::from(header);
+
+        // Automatically create parent directories for the destination file if they don't exist.
+        if let Some(parent) = std::path::Path::new(dest).parent()
+            && !parent.as_os_str().is_empty()
+        {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
         let mut file = TokioFile::create_or_truncate(dest, &header).await?;
 
         // Now we know how much we're receiving, update the chrome.
@@ -312,6 +320,25 @@ mod test {
             assert_eq!(r1?.stats.payload_bytes, contents.len() as u64);
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("file2")?;
+            assert_eq!(readback, contents);
+            Ok(())
+        })
+        .await
+    }
+
+    #[tokio::test]
+    async fn get_creates_missing_parent_directory() -> Result<()> {
+        let contents = "hello nested";
+        LitterTray::try_with_async(async |tray| {
+            let _ = tray.create_text("file1", contents)?;
+            let (r1, r2) = test_get_main("s:file1", "created_dir/nested_file").await?;
+            assert!(
+                r1.is_ok(),
+                "GET should succeed and automatically create the missing parent directory"
+            );
+            assert_eq!(r1?.stats.payload_bytes, contents.len() as u64);
+            assert!(r2.is_ok());
+            let readback = std::fs::read_to_string("created_dir/nested_file")?;
             assert_eq!(readback, contents);
             Ok(())
         })

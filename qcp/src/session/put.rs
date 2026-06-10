@@ -170,6 +170,13 @@ impl CommandHandler for PutHandler {
             return Ok(());
         }
 
+        // Automatically create parent directories for the destination file if they don't exist.
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
         let mut file = match TokioFile::create_or_truncate(path, &header).await {
             Ok(f) => f,
             Err(e) => {
@@ -282,7 +289,7 @@ async fn check_send_result(
 /// Determines whether to append the source filename to the destination path.
 ///
 /// Returns `Ok(true)` to append the source filename, `Ok(false)` if the full path is specified,
-/// or `Err(Status::DirectoryDoesNotExist)` if the destination directory doesn't exist.
+/// or `Err(Status::DirectoryDoesNotExist)` if the destination is explicitly a directory but doesn't exist.
 fn check_dest_path(path: &Path, destination: &str) -> Result<bool, Status> {
     if destination.is_empty() || destination == "." {
         // Easy case: copying to current working directory
@@ -293,28 +300,13 @@ fn check_dest_path(path: &Path, destination: &str) -> Result<bool, Status> {
     } else {
         // The given destination does not exist.
         // - If clearly intended as a directory (ends with / or \): error (use CreateDirectory instead).
-        // - If parent directory exists: the full path is specified, do not append.
-        // - Otherwise: error.
+        // - Otherwise: we allow it, and the caller will create missing parent directories automatically.
         if destination.ends_with(std::path::MAIN_SEPARATOR) {
-            // N.B. Path.has_trailing_sep() is currently only available in nightly
             debug!("Nonexistent destination directory {destination}");
             return Err(Status::DirectoryDoesNotExist);
         }
-        let mut parent_dir = {
-            let mut tmp = path.to_path_buf();
-            let _ = tmp.pop();
-            tmp
-        };
-        if parent_dir.as_os_str().is_empty() {
-            // We're writing a file to the current working directory
-            parent_dir.push(".");
-        }
-        if parent_dir.is_dir() {
-            Ok(false)
-        } else {
-            debug!("Nonexistent destination directory {destination}");
-            Err(Status::DirectoryDoesNotExist)
-        }
+        // Parent directory will be created automatically by the caller if needed.
+        Ok(false)
     }
 }
 
@@ -508,14 +500,18 @@ mod test {
     }
 
     #[tokio::test]
-    async fn write_fail_parent_directory_missing() -> Result<()> {
+    async fn put_creates_missing_parent_directory() -> Result<()> {
         let contents = "xyzy";
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
             let (r1, r2) = test_put_main("file1", "server:destdir/foo", false).await?;
-            let r1 = r1.unwrap_err();
-            assert_eq!(Status::from(r1), Status::DirectoryDoesNotExist);
+            assert!(
+                r1.is_ok(),
+                "PUT should succeed and automatically create the missing parent directory"
+            );
             assert!(r2.is_ok());
+            let readback = std::fs::read_to_string("destdir/foo")?;
+            assert_eq!(readback, contents);
             Ok(())
         })
         .await

@@ -15,6 +15,9 @@ async fn test_umask(initial: u16, set_umask: u16) {
     let dest = "dest";
     unsafe {
         // umask takes a u32 on Linux but a u16 on macos
+        #[cfg(target_os = "macos")]
+        libc::umask(set_umask);
+        #[cfg(not(target_os = "macos"))]
         libc::umask(set_umask.into());
     }
 

@@ -637,6 +637,26 @@ impl Client {
         }
     }
 
+    fn is_parent_dir(parent: &str, child: &str) -> bool {
+        if parent == child {
+            return false;
+        }
+        if let Some(remainder) = child.strip_prefix(parent) {
+            if parent.ends_with(std::path::MAIN_SEPARATOR) {
+                return true;
+            }
+            return remainder.starts_with(std::path::MAIN_SEPARATOR);
+        }
+        false
+    }
+
+    fn is_empty_directory_job(job: &CopyJobSpec, jobs: &[CopyJobSpec]) -> bool {
+        job.directory
+            && !jobs
+                .iter()
+                .any(|other| Self::is_parent_dir(&job.source.filename, &other.source.filename))
+    }
+
     /// This function should generally log errors and return Ok(status, stats). Err(...) is reserved for fatal errors.
     async fn process_file_transfers<S, R, OpenStream, JobRunner>(
         &self,
@@ -657,178 +677,95 @@ impl Client {
     {
         let mut aggregate_stats = CommandStats::default();
         let mut overall_success = true;
-
+        let parallel = self.negotiated_parallelism();
         let destination_is_remote = jobs
             .first()
             .is_some_and(|j| j.destination.user_at_host.is_some());
         let n_jobs = jobs.len();
-        let parallel = self.negotiated_parallelism();
-
-        // DIRECTORY CREATION PHASE
-        // All directories must exist before parallel file transfers begin.
-        // For local destinations: create sequentially (cheap local syscalls).
-        // For remote destinations: if the server supports MKDIR_ALL (create_dir_all), send all
-        // mkdir requests in one parallel batch -- the server creates missing parents
-        // automatically so depth ordering is not required. Otherwise fall back to the depth-level
-        // batching strategy (sequential between depths, parallel within a depth).
-        if destination_is_remote {
-            let compat = self.negotiated.as_ref().unwrap().compat;
-            if compat.supports(Feature::MKDIR_ALL) {
-                create_remote_dirs_parallel(
-                    jobs,
-                    parallel,
-                    &mut open_stream,
-                    &run_job,
-                    &mut aggregate_stats,
-                    &mut overall_success,
-                )
-                .await?;
-            } else {
-                create_remote_dirs_by_depth(
-                    jobs,
-                    parallel,
-                    &mut open_stream,
-                    &run_job,
-                    &mut aggregate_stats,
-                    &mut overall_success,
-                )
-                .await?;
-            }
-        } else {
-            for job in jobs {
-                if !job.directory {
-                    continue;
-                }
-                if !handle_local_directory_creation(job).await {
-                    overall_success = false;
-                    break;
-                }
-            }
-        }
-
-        // FILE TRANSFER PHASE (parallel)
-        if overall_success {
-            self.transfer_files_phase(
-                jobs,
-                parallel,
-                &mut open_stream,
-                &run_job,
-                &mut aggregate_stats,
-                &mut overall_success,
-            )
-            .await?;
-        }
-
-        // POST-TRANSFER: Apply preserve logic (permission bits) to any directories created.
-        // We do this in _reverse order_ in case the changed permissions prevent us from being able to traverse a directory we recently created.
-        if n_jobs > 1 {
-            let mut message_set = false;
-            for job in jobs.iter().rev() {
-                if job.directory && job.preserve {
-                    let stream_pair = open_stream().await?;
-                    if !message_set {
-                        self.spinner
-                            .set_message("Finishing up directory permissions");
-                        message_set = true;
-                    }
-                    let result = run_job(stream_pair, job.clone(), 0, TransferPhase::Post).await;
-                    if let Err(e) = result {
-                        if let Some(src) = e.source() {
-                            // Some error conditions come with an anyhow Context.
-                            // We want to output one tidy line, so glue them together.
-                            error!("{e}: {src}");
-                        } else {
-                            error!("{e}");
-                        }
-                        overall_success = false;
-                    }
-                }
-            }
-        }
-
-        Ok((overall_success, aggregate_stats))
-    }
-
-    async fn transfer_files_phase<S, R, OpenStream, JobRunner>(
-        &self,
-        jobs: &[CopyJobSpec],
-        parallel: usize,
-        open_stream: &mut OpenStream,
-        run_job: &JobRunner,
-        aggregate_stats: &mut CommandStats,
-        overall_success: &mut bool,
-    ) -> anyhow::Result<()>
-    where
-        OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-        JobRunner: AsyncFn(
-            SendReceivePair<S, R>,
-            CopyJobSpec,
-            usize,
-            TransferPhase,
-        ) -> Result<RequestResult>,
-        S: SendingStream + 'static,
-        R: ReceivingStream + 'static,
-    {
         let filename_width = longest_filename(jobs);
         let n_files = jobs.iter().filter(|j| !j.directory).count();
+
         let mut in_flight: InFlightTransfers<'_> = FuturesUnordered::new();
         let mut stop_launching = false;
 
         for job in jobs {
-            if job.directory {
-                continue;
-            }
             if stop_launching {
                 break;
             }
 
-            // Drain finished tasks when we are at the concurrency limit.
-            while in_flight.len() >= parallel {
-                if let Some(result) = in_flight.next().await {
-                    collect_transfer_result(result, aggregate_stats, overall_success);
+            if job.directory {
+                if Self::is_empty_directory_job(job, jobs) {
+                    if destination_is_remote {
+                        stop_launching = !drain_in_flight(
+                            &mut in_flight,
+                            parallel,
+                            &mut aggregate_stats,
+                            &mut overall_success,
+                        )
+                        .await;
+                        if stop_launching {
+                            break;
+                        }
+                        debug!("Creating remote empty directory {:?}", job);
+                        enqueue_transfer_job(
+                            job,
+                            filename_width,
+                            TransferPhase::Transfer,
+                            &mut in_flight,
+                            &mut open_stream,
+                            &run_job,
+                        )
+                        .await?;
+                    } else if !create_local_empty_directory(job).await {
+                        overall_success = false;
+                        break;
+                    }
                 }
-                if !*overall_success {
-                    stop_launching = true;
-                    break;
-                }
+                continue;
             }
 
+            stop_launching = !drain_in_flight(
+                &mut in_flight,
+                parallel,
+                &mut aggregate_stats,
+                &mut overall_success,
+            )
+            .await;
             if stop_launching {
                 break;
             }
 
             debug!("Processing job {:?}", job);
-            let stream_pair = open_stream().await?;
-
             if n_files > 1 {
                 self.spinner.set_message(format!(
                     "Transferring data ({} in flight)",
-                    in_flight.len() + 1,
+                    in_flight.len() + 1
                 ));
             }
-
-            let job_clone = job.clone();
-            // Call run_job immediately (AsyncFn: &self, so concurrent calls are OK).
-            let transfer_fut = run_job(
-                stream_pair,
-                job_clone.clone(),
+            enqueue_transfer_job(
+                job,
                 filename_width,
                 TransferPhase::Transfer,
-            );
-            in_flight.push(Box::pin(async move {
-                let result = transfer_fut.await;
-                (job_clone, result)
-            }));
+                &mut in_flight,
+                &mut open_stream,
+                &run_job,
+            )
+            .await?;
         }
 
-        // Drain remaining in-flight futures.
-        while !in_flight.is_empty() {
-            if let Some(result) = in_flight.next().await {
-                collect_transfer_result(result, aggregate_stats, overall_success);
-            }
-        }
+        drain_remaining_in_flight(&mut in_flight, &mut aggregate_stats, &mut overall_success).await;
 
-        Ok(())
+        apply_directory_metadata(
+            self,
+            jobs,
+            n_jobs,
+            &mut open_stream,
+            &run_job,
+            &mut overall_success,
+        )
+        .await?;
+
+        Ok((overall_success, aggregate_stats))
     }
 
     /// This function should generally log errors and return Ok(status, stats). Err(...) is reserved for fatal errors.
@@ -926,6 +863,117 @@ impl Client {
 type TransferResult = (CopyJobSpec, Result<RequestResult>);
 type InFlightTransfers<'a> = FuturesUnordered<Pin<Box<dyn Future<Output = TransferResult> + 'a>>>;
 
+async fn drain_in_flight(
+    in_flight: &mut InFlightTransfers<'_>,
+    parallel: usize,
+    aggregate_stats: &mut CommandStats,
+    overall_success: &mut bool,
+) -> bool {
+    while in_flight.len() >= parallel {
+        if let Some(result) = in_flight.next().await {
+            collect_transfer_result(result, aggregate_stats, overall_success);
+        }
+        if !*overall_success {
+            return false;
+        }
+    }
+    true
+}
+
+async fn enqueue_transfer_job<'a, S, R, OpenStream, JobRunner>(
+    job: &CopyJobSpec,
+    filename_width: usize,
+    phase: TransferPhase,
+    in_flight: &mut InFlightTransfers<'a>,
+    open_stream: &mut OpenStream,
+    run_job: &'a JobRunner,
+) -> anyhow::Result<()>
+where
+    OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
+    JobRunner:
+        AsyncFn(SendReceivePair<S, R>, CopyJobSpec, usize, TransferPhase) -> Result<RequestResult>,
+    S: SendingStream + 'static,
+    R: ReceivingStream + 'static,
+{
+    let stream_pair = open_stream().await?;
+    let job_clone = job.clone();
+    let transfer_fut = run_job(stream_pair, job_clone.clone(), filename_width, phase);
+    in_flight.push(Box::pin(async move { (job_clone, transfer_fut.await) }));
+    Ok(())
+}
+
+async fn create_local_empty_directory(job: &CopyJobSpec) -> bool {
+    debug!(
+        "Creating local empty directory {}",
+        job.destination.filename
+    );
+    if let Err(e) = tokio::fs::create_dir_all(&job.destination.filename).await
+        && e.kind() != std::io::ErrorKind::AlreadyExists
+    {
+        error!(
+            "Failed to create local directory {}: {e}",
+            job.destination.filename
+        );
+        return false;
+    }
+    true
+}
+
+async fn drain_remaining_in_flight(
+    in_flight: &mut InFlightTransfers<'_>,
+    aggregate_stats: &mut CommandStats,
+    overall_success: &mut bool,
+) {
+    while !in_flight.is_empty() {
+        if let Some(result) = in_flight.next().await {
+            collect_transfer_result(result, aggregate_stats, overall_success);
+        }
+    }
+}
+
+async fn apply_directory_metadata<S, R, OpenStream, JobRunner>(
+    client: &Client,
+    jobs: &[CopyJobSpec],
+    n_jobs: usize,
+    open_stream: &mut OpenStream,
+    run_job: &JobRunner,
+    overall_success: &mut bool,
+) -> anyhow::Result<()>
+where
+    OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
+    JobRunner:
+        AsyncFn(SendReceivePair<S, R>, CopyJobSpec, usize, TransferPhase) -> Result<RequestResult>,
+    S: SendingStream + 'static,
+    R: ReceivingStream + 'static,
+{
+    if n_jobs <= 1 {
+        return Ok(());
+    }
+
+    let mut message_set = false;
+    for job in jobs.iter().rev() {
+        if job.directory && job.preserve {
+            let stream_pair = open_stream().await?;
+            if !message_set {
+                client
+                    .spinner
+                    .set_message("Finishing up directory permissions");
+                message_set = true;
+            }
+            let result = run_job(stream_pair, job.clone(), 0, TransferPhase::Post).await;
+            if let Err(e) = result {
+                if let Some(src) = e.source() {
+                    error!("{e}: {src}");
+                } else {
+                    error!("{e}");
+                }
+                *overall_success = false;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn collect_transfer_result(
     result: TransferResult,
     aggregate_stats: &mut CommandStats,
@@ -945,151 +993,6 @@ fn collect_transfer_result(
             *overall_success = false;
         }
     }
-}
-
-/// Creates all remote directories in a single parallel batch.
-///
-/// Relies on the server using `create_dir_all` (i.e. [`Feature::MKDIR_ALL`] is supported),
-/// so parent directories are created automatically and depth ordering is not required.
-async fn create_remote_dirs_parallel<S, R, OpenStream, JobRunner>(
-    jobs: &[CopyJobSpec],
-    parallel: usize,
-    open_stream: &mut OpenStream,
-    run_job: &JobRunner,
-    aggregate_stats: &mut CommandStats,
-    overall_success: &mut bool,
-) -> anyhow::Result<()>
-where
-    OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-    JobRunner:
-        AsyncFn(SendReceivePair<S, R>, CopyJobSpec, usize, TransferPhase) -> Result<RequestResult>,
-    S: SendingStream + 'static,
-    R: ReceivingStream + 'static,
-{
-    let mut in_flight: InFlightTransfers<'_> = FuturesUnordered::new();
-    let mut stop_dirs = false;
-    for job in jobs {
-        if !job.directory {
-            continue;
-        }
-        if stop_dirs {
-            break;
-        }
-        while in_flight.len() >= parallel {
-            if let Some(result) = in_flight.next().await {
-                collect_transfer_result(result, aggregate_stats, overall_success);
-            }
-            if !*overall_success {
-                stop_dirs = true;
-                break;
-            }
-        }
-        if stop_dirs {
-            break;
-        }
-        debug!("Creating remote directory {:?}", job);
-        let stream_pair = open_stream().await?;
-        let j = job.clone();
-        let fut = run_job(stream_pair, j.clone(), 0, TransferPhase::Transfer);
-        in_flight.push(Box::pin(async move { (j, fut.await) }));
-    }
-    while let Some(result) = in_flight.next().await {
-        collect_transfer_result(result, aggregate_stats, overall_success);
-    }
-    Ok(())
-}
-
-/// Creates remote directories grouped by path depth.
-///
-/// All directories at a given depth are created in parallel (up to `parallel` concurrent
-/// streams), and the next depth level starts only after all directories at the current
-/// level are confirmed. This guarantees that parents always exist before children are
-/// attempted, while sibling directories at the same level are created concurrently.
-async fn create_remote_dirs_by_depth<S, R, OpenStream, JobRunner>(
-    jobs: &[CopyJobSpec],
-    parallel: usize,
-    open_stream: &mut OpenStream,
-    run_job: &JobRunner,
-    aggregate_stats: &mut CommandStats,
-    overall_success: &mut bool,
-) -> anyhow::Result<()>
-where
-    OpenStream: AsyncFnMut() -> anyhow::Result<SendReceivePair<S, R>>,
-    JobRunner:
-        AsyncFn(SendReceivePair<S, R>, CopyJobSpec, usize, TransferPhase) -> Result<RequestResult>,
-    S: SendingStream + 'static,
-    R: ReceivingStream + 'static,
-{
-    use std::collections::BTreeMap;
-    let mut by_depth: BTreeMap<usize, Vec<&CopyJobSpec>> = BTreeMap::new();
-    for job in jobs {
-        if !job.directory {
-            continue;
-        }
-        let depth = std::path::Path::new(&job.destination.filename)
-            .components()
-            .count();
-        by_depth.entry(depth).or_default().push(job);
-    }
-    for batch in by_depth.values() {
-        if !*overall_success {
-            break;
-        }
-        let mut dir_flights: InFlightTransfers<'_> = FuturesUnordered::new();
-        let mut stop_dirs = false;
-        for job in batch {
-            if stop_dirs {
-                break;
-            }
-            while dir_flights.len() >= parallel {
-                if let Some(result) = dir_flights.next().await {
-                    collect_transfer_result(result, aggregate_stats, overall_success);
-                }
-                if !*overall_success {
-                    stop_dirs = true;
-                    break;
-                }
-            }
-            if stop_dirs {
-                break;
-            }
-            debug!("Creating remote directory {:?}", job);
-            let stream_pair = open_stream().await?;
-            let j = (*job).clone();
-            let fut = run_job(stream_pair, j.clone(), 0, TransferPhase::Transfer);
-            dir_flights.push(Box::pin(async move { (j, fut.await) }));
-        }
-        while let Some(result) = dir_flights.next().await {
-            collect_transfer_result(result, aggregate_stats, overall_success);
-        }
-    }
-    Ok(())
-}
-
-async fn handle_local_directory_creation(job: &CopyJobSpec) -> bool {
-    debug!("Creating local directory {}", job.destination.filename);
-    let meta = tokio::fs::metadata(&job.destination.filename).await;
-    if let Ok(m) = meta {
-        if m.is_file() {
-            error!(
-                "Cannot create local directory {}: a file already exists there",
-                job.destination.filename
-            );
-            return false;
-        }
-        // directory already exists, that's fine
-        return true;
-    }
-    if let Err(e) = tokio::fs::create_dir_all(&job.destination.filename).await
-        && e.kind() != std::io::ErrorKind::AlreadyExists
-    {
-        error!(
-            "Failed to create local directory {}: {e}",
-            job.destination.filename
-        );
-        return false;
-    }
-    true
 }
 
 async fn determine_single_source_mkdir_mode(

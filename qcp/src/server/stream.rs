@@ -102,8 +102,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_put() {
+        // Trailing slash indicates an explicit directory, which must exist.
         let cmd = Command::Put(PutArgs {
-            filename: "/fjds/no-such-file.txt".to_string(),
+            filename: "/fjds/no-such-file.txt/".to_string(),
         });
         let resp = test_handler(cmd, 1).await;
         assert_eq!(resp.status, Status::DirectoryDoesNotExist);
@@ -120,8 +121,9 @@ mod tests {
     }
     #[tokio::test]
     async fn handle_put2() {
+        // Trailing slash indicates an explicit directory, which must exist.
         let cmd = Command::Put2(Put2Args {
-            filename: String::from("/blah/no-such-file"),
+            filename: String::from("/blah/no-such-file/"),
             ..Default::default()
         });
         let resp = test_handler(cmd, 3).await;
