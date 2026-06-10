@@ -60,8 +60,11 @@ pub fn create_config(
     let _ = mtu_cfg.upper_bound(params.max_mtu);
 
     let mut config = TransportConfig::default();
+    // Allow a few more concurrent streams than the requested parallel degree so quinn's flow
+    // control never becomes the bottleneck.
+    let max_streams = VarInt::from(u32::from(params.parallel.max(1)) + 2);
     let _ = config
-        .max_concurrent_bidi_streams(1u8.into())
+        .max_concurrent_bidi_streams(max_streams)
         .max_concurrent_uni_streams(0u8.into())
         .keep_alive_interval(Some(PROTOCOL_KEEPALIVE))
         .allow_spin(true)
@@ -87,12 +90,14 @@ pub fn create_config(
     }
 
     match mode {
-        // TODO: If we later support multiple streams at once, will need to consider receive_window and stream_receive_window.
+        // When parallel > 1 the connection-level receive window must accommodate all concurrent streams.
         ThroughputMode::Rx | ThroughputMode::Both => {
-            let rwnd: VarInt = params.recv_window().try_into()?;
+            let srwnd: VarInt = params.recv_window().try_into()?;
+            let n_streams = u64::from(params.parallel.max(1));
+            let crwnd: VarInt = params.recv_window().saturating_mul(n_streams).try_into()?;
             let _ = config
-                .receive_window(rwnd) // Not strictly essential as quinn defaults to unlimited
-                .stream_receive_window(rwnd) // essential; quinn defaults to 100Mbits x 100ms
+                .receive_window(crwnd) // connection-level: scale with parallelism
+                .stream_receive_window(srwnd) // per-stream: one BDP
                 .datagram_receive_buffer_size(Some(udp_buf));
         }
         ThroughputMode::Tx => (),
@@ -356,6 +361,13 @@ pub fn combine_bandwidth_configurations(
         server.timeout,
         |_: u16, _| CombinationResponse::Client,
         "timeout"
+    )?;
+    negotiate!(
+        ca.find_tag(ClientMessage2Attributes::ParallelDegree)
+            .map(|v| (v.coerce_unsigned() & 0xffff) as u16),
+        server.parallel,
+        |a: u16, b: u16| CombinationResponse::Combined(a.min(b).max(1)),
+        "parallel"
     )?;
 
     // Convert selected fields to human-friendly representations
@@ -705,5 +717,42 @@ mod tests {
         // this is a server-oriented configuration
         assert_eq!(c.tx, 333_444);
         assert_eq!(c.rx, 123_456);
+    }
+
+    #[test]
+    fn parallel_sets_max_concurrent_streams() {
+        // parallel=1 (default): max_concurrent_bidi_streams should be at least 1
+        let cfg = Configuration::system_default().clone();
+        assert_eq!(cfg.parallel, 1);
+        let (tc, _) = process_config(&cfg, ThroughputMode::Both);
+        // parallel=1 -> max_streams = 1+2 = 3
+        assert_contains!(tc, "max_concurrent_bidi_streams: 3");
+
+        // parallel=4: max_concurrent_bidi_streams should be at least 4
+        let mut cfg4 = Configuration::system_default().clone();
+        cfg4.parallel = 4;
+        let (tc4, _) = process_config(&cfg4, ThroughputMode::Both);
+        // parallel=4 -> max_streams = 4+2 = 6
+        assert_contains!(tc4, "max_concurrent_bidi_streams: 6");
+    }
+
+    #[test]
+    fn parallel_scales_receive_window() {
+        let mut cfg = Configuration::system_default().clone();
+        cfg.rx = 1_000_000;
+        cfg.rtt = 1000;
+        cfg.parallel = 1;
+        let (tc1, _) = process_config(&cfg, ThroughputMode::Rx);
+
+        cfg.parallel = 4;
+        let (tc4, _) = process_config(&cfg, ThroughputMode::Rx);
+
+        // Connection-level receive window should be 4x larger with parallel=4.
+        // With rx=1M, rtt=1s: bdp=1_000_000. parallel=1 => crwnd=1_000_000; parallel=4 => crwnd=4_000_000
+        assert_contains!(tc1, "receive_window: 1000000");
+        assert_contains!(tc4, "receive_window: 4000000");
+        // Per-stream window is unchanged (still one BDP)
+        assert_contains!(tc1, "stream_receive_window: 1000000");
+        assert_contains!(tc4, "stream_receive_window: 1000000");
     }
 }

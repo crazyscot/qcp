@@ -207,6 +207,10 @@ impl ClientMessageV2 {
             self.attributes
                 .push(ClientMessage2Attributes::QuicTimeout.with_unsigned(t));
         }
+        if let Some(p) = our_config.parallel {
+            self.attributes
+                .push(ClientMessage2Attributes::ParallelDegree.with_unsigned(p));
+        }
         // DirectionOfTravel is set up by set_direction()
     }
 }
@@ -352,6 +356,9 @@ pub enum ClientMessage2Attributes {
     /// Connection timeout for the QUIC endpoints, in seconds.
     /// Data is [`crate::protocol::Variant::Unsigned`].
     QuicTimeout,
+    /// The number of files to transfer concurrently.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    ParallelDegree,
 }
 impl DataTag for ClientMessage2Attributes {
     fn debug_data(&self, data: &Variant) -> String {
@@ -545,6 +552,7 @@ mod test {
             tls_auth_type: None,
             aes256: None,
             io_buffer_size: None,
+            parallel: None,
         };
 
         let cmsg = {

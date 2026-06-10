@@ -32,7 +32,7 @@ enumscribe = "0.4.0"
 figment = "0.10.19"
 file-mode = "0.1.2"
 flate2 = "1.1.9"
-futures-util = { version = "0.3.32", default-features = false }
+futures-util = { version = "0.3.32", default-features = false, features = ["alloc"] }
 gethostname = "1.1.0"
 glob = "0.3.3"
 heck = "0.5.0"

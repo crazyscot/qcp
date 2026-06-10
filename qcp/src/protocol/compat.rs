@@ -61,6 +61,7 @@ def_enum!(
         GET2_PUT2 => Compatibility::Level(2) => "Get2 and Put2 commands with extensible options.\n`FileHeaderV2` and `FileTrailerV2` structures with extensible metadata.",
         CMSG_SMSG_2 => Compatibility::Level(3) => "Version 2 of `ClientMessage` and `ServerMessage` with extensible attributes.\n`CredentialsType` enum.",
         MKDIR_SETMETA_LS => Compatibility::Level(4) => "CreateDirectory, SetMetadata, ListFiles commands",
+        MKDIR_ALL => Compatibility::Level(5) => "CreateDirectory uses create_dir_all; client may submit all mkdir requests in parallel regardless of depth",
     }
     // Note: When adding a new compatibility level, don't forget to update OUR_COMPATIBILITY_LEVEL.
 );

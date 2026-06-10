@@ -71,7 +71,7 @@ impl CommandHandler for CreateDirectoryHandler {
                 anyhow::bail!("mkdir: existing entity {path:?} is neither file nor directory");
             }
         } else {
-            let result = tokio::fs::create_dir(path).await;
+            let result = tokio::fs::create_dir_all(path).await;
             if let Err(e) = result {
                 let str = e.to_string();
                 debug!("Could not mkdir: {str}");
@@ -156,11 +156,11 @@ mod test {
     #[tokio::test]
     async fn mkdir_missing_parent() -> Result<()> {
         LitterTray::try_with_async(async |_| {
+            // create_dir_all creates all missing parent components
             let (r1, r2) = test_mkdir_main("d/e").await?;
+            assert!(r1.is_ok());
             assert!(r2.is_ok());
-            let err = r1.expect_err("r1 should have errored");
-            let st = Status::from(err);
-            assert_eq!(st, Status::FileNotFound); // TODO: This should really be DirectoryDoesNotExist
+            assert!(is_dir("d/e").await.expect("is_dir failed"));
             Ok(())
         })
         .await

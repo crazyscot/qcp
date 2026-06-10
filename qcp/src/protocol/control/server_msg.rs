@@ -279,6 +279,9 @@ pub enum ServerMessage2Attributes {
     /// Connection timeout for the QUIC endpoints, in seconds.
     /// Data is [`crate::protocol::Variant::Unsigned`].
     QuicTimeout,
+    /// The number of files to transfer concurrently.
+    /// Data is [`crate::protocol::Variant::Unsigned`].
+    ParallelDegree,
 }
 
 impl DataTag for ServerMessage2Attributes {}
@@ -299,6 +302,10 @@ impl ServerMessageV2 {
         if config.timeout != 0 {
             self.attributes
                 .push(ServerMessage2Attributes::QuicTimeout.with_unsigned(config.timeout));
+        }
+        if config.parallel > 1 {
+            self.attributes
+                .push(ServerMessage2Attributes::ParallelDegree.with_unsigned(config.parallel));
         }
         // WarningMessage is set up when the message is created.
     }
@@ -333,6 +340,9 @@ impl Provider for ServerMessageV2 {
                     }
                     ServerMessage2Attributes::QuicTimeout => {
                         insert("timeout", data.coerce_unsigned().into());
+                    }
+                    ServerMessage2Attributes::ParallelDegree => {
+                        insert("parallel", data.coerce_unsigned().into());
                     }
                     // attributes not forming part of the configuration:
                     ServerMessage2Attributes::WarningMessage

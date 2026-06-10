@@ -547,6 +547,24 @@ CLI options take precedence over the configuration file, which takes precedence 
         serialize_with = "EQHelper::to_string_figment"
     )]
     pub io_buffer_size: u64,
+
+    /// Number of files to transfer concurrently. [default: 1]
+    ///
+    /// Increasing this helps saturate the channel when transferring many small files,
+    /// because each file's transfer can overlap with others rather than waiting for each to complete serially.
+    ///
+    /// A value of 1 (the default) gives the same sequential behaviour as previous versions.
+    ///
+    /// **Note:** With `parallel > 1`, the QUIC receive buffer grows proportionally;
+    /// very large values on memory-constrained systems may need `udp-buffer` tuning.
+    #[arg(
+        short = 'j',
+        long,
+        value_name = "N",
+        help_heading("Tuning"),
+        display_order(1),
+    )]
+    pub parallel: u16,
 }
 
 static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configuration {
@@ -582,6 +600,9 @@ static SYSTEM_DEFAULT_CONFIG: LazyLock<Configuration> = LazyLock::new(|| Configu
     // Other
     tls_auth_type: CredentialsType::Any,
     aes256: false,
+
+    // Transfer concurrency
+    parallel: 1,
 });
 
 impl Configuration {
