@@ -231,7 +231,7 @@ pub enum Status {
     /// Destination file was skipped because it already exists with the same size as the source.
     ///
     /// This status is only sent in response to a command that included the
-    /// [`CommandParam::SkipIfSameSize`](crate::protocol::session::CommandParam::SkipIfSameSize) option.
+    /// [`CommandParam::SkipIfSameSize`] option.
     Skipped = 11,
 }
 

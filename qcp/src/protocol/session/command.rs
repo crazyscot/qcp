@@ -138,7 +138,7 @@ pub enum CommandParam {
     ///
     /// For [`Command::Put2`] commands: the associated [`Variant`] data is empty.
     /// The server compares the destination file size with the source size from the [`FileHeader`]
-    /// after receiving it; if they match it responds with [`Status::Skipped`] instead of
+    /// after receiving it; if they match it responds with [`Status::Skipped`](crate::protocol::session::Status::Skipped) instead of
     /// accepting the payload.
     ///
     /// Introduced in qcp 0.9 with compatibility level 5.

@@ -499,7 +499,8 @@ mod tests {
             ..Default::default()
         };
 
-        let e = combine_bandwidth_configurations(&mut mgr, &mp, Compatibility::Level(5)).unwrap_err();
+        let e =
+            combine_bandwidth_configurations(&mut mgr, &mp, Compatibility::Level(5)).unwrap_err();
         assert_contains!(
             e.to_string(),
             "server and client have incompatible congestion algorithm requirements"
