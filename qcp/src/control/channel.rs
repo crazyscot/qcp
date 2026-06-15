@@ -31,6 +31,11 @@ use crate::util::{Credentials, TimeFormat, TracingSetupFn};
 use mockall::{automock, predicate::*};
 
 /// Control channel abstraction
+#[allow(unknown_lints, reason = "clippy::unused_async_trait_impl is new")]
+#[allow(
+    clippy::unused_async_trait_impl,
+    reason = "failure created by external package"
+)]
 #[cfg_attr(test, automock)]
 pub(crate) trait ControlChannelServerInterface<
     S: SendingStream + 'static,

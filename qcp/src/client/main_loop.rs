@@ -1642,9 +1642,9 @@ mod test {
         type Send = tokio::io::WriteHalf<tokio::io::SimplexStream>;
         type Recv = tokio::io::ReadHalf<tokio::io::SimplexStream>;
 
-        async fn open_bi_stream(
+        fn open_bi_stream(
             &self,
-        ) -> anyhow::Result<crate::protocol::common::SendReceivePair<Self::Send, Self::Recv>>
+        ) -> impl Future<Output = anyhow::Result<crate::protocol::common::SendReceivePair<Self::Send, Self::Recv>>>
         {
             let (client_side, mut server_side) = new_test_plumbing();
             let _ = self.open_calls.fetch_add(1, Ordering::SeqCst);
@@ -1652,7 +1652,7 @@ mod test {
             std::mem::drop(tokio::spawn(async move {
                 let _ = server_side.send.write_all(&response).await;
             }));
-            Ok(client_side)
+            std::future::ready(Ok(client_side))
         }
     }
 
