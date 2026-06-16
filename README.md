@@ -1,9 +1,7 @@
-[![Crates.io](https://img.shields.io/crates/v/qcp.svg)](https://crates.io/crates/qcp)
 [![Build status](https://github.com/crazyscot/qcp/actions/workflows/ci.yml/badge.svg)](https://github.com/crazyscot/qcp/actions/workflows/ci.yml)
 [![Documentation](https://docs.rs/qcp/badge.svg)](https://docs.rs/qcp/)
 [![codecov](https://codecov.io/gh/crazyscot/qcp/graph/badge.svg?token=RNYUNDHTQI)](https://codecov.io/gh/crazyscot/qcp)
 ![GitHub License](https://img.shields.io/github/license/crazyscot/qcp)
-![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/crazyscot/qcp)
 
 The QUIC Copier (`qcp`) is an experimental
 high-performance remote file copy utility for long-distance internet connections.
