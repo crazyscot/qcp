@@ -1644,8 +1644,11 @@ mod test {
 
         fn open_bi_stream(
             &self,
-        ) -> impl Future<Output = anyhow::Result<crate::protocol::common::SendReceivePair<Self::Send, Self::Recv>>>
-        {
+        ) -> impl Future<
+            Output = anyhow::Result<
+                crate::protocol::common::SendReceivePair<Self::Send, Self::Recv>,
+            >,
+        > {
             let (client_side, mut server_side) = new_test_plumbing();
             let _ = self.open_calls.fetch_add(1, Ordering::SeqCst);
             let response = self.responses.lock().unwrap().remove(0);
