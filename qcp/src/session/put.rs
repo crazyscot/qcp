@@ -509,13 +509,15 @@ mod test {
 
     #[tokio::test]
     async fn write_creates_missing_destination_directory() -> Result<()> {
+        use std::path::MAIN_SEPARATOR;
         let contents = "foo";
         LitterTray::try_with_async(async |tray| {
             let _ = tray.create_text("file1", contents)?;
-            let (r1, r2) = test_put_main("file1", "server:destdir/", false).await?;
+            let destfile = format!("server:destdir{MAIN_SEPARATOR}");
+            let (r1, r2) = test_put_main("file1", &destfile, false).await?;
             assert!(
                 r1.is_ok(),
-                "PUT should succeed and create the missing destination directory"
+                "PUT should succeed and create the missing destination directory: {r1:?}"
             );
             assert!(r2.is_ok());
             let readback = std::fs::read_to_string("destdir/file1")?;
