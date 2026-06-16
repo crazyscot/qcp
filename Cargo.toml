@@ -8,7 +8,7 @@ edition = "2024"
 [workspace.dependencies]
 anstyle = { version = "1.0.14", default-features = false }
 anyhow = "1.0.102"
-assertables = "9.9.0"
+assertables = "10.1.0"
 async-trait = "0.1.89"
 bytes = "1.11.1"
 cargo_toml = "0.22.3"
@@ -70,7 +70,7 @@ static_str_ops = "0.1.2"
 struct-field-names-as-array = "0.3.0"
 strum = "0.28.0"
 strum_macros = "0.28.0"
-tabled = "0.20.0"
+tabled = "0.21.0"
 tempfile = { version = "3.27.0", default-features = false }
 termsize = "0.1.9"
 thiserror = "2.0.18"
