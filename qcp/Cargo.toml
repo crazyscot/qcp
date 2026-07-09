@@ -73,7 +73,7 @@ static_assertions = { workspace = true }
 struct-field-names-as-array = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
-tabled = { workspace = true }
+tabled = { workspace = true, features = ["std"] }
 termsize = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

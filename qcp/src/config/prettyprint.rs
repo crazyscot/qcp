@@ -18,11 +18,26 @@ use tabled::{
 };
 
 /// Data type used when rendering the config table
-#[derive(Tabled)]
 struct PrettyConfig {
     field: String,
     value: String,
     source: String,
+}
+
+impl Tabled for PrettyConfig {
+    const LENGTH: usize = 3;
+
+    fn fields(&self) -> Vec<std::borrow::Cow<'_, str>> {
+        vec![
+            self.field.clone().into(),
+            self.value.clone().into(),
+            self.source.clone().into(),
+        ]
+    }
+
+    fn headers() -> Vec<std::borrow::Cow<'static, str>> {
+        vec!["Field".into(), "Value".into(), "Source".into()]
+    }
 }
 
 impl PrettyConfig {

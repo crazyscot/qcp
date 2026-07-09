@@ -106,14 +106,26 @@ impl Compatibility {
 
 // Pretty print support //////////////////////////////////////////////////////////////////////////////
 
-#[derive(tabled::Tabled)]
 struct TableRow {
-    #[tabled(rename = "Feature")]
     name: String,
-    #[tabled(rename = "Level")]
     compat: u16,
-    #[tabled(rename = "Notes")]
     notes: String,
+}
+
+impl tabled::Tabled for TableRow {
+    const LENGTH: usize = 3;
+
+    fn fields(&self) -> Vec<std::borrow::Cow<'_, str>> {
+        vec![
+            self.name.clone().into(),
+            self.compat.to_string().into(),
+            self.notes.clone().into(),
+        ]
+    }
+
+    fn headers() -> Vec<std::borrow::Cow<'static, str>> {
+        vec!["Feature".into(), "Level".into(), "Notes".into()]
+    }
 }
 
 impl From<&Feature> for TableRow {

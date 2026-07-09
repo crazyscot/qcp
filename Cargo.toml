@@ -69,7 +69,7 @@ static_str_ops = "0.1.2"
 struct-field-names-as-array = "0.3.0"
 strum = "0.28.0"
 strum_macros = "0.28.0"
-tabled = "0.21.0"
+tabled = { version = "0.21.0", default-features = false }
 tempfile = { version = "3.27.0", default-features = false }
 termsize = "0.1.9"
 thiserror = "2.0.18"
