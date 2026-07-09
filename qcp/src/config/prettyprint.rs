@@ -36,7 +36,7 @@ impl Tabled for PrettyConfig {
     }
 
     fn headers() -> Vec<std::borrow::Cow<'static, str>> {
-        vec!["Field".into(), "Value".into(), "Source".into()]
+        vec!["field".into(), "value".into(), "source".into()]
     }
 }
 
