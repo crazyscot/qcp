@@ -20,7 +20,7 @@ env:
 jobs:
   checks:
     name: checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 1
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # 6.0.1
@@ -47,7 +47,7 @@ jobs:
         if: ${{ !cancelled() }}
 
   cargo-deny:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 1
     strategy:
       matrix:
@@ -76,7 +76,7 @@ jobs:
 
   clippy:
     name: clippy @${{ matrix.rust-version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [checks, cargo-deny]
     timeout-minutes: 10
     strategy:
@@ -108,7 +108,7 @@ jobs:
       - run: cargo clippy --locked --tests --workspace --no-deps
 
   docs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [checks, cargo-deny]
     timeout-minutes: 10
     env:
