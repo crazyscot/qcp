@@ -13,6 +13,7 @@ description = "Secure remote file copy utility which uses the QUIC protocol over
 
 [[bin]]
 name = "qcp"
+#
 
 [lib]
 
