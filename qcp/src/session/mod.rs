@@ -43,6 +43,10 @@ pub struct CommandStats {
     pub skipped_files: u64,
 }
 
+#[allow(
+    clippy::redundant_field_names,
+    reason = "false positives from derive_more::Constructor (clippy bug?)"
+)]
 /// Result of a successfully completed request
 #[derive(Debug, derive_more::Constructor)]
 pub struct RequestResult {

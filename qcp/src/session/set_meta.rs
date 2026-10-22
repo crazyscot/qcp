@@ -43,13 +43,13 @@ impl CommandHandler for SetMetadataHandler {
         // This is a trivial operation, we do not bother with a progress bar.
 
         trace!("sending command");
-        let mut outbound = &mut inner.stream.send;
+        let outbound = &mut inner.stream.send;
         let cmd = Command::SetMetadata(SetMetadataArgs {
             path: job.destination.filename.clone(),
             metadata: localmeta.tagged_data_for_dir(inner.compat),
             options: vec![],
         });
-        cmd.to_writer_async_framed(&mut outbound).await?;
+        cmd.to_writer_async_framed(&mut *outbound).await?;
         outbound.flush().await?;
 
         trace!("await response");

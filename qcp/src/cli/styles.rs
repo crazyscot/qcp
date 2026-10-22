@@ -16,20 +16,20 @@ use std::sync::LazyLock;
 // RAW STYLE DEFINITIONS //////////////////////////////////////////////////////////////////
 
 /// Error message styling. This can be Displayed directly.
-const _ERROR: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Red)));
+const ERROR: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Red)));
 
 /// Warning message styling. This can be Displayed directly.
-const _WARNING: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Yellow)));
+const WARNING: anstyle::Style = anstyle::Style::new().bold().fg_color(Some(Ansi(Yellow)));
 
 /// Informational message styling. This can be Displayed directly.
-const _INFO: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Cyan)));
+const INFO: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Cyan)));
 
 // pub(crate) const DEBUG: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Blue)));
 
 /// Success message style. This can be Displayed directly.
-const _SUCCESS: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Green)));
+const SUCCESS: anstyle::Style = anstyle::Style::new().fg_color(Some(Ansi(Green)));
 
-const _HEADER: anstyle::Style = anstyle::Style::new()
+const HEADER: anstyle::Style = anstyle::Style::new()
     .underline()
     .fg_color(Some(Ansi(Yellow)));
 
@@ -37,13 +37,13 @@ const _HEADER: anstyle::Style = anstyle::Style::new()
 
 // We don't need to make this conditional, as clap already reads the CLICOLOR environment variables.
 pub(crate) const CLAP_STYLES: Styles = Styles::styled()
-    .usage(_HEADER)
-    .header(_HEADER)
+    .usage(HEADER)
+    .header(HEADER)
     .literal(anstyle::Style::new().bold())
-    .invalid(_WARNING)
-    .error(_ERROR)
-    .valid(_INFO.bold().underline())
-    .placeholder(_INFO);
+    .invalid(WARNING)
+    .error(ERROR)
+    .valid(INFO.bold().underline())
+    .placeholder(INFO);
 
 // CONDITIONAL STYLES ////////////////////////////////////////////////////////////////////
 
@@ -69,11 +69,11 @@ macro_rules! wrap {
     };
 }
 
-wrap!(error, _ERROR);
-wrap!(warning, _WARNING);
-wrap!(info, _INFO);
-wrap!(success, _SUCCESS);
-wrap!(header, _HEADER);
+wrap!(error, ERROR);
+wrap!(warning, WARNING);
+wrap!(info, INFO);
+wrap!(success, SUCCESS);
+wrap!(header, HEADER);
 
 /// Resets styling to default. This is a re-export of [`anstyle::Reset`].
 ///

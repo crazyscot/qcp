@@ -1,5 +1,9 @@
 //! Session protocol response structure definitions
 // (c) 2025 Ross Younger
+#![allow(
+    clippy::redundant_field_names,
+    reason = "false positives from derive_more::Constructor (clippy bug?)"
+)]
 
 use crate::{protocol::session::prelude::*, util::FsMetadataExt};
 use std::fmt::Display;

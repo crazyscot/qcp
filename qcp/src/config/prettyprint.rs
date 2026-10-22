@@ -191,7 +191,7 @@ mod test {
     }
     #[test]
     fn config_meta() {
-        assert!(PrettyConfig::render_source(None).is_empty());
+        assert_eq!(PrettyConfig::render_source(None), "");
         assert_eq!(
             PrettyConfig::render_source(Some(&Metadata::named("test"))),
             "test"

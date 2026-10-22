@@ -24,7 +24,6 @@ use lessify::OutputPaged;
 /// # Safety
 /// - This function may start a tokio runtime and perform work in it.
 /// - This function is not safe to call from multi-threaded code.
-#[must_use]
 pub fn cli<I, T>(args: I) -> ExitCode
 where
     I: IntoIterator<Item = T>,

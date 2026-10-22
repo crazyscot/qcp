@@ -35,12 +35,12 @@ impl CommandHandler for CreateDirectoryHandler {
         );
 
         trace!("sending command");
-        let mut outbound = &mut inner.stream.send;
+        let outbound = &mut inner.stream.send;
         let cmd = Command::CreateDirectory(CreateDirectoryArgs {
             dir_name: job.destination.filename.clone(),
             options: vec![],
         });
-        cmd.to_writer_async_framed(&mut outbound).await?;
+        cmd.to_writer_async_framed(&mut *outbound).await?;
         outbound.flush().await?;
 
         trace!("await response");

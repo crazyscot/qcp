@@ -4,7 +4,6 @@ version = "0.9.0"
 authors = ["Ross Younger <qcp@crazyscot.com>"]
 categories = ["command-line-utilities"]
 edition.workspace = true
-homepage = "https://github.com/crazyscot/qcp/"
 keywords = ["networking", "file-transfer", "quic"]
 license = "AGPL-3.0-or-later"
 readme = "../README.md"

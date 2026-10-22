@@ -11,6 +11,10 @@ use tracing::warn;
 use crate::protocol::common::SendReceivePair;
 use crate::protocol::common::{ReceivingStream, SendingStream};
 
+#[allow(
+    clippy::redundant_field_names,
+    reason = "false positives from derive_more::Constructor (clippy bug?)"
+)]
 /// A child process (usually ssh) that implements the connection to the remote
 #[derive(Debug, derive_more::Constructor)]
 pub(crate) struct ProcessWrapper {

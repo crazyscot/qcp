@@ -122,7 +122,7 @@ mod test {
         // tricky case. a username.
         // This doesn't work on Nix build tests, as they don't set USER.
         let user = std::env::var("USER").expect("this test requires a USER");
-        assert!(!user.is_empty());
+        assert_ne!(user, "");
         let home = dirs::home_dir().expect("this test requires a home directory");
         let path_part = format!("~{user}");
         assert_eq!(xhd!(&path_part), home);
@@ -137,7 +137,7 @@ mod test {
         let _ = dirs::home_dir().expect("this test requires a HOME");
         let testpath = format!("~{}zzznonexistent", super::MAIN_SEPARATOR);
         let d = find_include_files(&testpath, true).expect("home directory should have expanded");
-        assert!(d.is_empty());
+        assert_eq!(d, Vec::<String>::new());
         let _ = find_include_files("~nonexistent-user-xyzy", true)
             .expect_err("non existent user should have bailed");
     }
@@ -146,6 +146,6 @@ mod test {
         let d = find_include_files("nonexistent-really----", false).expect("");
         assert_eq!(d, Vec::<String>::new());
         let d = find_include_files("nonexistent-really----", true).expect("");
-        assert!(d.is_empty());
+        assert_eq!(d, Vec::<String>::new());
     }
 }

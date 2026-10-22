@@ -33,7 +33,7 @@ impl CommandHandler for ListingHandler {
 
         // This is a trivial operation, we do not bother with a progress bar.
         trace!("sending command");
-        let mut outbound = &mut inner.stream.send;
+        let outbound = &mut inner.stream.send;
         let mut options = vec![];
         if params.recurse {
             options.push(CommandParam::Recurse.into());
@@ -42,7 +42,7 @@ impl CommandHandler for ListingHandler {
             path: path.clone(),
             options,
         });
-        cmd.to_writer_async_framed(&mut outbound).await?;
+        cmd.to_writer_async_framed(&mut *outbound).await?;
         outbound.flush().await?;
 
         trace!("await response");
