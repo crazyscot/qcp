@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # 6.0.1
         with:
           persist-credentials: false
-      - uses: taiki-e/setup-cross-toolchain-action@15a579e0045e5e4f668b73a441b9609884abffc9 # v1.37.0
+      - uses: taiki-e/setup-cross-toolchain-action@12b7ad4acfa95a1476779d6c06699b96ec1691f8 # v1.42.0
         with:
           target: ${{ matrix.target }}
 
