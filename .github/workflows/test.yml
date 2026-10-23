@@ -59,6 +59,14 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # 6.0.1
         with:
           persist-credentials: false
+      - name: Switch apt mirror
+        # Work around the azure ubuntu archive, which is unstable. https://github.com/actions/runner-images/issues/14823 refers.
+        if: ${{ contains(matrix.host, 'ubuntu') }}
+        run: |
+          cat /etc/apt/apt-mirrors.txt || true
+          sudo sed -i '/azure.archive.ubuntu.com/d' /etc/apt/apt-mirrors.txt
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update
       - uses: taiki-e/setup-cross-toolchain-action@12b7ad4acfa95a1476779d6c06699b96ec1691f8 # v1.42.0
         with:
           target: ${{ matrix.target }}
