@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1](https://github.com/crazyscot/qcp/compare/v0.9.0...v0.9.1)
+
+### 🛡️ Security
+
+- *(deps)* Update quinn, quinn-proto, rustls, rustls-webpki for recent advisories - ([a2fd2f6](https://github.com/crazyscot/qcp/commit/a2fd2f64e331ce0ea30420cd74f8ad568b24a2aa))
+
+### ⚙️ Miscellaneous Tasks
+
+- Clippy fixes to date (inc nightly) - ([9d94e46](https://github.com/crazyscot/qcp/commit/9d94e46e8f59d5754ff3b016afc5d509e8ec0573))
+
+
 ## [0.9.0](https://github.com/crazyscot/qcp/compare/v0.8.3...v0.9.0)
 
 ### ⛰️ Features
